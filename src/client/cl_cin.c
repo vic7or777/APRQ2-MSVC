@@ -93,6 +93,7 @@ void SCR_LoadPCX (char *filename, byte **pic, byte **palette, int *width, int *h
 		|| pcx->ymax >= 480)
 	{
 		Com_Printf ("Bad pcx file %s\n", filename);
+		FS_FreeFile ((void *)pcx);
 		return;
 	}
 

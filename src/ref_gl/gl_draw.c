@@ -27,17 +27,12 @@ image_t		*draw_chars;
 extern	qboolean	scrap_dirty;
 void Scrap_Upload (void);
 
-/* 
- * Changed, tgahud, -Maniac
- * Copied from Q2ICE project (http://q2ice.iceware.net)
- */
+// vertex arrays
+float	tex_array[MAX_ARRAY][2];
+float	vert_array[MAX_ARRAY][3];
+float	col_array[MAX_ARRAY][4];
 
-extern cvar_t		*gl_hudformat;
-extern cvar_t		*gl_conformat;
-extern cvar_t		*gl_hudtrans;
-//ignorecantfindpic
-extern cvar_t *ignorecantfindpic;
-//end
+extern cvar_t *gl_fontshadow;
 
 /*
 ===============
@@ -53,7 +48,16 @@ void Draw_InitLocal (void)
 	qglTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 }
 
-
+vec3_t	color_table[8] = {
+	{0, 0, 0},	// Black
+	{1, 0, 0},	// Red
+	{0, 1, 0},	// Green
+	{1, 1, 0},	// Yellow
+	{0, 0, 1},	// Blue
+	{0, 1, 1},	// Cyan
+	{1, 0, 1},	// Magenta
+	{1, 1, 1}	// White
+};
 
 /*
 ================
@@ -64,10 +68,16 @@ It can be clipped to the top of the screen to allow the console to be
 smoothly scrolled off.
 ================
 */
-void Draw_Char (int x, int y, int num)
+
+void Draw_Char (int x, int y, int num, int color, float alpha)
 {
 	int				row, col;
 	float			frow, fcol, size;
+	int				fsize;
+	vec4_t			colors = {1, 1, 1, 1};
+
+	if (color != FC_WHITE && num > 127)
+		num &= 127;
 
 	num &= 255;
 	
@@ -77,67 +87,63 @@ void Draw_Char (int x, int y, int num)
 	if (y <= -8)
 		return;			// totally off screen
 
+	if(num < 128)
+		VectorCopy(color_table[(color&7)], colors);
+
+	colors[3] = alpha;
+
 	row = num>>4;
 	col = num&15;
 
 	frow = row*0.0625;
 	fcol = col*0.0625;
 	size = 0.0625;
+	fsize = 8;
+
+
+	qglEnable(GL_BLEND);
+	qglDisable(GL_ALPHA_TEST);
+	GL_TexEnv (GL_MODULATE);
 
 	GL_Bind (draw_chars->texnum);
 
+	if(gl_fontshadow->value)
+	{
+		qglColor4f (0, 0, 0, alpha);
+		qglBegin (GL_QUADS);
+
+		qglTexCoord2f (fcol, frow);
+		qglVertex2f (x+1, y+1);
+		qglTexCoord2f (fcol + size, frow);
+		qglVertex2f (x+fsize+1, y+1);
+		qglTexCoord2f (fcol + size, frow + size);
+		qglVertex2f (x+fsize+1, y+fsize+1);
+		qglTexCoord2f (fcol, frow + size);
+		qglVertex2f (x+1, y+fsize+1);
+
+		qglEnd ();
+	}
+
+	qglColor4fv (colors);
+
 	qglBegin (GL_QUADS);
+
 	qglTexCoord2f (fcol, frow);
 	qglVertex2f (x, y);
 	qglTexCoord2f (fcol + size, frow);
-	qglVertex2f (x+8, y);
+	qglVertex2f (x+fsize, y);
 	qglTexCoord2f (fcol + size, frow + size);
-	qglVertex2f (x+8, y+8);
+	qglVertex2f (x+fsize, y+fsize);
 	qglTexCoord2f (fcol, frow + size);
-	qglVertex2f (x, y+8);
+	qglVertex2f (x, y+fsize);
 	qglEnd ();
+
+	qglColor4f (1,1,1,1);
+
+	GL_TexEnv(GL_REPLACE);
+	qglDisable(GL_BLEND);
+	qglEnable(GL_ALPHA_TEST);
 }
-
-/*
- * Added Draw_Char_Sized -Maniac
- * from Q2ACE (http://www.savageservers.com/q2ace/)
- */
-void Draw_Char_Sized (int x, int y, int num, int xsize, int ysize)
-{
-        int                             row, col;
-        float                   frow, fcol, size;
-
-        num &= 255;
-
-        if ( (num&127) == 32 )
-                return;         // space
-
-        if (y <= -ysize)
-                return;                 // totally off screen
-
-        row = num>>4;
-        col = num&15; 
-
-        frow = row*0.0625;
-        fcol = col*0.0625;
-        size = 0.0625;
-
-        GL_Bind (draw_chars->texnum);
-
-        qglBegin (GL_QUADS);
-
-        qglTexCoord2f (fcol, frow);
-        qglVertex2f (x, y);
-        qglTexCoord2f (fcol + size, frow);
-        qglVertex2f (x+xsize, y);
-        qglTexCoord2f (fcol + size, frow + size);
-        qglVertex2f (x+xsize, y+ysize);
-        qglTexCoord2f (fcol, frow + size);
-        qglVertex2f (x, y+ysize);
-        qglEnd ();
-}
-
-// End
 
 /*
 =============
@@ -147,65 +153,12 @@ Draw_FindPic
 image_t	*Draw_FindPic (char *name)
 {
 	image_t *gl;
-	char	fullname[MAX_QPATH], format[4];
+	char	fullname[MAX_QPATH];
 
 	if (name[0] != '/' && name[0] != '\\')
 	{
-		if(!strcmp( name, "conback" ))
-		{
-			if(gl_conformat->value)
-			{
-				switch((int)gl_conformat->value)
-				{
-					case 1:	strcpy(format, "tga"); break;
-					case 2: strcpy(format, "png"); break;
-					case 3: strcpy(format, "jpg"); break;
-					default: strcpy(format, "pcx"); break;
-				}
-			    Com_sprintf (fullname, sizeof(fullname), "pics/%s.%s", name, format);
-				gl = GL_FindImage (fullname, it_pic);
-
-				if (!gl)
-				{
-						Com_sprintf (fullname, sizeof(fullname), "pics/%s.pcx", name);
-						gl = GL_FindImage (fullname, it_pic);
-				}
-			}
-			else
-			{
-				Com_sprintf (fullname, sizeof(fullname), "pics/%s.pcx", name);
-				gl = GL_FindImage (fullname, it_pic);
-            }
-		}
-		else
-		{
-		//Changed, added different hud formats, -Maniac
-		    if (gl_hudformat->value)
-			{
-				switch((int)gl_hudformat->value)
-				{
-					case 1:	strcpy(format, "tga"); break;
-					case 2: strcpy(format, "png"); break;
-					case 3: strcpy(format, "jpg"); break;
-					default: strcpy(format, "pcx"); break;
-				}
-				Com_sprintf (fullname, sizeof(fullname), "pics/%s.%s", name, format);
-				gl = GL_FindImage (fullname, it_pic);
-
-				if (!gl)
-				{
-					Com_sprintf (fullname, sizeof(fullname), "pics/%s.pcx", name);
-					gl = GL_FindImage (fullname, it_pic);
-				}
-
-			}
-			else
-			{
-							Com_sprintf (fullname, sizeof(fullname), "pics/%s.pcx", name);
-							gl = GL_FindImage (fullname, it_pic);
-            }
-		}
-
+		Com_sprintf (fullname, sizeof(fullname), "pics/%s.pcx", name);
+		gl = GL_FindImage (fullname, it_pic);
 	}
 	else
 		gl = GL_FindImage (name+1, it_pic);
@@ -234,6 +187,68 @@ void Draw_GetPicSize (int *w, int *h, char *pic)
 
 /*
 =============
+Draw_ScaledPic
+=============
+*/
+void Draw_ScaledPic (int x, int y, float scale, char *pic, float red, float green, float blue, float alpha)
+{
+	image_t *gl;
+	int yoff, xoff;
+
+	gl = Draw_FindPic (pic);
+	if (!gl)
+	{
+		ri.Con_Printf (PRINT_DEVELOPER, "Can't find pic: %s\n", pic);
+		return;
+	}
+
+	if (scrap_dirty)
+		Scrap_Upload ();
+
+	if (alpha < 1 || scale != 1 || (gl->bits == 32 && gl->has_alpha))
+	{
+		qglEnable(GL_BLEND);
+		qglDisable(GL_ALPHA_TEST);
+		GL_TexEnv(GL_MODULATE);
+	}
+	else if ( ( ( gl_config.renderer == GL_RENDERER_MCD ) || ( gl_config.renderer & GL_RENDERER_RENDITION ) ) && !gl->has_alpha)
+		qglDisable(GL_ALPHA_TEST);
+
+	qglColor4f(red, green, blue, alpha);
+
+	GL_Bind (gl->texnum);
+
+	qglBegin (GL_QUADS);
+	xoff = gl->width * scale - gl->width;
+	yoff = gl->height * scale - gl->height;
+	x -= xoff/2;
+	y -= yoff/2;
+	qglTexCoord2f (gl->sl, gl->tl);
+	qglVertex2f (x, y);
+	qglTexCoord2f (gl->sh, gl->tl);
+	qglVertex2f (x+gl->width+xoff, y);
+	qglTexCoord2f (gl->sh, gl->th);
+	qglVertex2f (x+gl->width+xoff, y+gl->height+yoff);
+	qglTexCoord2f (gl->sl, gl->th);
+	qglVertex2f (x, y+gl->height+yoff);
+
+	qglEnd ();
+
+	if (alpha < 1 || scale != 1 || (gl->bits == 32 && gl->has_alpha))
+	{
+		GL_TexEnv(GL_REPLACE);
+		qglEnable(GL_ALPHA_TEST);
+		qglDisable(GL_BLEND);
+
+	}
+	else if ( ( ( gl_config.renderer == GL_RENDERER_MCD ) || ( gl_config.renderer & GL_RENDERER_RENDITION ) )  && !gl->has_alpha)
+		qglEnable(GL_ALPHA_TEST);
+
+	qglColor4f(1,1,1,1);
+}
+
+/*
+=============
 Draw_StretchPic
 =============
 */
@@ -244,40 +259,24 @@ void Draw_StretchPic (int x, int y, int w, int h, char *pic, float alpha)
 	gl = Draw_FindPic (pic);
 	if (!gl)
 	{
-		//Added ignore cantfindpic -Maniac
-		if(!ignorecantfindpic->value)
-		{
-			ri.Con_Printf (PRINT_ALL, "Can't find pic: %s\n", pic);
-		}
-		//End
+		ri.Con_Printf (PRINT_DEVELOPER, "Can't find pic: %s\n", pic);
 		return;
 	}
 
 	if (scrap_dirty)
 		Scrap_Upload ();
 
-	if (gl->paletted) {
-		if ( ( ( gl_config.renderer == GL_RENDERER_MCD ) || ( gl_config.renderer & GL_RENDERER_RENDITION ) ) && !gl->has_alpha)
-			GLSTATE_DISABLE_ALPHATEST
-	}
-	else
+	if (alpha < 1 || (gl->bits == 32 && gl->has_alpha))
 	{
-		GLSTATE_DISABLE_ALPHATEST
-		GLSTATE_ENABLE_BLEND
-	}
-
-		//Psychospaz's transparent console support -Maniac
-	if (gl->has_alpha || alpha < 1)
-	{
-		GLSTATE_DISABLE_ALPHATEST
-		GL_Bind(gl->texnum);
+		qglDisable(GL_ALPHA_TEST);
+		qglEnable(GL_BLEND);
 		GL_TexEnv(GL_MODULATE);
-		qglColor4f(1,1,1,alpha);	
-		GLSTATE_ENABLE_BLEND
-		qglDepthMask(false);
+		qglColor4f(1,1,1,alpha);
 	}
-	else //end
-		GL_Bind (gl->texnum);
+	else if ( ( ( gl_config.renderer == GL_RENDERER_MCD ) || ( gl_config.renderer & GL_RENDERER_RENDITION ) ) && !gl->has_alpha)
+		qglDisable(GL_ALPHA_TEST);
+
+	GL_Bind (gl->texnum);
 
 	qglBegin (GL_QUADS);
 	qglTexCoord2f (gl->sl, gl->tl);
@@ -290,133 +289,49 @@ void Draw_StretchPic (int x, int y, int w, int h, char *pic, float alpha)
 	qglVertex2f (x, y+h);
 	qglEnd ();
 
-	//Psychospaz's transparent console support -Maniac
-	if (gl->has_alpha || alpha < 1)
+	if (alpha < 1 || (gl->bits == 32 && gl->has_alpha))
 	{
-		qglDepthMask (true);
-		GL_TexEnv(GL_REPLACE);
-		GLSTATE_DISABLE_BLEND
+		GL_TexEnv (GL_REPLACE);
+		qglEnable(GL_ALPHA_TEST);
+		qglDisable(GL_BLEND);
 		qglColor4f(1,1,1,1);
-		GLSTATE_ENABLE_ALPHATEST
 	}
-	//end Knightmare
-
-	if (gl->paletted) {
-			if ( ( ( gl_config.renderer == GL_RENDERER_MCD ) || ( gl_config.renderer & GL_RENDERER_RENDITION ) ) && !gl->has_alpha)
-                   GLSTATE_ENABLE_ALPHATEST
-	}
-	else
-	{
-		GLSTATE_ENABLE_ALPHATEST
-		GLSTATE_DISABLE_BLEND
-	}
+	else if ( ( ( gl_config.renderer == GL_RENDERER_MCD ) || ( gl_config.renderer & GL_RENDERER_RENDITION ) ) && !gl->has_alpha)
+		qglEnable(GL_ALPHA_TEST);
 
 }
 // End
-/*
-Added alpha_pic -Maniac
-=====================
-alpha_pic
-=====================
-*//*
-qboolean alpha_pic(char *s)
-{
-	int i = 0, joku;
-	char *alphapics[10] = {"anum_",
-							"num_",
-							"minius",
-							"a_",
-							"i_",
-							"p_",
-							"w_",
-							"loading",
-							"quit"};
-	
-	while ( alphapics[i] != NULL )
-	{
-		joku = strlen(alphapics[i]);
-		if ( !strncmp(s, alphapics[i], joku) )
-			return true;
-		i++;
-	}
-
-	return false;
-}*/
-
-qboolean alpha_pic(char *s)
-{
-	int i = 0, joku;
-	char *alphapics[12] = {"conchars",
-							"scope",
-							"m_",
-							"ch1",
-							"ch2",
-							"ch3",
-							"ch4",
-							"ch5",
-							"ch6",
-							"ch7",
-							"ch8"};
-	
-	while ( alphapics[i] != NULL )
-	{
-		joku = strlen(alphapics[i]);
-		if ( !strncmp(s, alphapics[i], joku) )
-			return false;
-		i++;
-	}
-
-	return true;
-}
 
 /*
 =============
 Draw_Pic
 =============
 */
-void Draw_Pic (int x, int y, char *pic)
+void Draw_Pic (int x, int y, char *pic, float alpha)
 {
 	image_t *gl;
+
 
 	gl = Draw_FindPic (pic);
 	if (!gl)
 	{
-		//Added ignore cantfindpic -Maniac
-		if(!ignorecantfindpic->value)
-		{
-			ri.Con_Printf (PRINT_ALL, "Can't find pic: %s\n", pic);
-		}
-		//End
+		ri.Con_Printf (PRINT_DEVELOPER, "Can't find pic: %s\n", pic);
 		return;
 	}
 	if (scrap_dirty)
 		Scrap_Upload ();
 
-	//Changed -Maniac
-	if (gl->paletted) {
-			if ( ( ( gl_config.renderer == GL_RENDERER_MCD ) || ( gl_config.renderer & GL_RENDERER_RENDITION ) ) && !gl->has_alpha)
-                  GLSTATE_DISABLE_ALPHATEST
-	}
-	else
+	if (alpha < 1 || (gl->bits == 32 && gl->has_alpha))
 	{
-			GLSTATE_DISABLE_ALPHATEST             // Idle: disable the alpha before mipping
-		    GLSTATE_ENABLE_BLEND                  // Idle: enable blending for targa files
-	}
-
-
-	if(gl_hudtrans->value < 1 && (alpha_pic(pic)))
-	{
-		GLSTATE_DISABLE_ALPHATEST
-		GL_Bind(gl->texnum);
+		qglDisable(GL_ALPHA_TEST);
+		qglEnable(GL_BLEND);
 		GL_TexEnv(GL_MODULATE);
-		qglColor4f(1,1,1,gl_hudtrans->value);	
-		GLSTATE_ENABLE_BLEND
-		qglDepthMask(false);
+		qglColor4f(1,1,1,alpha);
 	}
-	else
-	{
+	else if ( ( ( gl_config.renderer == GL_RENDERER_MCD ) || ( gl_config.renderer & GL_RENDERER_RENDITION ) ) && !gl->has_alpha)
+		qglDisable(GL_ALPHA_TEST);
+
 	GL_Bind (gl->texnum);
-	}
 
 	qglBegin (GL_QUADS);
 	qglTexCoord2f (gl->sl, gl->tl);
@@ -428,28 +343,18 @@ void Draw_Pic (int x, int y, char *pic)
 	qglTexCoord2f (gl->sl, gl->th);
 	qglVertex2f (x, y+gl->height);
 	qglEnd ();
-
-	if(gl_hudtrans->value < 1 && (alpha_pic(pic)))
+	
+	if (alpha < 1 || (gl->bits == 32 && gl->has_alpha))
 	{
-		qglDepthMask (true);
-		GL_TexEnv(GL_REPLACE);
-		GLSTATE_DISABLE_BLEND
+		GL_TexEnv (GL_REPLACE);
+		qglEnable(GL_ALPHA_TEST);
+		qglDisable(GL_BLEND);
 		qglColor4f(1,1,1,1);
-		GLSTATE_ENABLE_ALPHATEST
 	}
+	else if ( ( ( gl_config.renderer == GL_RENDERER_MCD ) || ( gl_config.renderer & GL_RENDERER_RENDITION ) )  && !gl->has_alpha)
+		qglEnable(GL_ALPHA_TEST);
 
-
-	if (gl->paletted) {
-			if ( ( ( gl_config.renderer == GL_RENDERER_MCD ) || ( gl_config.renderer & GL_RENDERER_RENDITION ) )  && !gl->has_alpha)
-                  GLSTATE_ENABLE_ALPHATEST
-	}
-	else
-	{
-		    GLSTATE_ENABLE_ALPHATEST
-			GLSTATE_DISABLE_BLEND
-	}
 }
-// End
 
 /*
 =============
@@ -466,17 +371,12 @@ void Draw_TileClear (int x, int y, int w, int h, char *pic)
 	image = Draw_FindPic (pic);
 	if (!image)
 	{
-		//Added ignore cantfindpic -Maniac
-		if(!ignorecantfindpic->value)
-		{
-			ri.Con_Printf (PRINT_ALL, "Can't find pic: %s\n", pic);
-		}
-		//End
+		ri.Con_Printf (PRINT_DEVELOPER, "Can't find pic: %s\n", pic);
 		return;
 	}
 
 	if ( ( ( gl_config.renderer == GL_RENDERER_MCD ) || ( gl_config.renderer & GL_RENDERER_RENDITION ) )  && !image->has_alpha)
-		GLSTATE_DISABLE_ALPHATEST
+		qglDisable(GL_ALPHA_TEST);
 
 	GL_Bind (image->texnum);
 	qglBegin (GL_QUADS);
@@ -491,7 +391,7 @@ void Draw_TileClear (int x, int y, int w, int h, char *pic)
 	qglEnd ();
 
 	if ( ( ( gl_config.renderer == GL_RENDERER_MCD ) || ( gl_config.renderer & GL_RENDERER_RENDITION ) )  && !image->has_alpha)
-		GLSTATE_ENABLE_ALPHATEST
+		qglEnable(GL_ALPHA_TEST);
 }
 
 
@@ -540,9 +440,9 @@ Draw_FadeScreen
 */
 void Draw_FadeScreen (void)
 {
-	GLSTATE_ENABLE_BLEND
+	qglEnable(GL_BLEND);
 	qglDisable (GL_TEXTURE_2D);
-	qglColor4f (0, 0, 0, 0.8);
+	qglColor4f (0, 0, 0, 0.75); //Changed from 0.8
 	qglBegin (GL_QUADS);
 
 	qglVertex2f (0,0);
@@ -553,7 +453,7 @@ void Draw_FadeScreen (void)
 	qglEnd ();
 	qglColor4f (1,1,1,1);
 	qglEnable (GL_TEXTURE_2D);
-	GLSTATE_DISABLE_BLEND
+	qglDisable(GL_BLEND);
 }
 
 
@@ -587,27 +487,35 @@ void Draw_StretchRaw (int x, int y, int w, int h, int cols, int rows, byte *data
 	}
 	else
 	{
-		hscale = rows * 0.00390625;
+		hscale = rows /256.0;
 		trows = 256;
 	}
-	t = rows*hscale * 0.00390625;
+	t = rows*hscale / 256.0;
+	fracstep = cols*0x10000 /256.0;
 
 	if ( !qglColorTableEXT )
 	{
-		unsigned *dest;
+		unsigned *dest = image32;
 
-		for (i=0 ; i<trows ; i++)
+		memset ( image32, 0, sizeof(unsigned)*256*256 );
+
+		for (i=0 ; i<trows ; i++, dest+=256)
 		{
 			row = (int)(i*hscale);
 			if (row > rows)
 				break;
 			source = data + cols*row;
-			dest = &image32[i*256];
-			fracstep = cols*0x10000 *0.00390625;
+
 			frac = fracstep >> 1;
-			for (j=0 ; j<256 ; j++)
+			for (j=0 ; j<256 ; j+=4)
 			{
 				dest[j] = r_rawpalette[source[frac>>16]];
+				frac += fracstep;
+				dest[j+1] = r_rawpalette[source[frac>>16]];
+				frac += fracstep;
+				dest[j+2] = r_rawpalette[source[frac>>16]];
+				frac += fracstep;
+				dest[j+3] = r_rawpalette[source[frac>>16]];
 				frac += fracstep;
 			}
 		}
@@ -616,20 +524,26 @@ void Draw_StretchRaw (int x, int y, int w, int h, int cols, int rows, byte *data
 	}
 	else
 	{
-		unsigned char *dest;
+		unsigned char *dest = image8;
 
-		for (i=0 ; i<trows ; i++)
+		memset ( image8, 0, sizeof(unsigned char)*256*256 );
+
+		for (i=0 ; i<trows ; i++, dest+=256)
 		{
 			row = (int)(i*hscale);
 			if (row > rows)
 				break;
 			source = data + cols*row;
-			dest = &image8[i*256];
-			fracstep = cols*0x10000 *0.00390625;
 			frac = fracstep >> 1;
-			for (j=0 ; j<256 ; j++)
+			for (j=0 ; j<256 ; j+=4)
 			{
 				dest[j] = source[frac>>16];
+				frac += fracstep;
+				dest[j+1] = source[frac>>16];
+				frac += fracstep;
+				dest[j+2] = source[frac>>16];
+				frac += fracstep;
+				dest[j+3] = source[frac>>16];
 				frac += fracstep;
 			}
 		}
@@ -647,7 +561,7 @@ void Draw_StretchRaw (int x, int y, int w, int h, int cols, int rows, byte *data
 	qglTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
 	if ( ( gl_config.renderer == GL_RENDERER_MCD ) || ( gl_config.renderer & GL_RENDERER_RENDITION ) ) 
-		GLSTATE_DISABLE_ALPHATEST
+		qglDisable(GL_ALPHA_TEST);
 
 	qglBegin (GL_QUADS);
 	qglTexCoord2f (0, 0);
@@ -661,6 +575,6 @@ void Draw_StretchRaw (int x, int y, int w, int h, int cols, int rows, byte *data
 	qglEnd ();
 
 	if ( ( gl_config.renderer == GL_RENDERER_MCD ) || ( gl_config.renderer & GL_RENDERER_RENDITION ) ) 
-		GLSTATE_ENABLE_ALPHATEST
+		qglEnable(GL_ALPHA_TEST);
 }
 

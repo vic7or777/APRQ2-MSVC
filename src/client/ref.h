@@ -23,6 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../qcommon/qcommon.h"
 
 #define	MAX_DLIGHTS		32
+#define	MAX_STAINS		32
 #define	MAX_ENTITIES	128
 #define	MAX_PARTICLES	4096
 #define	MAX_LIGHTSTYLES	256
@@ -99,6 +100,14 @@ typedef struct
 	float		white;			// highest of rgb
 } lightstyle_t;
 
+// Stainmaps: Begin -Maniac
+typedef struct {
+	vec3_t			origin;
+	float			size;
+	float			color[3];
+} stain_t;
+// Stainmaps: End
+
 typedef struct
 {
 	int			x, y, width, height;// in virtual screen coordinates
@@ -121,6 +130,9 @@ typedef struct
 
 	int			num_particles;
 	particle_t	*particles;
+
+	int			num_newstains;		// Stainmaps
+	stain_t		*newstains;			// Stainmaps
 } refdef_t;
 
 
@@ -163,19 +175,18 @@ typedef struct
 
 	void	(*RenderFrame) (refdef_t *fd);
 
-
-	// Changed, Added scalable text, -Maniac
-	void  (*DrawCharSized) (int x, int y, int c, int xscale, int yscale) ;
-
 	void	(*DrawGetPicSize) (int *w, int *h, char *name);	// will return 0 0 if not found
-	void	(*DrawPic) (int x, int y, char *name);
-	//Knightamre added alpha for Psychospaz's transparent console -Maniac
+	void	(*DrawPic) (int x, int y, char *name, float alpha);
+
 	void	(*DrawStretchPic) (int x, int y, int w, int h, char *name, float alpha);
-	void	(*DrawChar) (int x, int y, int c);
+	void	(*DrawScaledPic) (int x, int y, float scale, char *name, float red, float green, float blue, float alpha);
+	void	(*DrawChar) (int x, int y, int c, int color, float alpha);
 	void	(*DrawTileClear) (int x, int y, int w, int h, char *name);
 	void	(*DrawFill) (int x, int y, int w, int h, int c);
 	void	(*DrawFadeScreen) (void);
 
+	//Decals -Maniac
+	void	(*AddDecal) (vec3_t origin, vec3_t dir, float red, float green, float blue, float alpha, float size, int type, int flags, float angle);
 	// Draw images for cinematic rendering (which can have a different palette). Note that calls
 	void	(*DrawStretchRaw) (int x, int y, int w, int h, int cols, int rows, byte *data);
 

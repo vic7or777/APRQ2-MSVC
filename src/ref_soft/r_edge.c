@@ -21,7 +21,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "r_local.h"
 
-#ifndef id386
+#if !id386
 void R_SurfacePatch (void)
 {
 }
@@ -36,13 +36,13 @@ void R_EdgeCodeEnd (void)
 #endif
 
 
-#if 0
+/*
 the complex cases add new polys on most lines, so dont optimize for keeping them the same
 have multiple free span lists to try to get better coherence?
 low depth complexity -- 1 to 3 or so
 
 have a sentinal at both ends?
-#endif
+*/
 
 
 edge_t	*auxedges;
@@ -924,7 +924,7 @@ void D_TurbulentSurf (surf_t *s)
 	// FIXME: we don't want to do this every time!
 	// TODO: speed up
 	//
-		currententity = NULL;	// &r_worldentity;
+		currententity = &r_worldentity;
 		VectorCopy (world_transformed_modelorg,
 					transformed_modelorg);
 		VectorCopy (base_vpn, vpn);
@@ -994,34 +994,7 @@ void D_SolidSurf (surf_t *s)
 		currententity = &r_worldentity;
 
 	pface = s->msurf;
-#if 1
 	miplevel = D_MipLevelForScale(s->nearzi * scale_for_mip * pface->texinfo->mipadjust);
-#else
-	{
-		float dot;
-		float normal[3];
-
-		if ( s->insubmodel )
-		{
-			VectorCopy( pface->plane->normal, normal );
-//			TransformVector( pface->plane->normal, normal);
-			dot = DotProduct( normal, vpn );
-		}
-		else
-		{
-			VectorCopy( pface->plane->normal, normal );
-			dot = DotProduct( normal, vpn );
-		}
-
-		if ( pface->flags & SURF_PLANEBACK )
-			dot = -dot;
-
-		if ( dot > 0 )
-			printf( "blah" );
-
-		miplevel = D_MipLevelForScale(s->nearzi * scale_for_mip * pface->texinfo->mipadjust);
-	}
-#endif
 
 // FIXME: make this passed in to D_CacheSurface
 	pcurrentcache = D_CacheSurface (pface, miplevel);
@@ -1048,7 +1021,7 @@ void D_SolidSurf (surf_t *s)
 		VectorCopy (base_vup, vup);
 		VectorCopy (base_vright, vright);
 		R_TransformFrustum ();
-		currententity = NULL;	//&r_worldentity;
+		currententity = &r_worldentity;
 	}
 }
 
@@ -1091,7 +1064,6 @@ void D_DrawSurfaces (void)
 {
 	surf_t			*s;
 
-//	currententity = NULL;	//&r_worldentity;
 	VectorSubtract (r_origin, vec3_origin, modelorg);
 	TransformVector (modelorg, transformed_modelorg);
 	VectorCopy (transformed_modelorg, world_transformed_modelorg);
@@ -1118,7 +1090,7 @@ void D_DrawSurfaces (void)
 	else
 		D_DrawflatSurfaces ();
 
-	currententity = NULL;	//&r_worldentity;
+	currententity = &r_worldentity;
 	VectorSubtract (r_origin, vec3_origin, modelorg);
 	R_TransformFrustum ();
 }

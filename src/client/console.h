@@ -22,7 +22,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // console
 //
 
-#define	NUM_CON_TIMES 4
+
+#define	MAX_CON_TIMES 8
 
 #define		CON_TEXTSIZE	32768
 typedef struct
@@ -43,7 +44,7 @@ typedef struct
 
 	int		vislines;
 
-	float	times[NUM_CON_TIMES];	// cls.realtime time the line was generated
+	float	times[MAX_CON_TIMES];	// cls.realtime time the line was generated
 								// for transparent notify lines
 } console_t;
 
@@ -54,7 +55,6 @@ void Con_DrawCharacter (int cx, int line, int num);
 void Con_CheckResize (void);
 void Con_Init (void);
 //Changed -Maniac
-//void Con_DrawConsole (float frac);
 void Con_DrawConsole (float frac, qboolean ingame);
 void Con_Print (char *txt);
 void Con_CenteredPrint (char *text);

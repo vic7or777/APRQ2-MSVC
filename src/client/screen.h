@@ -60,3 +60,13 @@ void SCR_RunCinematic (void);
 void SCR_StopCinematic (void);
 void SCR_FinishCinematic (void);
 
+//
+// cl_draw.c
+//
+void SCR_InitDraw( void );
+void SCR_Draw2D( void );
+void SCR_AddToChatHUD( char *string );
+void SCR_ClearChatHUD_f( void );
+void SCR_AddLagometerOutPacketInfo( int size );
+void SCR_AddLagometerPacketInfo( void );
+void SCR_ClearLagometer( void );

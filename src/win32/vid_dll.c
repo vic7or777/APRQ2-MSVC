@@ -20,7 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // Main windowed and fullscreen graphics interface module. This module
 // is used for both the software and OpenGL rendering versions of the
 // Quake refresh engine.
-#include <assert.h>
+//#include <assert.h>
 #include <float.h>
 
 #include "..\client\client.h"
@@ -63,9 +63,7 @@ static qboolean s_alttab_disabled;
 
 extern	unsigned	sys_msg_time;
 
-/*
-** WIN32 helper functions
-*/
+// WIN32 helper functions
 extern qboolean s_win95;
 
 static void WIN_DisableAltTab( void )
@@ -155,7 +153,7 @@ void VID_Error (int err_level, char *fmt, ...)
 }
 
 //==========================================================================
-
+//Added capslock -Maniac
 byte        scantokey[128] = 
 					{ 
 //  0           1       2       3       4       5       6       7 
@@ -167,7 +165,7 @@ byte        scantokey[128] =
 	'd',    'f',    'g',    'h',    'j',    'k',    'l',    ';', 
 	'\'' ,    '`',    K_SHIFT,'\\',  'z',    'x',    'c',    'v',      // 2 
 	'b',    'n',    'm',    ',',    '.',    '/',    K_SHIFT,'*', 
-	K_ALT,' ',   0  ,    K_F1, K_F2, K_F3, K_F4, K_F5,   // 3 
+	K_ALT,' ',   K_CAPSLOCK  ,    K_F1, K_F2, K_F3, K_F4, K_F5,   // 3 
 	K_F6, K_F7, K_F8, K_F9, K_F10,  K_PAUSE,    0  , K_HOME, 
 	K_UPARROW,K_PGUP,K_KP_MINUS,K_LEFTARROW,K_KP_5,K_RIGHTARROW, K_KP_PLUS,K_END, //4 
 	K_DOWNARROW,K_PGDN,K_INS,K_DEL,0,0,             0,              K_F11, 
@@ -285,6 +283,17 @@ MainWndProc
 main window procedure
 ====================
 */
+
+//New Mouse buttons -Maniac
+#ifndef WM_XBUTTONDOWN 
+   #define WM_XBUTTONDOWN      0x020B 
+   #define WM_XBUTTONUP		   0x020C 
+#endif 
+#ifndef MK_XBUTTON1 
+   #define MK_XBUTTON1         0x0020 
+   #define MK_XBUTTON2         0x0040 
+#endif 
+
 LONG WINAPI MainWndProc (
     HWND    hWnd,
     UINT    uMsg,
@@ -371,10 +380,8 @@ LONG WINAPI MainWndProc (
 				xPos = (short) LOWORD(lParam);    // horizontal position 
 				yPos = (short) HIWORD(lParam);    // vertical position 
 
-				r.left   = 0;
-				r.top    = 0;
-				r.right  = 1;
-				r.bottom = 1;
+				r.left = r.top = 0;
+				r.right = r.bottom = 1;
 
 				style = GetWindowLong( hWnd, GWL_STYLE );
 				AdjustWindowRect( &r, style, FALSE );
@@ -398,6 +405,8 @@ LONG WINAPI MainWndProc (
 	case WM_MBUTTONDOWN:
 	case WM_MBUTTONUP:
 	case WM_MOUSEMOVE:
+	case WM_XBUTTONDOWN: //Added new mouse buttons -Maniac
+	case WM_XBUTTONUP:
 		{
 			int	temp;
 
@@ -412,14 +421,30 @@ LONG WINAPI MainWndProc (
 			if (wParam & MK_MBUTTON)
 				temp |= 4;
 
+			if (wParam & MK_XBUTTON1) 
+				temp |= 8;
+
+			if (wParam & MK_XBUTTON2) 
+				temp |= 16;
+
 			IN_MouseEvent (temp);
 		}
 		break;
-
+	//Added close etc button to window mode -Maniac
 	case WM_SYSCOMMAND:
-		if ( wParam == SC_SCREENSAVE )
-			return 0;
-        return DefWindowProc (hWnd, uMsg, wParam, lParam);
+		switch (wParam) 
+		{ 
+		  case SC_SCREENSAVE: 
+		  case SC_MONITORPOWER: 
+			 return 0; 
+		  case SC_CLOSE: 
+			 CL_Quit_f (); 
+		  case SC_MAXIMIZE: 
+			 Cvar_SetValue ("vid_fullscreen", 1); 
+		  return 0; 
+		} 
+		return DefWindowProc (hWnd, uMsg, wParam, lParam);
+
 	case WM_SYSKEYDOWN:
 		if ( wParam == 13 )
 		{
@@ -450,7 +475,7 @@ LONG WINAPI MainWndProc (
         return DefWindowProc (hWnd, uMsg, wParam, lParam);
     }
 
-    /* return 0 if handled message, 1 if not */
+    // return 0 if handled message, 1 if not
     return DefWindowProc( hWnd, uMsg, wParam, lParam );
 }
 
@@ -475,7 +500,9 @@ void VID_Front_f( void )
 }
 
 /*
-** VID_GetModeInfo
+================
+VID_GetModeInfo
+================
 */
 typedef struct vidmode_s
 {
@@ -484,19 +511,23 @@ typedef struct vidmode_s
 	int         mode;
 } vidmode_t;
 
+//Added new resolutions -Maniac
 vidmode_t vid_modes[] =
 {
-	{ "Mode 0: 320x240",   320, 240,   0 },
-	{ "Mode 1: 400x300",   400, 300,   1 },
-	{ "Mode 2: 512x384",   512, 384,   2 },
-	{ "Mode 3: 640x480",   640, 480,   3 },
-	{ "Mode 4: 800x600",   800, 600,   4 },
-	{ "Mode 5: 960x720",   960, 720,   5 },
-	{ "Mode 6: 1024x768",  1024, 768,  6 },
-	{ "Mode 7: 1152x864",  1152, 864,  7 },
-	{ "Mode 8: 1280x960",  1280, 960, 8 },
-	{ "Mode 9: 1600x1200", 1600, 1200, 9 },
-	{ "Mode 10: 2048x1536", 2048, 1536, 10 }
+	{ "Mode 0: 320x240",	 320,  240,	0  },
+	{ "Mode 1: 400x300",	 400,  300,	1  },
+	{ "Mode 2: 512x384",	 512,  384,	2  },
+	{ "Mode 3: 640x480",	 640,  480,	3  },
+	{ "Mode 4: 800x600",	 800,  600,	4  },
+	{ "Mode 5: 960x720",	 960,  720,	5  },
+	{ "Mode 6: 1024x768",	1024,  768,	6  },
+	{ "Mode 7: 1152x864",	1152,  864,	7  },
+	{ "Mode 8: 1280x960",	1280,  960,	8  },
+	{ "Mode 9: 1600x1200",	1600, 1200,	9  },
+	{ "Mode 10: 2048x1536",	2048, 1536,	10 },
+	{ "Mode 11: 1024x480",	1024,  480,	11 },
+	{ "Mode 12: 1280x768",	1280,  768,	12 },
+	{ "Mode 13: 1280x1024",	1280, 1024,	13 },
 };
 
 qboolean VID_GetModeInfo( int *width, int *height, int mode )
@@ -686,12 +717,14 @@ void VID_CheckChanges (void)
 		cls.disable_screen = true;
 
 		//Changed dll naming -Maniac
-		//Com_sprintf( name, sizeof(name), "ref_%s.dll", vid_ref->string );
 		Com_sprintf( name, sizeof(name), "aq2_%s.dll", vid_ref->string );
 		if ( !VID_LoadRefresh( name ) )
 		{
 			if ( strcmp (vid_ref->string, "soft") == 0 )
 				Com_Error (ERR_FATAL, "Couldn't fall back to software refresh!");
+			//if ( strcmp (vid_ref->string, "gl") == 0 )
+			//	Com_Error (ERR_FATAL, "Couldn't fall back to gl refresh!");
+			
 			Cvar_Set( "vid_ref", "soft" );
 
 			/*
@@ -726,7 +759,7 @@ VID_Init
 void VID_Init (void)
 {
 	/* Create the video variables so we know how to start the graphics drivers */
-	vid_ref = Cvar_Get ("vid_ref", "soft", CVAR_ARCHIVE);
+	vid_ref = Cvar_Get ("vid_ref", "gl", CVAR_ARCHIVE); //Changed form soft -Maniac
 	vid_xpos = Cvar_Get ("vid_xpos", "3", CVAR_ARCHIVE);
 	vid_ypos = Cvar_Get ("vid_ypos", "22", CVAR_ARCHIVE);
 	vid_fullscreen = Cvar_Get ("vid_fullscreen", "0", CVAR_ARCHIVE);
@@ -740,19 +773,6 @@ void VID_Init (void)
 	/*
 	** this is a gross hack but necessary to clamp the mode for 3Dfx
 	*/
-#if 0
-	{
-		cvar_t *gl_driver = Cvar_Get( "gl_driver", "opengl32", 0 );
-		cvar_t *gl_mode = Cvar_Get( "gl_mode", "3", 0 );
-
-		if ( stricmp( gl_driver->string, "3dfxgl" ) == 0 )
-		{
-			Cvar_SetValue( "gl_mode", 3 );
-			viddef.width  = 640;
-			viddef.height = 480;
-		}
-	}
-#endif
 
 	/* Disable the 3Dfx splash screen */
 	putenv("FX_GLIDE_NO_SPLASH=0");

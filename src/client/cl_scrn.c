@@ -34,28 +34,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "client.h"
 
-/*
- * // Added chathud & autorecord, -Maniac
- *  From Q2ACE (http://www.savageservers.com/q2ace/)
- */
-
-#define MAX_CHATLINE 1024
-#define MAX_CHATS       4
-
-typedef struct chathudtext
-{
-        char chattext[MAX_CHATLINE + 1];
-        int inuse;
-        int length;
-} chathudtext;
-
-chathudtext  chathud[MAX_CHATS];
-int currentchathudplace = 0;
-
-void SCR_AutoDemo(void);
-extern char		map_name[MAX_QPATH];
-
-// End
 
 float		scr_con_current;	// aproaches scr_conlines at scr_conspeed
 float		scr_conlines;		// 0.0 to 1.0 lines of console to display
@@ -82,27 +60,10 @@ cvar_t		*scr_graphscale;
 cvar_t		*scr_graphshift;
 cvar_t		*scr_drawall;
 
-//Added client cvars -Maniac
-cvar_t *scr_conheight;
 
-extern cvar_t *cl_clock;
-extern cvar_t *cl_clockx;
-extern cvar_t *cl_clocky;
-extern cvar_t *cl_fps;
-extern cvar_t *cl_fpsx;
-extern cvar_t *cl_fpsy;
-
-extern cvar_t *cl_chathud;
-extern cvar_t *cl_chathudx;
-extern cvar_t *cl_chathudy;
-extern cvar_t *cl_chathudgreen;
-extern cvar_t *cl_chathudtextxsize;
-extern cvar_t *cl_chathudtextysize;
-extern cvar_t *cl_netgraphmode;
-
-extern cvar_t *scr_autodemo;
-
-//end
+cvar_t		*scr_conheight;
+//AVI EXPORTING -Maniac
+void AVI_ProcessFrame (void);
 
 typedef struct
 {
@@ -116,9 +77,6 @@ int			crosshair_width, crosshair_height;
 
 void SCR_TimeRefresh_f (void);
 void SCR_Loading_f (void);
-
-//AVI EXPORTING -Maniac
-void AVI_ProcessFrame (void);
 
 /*
 ===============================================================================
@@ -202,12 +160,7 @@ void SCR_DrawDebugGraph (void)
 	x = scr_vrect.x;
 	y = scr_vrect.y+scr_vrect.height;
 
-	//Removed grey background from netgraph -Maniac
-	if(cl_netgraphmode->value <= 0 || (cl_netgraphmode->value == 1))
-	{
-		re.DrawFill (x, y-scr_graphheight->value, w, scr_graphheight->value, 8);
-	}
-	//End
+	//re.DrawFill (x, y-scr_graphheight->value, w, scr_graphheight->value, 8);
 
 	for (a=0 ; a<w ; a++)
 	{
@@ -330,7 +283,7 @@ void SCR_DrawCenterString (void)
 		SCR_AddDirtyPoint (x, y);
 		for (j=0 ; j<l ; j++, x+=8)
 		{
-			re.DrawChar (x, y, start[j]);	
+			re.DrawChar (x, y, start[j], FC_WHITE, 1);
 			if (!remaining--)
 				return;
 		}
@@ -475,7 +428,9 @@ void SCR_Init (void)
 	scr_graphshift = Cvar_Get ("graphshift", "0", 0);
 	scr_drawall = Cvar_Get ("scr_drawall", "0", 0);
 
-	scr_conheight = Cvar_Get ("scr_conheight", "0.5", CVAR_ARCHIVE); // -Maniac
+	scr_conheight = Cvar_Get ("scr_conheight", "0.5", CVAR_ARCHIVE);
+
+	SCR_InitDraw();
 
 //
 // register our commands
@@ -500,7 +455,7 @@ void SCR_DrawNet (void)
 	if (cls.netchan.outgoing_sequence - cls.netchan.incoming_acknowledged < CMD_BACKUP-1)
 		return;
 
-	re.DrawPic (scr_vrect.x+64, scr_vrect.y, "net");
+	re.DrawPic (scr_vrect.x+64, scr_vrect.y, "net", cl_hudalpha->value);
 }
 
 /*
@@ -510,7 +465,7 @@ SCR_DrawPause
 */
 void SCR_DrawPause (void)
 {
-	int		w, h;
+	int		w = 0, h = 0;
 
 	if (!scr_showpause->value)		// turn off for screenshots
 		return;
@@ -519,7 +474,7 @@ void SCR_DrawPause (void)
 		return;
 
 	re.DrawGetPicSize (&w, &h, "pause");
-	re.DrawPic ((viddef.width-w)* 0.5, viddef.height* 0.5 + 8, "pause");
+	re.DrawPic ((viddef.width-w)/2, viddef.height/2 + 8, "pause", 1.0f);
 }
 
 /*
@@ -536,7 +491,7 @@ void SCR_DrawLoading (void)
 
 	scr_draw_loading = false;
 	re.DrawGetPicSize (&w, &h, "loading");
-	re.DrawPic ((viddef.width-w)* 0.5, (viddef.height-h)* 0.5, "loading");
+	re.DrawPic ((viddef.width-w)/2, (viddef.height-h)/2, "loading", 1.0f);
 }
 
 //=============================================================================
@@ -553,15 +508,10 @@ void SCR_RunConsole (void)
 // decide on the height of the console
 	if (cls.key_dest == key_console)
 	{
-		//Added modified conheight -Maniac
-		if ( cls.state != ca_active ) {
-			scr_conlines = 0.5;		// half screen
-		}
-		else
-		{
-			scr_conlines = scr_conheight->value;	// user controllable
-		}
-		//end
+		if(scr_conheight->value < 0.1)
+			Cvar_SetValue ("scr_conheight", 0.1);
+
+		scr_conlines = scr_conheight->value;	// user controllable
 	}
 	else
 		scr_conlines = 0;				// none visible
@@ -593,21 +543,25 @@ void SCR_DrawConsole (void)
 	
 	if (cls.state == ca_disconnected || cls.state == ca_connecting)
 	{	// forced full screen console
-		Con_DrawConsole (1.0, false); // -Maniac
+		Con_DrawConsole (1.0, false);
 		return;
 	}
 
 	if (cls.state != ca_active || !cl.refresh_prepped)
 	{	// connected, but can't render
-		Con_DrawConsole (0.5, false); // -Maniac
-		re.DrawFill (0, viddef.height* 0.5, viddef.width, viddef.height* 0.5, 0);
-		//Changed conheight -Maniac
+		if(scr_conheight->value < 0.1)
+			Cvar_SetValue ("scr_conheight", 0.1);
+		else if(scr_conheight->value > 1)
+			Cvar_SetValue ("scr_conheight", 1);
+
+		Con_DrawConsole (scr_conheight->value, false);
+		re.DrawFill (0, viddef.height*scr_conheight->value, viddef.width, viddef.height*(1-scr_conheight->value), 0);
 		return;
 	}
 
 	if (scr_con_current)
 	{
-		Con_DrawConsole (scr_con_current, true); // -Maniac
+		Con_DrawConsole (scr_con_current, true);
 	}
 	else
 	{
@@ -913,7 +867,7 @@ void DrawHUDString (char *string, int x, int y, int centerwidth, int xor)
 			x = margin;
 		for (i=0 ; i<width ; i++)
 		{
-			re.DrawChar (x, y, line[i]^xor);
+			re.DrawChar (x, y, line[i]^xor, FC_WHITE, 1);
 			x += 8;
 		}
 		if (*string)
@@ -961,13 +915,12 @@ void SCR_DrawField (int x, int y, int color, int width, int value)
 		else
 			frame = *ptr -'0';
 
-		re.DrawPic (x,y,sb_nums[color][frame]);
+		re.DrawPic (x,y,sb_nums[color][frame], cl_hudalpha->value); //hud nums
 		x += CHAR_WIDTH;
 		ptr++;
 		l--;
 	}
 }
-
 
 /*
 ===============
@@ -1080,7 +1033,7 @@ void SCR_ExecuteLayoutString (char *s)
 			{
 				SCR_AddDirtyPoint (x, y);
 				SCR_AddDirtyPoint (x+23, y+23);
-				re.DrawPic (x, y, cl.configstrings[CS_IMAGES+value]);
+				re.DrawPic (x, y, cl.configstrings[CS_IMAGES+value], cl_hudalpha->value); //hud icons
 			}
 			continue;
 		}
@@ -1119,7 +1072,7 @@ void SCR_ExecuteLayoutString (char *s)
 
 			if (!ci->icon)
 				ci = &cl.baseclientinfo;
-			re.DrawPic (x, y, ci->iconname);
+			re.DrawPic (x, y, ci->iconname, cl_hudalpha->value); //model pic
 			continue;
 		}
 
@@ -1163,7 +1116,7 @@ void SCR_ExecuteLayoutString (char *s)
 			token = COM_Parse (&s);
 			SCR_AddDirtyPoint (x, y);
 			SCR_AddDirtyPoint (x+23, y+23);
-			re.DrawPic (x, y, token);
+			re.DrawPic (x, y, token, cl_hudalpha->value); //tag
 			continue;
 		}
 
@@ -1191,7 +1144,7 @@ void SCR_ExecuteLayoutString (char *s)
 				color = 1;
 
 			if (cl.frame.playerstate.stats[STAT_FLASHES] & 1)
-				re.DrawPic (x, y, "field_3");
+				re.DrawPic (x, y, "field_3", cl_hudalpha->value); //health flash
 
 			SCR_DrawField (x, y, color, width, value);
 			continue;
@@ -1211,7 +1164,7 @@ void SCR_ExecuteLayoutString (char *s)
 				continue;	// negative number = don't show
 
 			if (cl.frame.playerstate.stats[STAT_FLASHES] & 4)
-				re.DrawPic (x, y, "field_3");
+				re.DrawPic (x, y, "field_3", cl_hudalpha->value); //ammo flash
 
 			SCR_DrawField (x, y, color, width, value);
 			continue;
@@ -1229,7 +1182,7 @@ void SCR_ExecuteLayoutString (char *s)
 			color = 0;	// green
 
 			if (cl.frame.playerstate.stats[STAT_FLASHES] & 2)
-				re.DrawPic (x, y, "field_3");
+				re.DrawPic (x, y, "field_3", cl_hudalpha->value);
 
 			SCR_DrawField (x, y, color, width, value);
 			continue;
@@ -1327,71 +1280,96 @@ void SCR_DrawLayout (void)
 }
 
 //=======================================================
+
 /*
-* Added drawclock function -Maniac
-================
-SCR_DrawClock
-================
+==================
+SCR_DrawScreenFrame
+==================
 */
-void	SCR_DrawClock ( void )
+static void SCR_DrawScreenFrame( float separation )
 {
-		int i, len;
-		struct tm *ntime;
-		char tmpbuf[8], stime[9];
-		time_t l_time;
+	re.BeginFrame( separation );
 
-		time( &l_time );
-		ntime = localtime( &l_time ); 
-		strftime( tmpbuf, 9, "%H:%M:%S", ntime );
-		sprintf(stime, "%s", tmpbuf);
+	if (scr_draw_loading == 2)
+	{	//  loading plaque over black screen
+		int		w, h;
 
-		if (cl_clock->value == 2) {
-			len = strlen( stime );
+		re.CinematicSetPalette(NULL);
+		scr_draw_loading = false;
+		re.DrawGetPicSize (&w, &h, "loading");
+		re.DrawPic ((viddef.width-w)* 0.5f, (viddef.height-h)* 0.5f, "loading", 1);
 
-			for(i = 0; i < len; i++ )
-				stime[i] += 128;
+		return;
+	} 
+	// if a cinematic is supposed to be running, handle menus
+	// and console specially
+	if (cl.cinematictime > 0)
+	{
+		if (cls.key_dest == key_menu)
+		{
+			if (cl.cinematicpalette_active)
+			{
+				re.CinematicSetPalette(NULL);
+				cl.cinematicpalette_active = false;
+			}
+			M_Draw ();
 		}
-		DrawString(cl_clockx->value, cl_clocky->value, stime);
-
-}
-/*
-* Added drawfps function -Maniac
-================
-SCR_DrawFPS
-================
-*/
-
-char	temp[32];
-float	cur_fps;
-static float	frametime_25;
-static int		frametime_count;
-
-void	SCR_DrawFPS ( void )
-{
-	int i, len;
-	
-	frametime_25 += cls.frametime;
-	frametime_count++;
-
-	if (frametime_count >= 25) {
-		if (frametime_25 != 0)
-			cur_fps = 25 / frametime_25;
-		
-		frametime_25 = 0;
-		frametime_count = 0;
+		else if (cls.key_dest == key_console)
+		{
+			if (cl.cinematicpalette_active)
+			{
+				re.CinematicSetPalette(NULL);
+				cl.cinematicpalette_active = false;
+			}
+			SCR_DrawConsole ();
+		}
+		else
+		{
+			SCR_DrawCinematic();
+		}
+		return;
 	}
 
-	Com_sprintf(temp, sizeof(temp),"%3.0ffps", cur_fps);
-
-	if (cl_fps->value == 2) {
-		len = strlen( temp );
-
-		for (i = 0; i < len; i++)
-			temp[i] += 128;
+	// make sure the game palette is active
+	if (cl.cinematicpalette_active)
+	{
+		re.CinematicSetPalette(NULL);
+		cl.cinematicpalette_active = false;
 	}
 
-	DrawString (cl_fpsx->value, cl_fpsy->value, temp);
+	// do 3D refresh drawing, and then update the screen
+	SCR_CalcVrect ();
+
+	// clear any dirty part of the background
+	SCR_TileClear ();
+
+	if (cls.state == ca_active)
+	{
+
+		V_RenderView ( separation );
+
+		if (scr_timegraph->value)
+			SCR_DebugGraph (cls.frametime*300, 0);
+
+		if (scr_debuggraph->value || scr_timegraph->value || scr_netgraph->value)
+			SCR_DrawDebugGraph ();
+
+		SCR_Draw2D();
+
+		SCR_AutoDemo();
+
+		AVI_ProcessFrame (); //Avi export -Maniac
+	}
+
+	SCR_DrawPause ();
+
+	SCR_DrawLoading ();
+
+	SCR_DrawConsole ();
+
+	M_Draw ();
 }
+
 /*
 ==================
 SCR_UpdateScreen
@@ -1402,9 +1380,6 @@ text to the screen.
 */
 void SCR_UpdateScreen (void)
 {
-	int numframes, i;
-	float separation[2] = { 0, 0 };
-
 	// if the screen is disabled (loading plaque is up, or vid mode changing)
 	// do nothing at all
 	if (cls.disable_screen)
@@ -1428,361 +1403,13 @@ void SCR_UpdateScreen (void)
 
 	if ( cl_stereo->value )
 	{
-		numframes = 2;
-		separation[0] = -cl_stereo_separation->value * 0.5f;
-		separation[1] =  cl_stereo_separation->value * 0.5f;
+		SCR_DrawScreenFrame( -cl_stereo_separation->value / 2 );
+		SCR_DrawScreenFrame( cl_stereo_separation->value / 2 );
 	}		
 	else
 	{
-		separation[0] = 0;
-		separation[1] = 0;
-		numframes = 1;
+		SCR_DrawScreenFrame( 0.0f );
 	}
 
-	for ( i = 0; i < numframes; i++ )
-	{
-		re.BeginFrame( separation[i] );
-
-		if (scr_draw_loading == 2)
-		{	//  loading plaque over black screen
-			int		w, h;
-
-			re.CinematicSetPalette(NULL);
-			scr_draw_loading = false;
-			re.DrawGetPicSize (&w, &h, "loading");
-			re.DrawPic ((viddef.width-w)* 0.5f, (viddef.height-h)* 0.5f, "loading");
-//			re.EndFrame();
-//			return;
-		} 
-		// if a cinematic is supposed to be running, handle menus
-		// and console specially
-		else if (cl.cinematictime > 0)
-		{
-			if (cls.key_dest == key_menu)
-			{
-				if (cl.cinematicpalette_active)
-				{
-					re.CinematicSetPalette(NULL);
-					cl.cinematicpalette_active = false;
-				}
-				M_Draw ();
-//				re.EndFrame();
-//				return;
-			}
-			else if (cls.key_dest == key_console)
-			{
-				if (cl.cinematicpalette_active)
-				{
-					re.CinematicSetPalette(NULL);
-					cl.cinematicpalette_active = false;
-				}
-				SCR_DrawConsole ();
-//				re.EndFrame();
-//				return;
-			}
-			else
-			{
-				SCR_DrawCinematic();
-//				re.EndFrame();
-//				return;
-			}
-		}
-		else 
-		{
-
-			// make sure the game palette is active
-			if (cl.cinematicpalette_active)
-			{
-				re.CinematicSetPalette(NULL);
-				cl.cinematicpalette_active = false;
-			}
-
-			// do 3D refresh drawing, and then update the screen
-			SCR_CalcVrect ();
-
-			// clear any dirty part of the background
-			SCR_TileClear ();
-
-			V_RenderView ( separation[i] );
-
-			           /*
-                        * Changed netgraph behind hud items. -Maniac
-                        */
-			if(cl_netgraphmode->value == 1 || cl_netgraphmode->value >= 3)
-			{
-				if (scr_timegraph->value)
-					SCR_DebugGraph (cls.frametime*300, 0);
-
-				if (scr_debuggraph->value || scr_timegraph->value || scr_netgraph->value)
-					SCR_DrawDebugGraph ();
-
-				SCR_DrawStats ();
-				if (cl.frame.playerstate.stats[STAT_LAYOUTS] & 1)
-					SCR_DrawLayout ();
-				if (cl.frame.playerstate.stats[STAT_LAYOUTS] & 2)
-					CL_DrawInventory ();
-
-				SCR_DrawNet ();
-				SCR_CheckDrawCenterString ();
-
-				if (cl_chathud->value) {
-					SCR_Chathud();
-				}
-
-				if (cl_clock->value) {
-					SCR_DrawClock ();
-				}
-				if (cl_fps->value) {
-					SCR_DrawFPS ();
-				}
-
-			}
-			else
-			{
-			//OLD Netgraph -Maniac
-				SCR_DrawStats ();
-				if (cl.frame.playerstate.stats[STAT_LAYOUTS] & 1)
-					SCR_DrawLayout ();
-				if (cl.frame.playerstate.stats[STAT_LAYOUTS] & 2)
-					CL_DrawInventory ();
-
-				if (cl_chathud->value) {
-	                    SCR_Chathud();
-				}
-
-				if (cl_clock->value) {
-					SCR_DrawClock ();
-				}
-				if (cl_fps->value) {
-					SCR_DrawFPS ();
-				}
-
-				SCR_DrawNet ();
-				SCR_CheckDrawCenterString ();
-
-				if (scr_timegraph->value)
-					SCR_DebugGraph (cls.frametime*300, 0);
-
-				if (scr_debuggraph->value || scr_timegraph->value || scr_netgraph->value)
-					SCR_DrawDebugGraph ();
-			}
-
-        	SCR_AutoDemo(); //Autodemo -Maniac
-
-
-			AVI_ProcessFrame (); //Avi export -Maniac
-
-			SCR_DrawPause ();
-
-			SCR_DrawConsole ();
-
-			M_Draw ();
-
-			SCR_DrawLoading ();
-			
-		}
-	}
 	re.EndFrame();
 }
-
-
-/* 
- * Added chathud, -Maniac
- * Added chathud from Q2ACE (http://www.savageservers.com/q2ace/)
- */
-
-void clearchathud (void) {
-        int p;
-
-        currentchathudplace = 0;
-        for (p = 0; p < MAX_CHATS ; p++) {
-                        chathud[p].inuse = 0;
-                        strcpy(chathud[p].chattext, "") ;
-        }
-
-}
-
-
-
-void safe_cpy(char *d, char *s, int l)
-{
-        strncpy(d,s,l);
-        d[l]=0;
-}
-
-
-void addtochathud (char *s) {
-
-        int p;
-
-        if (cl_chathud->value == 0) return ;
-
-//        Com_DPrintf("Adding %s to chathud\n", s) ;
-
-
-        if (currentchathudplace >= MAX_CHATS) {
-
-                currentchathudplace = 0;
-                        for (p = 0; p < MAX_CHATS; p++) {
-                          //  strcpy(chathud[p].chattext,  chathud[p+1].chattext);
-                          //  chathud[currentchathudplace].inuse = 1;
-
-                                chathud[p].inuse = 0;
-
-                                if      (p >0)
-                                addtochathud(chathud[p].chattext) ;
-
-                        }
-
-
-
-
-                        //      currentchathudplace = MAX_CHATS - 1;
-                        safe_cpy(chathud[currentchathudplace].chattext , s, MAX_CHATLINE) ;
-                        chathud[currentchathudplace].length = strlen(chathud[currentchathudplace].chattext);
-
-
-                        chathud[currentchathudplace].inuse = 1;
-                        currentchathudplace ++ ;
-
-
-        }
-        else
-        {
-                chathud[currentchathudplace].inuse = 1;
-                safe_cpy(chathud[currentchathudplace].chattext, s, MAX_CHATLINE);
-                chathud[currentchathudplace].length = strlen(chathud[currentchathudplace].chattext);
-                currentchathudplace ++ ;
-        }
-
-
-
-
-
-}
-
-
-void DrawChatHudString (int x, int y, char *s, int xsize, int ysize)
-{
-        while (*s)
-        {
-
-                re.DrawCharSized (x, y, *s, xsize, ysize);
-
-                x+=xsize;
-                s++;
-        }
-}
-
-void SCR_Chathud( void ) {
-
-        int i,p, len;
-        int xsize, ysize;
-        int currentypos;
-
-
-        char chathudline[MAX_CHATLINE + 1] ;
-
-        if (cl_chathud->value) {
-
-
-                currentypos = atoi(cl_chathudy->string) ;
-
-	        xsize = atoi(   cl_chathudtextxsize->string);
-                ysize = atoi(   cl_chathudtextysize->string);
-
-                for (p = 0; p < MAX_CHATS ; p++) {
-                        if (chathud[p].inuse) {
-                                strcpy(chathudline, chathud[p].chattext) ;
-                                len = chathud[p].length ;
-                                if (cl_chathudgreen->value) for(i=0; i<len; i++) chathudline[i]+=128;
-                                DrawChatHudString(cl_chathudx->value,currentypos, chathudline, xsize, ysize);
-                                currentypos += ysize ;
-
-                        }
-                }
-
-        }
-
-
-
-
-
-}
-
-void SCR_AutoDemo(void)
-{
-
-	    struct          tm *ntime;
-        char            tmpbuf[20];
-        time_t          l_time;
-
-
-
-
-	char fname[128];
-	char lmap[MAX_QPATH],*pmap;
-	strcpy(lmap, map_name+5); // skip maps/
-	if((pmap=strstr(lmap,"."))) *pmap=0;	// ditch .bsp
-
-		if (!cls.canrecord) {
-		//	Com_Printf("Can't Record.\n") ;
-			return;
-		}
-
-		if(!scr_autodemo->value) {
-		//	Com_Printf("Auto record is off.\n") ;
-			return;
-
-		}
-
-
-	
-	if (!strstr(cls.demorealname, lmap)) {
-			// newmap so stop it...
-		
-		if (cls.demorecording)
-		{
-		//	Com_Printf("New map found so we stop record.\n") ;	
-			CL_Stop_f();
-		//	return ;
-		}
-
-	}
-
-		
-	if(cls.demorecording) {
-		return;
-	}
-
-
-/*	if( (cls.state==ca_connecting)&& cls.demorecording)
-	{
-		Com_Printf("Client Connecting so we can't record.\n") ;	
-		return;
-	}
-*/
-	if (cls.state != ca_active) {
-	//	Com_Printf("Client not active we can't record.\n") ;	
-		return;
-	
-	}	
-	if(cl.attractloop) {
-	//	Com_Printf("Client in attractloops we can't record.\n") ;	
-		return;
-	}
-
-	//GetLocalTime(&ltime);
-
-	//GetSystemTime(&ltime) ;
-
-	    time( &l_time );
-        ntime = localtime( &l_time );
-        strftime( tmpbuf, sizeof(tmpbuf), "%Y-%m-%d_%H-%M-%S", ntime );
-	
-	Com_sprintf(fname, sizeof(fname), "record %s_%s",tmpbuf, lmap);
-	//Com_sprintf(fname, sizeof(fname), "record %i-%02i-%02i_%02i-%02i-%02i_%s", ltime.wYear,ltime.wMonth,ltime.wDay,ltime.wHour,ltime.wMinute,ltime.wSecond, lmap);
-//	Com_Printf("We can record.\n") ;	
-	Cbuf_AddText(fname);
-}
-// End

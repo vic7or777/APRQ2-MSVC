@@ -44,7 +44,7 @@ CFG=ref_soft - Win32 Debug Alpha
 # PROP Target_Dir "."
 CPP=cl.exe
 # ADD BASE CPP /nologo /MT /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_WINDOWS" /YX /c
-# ADD CPP /nologo /G5 /MT /W4 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_WINDOWS" /YX /c
+# ADD CPP /nologo /G5 /MT /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_WINDOWS" /YX /c
 MTL=midl.exe
 # ADD BASE MTL /nologo /D "NDEBUG" /win32
 # ADD MTL /nologo /D "NDEBUG" /mktyplib203 /win32
@@ -166,12 +166,12 @@ LINK32=link.exe
 # PROP Default_Filter "cpp;c;cxx;rc;def;r;odl;hpj;bat;for;f90"
 # Begin Source File
 
-SOURCE=..\game\q_shared.c
+SOURCE=..\qshared\q_shared.c
 
 !IF  "$(CFG)" == "ref_soft - Win32 Release"
 
 DEP_CPP_Q_SHA=\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	
 
 !ELSEIF  "$(CFG)" == "ref_soft - Win32 Debug"
@@ -179,14 +179,14 @@ DEP_CPP_Q_SHA=\
 !ELSEIF  "$(CFG)" == "ref_soft - Win32 Debug Alpha"
 
 DEP_CPP_Q_SHA=\
-	"..\game\q_shared.h"\
-	
+	"..\qshared\q_shared.h"\
+
 
 !ELSEIF  "$(CFG)" == "ref_soft - Win32 Release Alpha"
 
 DEP_CPP_Q_SHA=\
-	"..\game\q_shared.h"\
-	
+	"..\qshared\q_shared.h"\
+
 
 !ENDIF 
 
@@ -198,7 +198,7 @@ SOURCE=..\win32\q_shwin.c
 !IF  "$(CFG)" == "ref_soft - Win32 Release"
 
 DEP_CPP_Q_SHW=\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	"..\win32\winquake.h"\
@@ -209,7 +209,7 @@ DEP_CPP_Q_SHW=\
 !ELSEIF  "$(CFG)" == "ref_soft - Win32 Debug Alpha"
 
 DEP_CPP_Q_SHW=\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	"..\win32\winquake.h"\
@@ -218,7 +218,7 @@ DEP_CPP_Q_SHW=\
 !ELSEIF  "$(CFG)" == "ref_soft - Win32 Release Alpha"
 
 DEP_CPP_Q_SHW=\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	"..\win32\winquake.h"\
@@ -235,7 +235,7 @@ SOURCE=.\r_aclip.c
 
 DEP_CPP_R_ACL=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
@@ -248,7 +248,7 @@ DEP_CPP_R_ACL=\
 
 DEP_CPP_R_ACL=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
@@ -259,7 +259,7 @@ DEP_CPP_R_ACL=\
 
 DEP_CPP_R_ACL=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
@@ -316,10 +316,11 @@ SOURCE=.\r_alias.c
 
 DEP_CPP_R_ALI=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\anorms.h"\
+	".\anormtab.h"\
 	".\r_local.h"\
 	".\r_model.h"\
 	
@@ -330,7 +331,7 @@ DEP_CPP_R_ALI=\
 
 DEP_CPP_R_ALI=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\anorms.h"\
@@ -342,7 +343,7 @@ DEP_CPP_R_ALI=\
 
 DEP_CPP_R_ALI=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\anorms.h"\
@@ -361,7 +362,7 @@ SOURCE=.\r_bsp.c
 
 DEP_CPP_R_BSP=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
@@ -374,7 +375,7 @@ DEP_CPP_R_BSP=\
 
 DEP_CPP_R_BSP=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
@@ -385,7 +386,7 @@ DEP_CPP_R_BSP=\
 
 DEP_CPP_R_BSP=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
@@ -403,7 +404,7 @@ SOURCE=.\r_draw.c
 
 DEP_CPP_R_DRA=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
@@ -416,7 +417,7 @@ DEP_CPP_R_DRA=\
 
 DEP_CPP_R_DRA=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
@@ -427,7 +428,7 @@ DEP_CPP_R_DRA=\
 
 DEP_CPP_R_DRA=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
@@ -523,7 +524,7 @@ SOURCE=.\r_edge.c
 
 DEP_CPP_R_EDG=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
@@ -536,7 +537,7 @@ DEP_CPP_R_EDG=\
 
 DEP_CPP_R_EDG=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
@@ -547,7 +548,7 @@ DEP_CPP_R_EDG=\
 
 DEP_CPP_R_EDG=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
@@ -604,7 +605,7 @@ SOURCE=.\r_image.c
 
 DEP_CPP_R_IMA=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
@@ -617,7 +618,7 @@ DEP_CPP_R_IMA=\
 
 DEP_CPP_R_IMA=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
@@ -628,7 +629,7 @@ DEP_CPP_R_IMA=\
 
 DEP_CPP_R_IMA=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
@@ -646,7 +647,7 @@ SOURCE=.\r_light.c
 
 DEP_CPP_R_LIG=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
@@ -659,7 +660,7 @@ DEP_CPP_R_LIG=\
 
 DEP_CPP_R_LIG=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
@@ -670,7 +671,7 @@ DEP_CPP_R_LIG=\
 
 DEP_CPP_R_LIG=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
@@ -688,12 +689,12 @@ SOURCE=.\r_main.c
 
 DEP_CPP_R_MAI=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
 	".\r_model.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "ref_soft - Win32 Debug"
 
@@ -701,18 +702,18 @@ DEP_CPP_R_MAI=\
 
 DEP_CPP_R_MAI=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
 	".\r_model.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "ref_soft - Win32 Release Alpha"
 
 DEP_CPP_R_MAI=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
@@ -730,7 +731,7 @@ SOURCE=.\r_misc.c
 
 DEP_CPP_R_MIS=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
@@ -743,18 +744,18 @@ DEP_CPP_R_MIS=\
 
 DEP_CPP_R_MIS=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
 	".\r_model.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "ref_soft - Win32 Release Alpha"
 
 DEP_CPP_R_MIS=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
@@ -772,7 +773,7 @@ SOURCE=.\r_model.c
 
 DEP_CPP_R_MOD=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
@@ -785,23 +786,23 @@ DEP_CPP_R_MOD=\
 
 DEP_CPP_R_MOD=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
 	".\r_model.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "ref_soft - Win32 Release Alpha"
 
 DEP_CPP_R_MOD=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
 	".\r_model.h"\
-	
+
 
 !ENDIF 
 
@@ -814,12 +815,12 @@ SOURCE=.\r_part.c
 
 DEP_CPP_R_PAR=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
 	".\r_model.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "ref_soft - Win32 Debug"
 
@@ -827,23 +828,23 @@ DEP_CPP_R_PAR=\
 
 DEP_CPP_R_PAR=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
 	".\r_model.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "ref_soft - Win32 Release Alpha"
 
 DEP_CPP_R_PAR=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
 	".\r_model.h"\
-	
+
 
 !ENDIF 
 
@@ -856,12 +857,12 @@ SOURCE=.\r_poly.c
 
 DEP_CPP_R_POL=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
 	".\r_model.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "ref_soft - Win32 Debug"
 
@@ -869,7 +870,7 @@ DEP_CPP_R_POL=\
 
 DEP_CPP_R_POL=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
@@ -880,12 +881,12 @@ DEP_CPP_R_POL=\
 
 DEP_CPP_R_POL=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
 	".\r_model.h"\
-	
+
 
 !ENDIF 
 
@@ -933,14 +934,13 @@ SOURCE=.\r_polyse.c
 
 DEP_CPP_R_POLY=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\adivtab.h"\
 	".\r_local.h"\
 	".\r_model.h"\
-	".\rand1k.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "ref_soft - Win32 Debug"
 
@@ -948,25 +948,29 @@ DEP_CPP_R_POLY=\
 
 DEP_CPP_R_POLY=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\adivtab.h"\
 	".\r_local.h"\
 	".\r_model.h"\
+
+NODEP_CPP_R_POLY=\
 	".\rand1k.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "ref_soft - Win32 Release Alpha"
 
 DEP_CPP_R_POLY=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\adivtab.h"\
 	".\r_local.h"\
 	".\r_model.h"\
+
+NODEP_CPP_R_POLY=\
 	".\rand1k.h"\
 	
 
@@ -981,7 +985,7 @@ SOURCE=.\r_rast.c
 
 DEP_CPP_R_RAS=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
@@ -994,23 +998,23 @@ DEP_CPP_R_RAS=\
 
 DEP_CPP_R_RAS=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
 	".\r_model.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "ref_soft - Win32 Release Alpha"
 
 DEP_CPP_R_RAS=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
 	".\r_model.h"\
-	
+
 
 !ENDIF 
 
@@ -1023,12 +1027,12 @@ SOURCE=.\r_scan.c
 
 DEP_CPP_R_SCA=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
 	".\r_model.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "ref_soft - Win32 Debug"
 
@@ -1036,23 +1040,23 @@ DEP_CPP_R_SCA=\
 
 DEP_CPP_R_SCA=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
 	".\r_model.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "ref_soft - Win32 Release Alpha"
 
 DEP_CPP_R_SCA=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
 	".\r_model.h"\
-	
+
 
 !ENDIF 
 
@@ -1143,12 +1147,12 @@ SOURCE=.\r_sprite.c
 
 DEP_CPP_R_SPR=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
 	".\r_model.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "ref_soft - Win32 Debug"
 
@@ -1156,23 +1160,22 @@ DEP_CPP_R_SPR=\
 
 DEP_CPP_R_SPR=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
 	".\r_model.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "ref_soft - Win32 Release Alpha"
 
 DEP_CPP_R_SPR=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
 	".\r_model.h"\
-	
 
 !ENDIF 
 
@@ -1185,12 +1188,12 @@ SOURCE=.\r_surf.c
 
 DEP_CPP_R_SUR=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
 	".\r_model.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "ref_soft - Win32 Debug"
 
@@ -1198,23 +1201,23 @@ DEP_CPP_R_SUR=\
 
 DEP_CPP_R_SUR=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
 	".\r_model.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "ref_soft - Win32 Release Alpha"
 
 DEP_CPP_R_SUR=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	".\r_local.h"\
 	".\r_model.h"\
-	
+
 
 !ENDIF 
 
@@ -1305,13 +1308,13 @@ SOURCE=..\win32\rw_ddraw.c
 
 DEP_CPP_RW_DD=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	"..\win32\rw_win.h"\
 	".\r_local.h"\
 	".\r_model.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "ref_soft - Win32 Debug"
 
@@ -1319,25 +1322,25 @@ DEP_CPP_RW_DD=\
 
 DEP_CPP_RW_DD=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	"..\win32\rw_win.h"\
 	".\r_local.h"\
 	".\r_model.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "ref_soft - Win32 Release Alpha"
 
 DEP_CPP_RW_DD=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	"..\win32\rw_win.h"\
 	".\r_local.h"\
 	".\r_model.h"\
-	
+
 
 !ENDIF 
 
@@ -1350,13 +1353,13 @@ SOURCE=..\win32\rw_dib.c
 
 DEP_CPP_RW_DI=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	"..\win32\rw_win.h"\
 	".\r_local.h"\
 	".\r_model.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "ref_soft - Win32 Debug"
 
@@ -1364,25 +1367,25 @@ DEP_CPP_RW_DI=\
 
 DEP_CPP_RW_DI=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	"..\win32\rw_win.h"\
 	".\r_local.h"\
 	".\r_model.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "ref_soft - Win32 Release Alpha"
 
 DEP_CPP_RW_DI=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	"..\win32\rw_win.h"\
 	".\r_local.h"\
 	".\r_model.h"\
-	
+
 
 !ENDIF 
 
@@ -1395,14 +1398,14 @@ SOURCE=..\win32\rw_imp.c
 
 DEP_CPP_RW_IM=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	"..\win32\rw_win.h"\
 	"..\win32\winquake.h"\
 	".\r_local.h"\
 	".\r_model.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "ref_soft - Win32 Debug"
 
@@ -1410,27 +1413,27 @@ DEP_CPP_RW_IM=\
 
 DEP_CPP_RW_IM=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	"..\win32\rw_win.h"\
 	"..\win32\winquake.h"\
 	".\r_local.h"\
 	".\r_model.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "ref_soft - Win32 Release Alpha"
 
 DEP_CPP_RW_IM=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
 	"..\win32\rw_win.h"\
 	"..\win32\winquake.h"\
 	".\r_local.h"\
 	".\r_model.h"\
-	
+
 
 !ENDIF 
 
@@ -1449,7 +1452,11 @@ SOURCE=.\anorms.h
 # End Source File
 # Begin Source File
 
-SOURCE=..\game\q_shared.h
+SOURCE=.\anormtab.h
+# End Source File
+# Begin Source File
+
+SOURCE=..\qshared\q_shared.h
 # End Source File
 # Begin Source File
 

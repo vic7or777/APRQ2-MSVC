@@ -23,7 +23,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 int	r_dlightframecount;
 
-#define	DLIGHT_CUTOFF	64
+extern cvar_t *gl_dynamic;
+
+#define	DLIGHT_CUTOFF	0
 
 /*
 =============================================================================
@@ -43,14 +45,6 @@ void R_RenderDlight (dlight_t *light)
 	rad = light->intensity * 0.35;
 
 	VectorSubtract (light->origin, r_origin, v);
-#if 0
-	// FIXME?
-	if (VectorLength (v) < rad)
-	{	// view is inside the dlight
-		V_AddBlend (light->color[0], light->color[1], light->color[2], light->intensity * 0.0003, v_blend);
-		return;
-	}
-#endif
 
 	qglBegin (GL_TRIANGLE_FAN);
 	qglColor3f (light->color[0]*0.2, light->color[1]*0.2, light->color[2]*0.2);
@@ -89,7 +83,7 @@ void R_RenderDlights (void)
 	qglDepthMask (0);
 	qglDisable (GL_TEXTURE_2D);
 	qglShadeModel (GL_SMOOTH);
-	GLSTATE_ENABLE_BLEND
+	qglEnable(GL_BLEND);
 	qglBlendFunc (GL_ONE, GL_ONE);
 
 	l = r_newrefdef.dlights;
@@ -97,7 +91,7 @@ void R_RenderDlights (void)
 		R_RenderDlight (l);
 
 	qglColor3f (1,1,1);
-	GLSTATE_DISABLE_BLEND
+	qglDisable(GL_BLEND);
 	qglEnable (GL_TEXTURE_2D);
 	qglBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	qglDepthMask (1);
@@ -117,46 +111,54 @@ DYNAMIC LIGHTS
 R_MarkLights
 =============
 */
+
 void R_MarkLights (dlight_t *light, int bit, mnode_t *node)
 {
 	cplane_t	*splitplane;
 	float		dist;
 	msurface_t	*surf;
 	int			i;
-	
-	if (node->contents != -1)
+
+	if (node->contents != CONTENTS_NODE)
 		return;
 
 	splitplane = node->plane;
-	dist = DotProduct (light->origin, splitplane->normal) - splitplane->dist;
-	
-	if (dist > light->intensity-DLIGHT_CUTOFF)
+
+	if ( splitplane->type < 3 ) {
+		dist = light->origin[splitplane->type] - splitplane->dist;
+	} else {
+		dist = DotProduct (light->origin, splitplane->normal) - splitplane->dist;
+	}
+
+	if (dist > light->intensity - DLIGHT_CUTOFF)
 	{
 		R_MarkLights (light, bit, node->children[0]);
 		return;
 	}
-	if (dist < -light->intensity+DLIGHT_CUTOFF)
+	if (dist < -light->intensity + DLIGHT_CUTOFF)
 	{
 		R_MarkLights (light, bit, node->children[1]);
 		return;
 	}
-		
-// mark the polygons
+
+	// mark the polygons
 	surf = r_worldmodel->surfaces + node->firstsurface;
 	for (i=0 ; i<node->numsurfaces ; i++, surf++)
 	{
 		if (surf->dlightframe != r_dlightframecount)
 		{
-			surf->dlightbits = 0;
+			surf->dlightbits = bit;
 			surf->dlightframe = r_dlightframecount;
-		} else
-		surf->dlightbits |= bit;
+		}
+		else
+		{
+			surf->dlightbits |= bit;
+		}
 	}
 
 	R_MarkLights (light, bit, node->children[0]);
 	R_MarkLights (light, bit, node->children[1]);
 }
-
 
 /*
 =============
@@ -197,22 +199,27 @@ int RecursiveLightPoint (mnode_t *node, vec3_t start, vec3_t end)
 	cplane_t	*plane;
 	vec3_t		mid;
 	msurface_t	*surf;
-	int			s, t, ds, dt;
+	int			ds, dt;
 	int			i;
 	mtexinfo_t	*tex;
-	byte		*lightmap;
-	int			maps;
 	int			r;
 
-	if (node->contents != -1)
+	if (node->contents != CONTENTS_NODE)
 		return -1;		// didn't hit anything
 	
 // calculate mid point
 
-// FIXME: optimize for axial
 	plane = node->plane;
-	front = DotProduct (start, plane->normal) - plane->dist;
-	back = DotProduct (end, plane->normal) - plane->dist;
+	if (plane->type < 3)
+	{
+		front = start[plane->type] - plane->dist;
+		back = end[plane->type] - plane->dist;
+	}
+	else
+	{
+		front = DotProduct (start, plane->normal) - plane->dist;
+		back = DotProduct (end, plane->normal) - plane->dist;
+	}
 	side = front < 0;
 	
 	if ( (back < 0) == side)
@@ -243,48 +250,39 @@ int RecursiveLightPoint (mnode_t *node, vec3_t start, vec3_t end)
 
 		tex = surf->texinfo;
 		
-		s = DotProduct (mid, tex->vecs[0]) + tex->vecs[0][3];
-		t = DotProduct (mid, tex->vecs[1]) + tex->vecs[1][3];;
-
-		if ( (s < surf->texturemins[0]) | (t < surf->texturemins[1]) )
-			continue;
-		
-		ds = s - surf->texturemins[0];
-		dt = t - surf->texturemins[1];
-		
-		if ( (ds > surf->extents[0]) | (dt > surf->extents[1]) )
+		ds = DotProduct (mid, tex->vecs[0]) + tex->vecs[0][3] - surf->texturemins[0];
+		if (ds < 0 || ds > surf->extents[0])
 			continue;
 
-		if (!surf->samples)
-			return 0;
+		dt = DotProduct (mid, tex->vecs[1]) + tex->vecs[1][3] - surf->texturemins[1];
+		if (dt < 0 || dt > surf->extents[1])
+			continue;
 
-		ds >>= 4;
-		dt >>= 4;
-
-		lightmap = surf->samples;
-		VectorCopy (vec3_origin, pointcolor);
-		if (lightmap)
+		if (surf->samples)
 		{
-			vec3_t scale;
+			vec3_t	scale;
+			byte	*lightmap;
+			int		maps;
 
-			lightmap += 3*(dt * ((surf->extents[0]>>4)+1) + ds);
+			lightmap = surf->stain_samples + 3*((dt>>4) * ((surf->extents[0]>>4)+1) + (ds>>4));
+			VectorClear (pointcolor);
 
 			for (maps = 0; maps < MAXLIGHTMAPS && surf->styles[maps] != 255; maps++)
 			{
-				//for (i=0 ; i<3 ; i++)
-				//	scale[i] = gl_modulate->value*r_newrefdef.lightstyles[surf->styles[maps]].rgb[i];
-				scale[0] = gl_modulate->value * r_newrefdef.lightstyles[surf->styles[maps]].rgb[0];
-				scale[1] = gl_modulate->value * r_newrefdef.lightstyles[surf->styles[maps]].rgb[1];
-				scale[2] = gl_modulate->value * r_newrefdef.lightstyles[surf->styles[maps]].rgb[2];
-
-				pointcolor[0] += lightmap[0] * scale[0] * 0.003921568627450980392156862745098;
-				pointcolor[1] += lightmap[1] * scale[1] * 0.003921568627450980392156862745098;
-				pointcolor[2] += lightmap[2] * scale[2] * 0.003921568627450980392156862745098;
-				lightmap += 3*((surf->extents[0]>>4)+1) * ((surf->extents[1]>>4)+1);
+				scale[0] = gl_modulate->value*r_newrefdef.lightstyles[surf->styles[maps]].rgb[0];
+				scale[1] = gl_modulate->value*r_newrefdef.lightstyles[surf->styles[maps]].rgb[1];
+				scale[2] = gl_modulate->value*r_newrefdef.lightstyles[surf->styles[maps]].rgb[2];
+	
+				pointcolor[0] += lightmap[0] * scale[0] * (1.0/255);
+				pointcolor[1] += lightmap[1] * scale[1] * (1.0/255);
+				pointcolor[2] += lightmap[2] * scale[2] * (1.0/255);
+				lightmap += 3*((surf->extents[0]>>4)+1)*((surf->extents[1]>>4)+1);
 			}
+
+			return 1;
 		}
 		
-		return 1;
+		return 0;
 	}
 
 // go down back side
@@ -302,7 +300,6 @@ void R_LightPoint (vec3_t p, vec3_t color)
 	float		r;
 	int			lnum;
 	dlight_t	*dl;
-	float		light;
 	vec3_t		dist;
 	float		add;
 	
@@ -320,23 +317,24 @@ void R_LightPoint (vec3_t p, vec3_t color)
 	
 	if (r == -1)
 	{
-		VectorCopy (vec3_origin, color);
+		VectorClear (color);
 	}
 	else
 	{
 		VectorCopy (pointcolor, color);
 	}
 
+	//
 	// add dynamic lights
-	light = 0;
+	//
 	dl = r_newrefdef.dlights;
 	for (lnum = 0; lnum < r_newrefdef.num_dlights; lnum++, dl++)
 	{
 		VectorSubtract (currententity->origin, dl->origin, dist);
 		add = dl->intensity - VectorLength(dist);
-		add *= 0.00390625;
 		if (add > 0)
 		{
+			add *= (1.0/256);
 			VectorMA (color, add, dl->color, color);
 		}
 	}
@@ -348,6 +346,126 @@ void R_LightPoint (vec3_t p, vec3_t color)
 //===================================================================
 
 static float s_blocklights[34*34*3];
+
+//Added R_StainNode & R_Applystains -Maniac
+/*
+===============
+R_StainNode
+===============
+*/
+void R_StainNode (stain_t *st, mnode_t *node) { 
+	msurface_t *surf;
+	float		dist;
+	int			c;
+	
+	if (node->contents != CONTENTS_NODE)
+		return;
+
+	dist = DotProduct (st->origin, node->plane->normal) - node->plane->dist;
+	if (dist > st->size) {
+		R_StainNode (st, node->children[0]);
+		return;
+	}
+	if (dist < -st->size) {
+		R_StainNode (st, node->children[1]);
+		return;
+	}
+
+	for (c = node->numsurfaces, surf = r_worldmodel->surfaces + node->firstsurface; c ; c--, surf++) {
+		int			i;
+		mtexinfo_t	*tex;
+		int			sd, td;
+		float		fdist, frad, fminlight;
+		vec3_t		impact, local;
+		int			s, t;
+		int			smax, tmax;
+		byte		*pfBL;
+		float		fsacc, ftacc;
+		long		col;
+
+		smax = (surf->extents[0]>>4)+1;
+		tmax = (surf->extents[1]>>4)+1;
+		tex = surf->texinfo;
+
+		if ( (tex->flags & (SURF_SKY|SURF_TRANS33|SURF_TRANS66|SURF_WARP) ) )
+			continue;
+
+		frad = st->size;
+		fdist = DotProduct (st->origin, surf->plane->normal) - surf->plane->dist;
+		if(surf->flags & SURF_PLANEBACK)
+			fdist *= -1;
+
+		frad -= fabs(fdist);
+
+		fminlight = DLIGHT_CUTOFF;
+		if (frad < fminlight)
+			continue;
+
+		fminlight = frad - fminlight;
+
+		for (i = 0; i < 3; i++)
+			impact[i] = st->origin[i] - surf->plane->normal[i]*fdist;
+
+		local[0] = DotProduct (impact, tex->vecs[0]) + tex->vecs[0][3] - surf->texturemins[0];
+		local[1] = DotProduct (impact, tex->vecs[1]) + tex->vecs[1][3] - surf->texturemins[1];
+
+		if (!surf->samples)
+			return;
+
+		pfBL = surf->samples;
+		surf->cached_light[0]=0;
+
+		for (t = 0, ftacc = 0 ; t<tmax ; t++, ftacc += 16)
+		{
+			td = local[1] - ftacc;
+			if ( td < 0 )
+				td = -td;
+			for ( s=0, fsacc = 0 ; s<smax ; s++, fsacc += 16, pfBL += 3)
+			{
+				sd = Q_ftol( local[0] - fsacc );
+
+
+				if ( sd < 0 )
+					sd = -sd;
+
+				if (sd > td)
+					fdist = sd + (td>>1);
+				else
+					fdist = td + (sd>>1);
+
+				if ( fdist < fminlight ) {
+					int test;
+					for(i = 0; i < 3; i++) {
+						test = pfBL[i] + (( frad - fdist ) * st->color[i]);
+						if(test < 255 && test > 0) {
+							col=pfBL[i]*st->color[i];
+							if (col > 255) col=255;
+							if (col < 0) col=0;
+							pfBL[i] = (byte)col;
+						}
+					}
+				}
+			}
+		}
+	}
+
+	R_StainNode (st, node->children[0]);
+	R_StainNode (st, node->children[1]);
+}
+
+/*
+===============
+R_ApplyStains
+===============
+*/
+void R_ApplyStains (void)
+{
+	int i;
+	stain_t *st;
+
+	for(i=0, st = r_newrefdef.newstains; i<r_newrefdef.num_newstains; i++, st++)
+		R_StainNode(st, r_worldmodel->nodes);
+}
 /*
 ===============
 R_AddDynamicLights
@@ -358,18 +476,25 @@ void R_AddDynamicLights (msurface_t *surf)
 	int			lnum;
 	int			sd, td;
 	float		fdist, frad, fminlight;
-	vec3_t		impact, local;
+	vec3_t		impact, local, dlorigin;
 	int			s, t;
-	int			i;
 	int			smax, tmax;
 	mtexinfo_t	*tex;
 	dlight_t	*dl;
 	float		*pfBL;
 	float		fsacc, ftacc;
+	qboolean	rotated = false;
+	vec3_t		forward, right, up, temp;
 
 	smax = (surf->extents[0]>>4)+1;
 	tmax = (surf->extents[1]>>4)+1;
 	tex = surf->texinfo;
+
+	if (currententity->angles[0] || currententity->angles[1] || currententity->angles[2])
+	{
+		rotated = true;
+		AngleVectors (currententity->angles, forward, right, up);
+	}
 
 	for (lnum = 0; lnum < r_newrefdef.num_dlights; lnum++)
 	{
@@ -378,18 +503,37 @@ void R_AddDynamicLights (msurface_t *surf)
 
 		dl = &r_newrefdef.dlights[lnum];
 		frad = dl->intensity;
-		fdist = DotProduct (dl->origin, surf->plane->normal) - surf->plane->dist;
+		VectorSubtract (dl->origin, currententity->origin, dlorigin);
+
+		if (rotated)
+		{
+			VectorCopy (dlorigin, temp);
+			dlorigin[0] = DotProduct (temp, forward);
+			dlorigin[1] = -DotProduct (temp, right);
+			dlorigin[2] = DotProduct (temp, up);
+		}
+
+		if (surf->plane->type < 3)
+			fdist = dlorigin[surf->plane->type] - surf->plane->dist;
+		else
+			fdist = DotProduct (dlorigin, surf->plane->normal) - surf->plane->dist;
+
 		frad -= fabs(fdist);
 		// rad is now the highest intensity on the plane
-
-		fminlight = DLIGHT_CUTOFF;	// FIXME: make configurable?
+		
+		fminlight = DLIGHT_CUTOFF;
 		if (frad < fminlight)
 			continue;
 		fminlight = frad - fminlight;
 
-		for (i = 0; i < 3; i++)
+		if (surf->plane->type < 3)
 		{
-			impact[i] = dl->origin[i] -	surf->plane->normal[i]*fdist;
+			VectorCopy (dlorigin, impact);
+			impact[surf->plane->type] -= fdist;
+		}
+		else 
+		{
+			VectorMA (dlorigin, -fdist, surf->plane->normal, impact);
 		}
 
 		local[0] = DotProduct (impact, tex->vecs[0]) + tex->vecs[0][3] - surf->texturemins[0];
@@ -414,12 +558,21 @@ void R_AddDynamicLights (msurface_t *surf)
 				else
 					fdist = td + (sd>>1);
 
-				if ( fdist < fminlight )
+				if (fdist < fminlight)
 				{
-					pfBL[0] += ( frad - fdist ) * dl->color[0];
-					pfBL[1] += ( frad - fdist ) * dl->color[1];
-					pfBL[2] += ( frad - fdist ) * dl->color[2];
+					if(gl_dynamic->value == 2) {
+						pfBL[0] += ( fminlight - fdist ) * dl->color[0];
+						pfBL[1] += ( fminlight - fdist ) * dl->color[1];
+						pfBL[2] += ( fminlight - fdist ) * dl->color[2];
+					}
+					else {
+						pfBL[0] += ( frad - fdist ) * dl->color[0];
+						pfBL[1] += ( frad - fdist ) * dl->color[1];
+						pfBL[2] += ( frad - fdist ) * dl->color[2];
+					}
+
 				}
+
 			}
 		}
 	}
@@ -687,10 +840,10 @@ store:
 					break;
 				case 'C':
 					// try faking colored lighting
-					a = 255 - ((r+g+b)*0.3333333);
-					r *= a*0.003921568627450980392156862745098; // /255.0;
-					g *= a*0.003921568627450980392156862745098; // /255.0;
-					b *= a*0.003921568627450980392156862745098; // /255.0;
+					a = 255 - ((r+g+b)/3);
+					r *= a/255.0;
+					g *= a/255.0;
+					b *= a/255.0;
 					break;
 				case 'A':
 				default:

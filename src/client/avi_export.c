@@ -209,7 +209,7 @@ void AVI_ProcessFrame (void)
 	int i, j;
 	byte *buf, *gam;
 
-	if (cls.state != ca_active || !cl.refresh_prepped || !avi_fps || !avi_fps->value)
+	if (!cl.refresh_prepped || !avi_fps || !avi_fps->value)
 		return;
 
 	buf = (byte *)malloc(viddef.width*viddef.height*3);

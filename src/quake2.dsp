@@ -44,7 +44,7 @@ CFG=quake2 - Win32 Debug Alpha
 # PROP Target_Dir ""
 CPP=cl.exe
 # ADD BASE CPP /nologo /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_WINDOWS" /YX /c
-# ADD CPP /nologo /G5 /MT /W4 /GX /Zd /O2 /D "WIN32" /D "NDEBUG" /D "_WINDOWS" /YX /FD /c
+# ADD CPP /nologo /G5 /MT /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_WINDOWS" /YX /FD /c
 MTL=midl.exe
 # ADD BASE MTL /nologo /D "NDEBUG" /win32
 # ADD MTL /nologo /D "NDEBUG" /mktyplib203 /win32
@@ -86,7 +86,7 @@ BSC32=bscmake.exe
 # ADD BSC32 /nologo
 LINK32=link.exe
 # ADD BASE LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:windows /debug /machine:I386
-# ADD LINK32 winmm.lib wsock32.lib kernel32.lib user32.lib gdi32.lib /nologo /subsystem:windows /incremental:no /map /debug /machine:I386
+# ADD LINK32 vfw32.lib winmm.lib wsock32.lib kernel32.lib user32.lib gdi32.lib /nologo /subsystem:windows /incremental:no /map /debug /machine:I386 /out:"d:\games\quake2\aq2.exe"
 # SUBTRACT LINK32 /nodefaultlib
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
@@ -167,66 +167,9 @@ LINK32=link.exe
 # Begin Group "Source Files"
 
 # PROP Default_Filter "cpp;c;cxx;rc;def;r;odl;hpj;bat;for;f90"
-# Begin Source File
+# Begin Group "client"
 
-SOURCE=.\client\avi_export.c
-
-!IF  "$(CFG)" == "quake2 - Win32 Release"
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug"
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
-
-!ENDIF 
-
-# End Source File
-# Begin Source File
-
-SOURCE=.\win32\cd_win.c
-
-!IF  "$(CFG)" == "quake2 - Win32 Release"
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug"
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
-
-DEP_CPP_CD_WI=\
-	".\client\cdaudio.h"\
-	".\client\client.h"\
-	".\client\console.h"\
-	".\client\input.h"\
-	".\client\keys.h"\
-	".\client\ref.h"\
-	".\client\screen.h"\
-	".\client\sound.h"\
-	".\client\vid.h"\
-	".\game\q_shared.h"\
-	".\qcommon\qcommon.h"\
-	".\qcommon\qfiles.h"\
-	
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
-
-DEP_CPP_CD_WI=\
-	".\client\cdaudio.h"\
-	".\client\client.h"\
-	".\client\console.h"\
-	".\client\input.h"\
-	".\client\keys.h"\
-	".\client\ref.h"\
-	".\client\screen.h"\
-	".\client\sound.h"\
-	".\client\vid.h"\
-	".\game\q_shared.h"\
-	".\qcommon\qcommon.h"\
-	".\qcommon\qfiles.h"\
-	
-
-!ENDIF 
-
-# End Source File
+# PROP Default_Filter ""
 # Begin Source File
 
 SOURCE=.\client\cl_cin.c
@@ -247,10 +190,10 @@ DEP_CPP_CL_CI=\
 	".\client\screen.h"\
 	".\client\sound.h"\
 	".\client\vid.h"\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
 
@@ -264,10 +207,40 @@ DEP_CPP_CL_CI=\
 	".\client\screen.h"\
 	".\client\sound.h"\
 	".\client\vid.h"\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
+
+!ENDIF 
+
+# End Source File
+# Begin Source File
+
+SOURCE=.\client\cl_demo.c
+
+!IF  "$(CFG)" == "quake2 - Win32 Release"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
+
+!ENDIF 
+
+# End Source File
+# Begin Source File
+
+SOURCE=.\client\cl_draw.c
+
+!IF  "$(CFG)" == "quake2 - Win32 Release"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
 
 !ENDIF 
 
@@ -292,10 +265,10 @@ DEP_CPP_CL_EN=\
 	".\client\screen.h"\
 	".\client\sound.h"\
 	".\client\vid.h"\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
 
@@ -309,10 +282,10 @@ DEP_CPP_CL_EN=\
 	".\client\screen.h"\
 	".\client\sound.h"\
 	".\client\vid.h"\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ENDIF 
 
@@ -337,10 +310,10 @@ DEP_CPP_CL_FX=\
 	".\client\screen.h"\
 	".\client\sound.h"\
 	".\client\vid.h"\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
 
@@ -354,10 +327,10 @@ DEP_CPP_CL_FX=\
 	".\client\screen.h"\
 	".\client\sound.h"\
 	".\client\vid.h"\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ENDIF 
 
@@ -382,10 +355,10 @@ DEP_CPP_CL_IN=\
 	".\client\screen.h"\
 	".\client\sound.h"\
 	".\client\vid.h"\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
 
@@ -399,10 +372,10 @@ DEP_CPP_CL_IN=\
 	".\client\screen.h"\
 	".\client\sound.h"\
 	".\client\vid.h"\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ENDIF 
 
@@ -427,10 +400,10 @@ DEP_CPP_CL_INV=\
 	".\client\screen.h"\
 	".\client\sound.h"\
 	".\client\vid.h"\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
 
@@ -444,10 +417,25 @@ DEP_CPP_CL_INV=\
 	".\client\screen.h"\
 	".\client\sound.h"\
 	".\client\vid.h"\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
+
+!ENDIF 
+
+# End Source File
+# Begin Source File
+
+SOURCE=.\client\cl_loc.c
+
+!IF  "$(CFG)" == "quake2 - Win32 Release"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
 
 !ENDIF 
 
@@ -472,10 +460,10 @@ DEP_CPP_CL_MA=\
 	".\client\screen.h"\
 	".\client\sound.h"\
 	".\client\vid.h"\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
 
@@ -489,10 +477,10 @@ DEP_CPP_CL_MA=\
 	".\client\screen.h"\
 	".\client\sound.h"\
 	".\client\vid.h"\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ENDIF 
 
@@ -517,10 +505,10 @@ DEP_CPP_CL_NE=\
 	".\client\screen.h"\
 	".\client\sound.h"\
 	".\client\vid.h"\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
 
@@ -534,10 +522,10 @@ DEP_CPP_CL_NE=\
 	".\client\screen.h"\
 	".\client\sound.h"\
 	".\client\vid.h"\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ENDIF 
 
@@ -562,10 +550,10 @@ DEP_CPP_CL_PA=\
 	".\client\screen.h"\
 	".\client\sound.h"\
 	".\client\vid.h"\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
 
@@ -579,10 +567,10 @@ DEP_CPP_CL_PA=\
 	".\client\screen.h"\
 	".\client\sound.h"\
 	".\client\vid.h"\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ENDIF 
 
@@ -607,10 +595,10 @@ DEP_CPP_CL_PR=\
 	".\client\screen.h"\
 	".\client\sound.h"\
 	".\client\vid.h"\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
 
@@ -624,10 +612,10 @@ DEP_CPP_CL_PR=\
 	".\client\screen.h"\
 	".\client\sound.h"\
 	".\client\vid.h"\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ENDIF 
 
@@ -652,10 +640,10 @@ DEP_CPP_CL_SC=\
 	".\client\screen.h"\
 	".\client\sound.h"\
 	".\client\vid.h"\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
 
@@ -669,10 +657,10 @@ DEP_CPP_CL_SC=\
 	".\client\screen.h"\
 	".\client\sound.h"\
 	".\client\vid.h"\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ENDIF 
 
@@ -697,10 +685,10 @@ DEP_CPP_CL_TE=\
 	".\client\screen.h"\
 	".\client\sound.h"\
 	".\client\vid.h"\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
 
@@ -714,10 +702,10 @@ DEP_CPP_CL_TE=\
 	".\client\screen.h"\
 	".\client\sound.h"\
 	".\client\vid.h"\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ENDIF 
 
@@ -742,10 +730,10 @@ DEP_CPP_CL_VI=\
 	".\client\screen.h"\
 	".\client\sound.h"\
 	".\client\vid.h"\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
 
@@ -759,14 +747,18 @@ DEP_CPP_CL_VI=\
 	".\client\screen.h"\
 	".\client\sound.h"\
 	".\client\vid.h"\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ENDIF 
 
 # End Source File
+# End Group
+# Begin Group "common"
+
+# PROP Default_Filter ""
 # Begin Source File
 
 SOURCE=.\qcommon\cmd.c
@@ -778,18 +770,18 @@ SOURCE=.\qcommon\cmd.c
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
 
 DEP_CPP_CMD_C=\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
 
 DEP_CPP_CMD_C=\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ENDIF 
 
@@ -805,18 +797,18 @@ SOURCE=.\qcommon\cmodel.c
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
 
 DEP_CPP_CMODE=\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
 
 DEP_CPP_CMODE=\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ENDIF 
 
@@ -833,19 +825,19 @@ SOURCE=.\qcommon\common.c
 
 DEP_CPP_COMMO=\
 	".\client\anorms.h"\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
 
 DEP_CPP_COMMO=\
 	".\client\anorms.h"\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ENDIF 
 
@@ -875,51 +867,6 @@ DEP_CPP_CONPR=\
 # End Source File
 # Begin Source File
 
-SOURCE=.\client\console.c
-
-!IF  "$(CFG)" == "quake2 - Win32 Release"
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug"
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
-
-DEP_CPP_CONSO=\
-	".\client\cdaudio.h"\
-	".\client\client.h"\
-	".\client\console.h"\
-	".\client\input.h"\
-	".\client\keys.h"\
-	".\client\ref.h"\
-	".\client\screen.h"\
-	".\client\sound.h"\
-	".\client\vid.h"\
-	".\game\q_shared.h"\
-	".\qcommon\qcommon.h"\
-	".\qcommon\qfiles.h"\
-	
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
-
-DEP_CPP_CONSO=\
-	".\client\cdaudio.h"\
-	".\client\client.h"\
-	".\client\console.h"\
-	".\client\input.h"\
-	".\client\keys.h"\
-	".\client\ref.h"\
-	".\client\screen.h"\
-	".\client\sound.h"\
-	".\client\vid.h"\
-	".\game\q_shared.h"\
-	".\qcommon\qcommon.h"\
-	".\qcommon\qfiles.h"\
-	
-
-!ENDIF 
-
-# End Source File
-# Begin Source File
-
 SOURCE=.\qcommon\crc.c
 
 !IF  "$(CFG)" == "quake2 - Win32 Release"
@@ -929,18 +876,18 @@ SOURCE=.\qcommon\crc.c
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
 
 DEP_CPP_CRC_C=\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
 
 DEP_CPP_CRC_C=\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ENDIF 
 
@@ -956,18 +903,18 @@ SOURCE=.\qcommon\cvar.c
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
 
 DEP_CPP_CVAR_=\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
 
 DEP_CPP_CVAR_=\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ENDIF 
 
@@ -983,133 +930,18 @@ SOURCE=.\qcommon\files.c
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
 
 DEP_CPP_FILES=\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
 
 DEP_CPP_FILES=\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
 
-!ENDIF 
-
-# End Source File
-# Begin Source File
-
-SOURCE=.\win32\in_win.c
-
-!IF  "$(CFG)" == "quake2 - Win32 Release"
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug"
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
-
-DEP_CPP_IN_WI=\
-	".\client\cdaudio.h"\
-	".\client\client.h"\
-	".\client\console.h"\
-	".\client\input.h"\
-	".\client\keys.h"\
-	".\client\ref.h"\
-	".\client\screen.h"\
-	".\client\sound.h"\
-	".\client\vid.h"\
-	".\game\q_shared.h"\
-	".\qcommon\qcommon.h"\
-	".\qcommon\qfiles.h"\
-	".\win32\winquake.h"\
-	
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
-
-DEP_CPP_IN_WI=\
-	".\client\cdaudio.h"\
-	".\client\client.h"\
-	".\client\console.h"\
-	".\client\input.h"\
-	".\client\keys.h"\
-	".\client\ref.h"\
-	".\client\screen.h"\
-	".\client\sound.h"\
-	".\client\vid.h"\
-	".\game\q_shared.h"\
-	".\qcommon\qcommon.h"\
-	".\qcommon\qfiles.h"\
-	".\win32\winquake.h"\
-	
-
-!ENDIF 
-
-# End Source File
-# Begin Source File
-
-SOURCE=.\client\keys.c
-
-!IF  "$(CFG)" == "quake2 - Win32 Release"
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug"
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
-
-DEP_CPP_KEYS_=\
-	".\client\cdaudio.h"\
-	".\client\client.h"\
-	".\client\console.h"\
-	".\client\input.h"\
-	".\client\keys.h"\
-	".\client\ref.h"\
-	".\client\screen.h"\
-	".\client\sound.h"\
-	".\client\vid.h"\
-	".\game\q_shared.h"\
-	".\qcommon\qcommon.h"\
-	".\qcommon\qfiles.h"\
-	
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
-
-DEP_CPP_KEYS_=\
-	".\client\cdaudio.h"\
-	".\client\client.h"\
-	".\client\console.h"\
-	".\client\input.h"\
-	".\client\keys.h"\
-	".\client\ref.h"\
-	".\client\screen.h"\
-	".\client\sound.h"\
-	".\client\vid.h"\
-	".\game\q_shared.h"\
-	".\qcommon\qcommon.h"\
-	".\qcommon\qfiles.h"\
-	
-
-!ENDIF 
-
-# End Source File
-# Begin Source File
-
-SOURCE=.\game\m_flash.c
-
-!IF  "$(CFG)" == "quake2 - Win32 Release"
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug"
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
-
-DEP_CPP_M_FLA=\
-	".\game\q_shared.h"\
-	
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
-
-DEP_CPP_M_FLA=\
-	".\game\q_shared.h"\
-	
 
 !ENDIF 
 
@@ -1131,53 +963,6 @@ SOURCE=.\qcommon\md4.c
 # End Source File
 # Begin Source File
 
-SOURCE=.\client\menu.c
-
-!IF  "$(CFG)" == "quake2 - Win32 Release"
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug"
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
-
-DEP_CPP_MENU_=\
-	".\client\cdaudio.h"\
-	".\client\client.h"\
-	".\client\console.h"\
-	".\client\input.h"\
-	".\client\keys.h"\
-	".\client\qmenu.h"\
-	".\client\ref.h"\
-	".\client\screen.h"\
-	".\client\sound.h"\
-	".\client\vid.h"\
-	".\game\q_shared.h"\
-	".\qcommon\qcommon.h"\
-	".\qcommon\qfiles.h"\
-	
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
-
-DEP_CPP_MENU_=\
-	".\client\cdaudio.h"\
-	".\client\client.h"\
-	".\client\console.h"\
-	".\client\input.h"\
-	".\client\keys.h"\
-	".\client\qmenu.h"\
-	".\client\ref.h"\
-	".\client\screen.h"\
-	".\client\sound.h"\
-	".\client\vid.h"\
-	".\game\q_shared.h"\
-	".\qcommon\qcommon.h"\
-	".\qcommon\qfiles.h"\
-	
-
-!ENDIF 
-
-# End Source File
-# Begin Source File
-
 SOURCE=.\qcommon\net_chan.c
 
 !IF  "$(CFG)" == "quake2 - Win32 Release"
@@ -1187,45 +972,18 @@ SOURCE=.\qcommon\net_chan.c
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
 
 DEP_CPP_NET_C=\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
 
 DEP_CPP_NET_C=\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
 
-!ENDIF 
-
-# End Source File
-# Begin Source File
-
-SOURCE=.\win32\net_wins.c
-
-!IF  "$(CFG)" == "quake2 - Win32 Release"
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug"
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
-
-DEP_CPP_NET_W=\
-	".\game\q_shared.h"\
-	".\qcommon\qcommon.h"\
-	".\qcommon\qfiles.h"\
-	
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
-
-DEP_CPP_NET_W=\
-	".\game\q_shared.h"\
-	".\qcommon\qcommon.h"\
-	".\qcommon\qfiles.h"\
-	
 
 !ENDIF 
 
@@ -1241,25 +999,25 @@ SOURCE=.\qcommon\pmove.c
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
 
 DEP_CPP_PMOVE=\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
 
 DEP_CPP_PMOVE=\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ENDIF 
 
 # End Source File
 # Begin Source File
 
-SOURCE=.\game\q_shared.c
+SOURCE=.\qshared\q_shared.c
 
 !IF  "$(CFG)" == "quake2 - Win32 Release"
 
@@ -1268,21 +1026,25 @@ SOURCE=.\game\q_shared.c
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
 
 DEP_CPP_Q_SHA=\
-	".\game\q_shared.h"\
-	
+	".\qshared\q_shared.h"\
+
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
 
 DEP_CPP_Q_SHA=\
-	".\game\q_shared.h"\
-	
+	".\qshared\q_shared.h"\
+
 
 !ENDIF 
 
 # End Source File
+# End Group
+# Begin Group "server"
+
+# PROP Default_Filter ""
 # Begin Source File
 
-SOURCE=.\win32\q_shwin.c
+SOURCE=.\server\sv_ccmds.c
 
 !IF  "$(CFG)" == "quake2 - Win32 Release"
 
@@ -1290,28 +1052,30 @@ SOURCE=.\win32\q_shwin.c
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
 
-DEP_CPP_Q_SHW=\
-	".\game\q_shared.h"\
+DEP_CPP_SV_CC=\
+	".\game\game.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	".\win32\winquake.h"\
-	
+	".\server\server.h"\
+
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
 
-DEP_CPP_Q_SHW=\
-	".\game\q_shared.h"\
+DEP_CPP_SV_CC=\
+	".\game\game.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	".\win32\winquake.h"\
-	
+	".\server\server.h"\
+
 
 !ENDIF 
 
 # End Source File
 # Begin Source File
 
-SOURCE=.\client\qmenu.c
+SOURCE=.\server\sv_ents.c
 
 !IF  "$(CFG)" == "quake2 - Win32 Release"
 
@@ -1319,43 +1083,216 @@ SOURCE=.\client\qmenu.c
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
 
-DEP_CPP_QMENU=\
-	".\client\cdaudio.h"\
-	".\client\client.h"\
-	".\client\console.h"\
-	".\client\input.h"\
-	".\client\keys.h"\
-	".\client\qmenu.h"\
-	".\client\ref.h"\
-	".\client\screen.h"\
-	".\client\sound.h"\
-	".\client\vid.h"\
-	".\game\q_shared.h"\
+DEP_CPP_SV_EN=\
+	".\game\game.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+	".\server\server.h"\
+
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
 
-DEP_CPP_QMENU=\
-	".\client\cdaudio.h"\
-	".\client\client.h"\
-	".\client\console.h"\
-	".\client\input.h"\
-	".\client\keys.h"\
-	".\client\qmenu.h"\
-	".\client\ref.h"\
-	".\client\screen.h"\
-	".\client\sound.h"\
-	".\client\vid.h"\
-	".\game\q_shared.h"\
+DEP_CPP_SV_EN=\
+	".\game\game.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+	".\server\server.h"\
+
 
 !ENDIF 
 
 # End Source File
+# Begin Source File
+
+SOURCE=.\server\sv_game.c
+
+!IF  "$(CFG)" == "quake2 - Win32 Release"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
+
+DEP_CPP_SV_GA=\
+	".\game\game.h"\
+	".\qshared\q_shared.h"\
+	".\qcommon\qcommon.h"\
+	".\qcommon\qfiles.h"\
+	".\server\server.h"\
+
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
+
+DEP_CPP_SV_GA=\
+	".\game\game.h"\
+	".\qshared\q_shared.h"\
+	".\qcommon\qcommon.h"\
+	".\qcommon\qfiles.h"\
+	".\server\server.h"\
+
+!ENDIF 
+
+# End Source File
+# Begin Source File
+
+SOURCE=.\server\sv_init.c
+
+!IF  "$(CFG)" == "quake2 - Win32 Release"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
+
+DEP_CPP_SV_IN=\
+	".\game\game.h"\
+	".\qshared\q_shared.h"\
+	".\qcommon\qcommon.h"\
+	".\qcommon\qfiles.h"\
+	".\server\server.h"\
+
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
+
+DEP_CPP_SV_IN=\
+	".\game\game.h"\
+	".\qshared\q_shared.h"\
+	".\qcommon\qcommon.h"\
+	".\qcommon\qfiles.h"\
+	".\server\server.h"\
+
+
+!ENDIF 
+
+# End Source File
+# Begin Source File
+
+SOURCE=.\server\sv_main.c
+
+!IF  "$(CFG)" == "quake2 - Win32 Release"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
+
+DEP_CPP_SV_MA=\
+	".\game\game.h"\
+	".\qshared\q_shared.h"\
+	".\qcommon\qcommon.h"\
+	".\qcommon\qfiles.h"\
+	".\server\server.h"\
+
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
+
+DEP_CPP_SV_MA=\
+	".\game\game.h"\
+	".\qshared\q_shared.h"\
+	".\qcommon\qcommon.h"\
+	".\qcommon\qfiles.h"\
+	".\server\server.h"\
+
+
+!ENDIF 
+
+# End Source File
+# Begin Source File
+
+SOURCE=.\server\sv_send.c
+
+!IF  "$(CFG)" == "quake2 - Win32 Release"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
+
+DEP_CPP_SV_SE=\
+	".\game\game.h"\
+	".\qshared\q_shared.h"\
+	".\qcommon\qcommon.h"\
+	".\qcommon\qfiles.h"\
+	".\server\server.h"\
+
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
+
+DEP_CPP_SV_SE=\
+	".\game\game.h"\
+	".\qshared\q_shared.h"\
+	".\qcommon\qcommon.h"\
+	".\qcommon\qfiles.h"\
+	".\server\server.h"\
+
+
+!ENDIF 
+
+# End Source File
+# Begin Source File
+
+SOURCE=.\server\sv_user.c
+
+!IF  "$(CFG)" == "quake2 - Win32 Release"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
+
+DEP_CPP_SV_US=\
+	".\game\game.h"\
+	".\qshared\q_shared.h"\
+	".\qcommon\qcommon.h"\
+	".\qcommon\qfiles.h"\
+	".\server\server.h"\
+
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
+
+DEP_CPP_SV_US=\
+	".\game\game.h"\
+	".\qshared\q_shared.h"\
+	".\qcommon\qcommon.h"\
+	".\qcommon\qfiles.h"\
+	".\server\server.h"\
+
+
+!ENDIF 
+
+# End Source File
+# Begin Source File
+
+SOURCE=.\server\sv_world.c
+
+!IF  "$(CFG)" == "quake2 - Win32 Release"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
+
+DEP_CPP_SV_WO=\
+	".\game\game.h"\
+	".\qshared\q_shared.h"\
+	".\qcommon\qcommon.h"\
+	".\qcommon\qfiles.h"\
+	".\server\server.h"\
+
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
+
+DEP_CPP_SV_WO=\
+	".\game\game.h"\
+	".\qshared\q_shared.h"\
+	".\qcommon\qcommon.h"\
+	".\qcommon\qfiles.h"\
+	".\server\server.h"\
+
+
+!ENDIF 
+
+# End Source File
+# End Group
+# Begin Group "sound"
+
+# PROP Default_Filter ""
 # Begin Source File
 
 SOURCE=.\client\snd_dma.c
@@ -1377,10 +1314,10 @@ DEP_CPP_SND_D=\
 	".\client\snd_loc.h"\
 	".\client\sound.h"\
 	".\client\vid.h"\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
 
@@ -1395,10 +1332,10 @@ DEP_CPP_SND_D=\
 	".\client\snd_loc.h"\
 	".\client\sound.h"\
 	".\client\vid.h"\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ENDIF 
 
@@ -1424,10 +1361,10 @@ DEP_CPP_SND_M=\
 	".\client\snd_loc.h"\
 	".\client\sound.h"\
 	".\client\vid.h"\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
 
@@ -1442,10 +1379,10 @@ DEP_CPP_SND_M=\
 	".\client\snd_loc.h"\
 	".\client\sound.h"\
 	".\client\vid.h"\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ENDIF 
 
@@ -1471,10 +1408,10 @@ DEP_CPP_SND_MI=\
 	".\client\snd_loc.h"\
 	".\client\sound.h"\
 	".\client\vid.h"\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
 
@@ -1489,10 +1426,10 @@ DEP_CPP_SND_MI=\
 	".\client\snd_loc.h"\
 	".\client\sound.h"\
 	".\client\vid.h"\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ENDIF 
 
@@ -1518,11 +1455,11 @@ DEP_CPP_SND_W=\
 	".\client\snd_loc.h"\
 	".\client\sound.h"\
 	".\client\vid.h"\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
 	".\win32\winquake.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
 
@@ -1537,11 +1474,11 @@ DEP_CPP_SND_W=\
 	".\client\snd_loc.h"\
 	".\client\sound.h"\
 	".\client\vid.h"\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
 	".\win32\winquake.h"\
-	
+
 
 !ENDIF 
 
@@ -1561,9 +1498,13 @@ SOURCE=.\win32\snd_winamp.c
 !ENDIF 
 
 # End Source File
+# End Group
+# Begin Group "win32"
+
+# PROP Default_Filter ""
 # Begin Source File
 
-SOURCE=.\server\sv_ccmds.c
+SOURCE=.\win32\cd_win.c
 
 !IF  "$(CFG)" == "quake2 - Win32 Release"
 
@@ -1571,30 +1512,44 @@ SOURCE=.\server\sv_ccmds.c
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
 
-DEP_CPP_SV_CC=\
-	".\game\game.h"\
-	".\game\q_shared.h"\
+DEP_CPP_CD_WI=\
+	".\client\cdaudio.h"\
+	".\client\client.h"\
+	".\client\console.h"\
+	".\client\input.h"\
+	".\client\keys.h"\
+	".\client\ref.h"\
+	".\client\screen.h"\
+	".\client\sound.h"\
+	".\client\vid.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	".\server\server.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
 
-DEP_CPP_SV_CC=\
-	".\game\game.h"\
-	".\game\q_shared.h"\
+DEP_CPP_CD_WI=\
+	".\client\cdaudio.h"\
+	".\client\client.h"\
+	".\client\console.h"\
+	".\client\input.h"\
+	".\client\keys.h"\
+	".\client\ref.h"\
+	".\client\screen.h"\
+	".\client\sound.h"\
+	".\client\vid.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	".\server\server.h"\
-	
+
 
 !ENDIF 
 
 # End Source File
 # Begin Source File
 
-SOURCE=.\server\sv_ents.c
+SOURCE=.\win32\in_win.c
 
 !IF  "$(CFG)" == "quake2 - Win32 Release"
 
@@ -1602,30 +1557,46 @@ SOURCE=.\server\sv_ents.c
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
 
-DEP_CPP_SV_EN=\
-	".\game\game.h"\
-	".\game\q_shared.h"\
+DEP_CPP_IN_WI=\
+	".\client\cdaudio.h"\
+	".\client\client.h"\
+	".\client\console.h"\
+	".\client\input.h"\
+	".\client\keys.h"\
+	".\client\ref.h"\
+	".\client\screen.h"\
+	".\client\sound.h"\
+	".\client\vid.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	".\server\server.h"\
-	
+	".\win32\winquake.h"\
+
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
 
-DEP_CPP_SV_EN=\
-	".\game\game.h"\
-	".\game\q_shared.h"\
+DEP_CPP_IN_WI=\
+	".\client\cdaudio.h"\
+	".\client\client.h"\
+	".\client\console.h"\
+	".\client\input.h"\
+	".\client\keys.h"\
+	".\client\ref.h"\
+	".\client\screen.h"\
+	".\client\sound.h"\
+	".\client\vid.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	".\server\server.h"\
-	
+	".\win32\winquake.h"\
+
 
 !ENDIF 
 
 # End Source File
 # Begin Source File
 
-SOURCE=.\server\sv_game.c
+SOURCE=.\win32\net_wins.c
 
 !IF  "$(CFG)" == "quake2 - Win32 Release"
 
@@ -1633,30 +1604,26 @@ SOURCE=.\server\sv_game.c
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
 
-DEP_CPP_SV_GA=\
-	".\game\game.h"\
-	".\game\q_shared.h"\
+DEP_CPP_NET_W=\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	".\server\server.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
 
-DEP_CPP_SV_GA=\
-	".\game\game.h"\
-	".\game\q_shared.h"\
+DEP_CPP_NET_W=\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	".\server\server.h"\
-	
+
 
 !ENDIF 
 
 # End Source File
 # Begin Source File
 
-SOURCE=.\server\sv_init.c
+SOURCE=.\win32\q_shwin.c
 
 !IF  "$(CFG)" == "quake2 - Win32 Release"
 
@@ -1664,147 +1631,21 @@ SOURCE=.\server\sv_init.c
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
 
-DEP_CPP_SV_IN=\
-	".\game\game.h"\
-	".\game\q_shared.h"\
+DEP_CPP_Q_SHW=\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	".\server\server.h"\
-	
+	".\win32\winquake.h"\
+
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
 
-DEP_CPP_SV_IN=\
-	".\game\game.h"\
-	".\game\q_shared.h"\
+DEP_CPP_Q_SHW=\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	".\server\server.h"\
-	
+	".\win32\winquake.h"\
 
-!ENDIF 
-
-# End Source File
-# Begin Source File
-
-SOURCE=.\server\sv_main.c
-
-!IF  "$(CFG)" == "quake2 - Win32 Release"
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug"
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
-
-DEP_CPP_SV_MA=\
-	".\game\game.h"\
-	".\game\q_shared.h"\
-	".\qcommon\qcommon.h"\
-	".\qcommon\qfiles.h"\
-	".\server\server.h"\
-	
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
-
-DEP_CPP_SV_MA=\
-	".\game\game.h"\
-	".\game\q_shared.h"\
-	".\qcommon\qcommon.h"\
-	".\qcommon\qfiles.h"\
-	".\server\server.h"\
-	
-
-!ENDIF 
-
-# End Source File
-# Begin Source File
-
-SOURCE=.\server\sv_send.c
-
-!IF  "$(CFG)" == "quake2 - Win32 Release"
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug"
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
-
-DEP_CPP_SV_SE=\
-	".\game\game.h"\
-	".\game\q_shared.h"\
-	".\qcommon\qcommon.h"\
-	".\qcommon\qfiles.h"\
-	".\server\server.h"\
-	
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
-
-DEP_CPP_SV_SE=\
-	".\game\game.h"\
-	".\game\q_shared.h"\
-	".\qcommon\qcommon.h"\
-	".\qcommon\qfiles.h"\
-	".\server\server.h"\
-	
-
-!ENDIF 
-
-# End Source File
-# Begin Source File
-
-SOURCE=.\server\sv_user.c
-
-!IF  "$(CFG)" == "quake2 - Win32 Release"
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug"
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
-
-DEP_CPP_SV_US=\
-	".\game\game.h"\
-	".\game\q_shared.h"\
-	".\qcommon\qcommon.h"\
-	".\qcommon\qfiles.h"\
-	".\server\server.h"\
-	
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
-
-DEP_CPP_SV_US=\
-	".\game\game.h"\
-	".\game\q_shared.h"\
-	".\qcommon\qcommon.h"\
-	".\qcommon\qfiles.h"\
-	".\server\server.h"\
-	
-
-!ENDIF 
-
-# End Source File
-# Begin Source File
-
-SOURCE=.\server\sv_world.c
-
-!IF  "$(CFG)" == "quake2 - Win32 Release"
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug"
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
-
-DEP_CPP_SV_WO=\
-	".\game\game.h"\
-	".\game\q_shared.h"\
-	".\qcommon\qcommon.h"\
-	".\qcommon\qfiles.h"\
-	".\server\server.h"\
-	
-
-!ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
-
-DEP_CPP_SV_WO=\
-	".\game\game.h"\
-	".\game\q_shared.h"\
-	".\qcommon\qcommon.h"\
-	".\qcommon\qfiles.h"\
-	".\server\server.h"\
-	
 
 !ENDIF 
 
@@ -1820,22 +1661,22 @@ SOURCE=.\win32\sys_win.c
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
 
 DEP_CPP_SYS_W=\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
 	".\win32\conproc.h"\
 	".\win32\winquake.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
 
 DEP_CPP_SYS_W=\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
 	".\win32\conproc.h"\
 	".\win32\winquake.h"\
-	
+
 
 !ENDIF 
 
@@ -1860,11 +1701,11 @@ DEP_CPP_VID_D=\
 	".\client\screen.h"\
 	".\client\sound.h"\
 	".\client\vid.h"\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
 	".\win32\winquake.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
 
@@ -1878,11 +1719,11 @@ DEP_CPP_VID_D=\
 	".\client\screen.h"\
 	".\client\sound.h"\
 	".\client\vid.h"\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
 	".\win32\winquake.h"\
-	
+
 
 !ENDIF 
 
@@ -1908,10 +1749,10 @@ DEP_CPP_VID_M=\
 	".\client\screen.h"\
 	".\client\sound.h"\
 	".\client\vid.h"\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
 
@@ -1926,10 +1767,239 @@ DEP_CPP_VID_M=\
 	".\client\screen.h"\
 	".\client\sound.h"\
 	".\client\vid.h"\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
+	".\qcommon\qcommon.h"\
+	".\qcommon\qfiles.h"\
+
+
+!ENDIF 
+
+# End Source File
+# End Group
+# Begin Source File
+
+SOURCE=.\client\avi_export.c
+
+!IF  "$(CFG)" == "quake2 - Win32 Release"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
+
+!ENDIF 
+
+# End Source File
+# Begin Source File
+
+SOURCE=.\client\console.c
+
+!IF  "$(CFG)" == "quake2 - Win32 Release"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
+
+DEP_CPP_CONSO=\
+	".\client\cdaudio.h"\
+	".\client\client.h"\
+	".\client\console.h"\
+	".\client\input.h"\
+	".\client\keys.h"\
+	".\client\ref.h"\
+	".\client\screen.h"\
+	".\client\sound.h"\
+	".\client\vid.h"\
+	".\qshared\q_shared.h"\
+	".\qcommon\qcommon.h"\
+	".\qcommon\qfiles.h"\
+
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
+
+DEP_CPP_CONSO=\
+	".\client\cdaudio.h"\
+	".\client\client.h"\
+	".\client\console.h"\
+	".\client\input.h"\
+	".\client\keys.h"\
+	".\client\ref.h"\
+	".\client\screen.h"\
+	".\client\sound.h"\
+	".\client\vid.h"\
+	".\qshared\q_shared.h"\
+	".\qcommon\qcommon.h"\
+	".\qcommon\qfiles.h"\
+
+
+!ENDIF 
+
+# End Source File
+# Begin Source File
+
+SOURCE=.\client\keys.c
+
+!IF  "$(CFG)" == "quake2 - Win32 Release"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
+
+DEP_CPP_KEYS_=\
+	".\client\cdaudio.h"\
+	".\client\client.h"\
+	".\client\console.h"\
+	".\client\input.h"\
+	".\client\keys.h"\
+	".\client\ref.h"\
+	".\client\screen.h"\
+	".\client\sound.h"\
+	".\client\vid.h"\
+	".\qshared\q_shared.h"\
+	".\qcommon\qcommon.h"\
+	".\qcommon\qfiles.h"\
+
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
+
+DEP_CPP_KEYS_=\
+	".\client\cdaudio.h"\
+	".\client\client.h"\
+	".\client\console.h"\
+	".\client\input.h"\
+	".\client\keys.h"\
+	".\client\ref.h"\
+	".\client\screen.h"\
+	".\client\sound.h"\
+	".\client\vid.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
 	
+NODEP_CPP_KEYS_=\
+	".\game\q_shared.h"\
+	
+
+!ENDIF 
+
+# End Source File
+# Begin Source File
+
+SOURCE=.\game\m_flash.c
+
+!IF  "$(CFG)" == "quake2 - Win32 Release"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
+
+DEP_CPP_M_FLA=\
+	".\qshared\q_shared.h"\
+	
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
+
+DEP_CPP_M_FLA=\
+	".\qshared\q_shared.h"\
+	
+
+!ENDIF 
+
+# End Source File
+# Begin Source File
+
+SOURCE=.\client\menu.c
+
+!IF  "$(CFG)" == "quake2 - Win32 Release"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
+
+DEP_CPP_MENU_=\
+	".\client\cdaudio.h"\
+	".\client\client.h"\
+	".\client\console.h"\
+	".\client\input.h"\
+	".\client\keys.h"\
+	".\client\qmenu.h"\
+	".\client\ref.h"\
+	".\client\screen.h"\
+	".\client\sound.h"\
+	".\client\vid.h"\
+	".\qshared\q_shared.h"\
+	".\qcommon\qcommon.h"\
+	".\qcommon\qfiles.h"\
+
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
+
+DEP_CPP_MENU_=\
+	".\client\cdaudio.h"\
+	".\client\client.h"\
+	".\client\console.h"\
+	".\client\input.h"\
+	".\client\keys.h"\
+	".\client\qmenu.h"\
+	".\client\ref.h"\
+	".\client\screen.h"\
+	".\client\sound.h"\
+	".\client\vid.h"\
+	".\qshared\q_shared.h"\
+	".\qcommon\qcommon.h"\
+	".\qcommon\qfiles.h"\
+
+
+!ENDIF 
+
+# End Source File
+# Begin Source File
+
+SOURCE=.\client\qmenu.c
+
+!IF  "$(CFG)" == "quake2 - Win32 Release"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
+
+DEP_CPP_QMENU=\
+	".\client\cdaudio.h"\
+	".\client\client.h"\
+	".\client\console.h"\
+	".\client\input.h"\
+	".\client\keys.h"\
+	".\client\qmenu.h"\
+	".\client\ref.h"\
+	".\client\screen.h"\
+	".\client\sound.h"\
+	".\client\vid.h"\
+	".\qshared\q_shared.h"\
+	".\qcommon\qcommon.h"\
+	".\qcommon\qfiles.h"\
+	
+NODEP_CPP_QMENU=\
+	".\game\q_shared.h"\
+	
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
+
+DEP_CPP_QMENU=\
+	".\client\cdaudio.h"\
+	".\client\client.h"\
+	".\client\console.h"\
+	".\client\input.h"\
+	".\client\keys.h"\
+	".\client\qmenu.h"\
+	".\client\ref.h"\
+	".\client\screen.h"\
+	".\client\sound.h"\
+	".\client\vid.h"\
+	".\qshared\q_shared.h"\
+	".\qcommon\qcommon.h"\
+	".\qcommon\qfiles.h"\
+
 
 !ENDIF 
 
@@ -1954,10 +2024,10 @@ DEP_CPP_X86_C=\
 	".\client\screen.h"\
 	".\client\sound.h"\
 	".\client\vid.h"\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
 
@@ -1971,10 +2041,10 @@ DEP_CPP_X86_C=\
 	".\client\screen.h"\
 	".\client\sound.h"\
 	".\client\vid.h"\
-	".\game\q_shared.h"\
+	".\qshared\q_shared.h"\
 	".\qcommon\qcommon.h"\
 	".\qcommon\qfiles.h"\
-	
+
 
 !ENDIF 
 
@@ -2025,7 +2095,7 @@ SOURCE=.\client\keys.h
 # End Source File
 # Begin Source File
 
-SOURCE=.\game\q_shared.h
+SOURCE=.\qshared\q_shared.h
 # End Source File
 # Begin Source File
 

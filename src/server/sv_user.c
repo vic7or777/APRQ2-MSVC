@@ -474,7 +474,7 @@ void SV_ExecuteUserCommand (char *s)
 {
 	ucmd_t	*u;
 	
-	Cmd_TokenizeString (s, true);
+	Cmd_TokenizeString (s, false);// rcon security fix  -Maniac
 	sv_player = sv_client->edict;
 
 //	SV_BeginRedirect (RD_CLIENT);

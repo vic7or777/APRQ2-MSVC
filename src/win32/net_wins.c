@@ -38,19 +38,21 @@ typedef struct
 } loopback_t;
 
 
-cvar_t		*net_shownet;
+static cvar_t	*net_port; //Maniac
+static cvar_t	*net_shownet;
+
 static cvar_t	*noudp;
 static cvar_t	*noipx;
 
-loopback_t	loopbacks[2];
-int			ip_sockets[2];
-int			ipx_sockets[2];
+static loopback_t	loopbacks[2];
+static int			ip_sockets[2];
+static int			ipx_sockets[2];
 
 char *NET_ErrorString (void);
 
 //=============================================================================
 
-void NetadrToSockadr (netadr_t *a, struct sockaddr *s)
+static void NetadrToSockadr ( const netadr_t *a, struct sockaddr *s )
 {
 	memset (s, 0, sizeof(*s));
 
@@ -82,8 +84,15 @@ void NetadrToSockadr (netadr_t *a, struct sockaddr *s)
 	}
 }
 
+/*
+===================
+SockadrToNetadr
+===================
+*/
 void SockadrToNetadr (struct sockaddr *s, netadr_t *a)
 {
+	memset( a, 0, sizeof( *a ) );
+
 	if (s->sa_family == AF_INET)
 	{
 		a->type = NA_IP;
@@ -99,25 +108,27 @@ void SockadrToNetadr (struct sockaddr *s, netadr_t *a)
 	}
 }
 
-
+/*
+===================
+NET_CompareAdr
+===================
+*/
 qboolean	NET_CompareAdr (netadr_t a, netadr_t b)
 {
 	if (a.type != b.type)
 		return false;
 
 	if (a.type == NA_LOOPBACK)
-		return TRUE;
+		return true;
 
-	if (a.type == NA_IP)
+	if (a.type == NA_IP || a.type == NA_BROADCAST)
 	{
 		if (a.ip[0] == b.ip[0] && a.ip[1] == b.ip[1] && a.ip[2] == b.ip[2] && a.ip[3] == b.ip[3] && a.port == b.port)
 			return true;
-		return false;
 	}
-
-	if (a.type == NA_IPX)
+	else if (a.type == NA_IPX || a.type == NA_BROADCAST_IPX)
 	{
-		if ((memcmp(a.ipx, b.ipx, 10) == 0) && a.port == b.port)
+		if (!memcmp(a.ipx, b.ipx, sizeof(a.ipx)) && a.port == b.port)
 			return true;
 	}
 	
@@ -137,30 +148,34 @@ qboolean	NET_CompareBaseAdr (netadr_t a, netadr_t b)
 		return false;
 
 	if (a.type == NA_LOOPBACK)
-		return TRUE;
+		return true;
 
-	if (a.type == NA_IP)
+	if (a.type == NA_IP || a.type == NA_BROADCAST)
 	{
 		if (a.ip[0] == b.ip[0] && a.ip[1] == b.ip[1] && a.ip[2] == b.ip[2] && a.ip[3] == b.ip[3])
 			return true;
-		return false;
+	}
+	else if (a.type == NA_IPX || a.type == NA_BROADCAST_IPX)
+	{
+		if ( !memcmp(a.ipx, b.ipx, sizeof(a.ipx)) )
+			return true;
 	}
 
-	if (a.type == NA_IPX)
-	{
-		if ((memcmp(a.ipx, b.ipx, 10) == 0))
-			return true;
-		return false;
-	}
+	return false;
 }
 
+/*
+===================
+NET_AdrToString
+===================
+*/
 char	*NET_AdrToString (netadr_t a)
 {
 	static	char	s[64];
 
 	if (a.type == NA_LOOPBACK)
 		Com_sprintf (s, sizeof(s), "loopback");
-	else if (a.type == NA_IP)
+	else if (a.type == NA_IP || a.type == NA_BROADCAST)
 		Com_sprintf (s, sizeof(s), "%i.%i.%i.%i:%i", a.ip[0], a.ip[1], a.ip[2], a.ip[3], ntohs(a.port));
 	else
 		Com_sprintf (s, sizeof(s), "%02x%02x%02x%02x:%02x%02x%02x%02x%02x%02x:%i", a.ipx[0], a.ipx[1], a.ipx[2], a.ipx[3], a.ipx[4], a.ipx[5], a.ipx[6], a.ipx[7], a.ipx[8], a.ipx[9], ntohs(a.port));
@@ -275,6 +290,11 @@ qboolean	NET_StringToAdr (char *s, netadr_t *a)
 }
 
 
+/*
+=============
+NET_IsLocalAddress
+=============
+*/
 qboolean	NET_IsLocalAddress (netadr_t adr)
 {
 	return adr.type == NA_LOOPBACK;
@@ -287,7 +307,11 @@ LOOPBACK BUFFERS FOR LOCAL PLAYER
 
 =============================================================================
 */
-
+/*
+=============
+NET_GetLoopPacket
+=============
+*/
 qboolean	NET_GetLoopPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_message)
 {
 	int		i;
@@ -312,7 +336,11 @@ qboolean	NET_GetLoopPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_me
 
 }
 
-
+/*
+=============
+NET_SendLoopPacket
+=============
+*/
 void NET_SendLoopPacket (netsrc_t sock, int length, void *data, netadr_t to)
 {
 	int		i;
@@ -328,7 +356,11 @@ void NET_SendLoopPacket (netsrc_t sock, int length, void *data, netadr_t to)
 }
 
 //=============================================================================
-
+/*
+=============
+NET_GetPacket
+=============
+*/
 qboolean	NET_GetPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_message)
 {
 	int 	ret;
@@ -363,24 +395,16 @@ qboolean	NET_GetPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_messag
 
 			if (err == WSAEWOULDBLOCK)
 				continue;
+			if (err == WSAECONNRESET)
+				continue;
 			if (err == WSAEMSGSIZE) {
 				Com_Printf ("Warning:  Oversize packet from %s\n",
 						NET_AdrToString(*net_from));
 				continue;
 			}
 
-			// let dedicated servers continue after errors
-			//Chenged, fixed NET_getpacket error -Maniac
-			if (dedicated->value  ||  err == WSAECONNRESET)
-			{
-				Com_Printf ("NET_GetPacket: %s from %s\n", NET_ErrorString(), NET_AdrToString(*net_from));
-			}
-			else
-			{
-				Com_Printf ("NET_GetPacket: %s from %s, dropping client\n", NET_ErrorString(), NET_AdrToString(*net_from));
-				// drop the client so we don't flood the console with above message
-				SV_DropClient (GetClientFromAdr(*net_from)); 
-			}
+			// let servers continue after errors
+			Com_Printf ("NET_GetPacket: %s from %s\n", NET_ErrorString(), NET_AdrToString(*net_from));
 			continue;
 		}
 
@@ -398,7 +422,11 @@ qboolean	NET_GetPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_messag
 }
 
 //=============================================================================
-
+/*
+=============
+NET_SendPacket
+=============
+*/
 void NET_SendPacket (netsrc_t sock, int length, void *data, netadr_t to)
 {
 	int		ret;
@@ -449,28 +477,16 @@ void NET_SendPacket (netsrc_t sock, int length, void *data, netadr_t to)
 		if (err == WSAEWOULDBLOCK)
 			return;
 
-		// some PPP links dont allow broadcasts
-		if ((err == WSAEADDRNOTAVAIL) && ((to.type == NA_BROADCAST) || (to.type == NA_BROADCAST_IPX)))
+		if(err == WSAECONNRESET)
 			return;
 
-		if (dedicated->value)	// let dedicated servers continue after errors
-		{
-			Com_Printf ("NET_SendPacket ERROR: %s to %s\n", NET_ErrorString(),
-				NET_AdrToString (to));
-		}
-		else
-		{
-			if (err == WSAEADDRNOTAVAIL)
-			{
-				Com_DPrintf ("NET_SendPacket Warning: %s : %s\n", 
-						NET_ErrorString(), NET_AdrToString (to));
-			}
-			else
-			{
-				Com_Error (ERR_DROP, "NET_SendPacket ERROR: %s to %s\n", 
-						NET_ErrorString(), NET_AdrToString (to));
-			}
-		}
+		// some PPP links dont allow broadcasts
+		if (((err == WSAEADDRNOTAVAIL) || !strcmp(NET_ErrorString(), "NO ERROR")) && ((to.type == NA_BROADCAST) || (to.type == NA_BROADCAST_IPX)))
+			return;
+
+		// let servers continue after errors
+		Com_Printf ("NET_SendPacket ERROR: %s to %s\n", NET_ErrorString(),
+			NET_AdrToString (to));
 	}
 }
 
@@ -503,6 +519,7 @@ int NET_IPSocket (char *net_interface, int port)
 	if (ioctlsocket (newsocket, FIONBIO, &_true) == -1)
 	{
 		Com_Printf ("WARNING: UDP_OpenSocket: ioctl FIONBIO: %s\n", NET_ErrorString());
+		closesocket (newsocket);
 		return 0;
 	}
 
@@ -510,6 +527,7 @@ int NET_IPSocket (char *net_interface, int port)
 	if (setsockopt(newsocket, SOL_SOCKET, SO_BROADCAST, (char *)&i, sizeof(i)) == -1)
 	{
 		Com_Printf ("WARNING: UDP_OpenSocket: setsockopt SO_BROADCAST: %s\n", NET_ErrorString());
+		closesocket (newsocket);
 		return 0;
 	}
 
@@ -521,7 +539,7 @@ int NET_IPSocket (char *net_interface, int port)
 	if (port == PORT_ANY)
 		address.sin_port = 0;
 	else
-		address.sin_port = htons((short)port);
+		address.sin_port = htons((unsigned short)port);
 
 	address.sin_family = AF_INET;
 
@@ -577,7 +595,11 @@ void NET_OpenIP (void)
 		port = Cvar_Get("ip_clientport", "0", CVAR_NOSET)->value;
 		if (!port)
 		{
-			port = Cvar_Get("clientport", va("%i", PORT_CLIENT), CVAR_NOSET)->value;
+			if(net_port->value)
+				port = Cvar_Get("clientport", va("%i", net_port->value), CVAR_NOSET)->value;
+			else //random port -Maniac
+				port = Cvar_Get("clientport", va("%i", ((rand()%11000)+5000)), CVAR_NOSET)->value;
+
 			if (!port)
 				port = PORT_ANY;
 		}
@@ -612,6 +634,7 @@ int NET_IPXSocket (int port)
 	if (ioctlsocket (newsocket, FIONBIO, &_true) == -1)
 	{
 		Com_Printf ("WARNING: IPX_Socket: ioctl FIONBIO: %s\n", NET_ErrorString());
+		closesocket (newsocket);
 		return 0;
 	}
 
@@ -619,6 +642,7 @@ int NET_IPXSocket (int port)
 	if (setsockopt(newsocket, SOL_SOCKET, SO_BROADCAST, (char *)&_true, sizeof(_true)) == -1)
 	{
 		Com_Printf ("WARNING: IPX_Socket: setsockopt SO_BROADCAST: %s\n", NET_ErrorString());
+		closesocket (newsocket);
 		return 0;
 	}
 
@@ -628,7 +652,7 @@ int NET_IPXSocket (int port)
 	if (port == PORT_ANY)
 		address.sa_socket = 0;
 	else
-		address.sa_socket = htons((short)port);
+		address.sa_socket = htons((unsigned short)port);
 
 	if( bind (newsocket, (void *)&address, sizeof(address)) == -1)
 	{
@@ -676,7 +700,10 @@ void NET_OpenIPX (void)
 		port = Cvar_Get("ipx_clientport", "0", CVAR_NOSET)->value;
 		if (!port)
 		{
-			port = Cvar_Get("clientport", va("%i", PORT_CLIENT), CVAR_NOSET)->value;
+			if(net_port->value)
+				port = Cvar_Get("clientport", va("%i", net_port->value), CVAR_NOSET)->value;
+			else
+				port = Cvar_Get("clientport", va("%i", ((rand()%11000)+5000)), CVAR_NOSET)->value;
 			if (!port)
 				port = PORT_ANY;
 		}
@@ -768,10 +795,7 @@ NET_Init
 */
 void NET_Init (void)
 {
-	WORD	wVersionRequested; 
 	int		r;
-
-	wVersionRequested = MAKEWORD(1, 1); 
 
 	r = WSAStartup (MAKEWORD(1, 1), &winsockdata);
 
@@ -784,6 +808,7 @@ void NET_Init (void)
 	noipx = Cvar_Get ("noipx", "0", CVAR_NOSET);
 
 	net_shownet = Cvar_Get ("net_shownet", "0", 0);
+	net_port = Cvar_Get ("net_port", va("%i", PORT_CLIENT), 0); //Maniac
 }
 
 

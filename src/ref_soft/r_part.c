@@ -149,30 +149,7 @@ __declspec(naked) void R_DrawParticle( void )
 	__asm fstp dword ptr [local+4]        ; p_o.z-r_o.z
 	__asm fstp dword ptr [local+8]        ; (empty)
 
-	// transformed[0] = DotProduct(local, r_pright);
-	// transformed[1] = DotProduct(local, r_pup);
 	// transformed[2] = DotProduct(local, r_ppn);
-	__asm fld  dword ptr [local+0]        ; l.x
-	__asm fmul dword ptr [r_pright+0]     ; l.x*pr.x
-	__asm fld  dword ptr [local+4]        ; l.y | l.x*pr.x
-	__asm fmul dword ptr [r_pright+4]     ; l.y*pr.y | l.x*pr.x
-	__asm fld  dword ptr [local+8]        ; l.z | l.y*pr.y | l.x*pr.x
-	__asm fmul dword ptr [r_pright+8]     ; l.z*pr.z | l.y*pr.y | l.x*pr.x
-	__asm fxch st(2)                      ; l.x*pr.x | l.y*pr.y | l.z*pr.z
-	__asm faddp st(1), st                 ; l.x*pr.x + l.y*pr.y | l.z*pr.z
-	__asm faddp st(1), st                 ; l.x*pr.x + l.y*pr.y + l.z*pr.z
-	__asm fstp  dword ptr [transformed+0] ; (empty)
-
-	__asm fld  dword ptr [local+0]        ; l.x
-	__asm fmul dword ptr [r_pup+0]        ; l.x*pr.x
-	__asm fld  dword ptr [local+4]        ; l.y | l.x*pr.x
-	__asm fmul dword ptr [r_pup+4]        ; l.y*pr.y | l.x*pr.x
-	__asm fld  dword ptr [local+8]        ; l.z | l.y*pr.y | l.x*pr.x
-	__asm fmul dword ptr [r_pup+8]        ; l.z*pr.z | l.y*pr.y | l.x*pr.x
-	__asm fxch st(2)                      ; l.x*pr.x | l.y*pr.y | l.z*pr.z
-	__asm faddp st(1), st                 ; l.x*pr.x + l.y*pr.y | l.z*pr.z
-	__asm faddp st(1), st                 ; l.x*pr.x + l.y*pr.y + l.z*pr.z
-	__asm fstp  dword ptr [transformed+4] ; (empty)
 
 	__asm fld  dword ptr [local+0]        ; l.x
 	__asm fmul dword ptr [r_ppn+0]        ; l.x*pr.x
@@ -199,6 +176,31 @@ __declspec(naked) void R_DrawParticle( void )
 	__asm js   end
 	__asm cmp  eax, particle_z_clip
 	__asm jl   end
+
+	// transformed[0] = DotProduct(local, r_pright);
+	// transformed[1] = DotProduct(local, r_pup);
+
+	__asm fld  dword ptr [local+0]        ; l.x
+	__asm fmul dword ptr [r_pright+0]     ; l.x*pr.x
+	__asm fld  dword ptr [local+4]        ; l.y | l.x*pr.x
+	__asm fmul dword ptr [r_pright+4]     ; l.y*pr.y | l.x*pr.x
+	__asm fld  dword ptr [local+8]        ; l.z | l.y*pr.y | l.x*pr.x
+	__asm fmul dword ptr [r_pright+8]     ; l.z*pr.z | l.y*pr.y | l.x*pr.x
+	__asm fxch st(2)                      ; l.x*pr.x | l.y*pr.y | l.z*pr.z
+	__asm faddp st(1), st                 ; l.x*pr.x + l.y*pr.y | l.z*pr.z
+	__asm faddp st(1), st                 ; l.x*pr.x + l.y*pr.y + l.z*pr.z
+	__asm fstp  dword ptr [transformed+0] ; (empty)
+
+	__asm fld  dword ptr [local+0]        ; l.x
+	__asm fmul dword ptr [r_pup+0]        ; l.x*pr.x
+	__asm fld  dword ptr [local+4]        ; l.y | l.x*pr.x
+	__asm fmul dword ptr [r_pup+4]        ; l.y*pr.y | l.x*pr.x
+	__asm fld  dword ptr [local+8]        ; l.z | l.y*pr.y | l.x*pr.x
+	__asm fmul dword ptr [r_pup+8]        ; l.z*pr.z | l.y*pr.y | l.x*pr.x
+	__asm fxch st(2)                      ; l.x*pr.x | l.y*pr.y | l.z*pr.z
+	__asm faddp st(1), st                 ; l.x*pr.x + l.y*pr.y | l.z*pr.z
+	__asm faddp st(1), st                 ; l.x*pr.x + l.y*pr.y + l.z*pr.z
+	__asm fstp  dword ptr [transformed+4] ; (empty)
 
 	/*
 	** project the point by initiating the 1/z calc
@@ -447,7 +449,6 @@ static byte BlendParticle66( int pcolor, int dstcolor )
 
 static byte BlendParticle100( int pcolor, int dstcolor )
 {
-	dstcolor = dstcolor;
 	return pcolor;
 }
 
@@ -481,12 +482,13 @@ void R_DrawParticle( void )
 	*/
 	VectorSubtract (pparticle->origin, r_origin, local);
 
-	transformed[0] = DotProduct(local, r_pright);
-	transformed[1] = DotProduct(local, r_pup);
 	transformed[2] = DotProduct(local, r_ppn);		
 
 	if (transformed[2] < PARTICLE_Z_CLIP)
 		return;
+
+	transformed[0] = DotProduct(local, r_pright);
+	transformed[1] = DotProduct(local, r_pup);
 
 	/*
 	** bind the blend function pointer to the appropriate blender
@@ -536,51 +538,18 @@ void R_DrawParticle( void )
 	** render the appropriate pixels
 	*/
 	count = pix;
-
-    switch (level) {
-    case PARTICLE_33 :
-        for ( ; count ; count--, pz += d_zwidth, pdest += r_screenwidth)
-        {
-//FIXME--do it in blocks of 8?
-            for (i=0 ; i<pix ; i++)
-            {
-                if (pz[i] <= izi)
-                {
-                    pz[i]    = izi;
-                    pdest[i] = vid.alphamap[color + ((int)pdest[i]<<8)];
-                }
-            }
-        }
-        break;
-
-    case PARTICLE_66 :
-        for ( ; count ; count--, pz += d_zwidth, pdest += r_screenwidth)
-        {
-            for (i=0 ; i<pix ; i++)
-            {
-                if (pz[i] <= izi)
-                {
-                    pz[i]    = izi;
-                    pdest[i] = vid.alphamap[(color<<8) + (int)pdest[i]];
-                }
-            }
-        }
-        break;
-
-    default:  //100
-        for ( ; count ; count--, pz += d_zwidth, pdest += r_screenwidth)
-        {
-            for (i=0 ; i<pix ; i++)
-            {
-                if (pz[i] <= izi)
-                {
-                    pz[i]    = izi;
-                    pdest[i] = color;
-                }
-            }
-        }
-        break;
-    }
+	
+	for ( ; count ; count--, pz += d_zwidth, pdest += r_screenwidth)
+	{
+		for (i=0 ; i<pix ; i++)
+		{
+			if (pz[i] <= izi)
+			{
+				pz[i]    = izi;
+				pdest[i] = blendparticle ( color, (int)pdest[i] );
+			}
+		}
+	}
 }
 
 #endif	// !id386
@@ -635,4 +604,3 @@ void R_DrawParticles (void)
 #endif
 
 }
-

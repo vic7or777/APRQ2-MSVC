@@ -46,10 +46,8 @@ typedef struct
 typedef struct
 {
 	vec3_t		mins, maxs;
-	vec3_t		origin;		// for sounds or lights
 	float		radius;
 	int			headnode;
-	int			visleafs;		// not including the solid leaf 0
 	int			firstface, numfaces;
 } mmodel_t;
 
@@ -69,7 +67,6 @@ typedef struct
 typedef struct
 {
 	unsigned short	v[2];
-	unsigned int	cachededgeoffset;
 } medge_t;
 
 typedef struct mtexinfo_s
@@ -85,10 +82,7 @@ typedef struct mtexinfo_s
 
 typedef struct glpoly_s
 {
-	struct	glpoly_s	*next;
-	struct	glpoly_s	*chain;
 	int		numverts;
-	int		flags;			// for SURF_UNDERWATER (not needed anymore?)
 	float	verts[4][VERTEXSIZE];	// variable sized (xyz s1t1 s2t2)
 } glpoly_t;
 
@@ -102,8 +96,8 @@ typedef struct msurface_s
 	int			firstedge;	// look up in model->surfedges[], negative numbers
 	int			numedges;	// are backwards edges
 	
-	short		texturemins[2];
-	short		extents[2];
+	int			texturemins[2];
+	int			extents[2];
 
 	int			light_s, light_t;	// gl lightmap coordinates
 	int			dlight_s, dlight_t; // gl lightmap coordinates for dynamic lightmaps
@@ -122,12 +116,18 @@ typedef struct msurface_s
 	byte		styles[MAXLIGHTMAPS];
 	float		cached_light[MAXLIGHTMAPS];	// values currently used in lightmap
 	byte		*samples;		// [numstyles*surfsize]
+	byte		*stain_samples;		// stainmapping
+
+	// Vic's awesome decals
+	int				fragmentframe;
 } msurface_t;
+
+#define CONTENTS_NODE -1
 
 typedef struct mnode_s
 {
 // common with leaf
-	int			contents;		// -1, to differentiate from leafs
+	int			contents;		// CONTENTS_NODE, to differentiate from leafs
 	int			visframe;		// node needs to be traversed if current
 	
 	float		minmaxs[6];		// for bounding box culling
@@ -147,7 +147,7 @@ typedef struct mnode_s
 typedef struct mleaf_s
 {
 // common with node
-	int			contents;		// wil be a negative contents number
+	int			contents;		// will be something other than CONTENTS_NODE
 	int			visframe;		// node needs to be traversed if current
 
 	float		minmaxs[6];		// for bounding box culling
@@ -189,16 +189,9 @@ typedef struct model_s
 	float		radius;
 
 //
-// solid volume for clipping 
-//
-	qboolean	clipbox;
-	vec3_t		clipmins, clipmaxs;
-
-//
 // brush model
 //
 	int			firstmodelsurface, nummodelsurfaces;
-	int			lightmap;		// only for submodels
 
 	int			numsubmodels;
 	mmodel_t	*submodels;
@@ -234,6 +227,7 @@ typedef struct model_s
 	dvis_t		*vis;
 
 	byte		*lightdata;
+	byte		*staindata;
 
 	// for alias models and skins
 	image_t		*skins[MAX_MD2SKINS];

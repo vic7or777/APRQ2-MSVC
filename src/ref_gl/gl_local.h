@@ -24,7 +24,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include <stdio.h>
 
-//#include <GL/gl.h> -Maniac
+//#include <GL/gl.h>
 #include <GL/glu.h>
 #include "glext.h"
 #include <math.h>
@@ -38,7 +38,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../client/ref.h"
 #include "qgl.h"
 
-#define	REF_VERSION	"GL 0.05"
+#define	REF_VERSION	"GL 0.01"
 
 // up / down
 #define	PITCH	0
@@ -130,6 +130,7 @@ typedef struct image_s
 	qboolean	scrap;
 	qboolean	has_alpha;
 
+	int		bits; //-Maniac
 	qboolean paletted;
 } image_t;
 
@@ -182,6 +183,9 @@ extern	int			numgltextures;
 
 extern	image_t		*r_notexture;
 extern	image_t		*r_particletexture;
+extern	image_t		*r_caustictexture;
+extern	image_t		*r_bholetexture;
+
 extern	entity_t	*currententity;
 extern	model_t		*currentmodel;
 extern	int			r_visframecount;
@@ -276,8 +280,19 @@ extern	cvar_t		*intensity;
 //Added gl_variables -Maniac
 extern  cvar_t  *skydistance; // DMP - skybox size change
 
-extern	cvar_t	*gl_loadtga;
+extern	cvar_t	*gl_replacewal;
+extern	cvar_t	*gl_replacepcx;
 extern	cvar_t	*gl_screenshot_quality;
+extern  cvar_t	*gl_stainmaps;
+extern	cvar_t	*gl_waterwaves;
+extern	cvar_t	*gl_celshading;
+extern	cvar_t	*gl_celshading_width;
+extern	cvar_t	*gl_scale;
+extern	cvar_t	*gl_watercaustics;
+extern	cvar_t	*gl_fog;
+
+extern	cvar_t	*gl_decals;
+extern	cvar_t	*gl_decals_time;
 
 //End
 
@@ -307,7 +322,7 @@ void R_PushDlights (void);
 extern	model_t	*r_worldmodel;
 
 extern	unsigned	d_8to24table[256];
-extern	float		d_8to24tablef[256][3]; // -Maniac
+extern	float		d_8to24tablef[256][3];
 
 extern	int		registration_sequence;
 
@@ -323,17 +338,16 @@ void GL_ScreenShot_JPG (void);
 //End
 
 void GL_ScreenShot_f (void);
-void R_DrawAliasModel (entity_t *e);
-void R_DrawBrushModel (entity_t *e);
-void R_DrawSpriteModel (entity_t *e);
-void R_DrawBeam( entity_t *e );
+void R_DrawAliasModel (void);
+void R_DrawBrushModel (void);
+void R_DrawSpriteModel (void);
+void R_DrawBeam( void );
 void R_DrawWorld (void);
 void R_RenderDlights (void);
 void R_DrawAlphaSurfaces (void);
 void R_RenderBrushPoly (msurface_t *fa);
 void R_InitParticleTexture (void);
 void Draw_InitLocal (void);
-void GL_SubdivideSurface (msurface_t *fa);
 qboolean R_CullBox (vec3_t mins, vec3_t maxs);
 void R_RotateForEntity (entity_t *e);
 void R_MarkLeaves (void);
@@ -358,10 +372,11 @@ char	*va(char *format, ...);
 void COM_StripExtension (char *in, char *out);
 
 void	Draw_GetPicSize (int *w, int *h, char *name);
-void	Draw_Pic (int x, int y, char *name);
-// Knightamre- added alpha for Psychospaz's transparent console -Maniac
+void	Draw_Pic (int x, int y, char *name, float alpha);
+//added alpha for transparent console -Maniac
 void	Draw_StretchPic (int x, int y, int w, int h, char *name, float alpha);
-void	Draw_Char (int x, int y, int c);
+void	Draw_ScaledPic (int x, int y, float scale, char *name, float red, float green, float blue, float alpha);
+void	Draw_Char (int x, int y, int c, int color, float alpha);
 void	Draw_TileClear (int x, int y, int w, int h, char *name);
 void	Draw_Fill (int x, int y, int w, int h, int c);
 void	Draw_FadeScreen (void);
@@ -378,10 +393,10 @@ void GL_ResampleTexture (unsigned *in, int inwidth, int inheight, unsigned *out,
 struct image_s *R_RegisterSkin (char *name);
 
 //Added loadpng -Maniac
-void LoadPNG ( char *name, byte **pic, int *width, int *height );
+void LoadPNG (char *filename, byte **pic, int *width, int *height);
 void LoadPCX (char *filename, byte **pic, byte **palette, int *width, int *height);
 
-image_t *GL_LoadPic (char *name, byte *pic, int width, int height, imagetype_t type, int bits);
+image_t *GL_LoadPic (char *name, byte *pic, int width, int height, imagetype_t type, int bits, int scale);
 image_t	*GL_FindImage (char *name, imagetype_t type);
 void	GL_TextureMode( char *string );
 void	GL_ImageList_f (void);
@@ -455,16 +470,6 @@ typedef struct
 	qboolean	allow_cds;
 } glconfig_t;
 
-// -Maniac
-#define GLSTATE_DISABLE_ALPHATEST	if (gl_state.alpha_test) { qglDisable(GL_ALPHA_TEST); gl_state.alpha_test=false; }
-#define GLSTATE_ENABLE_ALPHATEST	if (!gl_state.alpha_test) { qglEnable(GL_ALPHA_TEST); gl_state.alpha_test=true; }
-
-#define GLSTATE_DISABLE_BLEND		if (gl_state.blend) { qglDisable(GL_BLEND); gl_state.blend=false; }
-#define GLSTATE_ENABLE_BLEND		if (!gl_state.blend) { qglEnable(GL_BLEND); gl_state.blend=true; }
-
-#define GLSTATE_DISABLE_TEXGEN		if (gl_state.texgen) { qglDisable(GL_TEXTURE_GEN_S); qglDisable(GL_TEXTURE_GEN_T); qglDisable(GL_TEXTURE_GEN_R); gl_state.texgen=false; }
-#define GLSTATE_ENABLE_TEXGEN		if (!gl_state.texgen) { qglEnable(GL_TEXTURE_GEN_S); qglEnable(GL_TEXTURE_GEN_T); qglEnable(GL_TEXTURE_GEN_R); gl_state.texgen=true; }
-
 typedef struct
 {
 	float inverse_intensity;
@@ -482,16 +487,33 @@ typedef struct
 	float camera_separation;
 	qboolean stereo_enabled;
 
-	qboolean		alpha_test;
-	qboolean		blend;
+	qboolean		sgis_mipmap; //sgis mipmap -Maniac
+	int				maxtexsize; //max texture size -Maniac
+	qboolean		texture_compression; // Heffo - ARB Texture Compression
 
-	unsigned char originalRedGammaTable[256];
-	unsigned char originalGreenGammaTable[256];
-	unsigned char originalBlueGammaTable[256];
+	qboolean		tex_rectangle;
+
 } glstate_t;
 
 extern glconfig_t  gl_config;
 extern glstate_t   gl_state;
+
+
+// added vertex arrays -Maniac
+
+#define MAX_ARRAY MAX_PARTICLES*4
+
+#define VA_SetElem2(v,a,b)		((v)[0]=(a),(v)[1]=(b))
+#define VA_SetElem3(v,a,b,c)	((v)[0]=(a),(v)[1]=(b),(v)[2]=(c))
+#define VA_SetElem4(v,a,b,c,d)	((v)[0]=(a),(v)[1]=(b),(v)[2]=(c),(v)[3]=(d))
+
+extern float	tex_array[MAX_ARRAY][2];
+extern float	vert_array[MAX_ARRAY][3];
+extern float	col_array[MAX_ARRAY][4];
+
+extern int	max_tsize;
+
+#include "gl_decal.h"
 
 /*
 ====================================================================
@@ -520,4 +542,3 @@ int     	GLimp_SetMode( int *pwidth, int *pheight, int mode, qboolean fullscreen
 void		GLimp_AppActivate( qboolean active );
 void		GLimp_EnableLogging( qboolean enable );
 void		GLimp_LogNewFrame( void );
-

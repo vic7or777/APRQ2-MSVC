@@ -71,8 +71,8 @@ sizebuf_t	cmd_text;
 //byte		cmd_text_buf[8192];
 //byte		defer_text_buf[8192];
 
-byte		cmd_text_buf[65536];
-byte		defer_text_buf[65536];
+byte		cmd_text_buf[32768];
+byte		defer_text_buf[32768];
 
 /*
 ============
@@ -102,7 +102,7 @@ void Cbuf_AddText (char *text)
 		Com_Printf ("Cbuf_AddText: overflow\n");
 		return;
 	}
-	SZ_Write (&cmd_text, text, strlen (text));
+	SZ_Write (&cmd_text, text, l);
 }
 
 
@@ -120,7 +120,7 @@ void Cbuf_InsertText (char *text)
 	char	*temp;
 	int		templen, l;
 
-	//Added from q2ice -Maniac
+	//changed -Maniac
 	l = strlen(text);
 
 	if (cmd_text.cursize + l >= cmd_text.maxsize){
@@ -377,10 +377,9 @@ qboolean Cbuf_AddLateCommands (void)
 Cmd_Exec_f
 ===============
 */
-//Changed cmd_exec with one from q2ice -Maniac
 void Cmd_Exec_f (void)
 {
-	char	*f, *f2;
+	char	*f;
 	int		len;
 
 	if (Cmd_Argc () != 2)
@@ -397,18 +396,10 @@ void Cmd_Exec_f (void)
 	}
 	Com_Printf ("execing %s\n",Cmd_Argv(1));
 	
-	// the file doesn't have a trailing 0, so we need to copy it off
-	f2 = Z_Malloc(len+1);
-	memcpy (f2, f, len);
-	f2[len] = 0;
+	Cbuf_InsertText (f);
 
-	Cbuf_InsertText (f2);
-
-	Z_Free (f2);
 	FS_FreeFile (f);
 }
-
-
 
 /*
 ===============
@@ -442,15 +433,23 @@ void Cmd_Alias_f (void)
 	if (Cmd_Argc() == 1)
 	{
 		Com_Printf ("Current alias commands:\n");
-		for (a = cmd_alias; a; a = a->next)
-		{
-			Com_Printf ("%s : %s\n", a->name, a->value);
-			//Changed with one from q2ice .Maniac
-			if (a->value[strlen(a->value)-1] != '\n')
-				Com_Printf ("\n");	// Some alias cmds end with a newline
-		}
+		for (a = cmd_alias ; a ; a=a->next)
+			Com_Printf ("%s \"%s\"\n", a->name, a->value);
 		return;
 	}
+/*	else if (Cmd_Argc() == 2) //Added to show aliases -Maniac
+	{
+		s = Cmd_Argv(1);
+		for (a = cmd_alias ; a ; a=a->next)
+		{
+			if (!strcmp(s, a->name))
+			{
+				Com_Printf ("%s \"%s\"", a->name, cmd);
+				break;
+			}
+		}
+		return;		
+	} */
 
 	s = Cmd_Argv(1);
 	if (strlen(s) >= MAX_ALIAS_NAME)
@@ -486,9 +485,28 @@ void Cmd_Alias_f (void)
 		if (i != (c - 1))
 			strcat (cmd, " ");
 	}
-	strcat (cmd, "\n");
+//	strcat (cmd, "\n");
 	
 	a->value = CopyString (cmd);
+}
+
+
+/*
+===================
+WriteAliases
+===================
+*/
+void Cmd_WriteAliases (FILE *f)
+{
+	cmdalias_t	*a;
+	char		buffer[512];
+
+	for (a = cmd_alias; a; a = a->next)
+	{
+		sprintf (buffer, "alias %s \"%s\"\n", a->name, a->value);
+
+		fprintf (f, buffer);
+	}
 }
 
 /*
@@ -519,7 +537,7 @@ static	cmd_function_t	*cmd_functions;		// possible commands to execute
 Cmd_Argc
 ============
 */
-int		Cmd_Argc (void)
+int Cmd_Argc (void)
 {
 	return cmd_argc;
 }
@@ -529,7 +547,7 @@ int		Cmd_Argc (void)
 Cmd_Argv
 ============
 */
-char	*Cmd_Argv (int arg)
+char *Cmd_Argv (int arg)
 {
 	if ( (unsigned)arg >= cmd_argc )
 		return cmd_null_string;
@@ -543,7 +561,7 @@ Cmd_Args
 Returns a single string containing argv(1) to argv(argc()-1)
 ============
 */
-char		*Cmd_Args (void)
+char *Cmd_Args (void)
 {
 	return cmd_args;
 }
@@ -617,7 +635,6 @@ char *Cmd_MacroExpandString (char *text)
 	if (inquote)
 	{
 		Com_Printf ("Line has unmatched quote, discarded.\n");
-		Com_Printf ("(%s)\n", text); //Added from q2ice -Maniac
 		return NULL;
 	}
 
@@ -673,7 +690,9 @@ void Cmd_TokenizeString (char *text, qboolean macroExpand)
 		{
 			int		l;
 
-			strcpy (cmd_args, text);
+			//strcpy (cmd_args, text);
+			strncpy (cmd_args, text, sizeof(cmd_args)-1);
+			cmd_args[sizeof(cmd_args)-1] = 0;
 
 			// strip off any trailing whitespace
 			l = strlen(cmd_args) - 1;
@@ -704,7 +723,7 @@ void Cmd_TokenizeString (char *text, qboolean macroExpand)
 Cmd_AddCommand
 ============
 */
-void	Cmd_AddCommand (char *cmd_name, xcommand_t function)
+void Cmd_AddCommand (char *cmd_name, xcommand_t function)
 {
 	cmd_function_t	*cmd;
 	
@@ -779,18 +798,13 @@ qboolean	Cmd_Exists (char *cmd_name)
 }
 
 
-
-/*
- *	Replaced Cmd_CompleteCommand and Cmd_List_f funktions -Maniac
- *	New funktions from Q2ICE project (http://q2ice.iceware.net)
- */
-
 /*
 ============
 Cmd_CompleteCommand
 ============
 */
 char			retval[256];
+
 char *Cmd_CompleteCommand (char *partial)
 {
 	cmd_function_t	*cmd;
@@ -799,45 +813,46 @@ char *Cmd_CompleteCommand (char *partial)
 	cvar_t			*cvar;
 	char			*pmatch[1024];
 	qboolean		diff = false;
+
 	
 	len = strlen(partial);
 	
 	if (!len)
 		return NULL;
 		
-// check for exact match
+	// check for exact match
 	for (cmd=cmd_functions ; cmd ; cmd=cmd->next)
-		if (!_stricmp (partial,cmd->name))
+		if (!Q_strcasecmp (partial,cmd->name))
 			return cmd->name;
 	for (a=cmd_alias ; a ; a=a->next)
-		if (!_stricmp (partial, a->name))
+		if (!Q_strcasecmp (partial, a->name))
 			return a->name;
 	for (cvar=cvar_vars ; cvar ; cvar=cvar->next)
-		if (!_stricmp (partial,cvar->name))
+		if (!Q_strcasecmp (partial,cvar->name))
 			return cvar->name;
 
-	for (i=0; i<1024; i++)
-		pmatch[i]=NULL;
+	memset(pmatch, 0, 1024);
 	i=0;
 
-// check for partial match
+	// check for partial match
 	for (cmd=cmd_functions ; cmd ; cmd=cmd->next)
-		if (!_strnicmp (partial,cmd->name, len)) {
+		if (!Q_strncasecmp (partial,cmd->name, len)) {
 			pmatch[i]=cmd->name;
 			i++;
 		}
 	for (a=cmd_alias ; a ; a=a->next)
-		if (!_strnicmp (partial, a->name, len)) {
+		if (!Q_strncasecmp (partial, a->name, len)) {
 			pmatch[i]=a->name;
 			i++;
 		}
 	for (cvar=cvar_vars ; cvar ; cvar=cvar->next)
-		if (!_strnicmp (partial,cvar->name, len)) {
+		if (!Q_strncasecmp (partial,cvar->name, len)) {
 			pmatch[i]=cvar->name;
 			i++;
 		}
 
-	if (i) {
+	if (i)
+	{
 		if (i == 1)
 			return pmatch[0];
 
@@ -845,15 +860,18 @@ char *Cmd_CompleteCommand (char *partial)
 		for (o=0; o<i; o++)
 			Com_Printf("   %s\n",pmatch[o]);
 
-		strcpy(retval,""); p=0;
-		while (!diff && p < 256) {
+		memset(retval, 0, sizeof(retval));
+		p=0;
+
+		while (!diff && p < 256)
+		{
 			retval[p]=pmatch[0][p];
 			for (o=0; o<i; o++) {
 				if (p > strlen(pmatch[o]))
 					continue;
 				if (retval[p] != pmatch[o][p]) {
 					retval[p] = 0;
-					diff=false;
+					diff=true;
 				}
 			}
 			p++;
@@ -872,13 +890,13 @@ qboolean Cmd_IsComplete (char *command)
 			
 	// check for exact match
 	for (cmd = cmd_functions; cmd; cmd = cmd->next)
-		if (!_stricmp (command, cmd->name))
+		if (!Q_strcasecmp (command, cmd->name))
 			return true;
 	for (a = cmd_alias; a; a = a->next)
-		if (!_stricmp (command, a->name))
+		if (!Q_strcasecmp (command, a->name))
 			return true;
 	for (cvar = cvar_vars; cvar; cvar = cvar->next)
-		if (!_stricmp (command, cvar->name))
+		if (!Q_strcasecmp (command, cvar->name))
 			return true;
 
 	return false;
@@ -929,7 +947,7 @@ void	Cmd_ExecuteString (char *text)
 				Com_Printf ("ALIAS_LOOP_COUNT\n");
 				return;
 			}
-			Cbuf_InsertText (a->value);
+			Cbuf_InsertText (va("%s\n", a->value));
 			return;
 		}
 	}
@@ -942,11 +960,7 @@ void	Cmd_ExecuteString (char *text)
 	Cmd_ForwardToServer ();
 }
 
-/*
- *	Replaced Cmd_CompleteCommand and Cmd_List_f funktions -Maniac
- *	New funktions from Q2ICE project (http://q2ice.iceware.net)
- */
-
+//	Wildcard support Cmd_List_f -Maniac
 /*
 ============
 Cmd_List_f
@@ -971,11 +985,10 @@ void Cmd_List_f (void)
                 filter = "*";
 
         for (cmd = cmd_functions; cmd; cmd = cmd->next, i++){
-                if (!Com_WildCmp(filter, cmd->name, 1))
+                if (c == 2 && !Com_WildCmp(filter, cmd->name, 1) && !strstr(cmd->name, filter))
                         continue;
 
                 count++;
-
                 Com_Printf("%s\n", cmd->name);
         }
 
@@ -984,55 +997,6 @@ void Cmd_List_f (void)
         else
                 Com_Printf("%i cmds\n", i);
 }
-
-void Cmd_Savecfg_f (void)
-{
-	FILE	*f;
-	char	path[MAX_QPATH], cmd[1024];
-	cmdalias_t	*a;
-	cvar_t	*var;
-	char	buffer[1024];
-
-    if (Cmd_Argc() != 2)
-	{
-            Com_Printf("Usage: cfg_save <filename>\n");
-            return;
-    }
-
-	Com_sprintf (path, sizeof(path),"%s/%s",FS_Gamedir(), Cmd_Argv(1));
-	f = fopen (path, "w");
-	if (!f)
-	{
-		Com_Printf ("Couldn't write %s.\n", Cmd_Argv(1));
-		return;
-	}
-
-
-	fprintf (f, "// *** BINDINGS ***\n");
-	Key_WriteBindings (f);
-
-	fprintf (f, "\n// *** SETTINGS ***\n");
-	for (var = cvar_vars; var; var = var->next)
-	{
-		if (var->flags)
-		{
-			Com_sprintf (buffer, sizeof(buffer), "set %s \"%s\"\n", var->name, var->string);
-			fprintf (f, "%s", buffer);
-		}
-	}
-	
-	fprintf (f, "\n// *** ALIASES ***\n");
-	for (a = cmd_alias; a; a = a->next)
-	{
-			sprintf(cmd, "alias %s \"%s", a->name, a->value);
-			cmd[strlen(cmd)-1] = 0;
-			sprintf(cmd, "%s\"\n", cmd);					
-			fprintf(f, cmd) ;
-	}
-	fclose (f);
-	Com_Printf ("Config saved to file %s\n", Cmd_Argv(1));
-}
-
 
 /*
 ============
@@ -1047,6 +1011,5 @@ void Cmd_Init (void)
 	Cmd_AddCommand ("echo",Cmd_Echo_f);
 	Cmd_AddCommand ("alias",Cmd_Alias_f);
 	Cmd_AddCommand ("wait", Cmd_Wait_f);
-	Cmd_AddCommand ("cfg_save", Cmd_Savecfg_f);
 }
 

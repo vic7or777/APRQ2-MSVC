@@ -19,8 +19,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 // r_rast.c
 
-#include <assert.h>
-
 #include "r_local.h"
 
 #define MAXLEFTCLIPEDGES		100
@@ -132,6 +130,7 @@ void R_InitSkyBox (void)
 	for (i=0 ; i<6 ; i++)
 	{
 		r_skyplanes[i].normal[skybox_planes[i*2]] = 1;
+		r_skyplanes[i].type = skybox_planes[i*2];
 		r_skyplanes[i].dist = skybox_planes[i*2+1];
 
 		VectorCopy (box_vecs[i][0], r_skytexinfo[i].vecs[0]);
@@ -191,7 +190,7 @@ void R_EmitSkyBox (void)
 		else
 			r_skyplanes[i].dist = r_origin[skybox_planes[i*2]]-128;
 
-	// fix texture offseets
+	// fix texture offsets
 	for (i=0 ; i<6 ; i++)
 	{
 		r_skytexinfo[i].vecs[0][3] = -DotProduct (r_origin, r_skytexinfo[i].vecs[0]);
@@ -718,7 +717,11 @@ void R_RenderFace (msurface_t *fa, int clipflags)
 // FIXME: cache this?
 	TransformVector (pplane->normal, p_normal);
 // FIXME: cache this?
-	distinv = 1.0 / (pplane->dist - DotProduct (modelorg, pplane->normal));
+	if ( pplane->type < 3 ) {
+		distinv = 1.0 / (pplane->dist - modelorg[pplane->type]);
+	} else {
+		distinv = 1.0 / (pplane->dist - DotProduct (modelorg, pplane->normal));
+	}
 
 	surface_p->d_zistepu = p_normal[0] * xscaleinv * distinv;
 	surface_p->d_zistepv = -p_normal[1] * yscaleinv * distinv;
@@ -839,7 +842,11 @@ void R_RenderBmodelFace (bedge_t *pedges, msurface_t *psurf)
 // FIXME: cache this?
 	TransformVector (pplane->normal, p_normal);
 // FIXME: cache this?
-	distinv = 1.0 / (pplane->dist - DotProduct (modelorg, pplane->normal));
+	if ( pplane->type < 3 ) {
+		distinv = 1.0 / (pplane->dist - modelorg[pplane->type]);
+	} else {
+		distinv = 1.0 / (pplane->dist - DotProduct (modelorg, pplane->normal));
+	}
 
 	surface_p->d_zistepu = p_normal[0] * xscaleinv * distinv;
 	surface_p->d_zistepv = -p_normal[1] * yscaleinv * distinv;

@@ -20,18 +20,16 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 // qcommon.h -- definitions common between client and server, but not game.dll
 
-#include "../game/q_shared.h"
+#include "../qshared/q_shared.h"
 
 
 #define	VERSION		3.21
 
 #define	BASEDIRNAME	"baseq2"
 
-//Added own versio & name -Maniac
-#define APR_APPNAME "Apr"
 
-#define APR_DISPLAYVERSION "1.14"
-//End
+#define APR_APPNAME "Apr"
+#define APR_DISPLAYVERSION "1.161"
 
 #ifdef WIN32
 
@@ -443,6 +441,7 @@ void	Cmd_ForwardToServer (void);
 // things like godmode, noclip, etc, are commands directed to the server,
 // so when they are typed in at the console, they will need to be forwarded.
 
+void Cmd_WriteAliases (FILE *f);
 
 /*
 ==============================================================
@@ -496,15 +495,12 @@ char 	*Cvar_CompleteVariable (char *partial);
 void	Cvar_GetLatchedVars (void);
 // any CVAR_LATCHED variables that have been set will now take effect
 
-void	Cvar_Toggle_f (void);
-//Added toggle cvar between 0 and 1 -Maniac
-
 qboolean Cvar_Command (void);
 // called by Cmd_ExecuteString when Cmd_Argv(0) doesn't match a known
 // command.  Returns true if the command was a variable reference that
 // was handled. (print or change)
 
-void 	Cvar_WriteVariables (char *path);
+void 	Cvar_WriteVariables (FILE *f);
 // appends lines containing "set variable value" for all variables
 // with the archive flag set to true.
 
@@ -722,6 +718,7 @@ void	FS_FreeFile (void *buffer);
 
 void	FS_CreatePath (char *path);
 
+char **FS_ListFiles( char *findname, int *numfiles, unsigned musthave, unsigned canthave );
 
 /*
 ==============================================================
@@ -755,6 +752,9 @@ void		Com_SetServerState (int state);
 
 unsigned	Com_BlockChecksum (void *buffer, int length);
 byte		COM_BlockSequenceCRCByte (byte *base, int length, int sequence);
+
+int Com_WildCmp( const char *filter, const char *string, int ignoreCase );
+int SortStrcmp( const void *p1, const void *p2 );
 
 float	frand(void);	// 0 ti 1
 float	crand(void);	// -1 to 1
@@ -831,5 +831,38 @@ void SV_Init (void);
 void SV_Shutdown (char *finalmsg, qboolean reconnect);
 void SV_Frame (int msec);
 
+//Added font stuff -Maniac
+// ------------[Font Stuff]------------
+#define FC_BLACK	0	// 1
+#define FC_RED		1	// 2
+#define FC_GREEN	2	// 4
+#define FC_YELLOW	3	// 8
+#define FC_BLUE		4	// 16
+#define FC_CYAN		5	// 32
+#define FC_MAGETA	6	// 64
+#define FC_WHITE	7	// 128
+// ------------------------------------
 
+#define Q_COLOR_ESCAPE	'^'
+#define COLOR_BLACK		'0'
+#define COLOR_RED		'1'
+#define COLOR_GREEN		'2'
+#define COLOR_YELLOW	'3'
+#define COLOR_BLUE		'4'
+#define COLOR_CYAN		'5'
+#define COLOR_MAGENTA	'6'
+#define COLOR_WHITE		'7'
 
+#define Q_IsColorString(p)	( p && *(p) == Q_COLOR_ESCAPE && (*((p)+1) == COLOR_BLACK || *((p)+1) == COLOR_RED || *((p)+1) == COLOR_GREEN || *((p)+1) == COLOR_YELLOW || *((p)+1) == COLOR_BLUE || *((p)+1) == COLOR_CYAN || *((p)+1) == COLOR_MAGENTA || *((p)+1) == COLOR_WHITE))
+#define S_DISABLE_COLOR	"^DC"
+#define S_ENABLE_COLOR	"^EC"
+#define S_COLOR_BLACK	"^0"
+#define S_COLOR_RED		"^1"
+#define S_COLOR_GREEN	"^2"
+#define S_COLOR_YELLOW	"^3"
+#define S_COLOR_BLUE	"^4"
+#define S_COLOR_CYAN	"^5"
+#define S_COLOR_MAGENTA	"^6"
+#define S_COLOR_WHITE	"^7"
+
+#define ColorIndex(c)	( ( (c) - '0' ) & 7 )

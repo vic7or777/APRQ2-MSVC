@@ -44,16 +44,23 @@ void Inv_DrawString (int x, int y, char *string)
 {
 	while (*string)
 	{
-		re.DrawChar (x, y, *string);
+		re.DrawChar (x, y, *string++, FC_WHITE, 1);
 		x+=8;
-		string++;
 	}
 }
 
-void SetStringHighBit (char *s)
+/*
+================
+Inv_DrawAltString
+================
+*/
+void Inv_DrawAltString (int x, int y, char *string)
 {
-	while (*s)
-		*s++ |= 128;
+	while (*string)
+	{
+		re.DrawChar (x, y, 128|*string++, FC_WHITE, 1);
+		x += 8;
+	}
 }
 
 /*
@@ -103,7 +110,7 @@ void CL_DrawInventory (void)
 	// repaint everything next frame
 	SCR_DirtyScreen ();
 
-	re.DrawPic (x, y+8, "inventory");
+	re.DrawPic (x, y+8, "inventory", cl_hudalpha->value);
 
 	y += 24;
 	x += 24;
@@ -126,13 +133,14 @@ void CL_DrawInventory (void)
 		Com_sprintf (string, sizeof(string), "%6s %3i %s", bind, cl.inventory[item],
 			cl.configstrings[CS_ITEMS+item] );
 		if (item != selected)
-			SetStringHighBit (string);
+			Inv_DrawAltString (x, y, string);
 		else	// draw a blinky cursor by the selected item
 		{
 			if ( (int)(cls.realtime*10) & 1)
-				re.DrawChar (x-8, y, 15);
+				re.DrawChar (x-8, y, 15, FC_WHITE, 1);
+
+			Inv_DrawString (x, y, string);
 		}
-		Inv_DrawString (x, y, string);
 		y += 8;
 	}
 

@@ -22,6 +22,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "client.h"
 
 cvar_t	*cl_nodelta;
+static cvar_t *cl_maxpackets;
+extern cvar_t *cl_maxfps;
 
 extern	unsigned	sys_frame_time;
 unsigned	frame_msec;
@@ -197,13 +199,6 @@ float CL_KeyState (kbutton_t *key)
 		msec += sys_frame_time - key->downtime;
 		key->downtime = sys_frame_time;
 	}
-
-#if 0
-	if (msec)
-	{
-		Com_Printf ("%i ", msec);
-	}
-#endif
 
 	val = (float)msec / frame_msec;
 	if (val < 0)
@@ -447,6 +442,7 @@ void CL_InitInput (void)
 	Cmd_AddCommand ("-klook", IN_KLookUp);
 
 	cl_nodelta = Cvar_Get ("cl_nodelta", "0", 0);
+	cl_maxpackets = Cvar_Get( "cl_maxpackets", "0", 0 );
 }
 
 
@@ -464,6 +460,8 @@ void CL_SendCmd (void)
 	usercmd_t	*cmd, *oldcmd;
 	usercmd_t	nullcmd;
 	int			checksumIndex;
+	static int	prevTime;
+	int			time;
 
 	// build a command even if not connected
 
@@ -474,7 +472,7 @@ void CL_SendCmd (void)
 
 	*cmd = CL_CreateCmd ();
 
-	cl.cmd = *cmd;
+	//cl.cmd = *cmd;
 
 	if (cls.state == ca_disconnected || cls.state == ca_connecting)
 		return;
@@ -482,7 +480,7 @@ void CL_SendCmd (void)
 	if ( cls.state == ca_connected)
 	{
 		if (cls.netchan.message.cursize	|| curtime - cls.netchan.last_sent > 1000 )
-			Netchan_Transmit (&cls.netchan, 0, buf.data);	
+			Netchan_Transmit (&cls.netchan, 0, data);	
 		return;
 	}
 
@@ -539,6 +537,38 @@ void CL_SendCmd (void)
 		buf.data + checksumIndex + 1, buf.cursize - checksumIndex - 1,
 		cls.netchan.outgoing_sequence);
 
+	//
+	// Hack from fuzzquake2 - we simply drop outgoing packets
+	//
+	// Dropping two packets seems to be completely safe (see the code above)
+	//
+	// If we drop more, server will reuse our last command multiple times,
+	// and this will probably result in prediction error (see sv_user.c)
+	//
+	if( cl_maxpackets->value ) {
+		if( cl_maxpackets->value < cl_maxfps->value/3 ) {
+			Cvar_SetValue( "cl_maxpackets", cl_maxfps->value/3 );
+		} else if( cl_maxpackets->value > 999 ) {
+			Cvar_SetValue( "cl_maxpackets", 999 );
+		}
+
+		time = cls.realtime;
+		if( prevTime > time ) {
+			prevTime = time;
+		}
+
+		if( !cls.netchan.message.cursize && time - prevTime < 1000 / cl_maxpackets->value ) {
+			// drop the packet, saving reliable contents
+			cls.netchan.outgoing_sequence++;
+
+			return;
+		}
+
+		prevTime = time;
+	}
+
+	i = cls.netchan.message.cursize + buf.cursize + 10;
+	SCR_AddLagometerOutPacketInfo( i );
 	//
 	// deliver the message
 	//

@@ -125,13 +125,10 @@ void CL_DebugTrail (vec3_t start, vec3_t end)
 	vec3_t		move;
 	vec3_t		vec;
 	float		len;
-//	int			j;
 	cparticle_t	*p;
 	float		dec;
 	vec3_t		right, up;
-//	int			i;
-//	float		d, c, s;
-//	vec3_t		dir;
+
 
 	VectorCopy (start, move);
 	VectorSubtract (end, start, vec);
@@ -139,10 +136,6 @@ void CL_DebugTrail (vec3_t start, vec3_t end)
 
 	MakeNormalVectors (vec, right, up);
 
-//	VectorScale(vec, RT2_SKIP, vec);
-
-//	dec = 1.0;
-//	dec = 0.75;
 	dec = 3;
 	VectorScale (vec, dec, vec);
 	VectorCopy (start, move);
@@ -163,17 +156,9 @@ void CL_DebugTrail (vec3_t start, vec3_t end)
 		VectorClear (p->vel);
 		p->alpha = 1.0;
 		p->alphavel = -0.1;
-//		p->alphavel = 0;
 		p->color = 0x74 + (rand()&7);
 		VectorCopy (move, p->org);
-/*
-		for (j=0 ; j<3 ; j++)
-		{
-			p->org[j] = move[j] + crand()*2;
-			p->vel[j] = crand()*3;
-			p->accel[j] = 0;
-		}
-*/
+
 		VectorAdd (move, vec, move);
 	}
 
@@ -232,6 +217,7 @@ void CL_ForceWall (vec3_t start, vec3_t end, int color)
 	vec3_t		move;
 	vec3_t		vec;
 	float		len;
+	float		dec;
 	int			j;
 	cparticle_t	*p;
 
@@ -239,12 +225,14 @@ void CL_ForceWall (vec3_t start, vec3_t end, int color)
 	VectorSubtract (end, start, vec);
 	len = VectorNormalize (vec);
 
-	VectorScale (vec, 4, vec);
+	dec = 4;
+
+	VectorScale (vec, dec, vec);
 
 	// FIXME: this is a really silly way to have a loop
 	while (len > 0)
 	{
-		len -= 4;
+		len -= dec;
 
 		if (!free_particles)
 			return;
@@ -371,11 +359,9 @@ void CL_GenericParticleEffect (vec3_t org, vec3_t dir, int color, int count, int
 
 		p->accel[0] = p->accel[1] = 0;
 		p->accel[2] = -PARTICLE_GRAVITY;
-//		VectorCopy (accel, p->accel);
 		p->alpha = 1.0;
 
 		p->alphavel = -1.0 / (0.5 + frand()*alphavel);
-//		p->alphavel = alphavel;
 	}
 }
 
@@ -463,7 +449,6 @@ void CL_Heatbeam (vec3_t start, vec3_t end)
 	VectorScale (vec, step, vec);
 	ltime = (float) cl.time/1000.0;
 
-//	for (i=0 ; i<len ; i++)
 	for (i=0 ; i<len ; i+=step)
 	{
 		d = i * 0.1 - fmod(ltime,16.0)*M_PI;
@@ -487,13 +472,9 @@ void CL_Heatbeam (vec3_t start, vec3_t end)
 			VectorClear (p->accel);
 
 			p->alpha = 0.5;
-	//		p->alphavel = -1.0 / (1+frand()*0.2);
 			// only last one frame!
 			p->alphavel = INSTANT_PARTICLE;
-	//		p->color = 0x74 + (rand()&7);
-//			p->color = 223 - (rand()&7);
 			p->color = 223;
-//			p->color = 240;
 
 			// trim it so it looks like it's starting at the origin
 			if (i < 10)
@@ -510,7 +491,6 @@ void CL_Heatbeam (vec3_t start, vec3_t end)
 			for (j=0 ; j<3 ; j++)
 			{
 				p->org[j] = move[j] + dir[j]*3;
-	//			p->vel[j] = dir[j]*6;
 				p->vel[j] = 0;
 			}
 #ifdef DOUBLE_SCREW
@@ -547,7 +527,6 @@ void CL_Heatbeam (vec3_t start, vec3_t forward)
 	len = VectorNormalize (vec);
 
 	// FIXME - pmm - these might end up using old values?
-//	MakeNormalVectors (vec, right, up);
 	VectorCopy (cl.v_right, right);
 	VectorCopy (cl.v_up, up);
 	if (vidref_val == VIDREF_GL)
@@ -563,7 +542,6 @@ void CL_Heatbeam (vec3_t start, vec3_t forward)
 
 	VectorScale (vec, step, vec);
 
-//	Com_Printf ("%f\n", ltime);
 	rstep = M_PI/10.0;
 	for (i=start_pt ; i<len ; i+=step)
 	{
@@ -583,10 +561,6 @@ void CL_Heatbeam (vec3_t start, vec3_t forward)
 			
 			p->time = cl.time;
 			VectorClear (p->accel);
-//			rot+= fmod(ltime, 12.0)*M_PI;
-//			c = cos(rot)/2.0;
-//			s = sin(rot)/2.0;
-//			variance = 0.4 + ((float)rand()/(float)RAND_MAX) *0.2;
 			variance = 0.5;
 			c = cos(rot)*variance;
 			s = sin(rot)*variance;
@@ -604,14 +578,11 @@ void CL_Heatbeam (vec3_t start, vec3_t forward)
 			}
 		
 			p->alpha = 0.5;
-	//		p->alphavel = -1.0 / (1+frand()*0.2);
 			p->alphavel = -1000.0;
-	//		p->color = 0x74 + (rand()&7);
 			p->color = 223 - (rand()&7);
 			for (j=0 ; j<3 ; j++)
 			{
 				p->org[j] = move[j] + dir[j]*3;
-	//			p->vel[j] = dir[j]*6;
 				p->vel[j] = 0;
 			}
 		}
@@ -640,7 +611,6 @@ void CL_Heatbeam (vec3_t start, vec3_t end)
 	VectorSubtract (end, start, vec);
 	len = VectorNormalize (vec);
 
-//	MakeNormalVectors (vec, right, up);
 	VectorCopy (cl.v_forward, forward);
 	VectorCopy (cl.v_right, right);
 	VectorCopy (cl.v_up, up);
@@ -676,66 +646,7 @@ void CL_Heatbeam (vec3_t start, vec3_t end)
 		VectorMA (p->vel, c, right, p->vel);
 		VectorMA (p->vel, s, up, p->vel);
 	}
-/*
 
-	ltime = (float) cl.time/1000.0;
-	start_pt = fmod(ltime*16.0,step);
-	VectorMA (move, start_pt, vec, move);
-
-	VectorScale (vec, step, vec);
-
-//	Com_Printf ("%f\n", ltime);
-	rstep = M_PI/12.0;
-	for (i=start_pt ; i<len ; i+=step)
-	{
-		if (i>step*5) // don't bother after the 5th ring
-			break;
-
-		for (rot = 0; rot < M_PI*2; rot += rstep)
-		{
-			if (!free_particles)
-				return;
-
-			p = free_particles;
-			free_particles = p->next;
-			p->next = active_particles;
-			active_particles = p;
-			
-			p->time = cl.time;
-			VectorClear (p->accel);
-//			rot+= fmod(ltime, 12.0)*M_PI;
-//			c = cos(rot)/2.0;
-//			s = sin(rot)/2.0;
-			c = cos(rot)/1.5;
-			s = sin(rot)/1.5;
-			
-			// trim it so it looks like it's starting at the origin
-			if (i < 10)
-			{
-				VectorScale (right, c*(i/10.0), dir);
-				VectorMA (dir, s*(i/10.0), up, dir);
-			}
-			else
-			{
-				VectorScale (right, c, dir);
-				VectorMA (dir, s, up, dir);
-			}
-		
-			p->alpha = 0.5;
-	//		p->alphavel = -1.0 / (1+frand()*0.2);
-			p->alphavel = -1000.0;
-	//		p->color = 0x74 + (rand()&7);
-			p->color = 223 - (rand()&7);
-			for (j=0 ; j<3 ; j++)
-			{
-				p->org[j] = move[j] + dir[j]*3;
-	//			p->vel[j] = dir[j]*6;
-				p->vel[j] = 0;
-			}
-		}
-		VectorAdd (move, vec, move);
-	}
-*/
 }
 #endif
 
@@ -790,7 +701,6 @@ void CL_ParticleSteamEffect (vec3_t org, vec3_t dir, int color, int count, int m
 }
 
 void CL_ParticleSteamEffect2 (cl_sustain_t *self)
-//vec3_t org, vec3_t dir, int color, int count, int magnitude)
 {
 	int			i, j;
 	cparticle_t	*p;
@@ -798,8 +708,6 @@ void CL_ParticleSteamEffect2 (cl_sustain_t *self)
 	vec3_t		r, u;
 	vec3_t		dir;
 
-//	vectoangles2 (dir, angle_dir);
-//	AngleVectors (angle_dir, f, r, u);
 
 	VectorCopy (self->dir, dir);
 	MakeNormalVectors (dir, r, u);
@@ -819,7 +727,6 @@ void CL_ParticleSteamEffect2 (cl_sustain_t *self)
 		for (j=0 ; j<3 ; j++)
 		{
 			p->org[j] = self->org[j] + self->magnitude*0.1*crand();
-//			p->vel[j] = dir[j]*magnitude;
 		}
 		VectorScale (dir, self->magnitude, p->vel);
 		d = crand()*self->magnitude*0.3333333333;
@@ -861,7 +768,7 @@ void CL_TrackerTrail (vec3_t start, vec3_t end, int particleColor)
 	AngleVectors (angle_dir, forward, right, up);
 
 	dec = 3;
-	VectorScale (vec, 3, vec);
+	VectorScale (vec, dec, vec);
 
 	// FIXME: this is a really silly way to have a loop
 	while (len > 0)
@@ -885,7 +792,6 @@ void CL_TrackerTrail (vec3_t start, vec3_t end, int particleColor)
 		VectorMA(move, 8 * cos(dist), up, p->org);
 		for (j=0 ; j<3 ; j++)
 		{
-//			p->org[j] = move[j] + crand();
 			p->vel[j] = 0;
 			p->accel[j] = 0;
 		}
@@ -954,7 +860,6 @@ void CL_MonsterPlasma_Shell(vec3_t origin)
 		VectorNormalize(dir);
 	
 		VectorMA(origin, 10, dir, p->org);
-//		VectorMA(origin, 10*(((rand () & 0x7fff) / ((float)0x7fff))), dir, p->org);
 	}
 }
 
@@ -990,7 +895,6 @@ void CL_Widowbeamout (cl_sustain_t *self)
 		VectorNormalize(dir);
 	
 		VectorMA(self->org, (45.0 * ratio), dir, p->org);
-//		VectorMA(origin, 10*(((rand () & 0x7fff) / ((float)0x7fff))), dir, p->org);
 	}
 }
 
@@ -1026,7 +930,6 @@ void CL_Nukeblast (cl_sustain_t *self)
 		VectorNormalize(dir);
 	
 		VectorMA(self->org, (200.0 * ratio), dir, p->org);
-//		VectorMA(origin, 10*(((rand () & 0x7fff) / ((float)0x7fff))), dir, p->org);
 	}
 }
 
@@ -1118,7 +1021,7 @@ void CL_TagTrail (vec3_t start, vec3_t end, float color)
 	len = VectorNormalize (vec);
 
 	dec = 5;
-	VectorScale (vec, 5, vec);
+	VectorScale (vec, dec, vec);
 
 	while (len >= 0)
 	{
@@ -1213,7 +1116,6 @@ void CL_ParticleSmokeEffect (vec3_t org, vec3_t dir, int color, int count, int m
 		for (j=0 ; j<3 ; j++)
 		{
 			p->org[j] = org[j] + magnitude*0.1*crand();
-//			p->vel[j] = dir[j]*magnitude;
 		}
 		VectorScale (dir, magnitude, p->vel);
 		d = crand()*magnitude*0.3333333333;
@@ -1291,7 +1193,7 @@ void CL_BlasterTrail2 (vec3_t start, vec3_t end)
 	len = VectorNormalize (vec);
 
 	dec = 5;
-	VectorScale (vec, 5, vec);
+	VectorScale (vec, dec, vec);
 
 	// FIXME: this is a really silly way to have a loop
 	while (len > 0)

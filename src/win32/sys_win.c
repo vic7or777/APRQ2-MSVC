@@ -662,12 +662,15 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 		{
 			curtime += (1000/avi_fps->value);
 			Qcommon_Frame(1000/avi_fps->value);
-		} else
+		}
+		else
+		{
 			Qcommon_Frame (time);
+		}
 
 		oldtime = newtime;
 	}
 
 	// never gets here
-    return TRUE;
+    return 1;
 }

@@ -102,6 +102,7 @@ void Com_Printf (char *fmt, ...)
 {
 	va_list		argptr;
 	char		msg[MAXPRINTMSG];
+	int			skip, i;
 
 	va_start (argptr,fmt);
 	vsprintf (msg,fmt,argptr);
@@ -119,9 +120,23 @@ void Com_Printf (char *fmt, ...)
 	}
 
 	Con_Print (msg);
-		
+
+	//Remove color triggers -Maniac
+	if (Q_IsColorString( msg ) && !strncmp(msg+2, S_DISABLE_COLOR, 3))
+		skip = 5;
+	else if (!strncmp(msg, S_ENABLE_COLOR, 3))
+		skip = 3;
+	else
+		skip = 0;
+
+	// Strip the last bit off
+	for( i = skip; msg[i] != 0; i++ ) {
+		msg[i] &= 127;
+
+	}
+
 	// also echo to debugging console
-	Sys_ConsoleOutput (msg);
+	Sys_ConsoleOutput (msg+skip);
 
 	// logfile
 	if (logfile_active && logfile_active->value)
@@ -137,7 +152,7 @@ void Com_Printf (char *fmt, ...)
 				logfile = fopen (name, "w");
 		}
 		if (logfile)
-			fprintf (logfile, "%s", msg);
+			fprintf (logfile, "%s", msg+skip);
 		if (logfile_active->value > 1)
 			fflush (logfile);		// force it to save every time
 	}
@@ -1077,6 +1092,37 @@ void Info_Print (char *s)
 	}
 }
 
+int SortStrcmp( const void *p1, const void *p2 ) {
+	const char *s1 = *(const char **)p1;
+	const char *s2 = *(const char **)p2;
+
+	return strcmp( s1, s2 );
+}
+
+/*
+ =================
+ Com_WildCmp
+
+ Wildcard compare.
+ Returns non-zero if matches, zero otherwise.
+ =================
+*/
+int Com_WildCmp (const char *filter, const char *string, int ignoreCase){
+
+        switch (*filter){
+        case '\0':
+                return !*string;
+
+        case '*':
+                return Com_WildCmp(filter + 1, string, ignoreCase) || *string && Com_WildCmp(filter, string + 1, ignoreCase);
+
+        case '?':
+                return *string && Com_WildCmp(filter + 1, string + 1, ignoreCase);
+
+        default:
+                return ((*filter == *string) || (ignoreCase && (toupper(*filter) == toupper(*string)))) && Com_WildCmp(filter + 1, string + 1, ignoreCase);
+        }
+}
 
 /*
 ==============================================================================
@@ -1423,7 +1469,7 @@ void Qcommon_Init (int argc, char **argv)
 	FS_InitFilesystem ();
 
 	Cbuf_AddText ("exec default.cfg\n");
-	Cbuf_AddText ("exec config.cfg\n");
+	Cbuf_AddText ("exec aprconfig.cfg\n");
 
 	Cbuf_AddEarlyCommands (true);
 	Cbuf_Execute ();
@@ -1519,6 +1565,9 @@ void Qcommon_Frame (int msec)
 		msec = fixedtime->value;
 	else if (timescale->value)
 	{
+		if(timescale->value > 400)
+			Cvar_SetValue("timescale", 400);
+
 		msec *= timescale->value;
 		if (msec < 1)
 			msec = 1;
@@ -1535,13 +1584,16 @@ void Qcommon_Frame (int msec)
 		c_pointcontents = 0;
 	}
 
-	do
+	if (dedicated->value)
 	{
-		s = Sys_ConsoleInput ();
-		if (s)
-			Cbuf_AddText (va("%s\n",s));
-	} while (s);
-	Cbuf_Execute ();
+		do
+		{
+			s = Sys_ConsoleInput ();
+			if (s)
+				Cbuf_AddText (va("%s\n",s));
+		} while (s);
+		Cbuf_Execute ();
+	}
 
 	if (host_speeds->value)
 		time_before = Sys_Milliseconds ();

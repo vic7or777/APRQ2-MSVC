@@ -23,6 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 cvar_t	*cvar_vars;
 
+
 /*
 ============
 Cvar_InfoValidate
@@ -141,6 +142,10 @@ cvar_t *Cvar_Get (char *var_name, char *var_value, int flags)
 	if (var)
 	{
 		var->flags |= flags;
+
+		Z_Free(var->default_string);
+		var->default_string = CopyString (var_value);
+
 		return var;
 	}
 
@@ -159,6 +164,7 @@ cvar_t *Cvar_Get (char *var_name, char *var_value, int flags)
 	var = Z_Malloc (sizeof(*var));
 	var->name = CopyString (var_name);
 	var->string = CopyString (var_value);
+	var->default_string = CopyString (var_value);
 	var->modified = true;
 	var->value = atof (var->string);
 
@@ -330,6 +336,19 @@ void Cvar_SetValue (char *var_name, float value)
 	Cvar_Set (var_name, val);
 }
 
+//Added Cvar_SetDefault for reseting to defaults in menu -Maniac
+void Cvar_SetDefault (char *var_name)
+{ 
+
+	cvar_t	*var;
+
+	var = Cvar_FindVar (var_name);
+	if (var)
+	{
+		Cvar_Set (var->name, var->default_string);
+		//Com_Printf ("%s set to value %s\n", var->name, var->default_string);
+	}
+}
 
 /*
 ============
@@ -377,7 +396,8 @@ qboolean Cvar_Command (void)
 // perform a variable print or set
 	if (Cmd_Argc() == 1)
 	{
-		Com_Printf ("\"%s\" is \"%s\"\n", v->name, v->string);
+		//Com_Printf ("\"%s\" is \"%s\"\n", v->name, v->string); //changed -Maniac
+		Com_Printf ("\"%s%s%s\" is \"%s%s%s\" default: \"%s%s%s\"\n", S_COLOR_CYAN, v->name, S_COLOR_WHITE, S_COLOR_CYAN, v->string, S_COLOR_WHITE, S_COLOR_CYAN, v->default_string, S_COLOR_WHITE);
 		return true;
 	}
 
@@ -423,7 +443,7 @@ void Cvar_Set_f (void)
 }
 
 /*
-//Added cvar toggle and increase -Maniac
+//Added cvar toggle, increase -Maniac
 =============
 Cvar_Toggle_f
 
@@ -480,7 +500,6 @@ void CL_Increase_f (void)
 	Cvar_SetValue(Cmd_Argv(1), var->value+val);
 }
 
-
 /*
 ============
 Cvar_WriteVariables
@@ -489,13 +508,11 @@ Appends lines containing "set variable value" for all variables
 with the archive flag set to true.
 ============
 */
-void Cvar_WriteVariables (char *path)
+void Cvar_WriteVariables (FILE *f)
 {
 	cvar_t	*var;
 	char	buffer[1024];
-	FILE	*f;
 
-	f = fopen (path, "a");
 	for (var = cvar_vars ; var ; var = var->next)
 	{
 		if (var->flags & CVAR_ARCHIVE)
@@ -504,13 +521,7 @@ void Cvar_WriteVariables (char *path)
 			fprintf (f, "%s", buffer);
 		}
 	}
-	fclose (f);
 }
-
-/*
- *	Replaced Cvar_List_f funktion -Maniac
- * 	New function copied from Q2ICE project (http://q2ice.iceware.net)
- */
 
 /*
 ============
@@ -518,7 +529,8 @@ Cvar_List_f
 
 ============
 */
-void Cvar_List_f (void){
+void Cvar_List_f (void)
+{
 
         cvar_t  *var;
         int             i = 0, count = 0, c;
@@ -536,38 +548,41 @@ void Cvar_List_f (void){
                 filter = "*";
 
         for (var = cvar_vars; var; var = var->next, i++){
-                if (!Com_WildCmp(filter, var->name, 1))
-                        continue;
+                if (c == 2 && !Com_WildCmp(filter, var->name, 1) && !strstr(var->name, filter))
+					continue;
 
-                count++;
+				count++;
 
-                if (var->flags & CVAR_USERINFO)
-                        Com_Printf("U");
-                else
-                        Com_Printf(" ");
+				if (var->flags & CVAR_USERINFO)
+					Com_Printf("U");
+				else
+					Com_Printf(" ");
 
-                if (var->flags & CVAR_SERVERINFO)
-                        Com_Printf("S");
-                else
-                        Com_Printf(" ");
+				if (var->flags & CVAR_SERVERINFO)
+					Com_Printf("S");
+				else
+					Com_Printf(" ");
 
-                if (var->flags & CVAR_ARCHIVE)
-                        Com_Printf("A");
-                else
-                        Com_Printf(" ");
+				if (var->flags & CVAR_ARCHIVE)
+					Com_Printf("A");
+				else
+					Com_Printf(" ");
 
-                if (var->flags & CVAR_LATCH)
-                        Com_Printf("L");
-                else
-                        Com_Printf(" ");
+				if (var->flags & CVAR_NOSET)
+					Com_Printf ("-");
+				else if (var->flags & CVAR_LATCH)
+					Com_Printf ("L");
+				else
+					Com_Printf (" ");
 
                 Com_Printf(" %s \"%s\"\n", var->name, var->string);
+				//Com_Printf(" %s \"%s\"  (default:\"%s\")\n", var->name, var->string, var->default_string);
         }
 
-        if (c == 2)
-                Com_Printf("%i cvars found (%i total cvars)\n", count, i);
-        else
-                Com_Printf("%i cvars\n", i);
+		if (c == 2)
+			Com_Printf("%i cvars found (%i total cvars)\n", count, i);
+		else
+			Com_Printf("%i cvars\n", i);
 }
 
 qboolean userinfo_modified;

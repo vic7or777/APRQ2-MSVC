@@ -26,7 +26,7 @@ viddef_t	vid;
 
 refimport_t	ri;
 
-int GL_TEXTURE_0, GL_TEXTURE_1;
+int GL_TEXTURE0, GL_TEXTURE1;
 
 model_t		*r_worldmodel;
 
@@ -37,6 +37,8 @@ glstate_t  gl_state;
 
 image_t		*r_notexture;		// use for bad textures
 image_t		*r_particletexture;	// little dot for particles
+image_t		*r_caustictexture;	//Water caustic texture
+image_t		*r_bholetexture;
 
 entity_t	*currententity;
 model_t		*currentmodel;
@@ -52,16 +54,20 @@ float		v_blend[4];			// final blending color
 
 void GL_Strings_f( void );
 
+//
 // view origin
+//
 vec3_t	vup;
 vec3_t	vpn;
 vec3_t	vright;
 vec3_t	r_origin;
 
 float	r_world_matrix[16];
-float	r_base_world_matrix[16];
+//float	r_base_world_matrix[16];
 
+//
 // screen size info
+//
 refdef_t	r_newrefdef;
 
 int		r_viewcluster, r_viewcluster2, r_oldviewcluster, r_oldviewcluster2;
@@ -134,12 +140,24 @@ cvar_t	*vid_ref;
 //Added cvar's -Maniac
 cvar_t *skydistance; // DMP - skybox size change
 cvar_t *gl_screenshot_quality;
-cvar_t *ignorecantfindpic;
 
-cvar_t 	*gl_loadtga;
-cvar_t 	*gl_hudformat;
-cvar_t	*gl_conformat;
-cvar_t	*gl_hudtrans;
+cvar_t 	*gl_replacewal;
+cvar_t  *gl_replacepcx;
+cvar_t	*gl_stainmaps;				// stainmaps
+cvar_t	*gl_motionblur;				// motionblur
+cvar_t	*gl_waterwaves;
+cvar_t	*gl_fontshadow;
+cvar_t	*gl_particle;
+cvar_t	*gl_sgis_mipmap;
+cvar_t	*gl_ext_texture_compression;
+cvar_t	*gl_celshading;				//celshading
+cvar_t	*gl_celshading_width;
+cvar_t	*gl_scale;
+cvar_t	*gl_watercaustics;
+cvar_t	*gl_fog;
+cvar_t	*gl_fog_density;
+cvar_t	*gl_decals;
+cvar_t	*gl_decals_time;
 
 //End
 
@@ -153,13 +171,52 @@ Returns true if the box is completely outside the frustom
 qboolean R_CullBox (vec3_t mins, vec3_t maxs)
 {
 	int		i;
+	cplane_t *p;
 
 	if (r_nocull->value)
 		return false;
 
-	for (i = 0; i < 4; i++)
-		if ( BOX_ON_PLANE_SIDE(mins, maxs, &frustum[i]) == 2)
-			return true;
+	for (i=0,p=frustum ; i<4; i++,p++)
+	{
+		switch (p->signbits)
+		{
+		case 0:
+			if (p->normal[0]*maxs[0] + p->normal[1]*maxs[1] + p->normal[2]*maxs[2] < p->dist)
+				return true;
+			break;
+		case 1:
+			if (p->normal[0]*mins[0] + p->normal[1]*maxs[1] + p->normal[2]*maxs[2] < p->dist)
+				return true;
+			break;
+		case 2:
+			if (p->normal[0]*maxs[0] + p->normal[1]*mins[1] + p->normal[2]*maxs[2] < p->dist)
+				return true;
+			break;
+		case 3:
+			if (p->normal[0]*mins[0] + p->normal[1]*mins[1] + p->normal[2]*maxs[2] < p->dist)
+				return true;
+			break;
+		case 4:
+			if (p->normal[0]*maxs[0] + p->normal[1]*maxs[1] + p->normal[2]*mins[2] < p->dist)
+				return true;
+			break;
+		case 5:
+			if (p->normal[0]*mins[0] + p->normal[1]*maxs[1] + p->normal[2]*mins[2] < p->dist)
+				return true;
+			break;
+		case 6:
+			if (p->normal[0]*maxs[0] + p->normal[1]*mins[1] + p->normal[2]*mins[2] < p->dist)
+				return true;
+			break;
+		case 7:
+			if (p->normal[0]*mins[0] + p->normal[1]*mins[1] + p->normal[2]*mins[2] < p->dist)
+				return true;
+			break;
+		default:
+			return false;
+		}
+	}
+
 	return false;
 }
 
@@ -188,7 +245,7 @@ R_DrawSpriteModel
 
 =================
 */
-void R_DrawSpriteModel (entity_t *e)
+void R_DrawSpriteModel (void)
 {
 	float alpha = 1.0F;
 	vec3_t	point;
@@ -202,15 +259,15 @@ void R_DrawSpriteModel (entity_t *e)
 	psprite = (dsprite_t *)currentmodel->extradata;
 
 #if 0
-	if (e->frame < 0 || e->frame >= psprite->numframes)
+	if (currententity->frame < 0 || currententity->frame >= psprite->numframes)
 	{
-		ri.Con_Printf (PRINT_ALL, "no such sprite frame %i\n", e->frame);
-		e->frame = 0;
+		ri.Con_Printf (PRINT_ALL, "no such sprite frame %i\n", currententity->frame);
+		currententity->frame = 0;
 	}
 #endif
-	e->frame %= psprite->numframes;
+	currententity->frame %= psprite->numframes;
 
-	frame = &psprite->frames[e->frame];
+	frame = &psprite->frames[currententity->frame];
 
 #if 0
 	if (psprite->type == SPR_ORIENTED)
@@ -228,53 +285,52 @@ void R_DrawSpriteModel (entity_t *e)
 		right = vright;
 	}
 
-	if ( e->flags & RF_TRANSLUCENT )
-		alpha = e->alpha;
+	if ( currententity->flags & RF_TRANSLUCENT )
+		alpha = currententity->alpha;
 
-	if ( alpha != 1.0F )
-		GLSTATE_ENABLE_BLEND
+	if ( alpha < 1.0F )
+		qglEnable(GL_BLEND);
 
 	qglColor4f( 1, 1, 1, alpha );
 
-    GL_Bind(currentmodel->skins[e->frame]->texnum);
+    GL_Bind(currentmodel->skins[currententity->frame]->texnum);
 
 	GL_TexEnv( GL_MODULATE );
 
 	if ( alpha == 1.0 )
-		GLSTATE_ENABLE_ALPHATEST
+		qglEnable(GL_ALPHA_TEST);
 	else
-		GLSTATE_DISABLE_ALPHATEST
+		qglDisable(GL_ALPHA_TEST);
 
 	qglBegin (GL_QUADS);
 
 	qglTexCoord2f (0, 1);
-	VectorMA (e->origin, -frame->origin_y, up, point);
+	VectorMA (currententity->origin, -frame->origin_y, up, point);
 	VectorMA (point, -frame->origin_x, right, point);
 	qglVertex3fv (point);
 
 	qglTexCoord2f (0, 0);
-	VectorMA (e->origin, frame->height - frame->origin_y, up, point);
+	VectorMA (currententity->origin, frame->height - frame->origin_y, up, point);
 	VectorMA (point, -frame->origin_x, right, point);
 	qglVertex3fv (point);
 
 	qglTexCoord2f (1, 0);
-	VectorMA (e->origin, frame->height - frame->origin_y, up, point);
+	VectorMA (currententity->origin, frame->height - frame->origin_y, up, point);
 	VectorMA (point, frame->width - frame->origin_x, right, point);
 	qglVertex3fv (point);
 
 	qglTexCoord2f (1, 1);
-	VectorMA (e->origin, -frame->origin_y, up, point);
+	VectorMA (currententity->origin, -frame->origin_y, up, point);
 	VectorMA (point, frame->width - frame->origin_x, right, point);
 	qglVertex3fv (point);
 	
 	qglEnd ();
 
-	GLSTATE_DISABLE_ALPHATEST
+	qglDisable(GL_ALPHA_TEST);
 	GL_TexEnv( GL_REPLACE );
 
-	if ( alpha != 1.0F ) {
-		GLSTATE_DISABLE_BLEND
-	}
+	if ( alpha < 1.0F )
+		qglDisable(GL_BLEND);
 
 	qglColor4f( 1, 1, 1, 1 );
 }
@@ -340,7 +396,7 @@ void R_DrawEntitiesOnList (void)
 
 		if ( currententity->flags & RF_BEAM )
 		{
-			R_DrawBeam( currententity );
+			R_DrawBeam ();
 		}
 		else
 		{
@@ -353,13 +409,13 @@ void R_DrawEntitiesOnList (void)
 			switch (currentmodel->type)
 			{
 			case mod_alias:
-				R_DrawAliasModel (currententity);
+				R_DrawAliasModel ();
 				break;
 			case mod_brush:
-				R_DrawBrushModel (currententity);
+				R_DrawBrushModel ();
 				break;
 			case mod_sprite:
-				R_DrawSpriteModel (currententity);
+				R_DrawSpriteModel ();
 				break;
 			default:
 				ri.Sys_Error (ERR_DROP, "Bad modeltype");
@@ -378,7 +434,7 @@ void R_DrawEntitiesOnList (void)
 
 		if ( currententity->flags & RF_BEAM )
 		{
-			R_DrawBeam( currententity );
+			R_DrawBeam ();
 		}
 		else
 		{
@@ -392,13 +448,13 @@ void R_DrawEntitiesOnList (void)
 			switch (currentmodel->type)
 			{
 			case mod_alias:
-				R_DrawAliasModel (currententity);
+				R_DrawAliasModel ();
 				break;
 			case mod_brush:
-				R_DrawBrushModel (currententity);
+				R_DrawBrushModel ();
 				break;
 			case mod_sprite:
-				R_DrawSpriteModel (currententity);
+				R_DrawSpriteModel ();
 				break;
 			default:
 				ri.Sys_Error (ERR_DROP, "Bad modeltype");
@@ -419,18 +475,18 @@ void GL_DrawParticles( int num_particles, const particle_t particles[], const un
 {
 	const particle_t *p;
 	int				i;
-	vec3_t			up, right;
+	vec3_t			r_pup, r_pright, corner;
 	float			scale;
 	byte			color[4];
 
     GL_Bind(r_particletexture->texnum);
 	qglDepthMask( GL_FALSE );		// no z buffering
-	GLSTATE_ENABLE_BLEND
+	qglEnable(GL_BLEND);
 	GL_TexEnv( GL_MODULATE );
-	qglBegin( GL_TRIANGLES );
+	qglBegin( GL_QUADS );
 
-	VectorScale (vup, 1.5, up);
-	VectorScale (vright, 1.5, right);
+	VectorScale (vup, 1.5f, r_pup);
+	VectorScale (vright, 1.5f, r_pright);
 
 	for ( p = particles, i=0 ; i < num_particles ; i++,p++)
 	{
@@ -449,22 +505,31 @@ void GL_DrawParticles( int num_particles, const particle_t particles[], const un
 
 		qglColor4ubv( color );
 
-		qglTexCoord2f( 0.0625, 0.0625 );
-		qglVertex3fv( p->origin );
+		corner[0] = p->origin[0] + (r_pup[0] + r_pright[0])*scale*(-0.5);
+		corner[1] = p->origin[1] + (r_pup[1] + r_pright[1])*scale*(-0.5);
+		corner[2] = p->origin[2] + (r_pup[2] + r_pright[2])*scale*(-0.5);
 
-		qglTexCoord2f( 1.0625, 0.0625 );
-		qglVertex3f( p->origin[0] + up[0]*scale, 
-			         p->origin[1] + up[1]*scale, 
-					 p->origin[2] + up[2]*scale);
+		qglTexCoord2f( 1, 1 );
+		qglVertex3fv( corner );
 
-		qglTexCoord2f( 0.0625, 1.0625 );
-		qglVertex3f( p->origin[0] + right[0]*scale, 
-			         p->origin[1] + right[1]*scale, 
-					 p->origin[2] + right[2]*scale);
+		qglTexCoord2f( 0, 1 );
+		qglVertex3f( corner[0] + r_pup[0]*scale, 
+					 corner[1] + r_pup[1]*scale, 
+					 corner[2] + r_pup[2]*scale);
+
+		qglTexCoord2f( 0, 0 );
+		qglVertex3f( corner[0] + (r_pup[0]+r_pright[0])*scale, 
+					 corner[1] + (r_pup[1]+r_pright[1])*scale,
+					 corner[2] + (r_pup[2]+r_pright[2])*scale);
+
+		qglTexCoord2f( 1, 0 );
+		qglVertex3f( corner[0] + r_pright[0]*scale,
+					 corner[1] + r_pright[1]*scale,
+					 corner[2] + r_pright[2]*scale);
 	}
 
 	qglEnd ();
-	GLSTATE_DISABLE_BLEND
+	qglDisable(GL_BLEND);
 	qglColor4f( 1,1,1,1 );
 	qglDepthMask( 1 );		// back to normal Z buffering
 	GL_TexEnv( GL_REPLACE );
@@ -477,14 +542,87 @@ R_DrawParticles
 */
 void R_DrawParticles (void)
 {
-	if ( gl_ext_pointparameters->value && qglPointParameterfEXT )
+	if (gl_particle->value)
+	{
+		const particle_t *p;
+		int				i,k;
+		vec3_t			up, right;
+		float			scale, r,g,b;
+
+		qglDepthMask( GL_FALSE );		// no z buffering
+		qglEnable(GL_BLEND);
+		GL_TexEnv( GL_MODULATE );
+		qglEnable( GL_TEXTURE_2D );
+		qglBlendFunc   (GL_SRC_ALPHA, GL_ONE);	
+	
+		// Vertex arrays 
+		qglEnableClientState (GL_VERTEX_ARRAY);
+		qglEnableClientState (GL_TEXTURE_COORD_ARRAY);
+		qglEnableClientState (GL_COLOR_ARRAY);
+
+		qglTexCoordPointer (2, GL_FLOAT, sizeof(tex_array[0]), tex_array[0]);
+		qglVertexPointer (3, GL_FLOAT, sizeof(vert_array[0]), vert_array[0]);
+		qglColorPointer (4, GL_FLOAT, sizeof(col_array[0]), col_array[0]);
+
+		GL_Bind(r_particletexture->texnum);
+
+//		qglCallList(particle_shader);
+//		qglEnable(GL_REGISTER_COMBINERS_NV);
+
+		VectorScale (vup, 1.5, up);
+		VectorScale (vright, 1.5, right);
+
+		for ( p = r_newrefdef.particles, i=0, k=0 ; i < r_newrefdef.num_particles; i++,p++,k+=4)
+		{
+			// hack a scale up to keep particles from disapearing
+			scale = ( p->origin[0] - r_origin[0] ) * vpn[0] + 
+				    ( p->origin[1] - r_origin[1] ) * vpn[1] +
+				    ( p->origin[2] - r_origin[2] ) * vpn[2];
+
+			scale = (scale < 20) ? 1 : 1 + scale * 0.0004;
+
+			r = d_8to24tablef[p->color & 0xFF][0];
+			g = d_8to24tablef[p->color & 0xFF][1];
+			b = d_8to24tablef[p->color & 0xFF][2];
+
+			VA_SetElem2(tex_array[k],0,0);
+			VA_SetElem4(col_array[k],r,g,b,p->alpha);
+			VA_SetElem3(vert_array[k],p->origin[0] - (up[0]*scale) - (right[0]*scale),p->origin[1] - (up[1]*scale) - (right[1]*scale),p->origin[2] - (up[2]*scale) - (right[2]*scale));
+
+			VA_SetElem2(tex_array[k+1],1,0);
+			VA_SetElem4(col_array[k+1],r,g,b,p->alpha);
+			VA_SetElem3(vert_array[k+1],p->origin[0] + (up[0]*scale) - (right[0]*scale),p->origin[1] + (up[1]*scale) - (right[1]*scale),p->origin[2] + (up[2]*scale) - (right[2]*scale));
+
+			VA_SetElem2(tex_array[k+2],1,1);
+			VA_SetElem4(col_array[k+2],r,g,b,p->alpha);
+			VA_SetElem3(vert_array[k+2],p->origin[0] + (right[0]*scale) + (up[0]*scale),p->origin[1] + (right[1]*scale) + (up[1]*scale),p->origin[2] + (right[2]*scale) + (up[2]*scale));
+
+			VA_SetElem2(tex_array[k+3],0,1);
+			VA_SetElem4(col_array[k+3],r,g,b,p->alpha);
+			VA_SetElem3(vert_array[k+3],p->origin[0] + (right[0]*scale) - (up[0]*scale),p->origin[1] + (right[1]*scale) - (up[1]*scale),p->origin[2] + (right[2]*scale) - (up[2]*scale));
+		}
+
+		qglDrawArrays(GL_QUADS,0,k);
+
+//		qglDisable(GL_REGISTER_COMBINERS_NV);
+
+		qglDisable(GL_BLEND);
+		qglColor3f(1,1,1);
+		qglDepthMask(1);		// back to normal Z buffering
+		GL_TexEnv(GL_REPLACE);
+		qglBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+		qglDisableClientState (GL_VERTEX_ARRAY);
+		qglDisableClientState (GL_TEXTURE_COORD_ARRAY);
+		qglDisableClientState(GL_COLOR_ARRAY);
+	}
+	else if ( gl_ext_pointparameters->value && qglPointParameterfEXT )
 	{
 		int i;
 		unsigned char color[4];
 		const particle_t *p;
 
 		qglDepthMask( GL_FALSE );
-		GLSTATE_ENABLE_BLEND
+		qglEnable(GL_BLEND);
 		qglDisable( GL_TEXTURE_2D );
 
 		qglPointSize( gl_particle_size->value );
@@ -501,7 +639,7 @@ void R_DrawParticles (void)
 		}
 		qglEnd();
 
-		GLSTATE_DISABLE_BLEND
+		qglDisable(GL_BLEND);
 		qglColor4f( 1.0F, 1.0F, 1.0F, 1.0F );
 		qglDepthMask( GL_TRUE );
 		qglEnable( GL_TEXTURE_2D );
@@ -520,33 +658,35 @@ R_PolyBlend
 */
 void R_PolyBlend (void)
 {
-	if (!gl_polyblend->value || !v_blend[3])
+	if (!gl_polyblend->value)
 		return;
 
-	GLSTATE_DISABLE_ALPHATEST
-	GLSTATE_ENABLE_BLEND
+	if (v_blend[3] < 0.01f)
+		return;
+
+	qglDisable(GL_ALPHA_TEST);
+	qglEnable(GL_BLEND);
 	qglDisable (GL_DEPTH_TEST);
 	qglDisable (GL_TEXTURE_2D);
 
+	qglMatrixMode(GL_PROJECTION);
     qglLoadIdentity ();
+	qglOrtho (0, 1, 1, 0, -99999, 99999);
 
-	// FIXME: get rid of these
-    qglRotatef (-90,  1, 0, 0);	    // put Z going up
-    qglRotatef (90,  0, 0, 1);	    // put Z going up
+	qglMatrixMode(GL_MODELVIEW);
+    qglLoadIdentity ();
 
 	qglColor4fv (v_blend);
 
-	qglBegin (GL_QUADS);
-
-	qglVertex3f (10, 100, 100);
-	qglVertex3f (10, -100, 100);
-	qglVertex3f (10, -100, -100);
-	qglVertex3f (10, 100, -100);
+	qglBegin (GL_TRIANGLES);
+	qglVertex2f (-5, -5);
+	qglVertex2f (10, -5);
+	qglVertex2f (-5, 10);
 	qglEnd ();
 
-	GLSTATE_DISABLE_BLEND
+	qglDisable(GL_BLEND);
 	qglEnable (GL_TEXTURE_2D);
-	GLSTATE_ENABLE_ALPHATEST
+	qglEnable(GL_ALPHA_TEST);
 
 	qglColor4f(1,1,1,1);
 }
@@ -658,7 +798,7 @@ void R_SetupFrame (void)
 		qglClearColor( 0.3, 0.3, 0.3, 1 );
 		qglScissor( r_newrefdef.x, vid.height - r_newrefdef.height - r_newrefdef.y, r_newrefdef.width, r_newrefdef.height );
 		qglClear( GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT );
-		qglClearColor( 1, 0, 0.5, 0.5 );
+		qglClearColor( 0, 0, 0, 0.5 );
 		qglDisable( GL_SCISSOR_TEST );
 	}
 }
@@ -757,8 +897,8 @@ if (skydistance->modified)
 	else
 		qglDisable(GL_CULL_FACE);
 
-	GLSTATE_DISABLE_BLEND
-	GLSTATE_DISABLE_ALPHATEST
+	qglDisable(GL_BLEND);
+	qglDisable(GL_ALPHA_TEST);
 	qglEnable(GL_DEPTH_TEST);
 }
 
@@ -767,6 +907,8 @@ if (skydistance->modified)
 R_Clear
 =============
 */
+extern qboolean have_stencil;
+
 void R_Clear (void)
 {
 	if (gl_ztrick->value)
@@ -803,6 +945,12 @@ void R_Clear (void)
 
 	qglDepthRange (gldepthmin, gldepthmax);
 
+	//Added stencil shadows -Maniac
+	if (have_stencil && gl_shadows->value == 2)
+	{
+		qglClearStencil(1);
+		qglClear(GL_STENCIL_BUFFER_BIT);
+	}
 }
 
 void R_Flash( void )
@@ -817,12 +965,23 @@ R_RenderView
 r_newrefdef must be set before the first call
 ================
 */
+
+void R_ApplyStains();
+
 void R_RenderView (refdef_t *fd)
 {
+	float fogcolor[4] = {0.09,0.1,0.12,1};
+
 	if (r_norefresh->value)
 		return;
 
 	r_newrefdef = *fd;
+
+	// (gl_scale) NiceAss: Scale back up from client's false width/height -Maniac
+	r_newrefdef.width *= gl_scale->value;
+	r_newrefdef.height *= gl_scale->value;
+	r_newrefdef.x *= gl_scale->value;
+	r_newrefdef.y *= gl_scale->value;
 
 	if (!r_worldmodel && !( r_newrefdef.rdflags & RDF_NOWORLDMODEL ) )
 		ri.Sys_Error (ERR_DROP, "R_RenderView: NULL worldmodel");
@@ -838,6 +997,9 @@ void R_RenderView (refdef_t *fd)
 	if (gl_finish->value)
 		qglFinish ();
 
+	if (r_newrefdef.num_newstains > 0 && gl_stainmaps->value)
+		R_ApplyStains ();
+
 	R_SetupFrame ();
 
 	R_SetFrustum ();
@@ -847,6 +1009,8 @@ void R_RenderView (refdef_t *fd)
 	R_MarkLeaves ();	// done here so we know if we're in water
 
 	R_DrawWorld ();
+
+	R_AddDecals (); //Decals -Maniac
 
 	R_DrawEntitiesOnList ();
 
@@ -866,22 +1030,74 @@ void R_RenderView (refdef_t *fd)
 			c_visible_textures, 
 			c_visible_lightmaps); 
 	}
+
+	if(gl_fog->value)
+	{
+		qglFogi (GL_FOG_MODE, GL_EXP2);
+		//qglFogf		(GL_FOG_START, 50.0f); 
+		//qglFogf		(GL_FOG_END, 1600.0f);
+		qglFogf		(GL_FOG_DENSITY, gl_fog_density->value*2/4096);
+		qglFogfv	(GL_FOG_COLOR ,fogcolor);
+		//qglDisable(GL_FOG);
+		qglEnable(GL_FOG);
+	}
+	else if(gl_fog->modified)
+	{
+		qglDisable(GL_FOG);
+		gl_fog->modified = false;
+	}
 }
 
+unsigned int blurtex = 0;
 
 void	R_SetGL2D (void)
 {
 	// set 2D virtual screen size
 	qglViewport (0,0, vid.width, vid.height);
+
 	qglMatrixMode(GL_PROJECTION);
     qglLoadIdentity ();
-	qglOrtho  (0, vid.width, vid.height, 0, -99999, 99999);
+	// NiceAss: Scale the screen -Maniac
+	qglOrtho(0, vid.width / gl_scale->value, vid.height / gl_scale->value, 0, -99999, 99999);
+//	qglOrtho  (0, vid.width, vid.height, 0, -99999, 99999);
+
 	qglMatrixMode(GL_MODELVIEW);
     qglLoadIdentity ();
+
 	qglDisable (GL_DEPTH_TEST);
 	qglDisable (GL_CULL_FACE);
-	GLSTATE_DISABLE_BLEND
-	GLSTATE_ENABLE_ALPHATEST
+	if (gl_state.tex_rectangle && gl_motionblur->value) {
+		if (blurtex) {
+			GL_TexEnv(GL_MODULATE);
+			qglDisable(GL_TEXTURE_2D);
+			qglEnable(GL_TEXTURE_RECTANGLE_NV);
+			qglEnable(GL_BLEND);
+			qglDisable(GL_ALPHA_TEST);
+			qglBlendFunc(GL_SRC_ALPHA,GL_ONE_MINUS_SRC_ALPHA);
+			qglColor4f (1,1,1,0.45f);
+			qglBegin(GL_QUADS);
+			qglTexCoord2f(0,vid.height);
+					qglVertex2f(0,0);
+			qglTexCoord2f(vid.width,vid.height);
+					qglVertex2f(vid.width,0);
+			qglTexCoord2f(vid.width,0);
+					qglVertex2f(vid.width,vid.height);
+			qglTexCoord2f(0,0);
+					qglVertex2f(0,vid.height);
+			qglEnd();
+			qglDisable(GL_TEXTURE_RECTANGLE_NV);
+			qglEnable(GL_TEXTURE_2D);
+		}
+		if (!blurtex)
+			qglGenTextures(1,&blurtex);
+		qglBindTexture(GL_TEXTURE_RECTANGLE_NV,blurtex);
+		qglCopyTexImage2D(GL_TEXTURE_RECTANGLE_NV,0,GL_RGB,0,0,vid.width,vid.height,0);
+		qglTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+		qglTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	}
+	qglDisable(GL_BLEND);
+	qglEnable(GL_ALPHA_TEST);
+
 	qglColor4f (1,1,1,1);
 }
 
@@ -1029,7 +1245,7 @@ void R_Register( void )
 	gl_vertex_arrays = ri.Cvar_Get( "gl_vertex_arrays", "0", CVAR_ARCHIVE );
 
 	gl_ext_swapinterval = ri.Cvar_Get( "gl_ext_swapinterval", "1", CVAR_ARCHIVE );
-	gl_ext_palettedtexture = ri.Cvar_Get( "gl_ext_palettedtexture", "1", CVAR_ARCHIVE );
+	gl_ext_palettedtexture = ri.Cvar_Get( "gl_ext_palettedtexture", "0", CVAR_ARCHIVE );
 	gl_ext_multitexture = ri.Cvar_Get( "gl_ext_multitexture", "1", CVAR_ARCHIVE );
 	gl_ext_pointparameters = ri.Cvar_Get( "gl_ext_pointparameters", "1", CVAR_ARCHIVE );
 	gl_ext_compiled_vertex_array = ri.Cvar_Get( "gl_ext_compiled_vertex_array", "1", CVAR_ARCHIVE );
@@ -1043,18 +1259,33 @@ void R_Register( void )
 
 	vid_fullscreen = ri.Cvar_Get( "vid_fullscreen", "0", CVAR_ARCHIVE );
 	vid_gamma = ri.Cvar_Get( "vid_gamma", "1.0", CVAR_ARCHIVE );
-	vid_ref = ri.Cvar_Get( "vid_ref", "soft", CVAR_ARCHIVE );
+	vid_ref = ri.Cvar_Get( "vid_ref", "gl", CVAR_ARCHIVE ); //Changed from soft -Maniac
 
 	//Added cvar's -Maniac
-	skydistance = ri.Cvar_Get("skydistance", "2300", 0 ); // DMP - skybox size change
-	ignorecantfindpic = ri.Cvar_Get ("ignorecantfindpic", "0", 0);
+	skydistance = ri.Cvar_Get("skydistance", "2300", CVAR_ARCHIVE ); // DMP - skybox size change
 
-	gl_loadtga = ri.Cvar_Get( "gl_loadtga", "0", 0);
-	gl_hudformat = ri.Cvar_Get( "gl_hudformat", "0", 0);
-	gl_conformat = ri.Cvar_Get ( "gl_conformat", "0", CVAR_ARCHIVE );
-	gl_hudtrans = ri.Cvar_Get( "gl_hudtrans", "1", 0);
+	gl_replacewal = ri.Cvar_Get( "gl_replacewal", "0", 0);
+	gl_replacepcx = ri.Cvar_Get( "gl_replacepcx", "0", 0);
+	gl_fontshadow = ri.Cvar_Get( "gl_fontshadow", "0", CVAR_ARCHIVE);
 
-    gl_screenshot_quality = ri.Cvar_Get( "gl_screenshot_quality", "85", 0 );
+	gl_stainmaps = ri.Cvar_Get( "gl_stainmaps", "0", CVAR_ARCHIVE );
+	gl_sgis_mipmap = ri.Cvar_Get( "gl_sgis_mipmap", "0", CVAR_ARCHIVE );
+	gl_ext_texture_compression = ri.Cvar_Get( "gl_ext_texture_compression", "0", CVAR_ARCHIVE );
+	gl_celshading = ri.Cvar_Get ( "gl_celshading", "0", CVAR_ARCHIVE ); //Celshading
+	gl_celshading_width = ri.Cvar_Get ( "gl_celshading_width", "6", CVAR_ARCHIVE );
+	gl_scale = ri.Cvar_Get ("gl_scale", "1", CVAR_ARCHIVE);
+	gl_watercaustics = ri.Cvar_Get ("gl_watercaustics", "0", 0);
+
+    gl_screenshot_quality = ri.Cvar_Get( "gl_screenshot_quality", "85", CVAR_ARCHIVE );
+	gl_motionblur = ri.Cvar_Get( "gl_motionblur", "0", 0 );	// motionblur
+	gl_waterwaves = ri.Cvar_Get( "gl_waterwaves", "0", CVAR_ARCHIVE );	// waterwave
+	gl_particle = ri.Cvar_Get ( "gl_particle", "0", 0 );
+
+	gl_decals = ri.Cvar_Get( "gl_decals", "0", CVAR_ARCHIVE );
+	gl_decals_time = ri.Cvar_Get( "gl_decals_time", "30", CVAR_ARCHIVE );
+
+	gl_fog = ri.Cvar_Get ("gl_fog", "0", 0);
+	gl_fog_density = ri.Cvar_Get ("gl_fog_density", "1", 0);
     ri.Cmd_AddCommand( "screenshotjpg", GL_ScreenShot_JPG );
 	//End
 
@@ -1062,6 +1293,7 @@ void R_Register( void )
 	ri.Cmd_AddCommand( "screenshot", GL_ScreenShot_f );
 	ri.Cmd_AddCommand( "modellist", Mod_Modellist_f );
 	ri.Cmd_AddCommand( "gl_strings", GL_Strings_f );
+
 }
 
 /*
@@ -1126,6 +1358,25 @@ qboolean R_SetMode (void)
 R_Init
 ===============
 */
+void PowerofTwo (unsigned int *var)
+{
+	int i = 2;
+
+	while (1) 
+	{
+		i <<= 1;
+		if (*var == i)
+		{
+			break;
+		}
+		else if (*var < (i <<1)) 
+		{
+			*var = i<<1;
+			break;
+		}
+	};
+}
+
 int R_Init( void *hinstance, void *hWnd )
 {	
 	char renderer_buffer[1000];
@@ -1142,6 +1393,8 @@ int R_Init( void *hinstance, void *hWnd )
 	ri.Con_Printf (PRINT_ALL, "ref_gl version: "REF_VERSION"\n");
 
 	Draw_GetPalette ();
+
+	GL_ClearDecals (); //Decals -Maniac
 
 	R_Register();
 
@@ -1359,8 +1612,8 @@ int R_Init( void *hinstance, void *hWnd )
 			qglMTexCoord2fSGIS = ( void * ) qwglGetProcAddress( "glMultiTexCoord2fARB" );
 			qglActiveTextureARB = ( void * ) qwglGetProcAddress( "glActiveTextureARB" );
 			qglClientActiveTextureARB = ( void * ) qwglGetProcAddress( "glClientActiveTextureARB" );
-			GL_TEXTURE_0 = GL_TEXTURE0_ARB;
-			GL_TEXTURE_1 = GL_TEXTURE1_ARB;
+			GL_TEXTURE0 = GL_TEXTURE0_ARB;
+			GL_TEXTURE1 = GL_TEXTURE1_ARB;
 		}
 		else
 		{
@@ -1383,8 +1636,8 @@ int R_Init( void *hinstance, void *hWnd )
 			ri.Con_Printf( PRINT_ALL, "...using GL_SGIS_multitexture\n" );
 			qglMTexCoord2fSGIS = ( void * ) qwglGetProcAddress( "glMTexCoord2fSGIS" );
 			qglSelectTextureSGIS = ( void * ) qwglGetProcAddress( "glSelectTextureSGIS" );
-			GL_TEXTURE_0 = GL_TEXTURE0_SGIS;
-			GL_TEXTURE_1 = GL_TEXTURE1_SGIS;
+			GL_TEXTURE0 = GL_TEXTURE0_SGIS;
+			GL_TEXTURE1 = GL_TEXTURE1_SGIS;
 		}
 		else
 		{
@@ -1396,6 +1649,63 @@ int R_Init( void *hinstance, void *hWnd )
 		ri.Con_Printf( PRINT_ALL, "...GL_SGIS_multitexture not found\n" );
 	}
 
+	if ( strstr( gl_config.extensions_string, "GL_NV_texture_rectangle" ) )
+	{
+		ri.Con_Printf(PRINT_ALL, "...using GL_NV_texture_rectangle\n");
+		gl_state.tex_rectangle=true;
+	}
+	else if (strstr(gl_config.extensions_string, "GL_EXT_texture_rectangle"))
+	{
+		ri.Con_Printf(PRINT_ALL, "...using GL_EXT_texture_rectangle\n");
+		gl_state.tex_rectangle=true;
+	} else {
+		ri.Con_Printf(PRINT_ALL, "...GL_NV_texture_rectangle not found\n");
+		gl_state.tex_rectangle=false;
+	}
+
+	if ( strstr( gl_config.extensions_string, "GL_SGIS_generate_mipmap" ) )
+	{
+		if(gl_sgis_mipmap->value)
+		{
+			ri.Con_Printf(PRINT_ALL, "...using GL_SGIS_generate_mipmap\n");
+			gl_state.sgis_mipmap=true;
+		}
+		else
+		{
+			ri.Con_Printf(PRINT_ALL, "...ignoring GL_SGIS_generate_mipmap\n");
+			gl_state.sgis_mipmap=false;
+		}
+	} else {
+		ri.Con_Printf(PRINT_ALL, "...GL_SGIS_generate_mipmap not found\n");
+		gl_state.sgis_mipmap=false;
+	}
+
+	// Heffo - ARB Texture Compression
+	if ( strstr( gl_config.extensions_string, "GL_ARB_texture_compression" ) )
+	{
+		if(gl_ext_texture_compression->value)
+		{
+			ri.Con_Printf(PRINT_ALL, "...using GL_ARB_texture_compression\n");
+			gl_state.texture_compression = true;
+		}
+		else
+		{
+			ri.Con_Printf(PRINT_ALL, "...ignoring GL_ARB_texture_compression\n");
+			gl_state.texture_compression = false;
+		}
+	}
+	else
+	{
+		ri.Con_Printf(PRINT_ALL, "...GL_ARB_texture_compression not found\n");
+		gl_state.texture_compression = false;
+	}
+
+	// retreive information
+	qglGetIntegerv (GL_MAX_TEXTURE_SIZE, &gl_state.maxtexsize);
+	PowerofTwo (&gl_state.maxtexsize);
+	// display information
+	ri.Con_Printf( PRINT_ALL, "Maximum Texture Size: %ix%i\n", gl_state.maxtexsize, gl_state.maxtexsize);
+
 	GL_SetDefaultState();
 
 	/*
@@ -1406,6 +1716,7 @@ int R_Init( void *hinstance, void *hWnd )
 #endif
 
 	GL_InitImages ();
+
 	Mod_Init ();
 	R_InitParticleTexture ();
 	Draw_InitLocal ();
@@ -1413,6 +1724,8 @@ int R_Init( void *hinstance, void *hWnd )
 	err = qglGetError();
 	if ( err != GL_NO_ERROR )
 		ri.Con_Printf (PRINT_ALL, "glGetError() = 0x%x\n", err);
+
+	return 0;
 }
 
 /*
@@ -1429,6 +1742,7 @@ void R_Shutdown (void)
 
 	//Changed screenshotjpg -Maniac
 	ri.Cmd_RemoveCommand ("screenshotjpg");
+	//ri.Cmd_RemoveCommand ("screenshotpng");
 	//End
 
 	Mod_FreeAll ();
@@ -1470,6 +1784,22 @@ void R_BeginFrame( float camera_separation )
 		gl_log->modified = false;
 	}
 
+	// NiceAss: scale -Maniac
+	if (gl_scale->modified)
+	{
+		int width, height;
+
+		if( gl_scale->value < 1.0f )
+			ri.Cvar_SetValue( "gl_scale", 1.0f );
+
+		// get the current resolution
+		ri.Vid_GetModeInfo(&width, &height, gl_mode->value);
+		// lie to client about new scaled window size
+		ri.Vid_NewWindow( width / gl_scale->value, height / gl_scale->value );
+		
+		gl_scale->modified = false;
+	}
+
 	if ( gl_log->value )
 	{
 		GLimp_LogNewFrame();
@@ -1496,17 +1826,7 @@ void R_BeginFrame( float camera_separation )
 	GLimp_BeginFrame( camera_separation );
 
 	// go into 2D mode
-	qglViewport (0,0, vid.width, vid.height);
-	qglMatrixMode(GL_PROJECTION);
-    qglLoadIdentity ();
-	qglOrtho  (0, vid.width, vid.height, 0, -99999, 99999);
-	qglMatrixMode(GL_MODELVIEW);
-    qglLoadIdentity ();
-	qglDisable (GL_DEPTH_TEST);
-	qglDisable (GL_CULL_FACE);
-	GLSTATE_DISABLE_BLEND
-	GLSTATE_ENABLE_ALPHATEST
-	qglColor4f (1,1,1,1);
+	R_SetGL2D ();
 
 	// draw buffer stuff
 	if ( gl_drawbuffer->modified )
@@ -1581,17 +1901,18 @@ void R_SetPalette ( const unsigned char *palette)
 			rp[i*4+3] = 0xff;
 		}
 	}
+
 	GL_SetTexturePalette( r_rawpalette );
 
-	qglClearColor (0,0,0,0);
+	qglClearColor (0, 0, 0, 0);
 	qglClear (GL_COLOR_BUFFER_BIT);
-	qglClearColor (1,0, 0.5 , 0.5);
+	qglClearColor (0, 0, 0 , 0.5);
 }
 
 /*
 ** R_DrawBeam
 */
-void R_DrawBeam( entity_t *e )
+void R_DrawBeam (void)
 {
 #define NUM_BEAM_SEGS 6
 
@@ -1603,13 +1924,13 @@ void R_DrawBeam( entity_t *e )
 	vec3_t	start_points[NUM_BEAM_SEGS], end_points[NUM_BEAM_SEGS];
 	vec3_t oldorigin, origin;
 
-	oldorigin[0] = e->oldorigin[0];
-	oldorigin[1] = e->oldorigin[1];
-	oldorigin[2] = e->oldorigin[2];
+	oldorigin[0] = currententity->oldorigin[0];
+	oldorigin[1] = currententity->oldorigin[1];
+	oldorigin[2] = currententity->oldorigin[2];
 
-	origin[0] = e->origin[0];
-	origin[1] = e->origin[1];
-	origin[2] = e->origin[2];
+	origin[0] = currententity->origin[0];
+	origin[1] = currententity->origin[1];
+	origin[2] = currententity->origin[2];
 
 	normalized_direction[0] = direction[0] = oldorigin[0] - origin[0];
 	normalized_direction[1] = direction[1] = oldorigin[1] - origin[1];
@@ -1619,7 +1940,7 @@ void R_DrawBeam( entity_t *e )
 		return;
 
 	PerpendicularVector( perpvec, normalized_direction );
-	VectorScale( perpvec, e->frame * 0.5, perpvec );
+	VectorScale( perpvec, currententity->frame * 0.5, perpvec );
 
 	for ( i = 0; i < 6; i++ )
 	{
@@ -1629,18 +1950,18 @@ void R_DrawBeam( entity_t *e )
 	}
 
 	qglDisable( GL_TEXTURE_2D );
-	GLSTATE_ENABLE_BLEND
+	qglEnable(GL_BLEND);
 	qglDepthMask( GL_FALSE );
 
-	r = ( d_8to24table[e->skinnum & 0xFF] ) & 0xFF;
-	g = ( d_8to24table[e->skinnum & 0xFF] >> 8 ) & 0xFF;
-	b = ( d_8to24table[e->skinnum & 0xFF] >> 16 ) & 0xFF;
+	r = ( d_8to24table[currententity->skinnum & 0xFF] ) & 0xFF;
+	g = ( d_8to24table[currententity->skinnum & 0xFF] >> 8 ) & 0xFF;
+	b = ( d_8to24table[currententity->skinnum & 0xFF] >> 16 ) & 0xFF;
 
 	r /= 255.0F;
 	g /= 255.0F;
 	b /= 255.0F;
 
-	qglColor4f( r, g, b, e->alpha );
+	qglColor4f( r, g, b, currententity->alpha );
 
 	qglBegin( GL_TRIANGLE_STRIP );
 	for ( i = 0; i < NUM_BEAM_SEGS; i++ )
@@ -1653,7 +1974,7 @@ void R_DrawBeam( entity_t *e )
 	qglEnd();
 
 	qglEnable( GL_TEXTURE_2D );
-	GLSTATE_DISABLE_BLEND
+	qglDisable(GL_BLEND);
 	qglDepthMask( GL_TRUE );
 }
 
@@ -1670,15 +1991,7 @@ void	R_RenderFrame (refdef_t *fd);
 
 struct image_s	*Draw_FindPic (char *name);
 
-void	Draw_Pic (int x, int y, char *name);
-void	Draw_Char (int x, int y, int c);
-
-/* 
- * Changed -Maniac
- * Added Draw_Char_Sized from Q2ACE (http://www.savageservers.com/q2ace/)
- */
-void    Draw_Char_Sized (int x, int y, int c, int xsize, int ysize);
-// End
+void	Draw_Pic (int x, int y, char *name, float alpha);
 
 void	Draw_TileClear (int x, int y, int w, int h, char *name);
 void	Draw_Fill (int x, int y, int w, int h, int c);
@@ -1710,14 +2023,8 @@ refexport_t GetRefAPI (refimport_t rimp )
 	re.DrawGetPicSize = Draw_GetPicSize;
 	re.DrawPic = Draw_Pic;
 	re.DrawStretchPic = Draw_StretchPic;
+	re.DrawScaledPic = Draw_ScaledPic;
 	re.DrawChar = Draw_Char;
-
-	/*
-	 * Added Draw_Char_Sized, -Maniac
-	 * From Q2ACE (http://www.savageservers.com/q2ace/)
-	 */
-	re.DrawCharSized = Draw_Char_Sized;
-	//End 
 
 	re.DrawTileClear = Draw_TileClear;
 	re.DrawFill = Draw_Fill;
@@ -1733,6 +2040,8 @@ refexport_t GetRefAPI (refimport_t rimp )
 	re.EndFrame = GLimp_EndFrame;
 
 	re.AppActivate = GLimp_AppActivate;
+
+	re.AddDecal = R_AddDecal;
 
 	Swap_Init ();
 

@@ -38,7 +38,6 @@ float	r_avertexnormals[NUMVERTEXNORMALS][3] = {
 typedef float vec4_t[4];
 
 static	vec4_t	s_lerped[MAX_VERTS];
-//static	vec3_t	lerped[MAX_VERTS];
 
 vec3_t	shadevector;
 float	shadelight[3];
@@ -50,6 +49,7 @@ float	r_avertexnormal_dots[SHADEDOT_QUANT][256] =
 ;
 
 float	*shadedots = r_avertexnormal_dots[0];
+extern  vec3_t lightspot;
 
 void GL_LerpVerts( int nverts, dtrivertx_t *v, dtrivertx_t *ov, dtrivertx_t *verts, float *lerp, float move[3], float frontv[3], float backv[3] )
 {
@@ -77,6 +77,78 @@ void GL_LerpVerts( int nverts, dtrivertx_t *v, dtrivertx_t *ov, dtrivertx_t *ver
 		}
 	}
 
+}
+
+/*============================
+Cellshading from q2max -Maniac
+Discoloda's cellshading outline routine
+=============================*/
+
+#define OUTLINEDROPOFF 1000.0 //distance away for it to stop
+void GL_DrawOutLine (dmdl_t *paliashdr, int posenum, float width) 
+{
+	dtrivertx_t	*verts;
+	int		*order;
+	int		count;
+	float	strength, len;
+	daliasframe_t	*frame;
+
+	frame = (daliasframe_t *)((byte *)paliashdr + paliashdr->ofs_frames 
+		+ currententity->frame * paliashdr->framesize);
+	verts = frame->verts;
+
+	order = (int *)((byte *)paliashdr + paliashdr->ofs_glcmds);
+
+	if (currententity->flags & RF_TRANSLUCENT)
+		return;
+
+	//this makes long distance make line smaller, but never gone...
+	{	
+		vec3_t length;
+		VectorSubtract(r_newrefdef.vieworg, currententity->origin, length);
+		len = VectorNormalize(length);
+
+		strength = (OUTLINEDROPOFF-len)/OUTLINEDROPOFF;
+		if (strength>1)	strength=1;
+		if (strength<0) strength=0;
+	}
+
+	if( !strength )
+		return;
+
+	qglPolygonMode (GL_FRONT_AND_BACK, GL_LINE);
+	qglCullFace (GL_BACK);
+	qglEnable(GL_BLEND);
+	qglColor4f (0,0,0,strength);
+	qglLineWidth(width*strength);
+
+	//Now Draw...
+	while (count = *order++)
+	{
+		// get the vertex count and primitive type
+		if (count < 0)
+		{
+			count = -count;
+			qglBegin (GL_TRIANGLE_FAN);
+		}
+		else
+			qglBegin (GL_TRIANGLE_STRIP);
+
+		{
+			do
+			{
+				qglVertex3fv (s_lerped[order[2]]);
+				order += 3;
+			} while (--count);
+		}
+		qglEnd ();
+	}
+
+	qglDisable(GL_BLEND);
+	qglColor4f (0,0,0,1);
+	qglLineWidth(1);
+	qglCullFace(GL_FRONT);
+	qglPolygonMode (GL_FRONT_AND_BACK, GL_FILL);
 }
 
 /*
@@ -183,12 +255,9 @@ void GL_DrawAliasFrameLerp (dmdl_t *paliashdr, float backlerp)
 		if ( qglLockArraysEXT != 0 )
 			qglLockArraysEXT( 0, paliashdr->num_xyz );
 
-		while (1)
+		while (count = *order++)
 		{
 			// get the vertex count and primitive type
-			count = *order++;
-			if (!count)
-				break;		// done
 			if (count < 0)
 			{
 				count = -count;
@@ -222,9 +291,6 @@ void GL_DrawAliasFrameLerp (dmdl_t *paliashdr, float backlerp)
 					order += 3;
 
 					// normals and vertexes come from the frame list
-					//l = shadedots[verts[index_xyz].lightnormalindex];
-					
-					//qglColor4f (l* shadelight[0], l*shadelight[1], l*shadelight[2], alpha);
 					qglArrayElement( index_xyz );
 
 				} while (--count);
@@ -237,12 +303,9 @@ void GL_DrawAliasFrameLerp (dmdl_t *paliashdr, float backlerp)
 	}
 	else
 	{
-		while (1)
+		while (count = *order++)
 		{
 			// get the vertex count and primitive type
-			count = *order++;
-			if (!count)
-				break;		// done
 			if (count < 0)
 			{
 				count = -count;
@@ -286,6 +349,10 @@ void GL_DrawAliasFrameLerp (dmdl_t *paliashdr, float backlerp)
 		}
 	}
 
+	// NiceAss: Quake2Max Cel Shading
+	if (gl_celshading->value && alpha == 1.0 )
+		GL_DrawOutLine (paliashdr, currententity->frame, gl_celshading_width->value);//, mirrormodel);
+
 //	if ( currententity->flags & ( RF_SHELL_RED | RF_SHELL_GREEN | RF_SHELL_BLUE ) )
 	// PMM - added double damage shell
 	if ( currententity->flags & ( RF_SHELL_RED | RF_SHELL_GREEN | RF_SHELL_BLUE | RF_SHELL_DOUBLE | RF_SHELL_HALF_DAM) )
@@ -293,13 +360,12 @@ void GL_DrawAliasFrameLerp (dmdl_t *paliashdr, float backlerp)
 }
 
 
-#if 1
 /*
 =============
 GL_DrawAliasShadow
 =============
 */
-extern	vec3_t			lightspot;
+extern	qboolean		have_stencil;
 
 void GL_DrawAliasShadow (dmdl_t *paliashdr, int posenum)
 {
@@ -311,21 +377,22 @@ void GL_DrawAliasShadow (dmdl_t *paliashdr, int posenum)
 	daliasframe_t	*frame;
 
 	lheight = currententity->origin[2] - lightspot[2];
-
 	frame = (daliasframe_t *)((byte *)paliashdr + paliashdr->ofs_frames + currententity->frame * paliashdr->framesize);
 	verts = frame->verts;
-
 	height = 0;
-
 	order = (int *)((byte *)paliashdr + paliashdr->ofs_glcmds);
 	height = -lheight + 1.0;
+	//Added stencil shadows -Maniac
+	if (have_stencil && gl_shadows->value == 2) {
+		height = -lheight + 0.1f;
+		qglEnable( GL_STENCIL_TEST );
+		qglStencilFunc( GL_EQUAL, 1, 2 );
+		qglStencilOp( GL_KEEP, GL_KEEP, GL_INCR );
+	}
 
-	while (1)
+	while (count = *order++)
 	{
 		// get the vertex count and primitive type
-		count = *order++;
-		if (!count)
-			break;		// done
 		if (count < 0)
 		{
 			count = -count;
@@ -337,36 +404,30 @@ void GL_DrawAliasShadow (dmdl_t *paliashdr, int posenum)
 		do
 		{
 			// normals and vertexes come from the frame list
-/*
-			point[0] = verts[order[2]].v[0] * frame->scale[0] + frame->translate[0];
-			point[1] = verts[order[2]].v[1] * frame->scale[1] + frame->translate[1];
-			point[2] = verts[order[2]].v[2] * frame->scale[2] + frame->translate[2];
-*/
-
-			memcpy( point, s_lerped[order[2]], sizeof( point )  );
+			VectorCopy ( s_lerped[order[2]], point );
 
 			point[0] -= shadevector[0]*(point[2]+lheight);
 			point[1] -= shadevector[1]*(point[2]+lheight);
 			point[2] = height;
-//			height -= 0.001;
+
 			qglVertex3fv (point);
 
 			order += 3;
 
-//			verts++;
-
 		} while (--count);
 
 		qglEnd ();
-	}	
+	}
+
+	if (have_stencil && gl_shadows->value == 2)
+		qglDisable(GL_STENCIL_TEST);
 }
 
-#endif
 
 /*
 ** R_CullAliasModel
 */
-static qboolean R_CullAliasModel( vec3_t bbox[8], entity_t *e )
+static qboolean R_CullAliasModel( vec3_t bbox[8] )
 {
 	int i;
 	vec3_t		mins, maxs;
@@ -378,26 +439,26 @@ static qboolean R_CullAliasModel( vec3_t bbox[8], entity_t *e )
 
 	paliashdr = (dmdl_t *)currentmodel->extradata;
 
-	if ( ( e->frame >= paliashdr->num_frames ) || ( e->frame < 0 ) )
+	if ( ( currententity->frame >= paliashdr->num_frames ) || ( currententity->frame < 0 ) )
 	{
 		ri.Con_Printf (PRINT_ALL, "R_CullAliasModel %s: no such frame %d\n", 
-			currentmodel->name, e->frame);
-		e->frame = 0;
+			currentmodel->name, currententity->frame);
+		currententity->frame = 0;
 	}
-	if ( ( e->oldframe >= paliashdr->num_frames ) || ( e->oldframe < 0 ) )
+	if ( ( currententity->oldframe >= paliashdr->num_frames ) || ( currententity->oldframe < 0 ) )
 	{
 		ri.Con_Printf (PRINT_ALL, "R_CullAliasModel %s: no such oldframe %d\n", 
-			currentmodel->name, e->oldframe);
-		e->oldframe = 0;
+			currentmodel->name, currententity->oldframe);
+		currententity->oldframe = 0;
 	}
 
 	pframe = ( daliasframe_t * ) ( ( byte * ) paliashdr + 
 		                              paliashdr->ofs_frames +
-									  e->frame * paliashdr->framesize);
+									  currententity->frame * paliashdr->framesize);
 
 	poldframe = ( daliasframe_t * ) ( ( byte * ) paliashdr + 
 		                              paliashdr->ofs_frames +
-									  e->oldframe * paliashdr->framesize);
+									  currententity->oldframe * paliashdr->framesize);
 
 	// compute axially aligned mins and maxs
 	if ( pframe == poldframe )
@@ -454,7 +515,7 @@ static qboolean R_CullAliasModel( vec3_t bbox[8], entity_t *e )
 	}
 
 	// rotate the bounding box
-	VectorCopy( e->angles, angles );
+	VectorCopy( currententity->angles, angles );
 	angles[YAW] = -angles[YAW];
 	AngleVectors( angles, vectors[0], vectors[1], vectors[2] );
 
@@ -468,7 +529,7 @@ static qboolean R_CullAliasModel( vec3_t bbox[8], entity_t *e )
 		bbox[i][1] = -DotProduct( vectors[1], tmp );
 		bbox[i][2] = DotProduct( vectors[2], tmp );
 
-		VectorAdd( e->origin, bbox[i], bbox[i] );
+		VectorAdd( currententity->origin, bbox[i], bbox[i] );
 	}
 
 	{
@@ -506,21 +567,20 @@ R_DrawAliasModel
 
 =================
 */
-void R_DrawAliasModel (entity_t *e)
+void R_DrawAliasModel (void)
 {
 	int			i;
 	dmdl_t		*paliashdr;
-	float		an;
 	vec3_t		bbox[8];
 	image_t		*skin;
 
-	if ( !( e->flags & RF_WEAPONMODEL ) )
+	if ( !( currententity->flags & RF_WEAPONMODEL ) )
 	{
-		if ( R_CullAliasModel( bbox, e ) )
+		if ( R_CullAliasModel( bbox ) )
 			return;
 	}
 
-	if ( e->flags & RF_WEAPONMODEL )
+	if ( currententity->flags & RF_WEAPONMODEL )
 	{
 		if ( r_lefthand->value == 2 )
 			return;
@@ -641,11 +701,11 @@ void R_DrawAliasModel (entity_t *e)
 
 	shadedots = r_avertexnormal_dots[((int)(currententity->angles[1] * (SHADEDOT_QUANT * 0.0027777777777777777777777777777778))) & (SHADEDOT_QUANT - 1)];
 	
-	an = currententity->angles[1]*0.0055555555555555555555555555555556*M_PI;
+/*	an = currententity->angles[1]*0.0055555555555555555555555555555556*M_PI;
 	shadevector[0] = cos(-an);
 	shadevector[1] = sin(-an);
 	shadevector[2] = 1;
-	VectorNormalize (shadevector);
+	VectorNormalize (shadevector); */
 
 	// locate the proper data
 
@@ -670,9 +730,9 @@ void R_DrawAliasModel (entity_t *e)
 	}
 
     qglPushMatrix ();
-	e->angles[PITCH] = -e->angles[PITCH];	// sigh.
-	R_RotateForEntity (e);
-	e->angles[PITCH] = -e->angles[PITCH];	// sigh.
+	currententity->angles[PITCH] = -currententity->angles[PITCH];	// sigh.
+	R_RotateForEntity (currententity);
+	currententity->angles[PITCH] = -currententity->angles[PITCH];	// sigh.
 
 	// select skin
 	if (currententity->skin)
@@ -699,7 +759,7 @@ void R_DrawAliasModel (entity_t *e)
 	GL_TexEnv( GL_MODULATE );
 	if ( currententity->flags & RF_TRANSLUCENT )
 	{
-		GLSTATE_ENABLE_BLEND
+		qglEnable(GL_BLEND);
 	}
 
 
@@ -753,27 +813,39 @@ void R_DrawAliasModel (entity_t *e)
 
 	if ( currententity->flags & RF_TRANSLUCENT )
 	{
-		GLSTATE_DISABLE_BLEND
+		qglDisable(GL_BLEND);
 	}
 
 	if (currententity->flags & RF_DEPTHHACK)
 		qglDepthRange (gldepthmin, gldepthmax);
 
-#if 1
 	if (gl_shadows->value && !(currententity->flags & (RF_TRANSLUCENT | RF_WEAPONMODEL)))
 	{
+		float an = currententity->angles[1]/180*M_PI;
+		shadevector[0] = cos(-an);
+		shadevector[1] = sin(-an);
+		shadevector[2] = 1;
+
+		VectorNormalize (shadevector);
 		qglPushMatrix ();
-		R_RotateForEntity (e);
+
+		if (gl_shadows->value == 2) {
+			// Dont rotate shadows on ungodly axis
+			qglTranslatef (currententity->origin[0],  currententity->origin[1],  currententity->origin[2]);
+			qglRotatef (currententity->angles[1],  0, 0, 1);
+		} else {
+			R_RotateForEntity (currententity);
+		}
 		qglDisable (GL_TEXTURE_2D);
-		GLSTATE_ENABLE_BLEND
+		qglEnable(GL_BLEND);
 		qglColor4f (0,0,0,0.5);
 		GL_DrawAliasShadow (paliashdr, currententity->frame );
 		qglEnable (GL_TEXTURE_2D);
-		GLSTATE_DISABLE_BLEND
+		qglDisable(GL_BLEND);
 		qglPopMatrix ();
 	}
-#endif
 	qglColor4f (1,1,1,1);
+ 
 }
 
 

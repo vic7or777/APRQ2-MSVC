@@ -21,177 +21,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "gl_local.h"
 
-extern	model_t	*loadmodel;
-
 char	skyname[MAX_QPATH];
 float	skyrotate;
 vec3_t	skyaxis;
 image_t	*sky_images[6];
-
-msurface_t	*warpface;
-
-#define	SUBDIVIDE_SIZE	64
-//#define	SUBDIVIDE_SIZE	1024
-
-void BoundPoly (int numverts, float *verts, vec3_t mins, vec3_t maxs)
-{
-	int		i, j;
-	float	*v;
-
-	mins[0] = mins[1] = mins[2] = 9999;
-	maxs[0] = maxs[1] = maxs[2] = -9999;
-	v = verts;
-	for (i=0 ; i<numverts ; i++)
-		for (j=0 ; j<3 ; j++, v++)
-		{
-			if (*v < mins[j])
-				mins[j] = *v;
-			if (*v > maxs[j])
-				maxs[j] = *v;
-		}
-}
-
-void SubdividePolygon (int numverts, float *verts)
-{
-	int		i, j, k;
-	vec3_t	mins, maxs;
-	float	m;
-	float	*v;
-	vec3_t	front[64], back[64];
-	int		f, b;
-	float	dist[64];
-	float	frac;
-	glpoly_t	*poly;
-	float	s, t;
-	vec3_t	total;
-	float	total_s, total_t;
-
-	if (numverts > 60)
-		ri.Sys_Error (ERR_DROP, "numverts = %i", numverts);
-
-	BoundPoly (numverts, verts, mins, maxs);
-
-	for (i=0 ; i<3 ; i++)
-	{
-		m = (mins[i] + maxs[i]) * 0.5;
-		m = SUBDIVIDE_SIZE * floor (m/SUBDIVIDE_SIZE + 0.5f);
-		if (maxs[i] - m < 8)
-			continue;
-		if (m - mins[i] < 8)
-			continue;
-
-		// cut it
-		v = verts + i;
-		for (j=0 ; j<numverts ; j++, v+= 3)
-			dist[j] = *v - m;
-
-		// wrap cases
-		dist[j] = dist[0];
-		v-=i;
-		VectorCopy (verts, v);
-
-		f = b = 0;
-		v = verts;
-		for (j=0 ; j<numverts ; j++, v+= 3)
-		{
-			if (dist[j] >= 0)
-			{
-				VectorCopy (v, front[f]);
-				f++;
-			}
-			if (dist[j] <= 0)
-			{
-				VectorCopy (v, back[b]);
-				b++;
-			}
-			if (dist[j] == 0 || dist[j+1] == 0)
-				continue;
-			if ( (dist[j] > 0) != (dist[j+1] > 0) )
-			{
-				// clip point
-				frac = dist[j] / (dist[j] - dist[j+1]);
-				for (k=0 ; k<3 ; k++)
-					front[f][k] = back[b][k] = v[k] + frac*(v[3+k] - v[k]);
-				f++;
-				b++;
-			}
-		}
-
-		SubdividePolygon (f, front[0]);
-		SubdividePolygon (b, back[0]);
-		return;
-	}
-
-	// add a point in the center to help keep warp valid
-	poly = Hunk_Alloc (sizeof(glpoly_t) + ((numverts-4)+2) * VERTEXSIZE*sizeof(float));
-	poly->next = warpface->polys;
-	warpface->polys = poly;
-	poly->numverts = numverts+2;
-	VectorClear (total);
-	total_s = 0;
-	total_t = 0;
-	for (i=0 ; i<numverts ; i++, verts+= 3)
-	{
-		VectorCopy (verts, poly->verts[i+1]);
-		s = DotProduct (verts, warpface->texinfo->vecs[0]);
-		t = DotProduct (verts, warpface->texinfo->vecs[1]);
-
-		total_s += s;
-		total_t += t;
-		VectorAdd (total, verts, total);
-
-		poly->verts[i+1][3] = s;
-		poly->verts[i+1][4] = t;
-	}
-
-	VectorScale (total, (1.0/numverts), poly->verts[0]);
-	poly->verts[0][3] = total_s/numverts;
-	poly->verts[0][4] = total_t/numverts;
-
-	// copy first vertex to last
-	memcpy (poly->verts[i+1], poly->verts[1], sizeof(poly->verts[0]));
-}
-
-/*
-================
-GL_SubdivideSurface
-
-Breaks a polygon up along axial 64 unit
-boundaries so that turbulent and sky warps
-can be done reasonably.
-================
-*/
-void GL_SubdivideSurface (msurface_t *fa)
-{
-	vec3_t		verts[64];
-	int			numverts;
-	int			i;
-	int			lindex;
-	float		*vec;
-
-	warpface = fa;
-
-	//
-	// convert edges back to a normal polygon
-	//
-	numverts = 0;
-	for (i=0 ; i<fa->numedges ; i++)
-	{
-		lindex = loadmodel->surfedges[fa->firstedge + i];
-
-		if (lindex > 0)
-			vec = loadmodel->vertexes[loadmodel->edges[lindex].v[0]].position;
-		else
-			vec = loadmodel->vertexes[loadmodel->edges[-lindex].v[1]].position;
-		VectorCopy (vec, verts[numverts]);
-		numverts++;
-	}
-
-	SubdividePolygon (numverts, verts[0]);
-}
-
-//=========================================================
-
 
 
 // speed up sin calculations - Ed
@@ -200,59 +33,66 @@ float	r_turbsin[] =
 	#include "warpsin.h"
 };
 #define TURBSCALE (256.0 / (2 * M_PI))
+#define TURBSIN(f, s) r_turbsin[((int)(((f)*(s) + r_newrefdef.time) * TURBSCALE) & 255)]
 
 /*
 =============
 EmitWaterPolys
 
-Does a water warp on the pre-fragmented glpoly_t chain
+Does a water warp
 =============
 */
 void EmitWaterPolys (msurface_t *fa)
 {
-	glpoly_t	*p, *bp;
+	vec3_t		wv;   // Water waves
 	float		*v;
-	int			i;
-	float		s, t, os, ot;
-	float		scroll;
-	float		rdt = r_newrefdef.time;
+	int			i, nv;
+	float		st[2];
+	float		scroll, rdt = r_newrefdef.time;
+
 
 	if (fa->texinfo->flags & SURF_FLOWING)
 		scroll = -64 * ( (r_newrefdef.time*0.5) - (int)(r_newrefdef.time*0.5) );
 	else
 		scroll = 0;
-	for (bp=fa->polys ; bp ; bp=bp->next)
+
+	v = fa->polys->verts[0];
+	nv = fa->polys->numverts;
+
+	qglBegin (GL_TRIANGLE_FAN);
+	for (i=0 ; i<nv ; i++, v+=VERTEXSIZE)
 	{
-		p = bp;
+			st[0] = (v[3] + TURBSIN(v[4], 0.125) + scroll) * (1.0/64);
+			st[1] = (v[4] + TURBSIN(v[3], 0.125)) * (1.0/64);
+			qglTexCoord2fv (st);
 
-		qglBegin (GL_TRIANGLE_FAN);
-		for (i=0,v=p->verts[0] ; i<p->numverts ; i++, v+=VERTEXSIZE)
-		{
-			os = v[3];
-			ot = v[4];
+			//=============== Water waves ============ //Added -Maniac
+			if (!(fa->texinfo->flags & SURF_FLOWING) && gl_waterwaves->value)
+			{
+				if (gl_waterwaves->value < 0)
+					ri.Cvar_Set( "gl_waterwaves", "0");
+				else if (gl_waterwaves->value > 4)
+					ri.Cvar_Set( "gl_waterwaves", "4");
 
-#if !id386
-			s = os + r_turbsin[(int)((ot*0.125+r_newrefdef.time) * TURBSCALE) & 255];
-#else
-			s = os + r_turbsin[Q_ftol( ((ot*0.125+rdt) * TURBSCALE) ) & 255];
-#endif
-			s += scroll;
-			//s *= (1.0/64);
-			s *= 0.015625;
+				wv[0] =v[0];
+				wv[1] =v[1];
+				#if !id386
+				wv[2] =v[2] + gl_waterwaves->value *sin(v[0]*0.025+r_newrefdef.time)*sin(v[2]*0.05+r_newrefdef.time)
+						+ gl_waterwaves->value *sin(v[1]*0.025+r_newrefdef.time*2)*sin(v[2]*0.05+r_newrefdef.time);
+				#else
+				wv[2] =v[2] + gl_waterwaves->value *sin(v[0]*0.025+rdt)*sin(v[2]*0.05+r_newrefdef.time)
+						+ gl_waterwaves->value *sin(v[1]*0.025+rdt*2)*sin(v[2]*0.05+rdt);
+				#endif
 
-#if !id386
-			t = ot + r_turbsin[(int)((os*0.125+rdt) * TURBSCALE) & 255];
-#else
-			t = ot + r_turbsin[Q_ftol( ((os*0.125+rdt) * TURBSCALE) ) & 255];
-#endif
-			//t *= (1.0/64);
-			t *= 0.015625;
-
-			qglTexCoord2f (s, t);
-			qglVertex3fv (v);
-		}
-		qglEnd ();
+				qglVertex3fv (wv);
+			}
+			else
+			{
+			//============= Water waves end. ==============
+				qglVertex3fv (v);
+			}
 	}
+	qglEnd ();
 }
 
 
@@ -267,7 +107,6 @@ vec3_t	skyclip[6] = {
 	{1,0,1},
 	{-1,0,1} 
 };
-int	c_sky;
 
 // 1 = s, 2 = t, 3 = 2048
 int	st_to_vec[6][3] =
@@ -280,9 +119,6 @@ int	st_to_vec[6][3] =
 
 	{-2,-1,3},		// 0 degrees yaw, look straight up
 	{2,-1,-3}		// look straight down
-
-//	{-1,2,3},
-//	{1,2,-3}
 };
 
 // s = [0]/[2], t = [1]/[2]
@@ -296,9 +132,6 @@ int	vec_to_st[6][3] =
 
 	{-2,-1,3},
 	{-2,1,-3}
-
-//	{-1,2,3},
-//	{1,2,-3}
 };
 
 float	skymins[2][6], skymaxs[2][6];
@@ -312,23 +145,13 @@ void DrawSkyPolygon (int nump, vec3_t vecs)
 	int		axis;
 	float	*vp;
 
-	c_sky++;
-#if 0
-glBegin (GL_POLYGON);
-for (i=0 ; i<nump ; i++, vecs+=3)
-{
-	VectorAdd(vecs, r_origin, v);
-	qglVertex3fv (v);
-}
-glEnd();
-return;
-#endif
 	// decide which face it maps to
-	VectorCopy (vec3_origin, v);
+	//VectorCopy (vec3_origin, v);
+	VectorClear (v);
+
 	for (i=0, vp=vecs ; i<nump ; i++, vp+=3)
-	{
 		VectorAdd (vp, v, v);
-	}
+
 	av[0] = fabs(v[0]);
 	av[1] = fabs(v[1]);
 	av[2] = fabs(v[2]);
@@ -362,13 +185,16 @@ return;
 			dv = vecs[j - 1];
 		else
 			dv = -vecs[-j - 1];
+
 		if (dv < 0.001)
 			continue;	// don't divide by zero
+
 		j = vec_to_st[axis][0];
 		if (j < 0)
 			s = -vecs[-j -1] / dv;
 		else
 			s = vecs[j-1] / dv;
+
 		j = vec_to_st[axis][1];
 		if (j < 0)
 			t = -vecs[-j -1] / dv;
@@ -388,6 +214,7 @@ return;
 
 #define	ON_EPSILON		0.1			// point on plane side epsilon
 #define	MAX_CLIP_VERTS	64
+
 void ClipSkyPolygon (int nump, vec3_t vecs, int stage)
 {
 	float	*norm;
@@ -402,6 +229,7 @@ void ClipSkyPolygon (int nump, vec3_t vecs, int stage)
 
 	if (nump > MAX_CLIP_VERTS-2)
 		ri.Sys_Error (ERR_DROP, "ClipSkyPolygon: MAX_CLIP_VERTS");
+
 	if (stage == 6)
 	{	// fully clipped, so draw it
 		DrawSkyPolygon (nump, vecs);
@@ -491,14 +319,12 @@ void R_AddSkySurface (msurface_t *fa)
 	glpoly_t	*p;
 
 	// calculate vertex values for sky box
-	for (p=fa->polys ; p ; p=p->next)
-	{
-		for (i=0 ; i<p->numverts ; i++)
-		{
-			VectorSubtract (p->verts[i], r_origin, verts[i]);
-		}
-		ClipSkyPolygon (p->numverts, verts[0], 0);
-	}
+	p = fa->polys;
+
+	for (i=0 ; i<p->numverts ; i++)
+		VectorSubtract (p->verts[i], r_origin, verts[i]);
+
+	ClipSkyPolygon (p->numverts, verts[0], 0);
 }
 
 
@@ -568,12 +394,6 @@ void R_DrawSkyBox (void)
 {
 	int		i;
 
-#if 0
-GLSTATE_ENABLE_BLEND
-GL_TexEnv( GL_MODULATE );
-qglColor4f (1,1,1,0.5);
-qglDisable (GL_DEPTH_TEST);
-#endif
 	if (skyrotate)
 	{	// check for no sky at all
 		for (i=0 ; i<6 ; i++)
@@ -583,9 +403,13 @@ qglDisable (GL_DEPTH_TEST);
 			return;		// nothing visible
 	}
 
-qglPushMatrix ();
-qglTranslatef (r_origin[0], r_origin[1], r_origin[2]);
-qglRotatef (r_newrefdef.time * skyrotate, skyaxis[0], skyaxis[1], skyaxis[2]);
+	qglPushMatrix ();
+
+//	if (gl_fog->value)
+//		qglDisable(GL_FOG);
+
+	qglTranslatef (r_origin[0], r_origin[1], r_origin[2]);
+	qglRotatef (r_newrefdef.time * skyrotate, skyaxis[0], skyaxis[1], skyaxis[2]);
 
 	for (i=0 ; i<6 ; i++)
 	{
@@ -609,13 +433,11 @@ qglRotatef (r_newrefdef.time * skyrotate, skyaxis[0], skyaxis[1], skyaxis[2]);
 		MakeSkyVec (skymaxs[0][i], skymins[1][i], i);
 		qglEnd ();
 	}
-qglPopMatrix ();
-#if 0
-GLSTATE_DISABLE_BLEND
-qglTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
-qglColor4f (1,1,1,0.5);
-qglEnable (GL_DEPTH_TEST);
-#endif
+
+//	if (gl_fog->value)
+//		qglEnable(GL_FOG);
+
+	qglPopMatrix ();
 }
 
 
@@ -641,10 +463,9 @@ void R_SetSky (char *name, float rotate, vec3_t axis)
 		if (gl_skymip->value || skyrotate)
 			gl_picmip->value++;
 
-		//changed always load targa skyboxes in OpenGL mode -Maniac
-		//if ( qglColorTableEXT && gl_ext_palettedtexture->value )
-		//	Com_sprintf (pathname, sizeof(pathname), "env/%s%s.pcx", skyname, suf[i]);
-		//else
+		if ( qglColorTableEXT && gl_ext_palettedtexture->value )
+			Com_sprintf (pathname, sizeof(pathname), "env/%s%s.pcx", skyname, suf[i]);
+		else
 			Com_sprintf (pathname, sizeof(pathname), "env/%s%s.tga", skyname, suf[i]);
 
 		sky_images[i] = GL_FindImage (pathname, it_sky);
@@ -663,4 +484,48 @@ void R_SetSky (char *name, float rotate, vec3_t axis)
 			sky_max = 0.998046875f;
 		}
 	}
+}
+
+//For water caustics -Maniac
+void EmitCausticPolys (msurface_t *fa)
+{
+	float		*v;
+	int			i, nv;
+	float		txm, tym;
+		
+
+	txm = cos (r_newrefdef.time*0.3) * 0.3;
+	tym = sin (r_newrefdef.time*-0.3) * 0.6;
+
+	v = fa->polys->verts[0];	
+	nv = fa->polys->numverts;
+
+	GL_SelectTexture(GL_TEXTURE1);
+	qglDisable(GL_TEXTURE_2D);
+	GL_SelectTexture(GL_TEXTURE0);
+	qglEnable(GL_BLEND);
+
+    qglBlendFunc(GL_ZERO, GL_SRC_COLOR);
+	
+	qglColor4f (1, 1, 1, 0.275f);
+
+	GL_Bind(r_caustictexture->texnum);
+	qglBegin (GL_TRIANGLE_FAN);
+
+	for (i=0 ; i<nv ; i++, v+= VERTEXSIZE)
+	{
+		qglTexCoord2f (v[3]+txm, v[4]+tym);
+		qglVertex3fv (v);
+
+	}
+	qglEnd ();
+
+
+	qglBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+	qglColor4f (1,1,1,1);
+	qglDisable(GL_BLEND);
+	GL_SelectTexture(GL_TEXTURE1);
+	qglEnable(GL_TEXTURE_2D);
+	GL_SelectTexture(GL_TEXTURE0);
 }

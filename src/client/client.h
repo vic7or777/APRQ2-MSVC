@@ -103,7 +103,7 @@ typedef struct
 
 	int			parse_entities;		// index (not anded off) into cl_parse_entities[]
 
-	usercmd_t	cmd;
+//	usercmd_t	cmd;
 	usercmd_t	cmds[CMD_BACKUP];	// each mesage will send several old cmds
 	int			cmd_time[CMD_BACKUP];	// time sent, for calculating pings
 	short		predicted_origins[CMD_BACKUP][3];	// for debug comparing against server
@@ -171,7 +171,15 @@ typedef struct
 	clientinfo_t	clientinfo[MAX_CLIENTS];
 	clientinfo_t	baseclientinfo;
 
+	char loc_here[40];  // Locs -Maniac
+	char loc_there[40];
+
 	int doscreenshot;  // doscreenshot -Maniac
+
+	char mapname[MAX_OSPATH];
+
+	int	time_since_nocheatsay; //!nocheatsay anti-exploit wait-delay
+	int roundtime; //Hack to show roundtime in aq2 mod -Maniac
 
 } client_state_t;
 
@@ -242,22 +250,11 @@ typedef struct
 	qboolean	demorecording;
 	qboolean	demowaiting;	// don't record until a non-delta message is received
 	FILE		*demofile;
-	//Added autorecord -Maniac
-	char		demorealname[MAX_OSPATH] ;
-	int			canrecord ;
+
 } client_static_t;
 
 extern client_static_t	cls;
 
-//x_info -Maniac
-typedef struct
-{
-	int			x_pversion;//p_version anti-exploit wait-delay
-	int			x_nocheatsay;//!nocheatsay anti-exploit wait-delay
-//	int			x_deadoralive;
-} x_info_t;
-
-extern x_info_t x_info;
 //=============================================================================
 
 //
@@ -311,6 +308,27 @@ extern	cvar_t	*cl_vwep;
 
 //AVI EXPORT -Maniac
 extern	cvar_t	*avi_fps;
+extern	cvar_t	*ch_alpha;
+extern	cvar_t	*ch_pulse;
+extern	cvar_t	*ch_scale;
+extern	cvar_t	*ch_red;
+extern	cvar_t	*ch_green;
+extern	cvar_t	*ch_blue;
+extern	cvar_t	*con_notifylines;
+extern	cvar_t	*con_notifyfade;
+extern	cvar_t	*con_alpha;
+extern	cvar_t	*con_scrlines;
+extern	cvar_t	*cl_clock;
+extern	cvar_t	*cl_fps;
+extern	cvar_t	*cl_chathud;
+extern	cvar_t	*cl_chathudlines;
+extern	cvar_t	*cl_maptime;
+extern	cvar_t	*cl_timestamps;
+extern	cvar_t	*cl_timestampsformat;
+extern	cvar_t	*scr_conheight;
+extern	cvar_t	*cl_hudalpha;
+extern	cvar_t	*cl_textcolors;
+extern	cvar_t	*cl_autorecord;
 
 typedef struct
 {
@@ -338,12 +356,9 @@ extern	netadr_t	net_from;
 extern	sizebuf_t	net_message;
 
 void DrawString (int x, int y, char *s);
-
-//Changed, Chathud, -Maniac
-void DrawChatHudString (int x, int y, char *s, int xsize, int ysize);
-// End
-
 void DrawAltString (int x, int y, char *s);	// toggle high bit
+void DrawString2 (int x, int y, char *s, float alpha);
+void DrawColorString (int x, int y, char *s, int color, float alpha);
 qboolean	CL_CheckOrDownloadFile (char *filename);
 
 void CL_AddNetgraph (void);
@@ -505,14 +520,11 @@ extern 	kbutton_t 	in_speed;
 
 void CL_InitInput (void);
 void CL_SendCmd (void);
-void CL_SendMove (usercmd_t *cmd);
 
 void CL_ClearState (void);
 
 void CL_ReadPackets (void);
 
-int  CL_ReadFromServer (void);
-void CL_WriteToServer (usercmd_t *cmd);
 void CL_BaseMove (usercmd_t *cmd);
 
 void IN_CenterView (void);
@@ -526,13 +538,9 @@ char *Key_KeynumToString (int keynum);
 void CL_WriteDemoMessage (void);
 void CL_Stop_f (void);
 void CL_Record_f (void);
-
-//Added chathud -Maniac
-// cl_scrn.c
-//
-void clearchathud (void);
-void addtochathud (char *s);
-void SCR_Chathud (void);
+void CL_InitDemos(void);
+void CL_ParseAutoRecord (char *s);
+void SCR_AutoDemo(void);
 
 //
 // cl_parse.c
@@ -548,14 +556,13 @@ void CL_Download_f (void);
 //
 // cl_view.c
 //
-extern	int			gun_frame;
-extern	struct model_s	*gun_model;
 
 void V_Init (void);
 void V_RenderView( float stereo_separation );
 void V_AddEntity (entity_t *ent);
 void V_AddParticle (vec3_t org, int color, float alpha);
 void V_AddLight (vec3_t org, float intensity, float r, float g, float b);
+void V_AddStain (vec3_t org, vec3_t color, float size); //Stainmaps -Maniac
 void V_AddLightStyle (int style, float r, float g, float b);
 
 // cl_tent.c
@@ -591,7 +598,6 @@ void M_AddToServerList (netadr_t adr, char *info);
 
 // cl_inv.c
 void CL_ParseInventory (void);
-void CL_KeyInventory (int key);
 void CL_DrawInventory (void);
 
 // cl_pred.c
@@ -603,3 +609,9 @@ void x86_TimerStop( void );
 void x86_TimerInit( unsigned long smallest, unsigned longest );
 unsigned long *x86_TimerGetHistogram( void );
 #endif
+
+// cl_locs.c
+void CL_LoadLoc(void);
+void CL_LocPlace(void);
+void CL_AddViewLocs(void);
+void CL_InitLocs(void);

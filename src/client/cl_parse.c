@@ -21,21 +21,22 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "client.h"
 
-//Added cvar load -Maniac
+
 extern cvar_t *cl_autoscreenshot;
 extern cvar_t *cl_customlimitmsg;
-
-extern cvar_t *scr_autodemo;
-
-extern cvar_t *cl_recordstopatlimits;
-extern cvar_t *cl_recordstopatmatchsetup ;
-extern cvar_t *cl_custommatchsetup ;
-extern cvar_t *cl_custommatchstart ;
-extern cvar_t *cl_recordatmatchstart ;
-extern cvar_t *cl_dontrecorduntilmatchstart;
+extern cvar_t *cl_highlight;
+extern cvar_t *cl_highlightmsg;
+extern cvar_t *cl_highlightnames;
+extern cvar_t *cl_highlightcolor;
+extern cvar_t *cl_mychatcolor;
 extern cvar_t *ignorewaves;
-//extern cvar_t *cl_todo;
-//extern cvar_t *cl_todoalive;
+extern cvar_t *name;
+
+void p_version_reply (char *s);
+int CL_Ignore (char *s);
+int CL_Highlight (char *s);
+void CL_HighlightNames (char *s);
+void CL_Timestamp (qboolean chat);
 //End
 
 char *svc_strings[256] =
@@ -43,7 +44,7 @@ char *svc_strings[256] =
 	"svc_bad",
 
 	"svc_muzzleflash",
-	"svc_muzzlflash2",
+	"svc_muzzleflash2",
 	"svc_temp_entity",
 	"svc_layout",
 	"svc_inventory",
@@ -66,17 +67,6 @@ char *svc_strings[256] =
 };
 
 //=============================================================================
-
-//Added custom_to_lower -Maniac
-char custom_to_lower ( char c ) {
-		char difference = 'A' - 'a' ;
-
-		if ((c >='A') && (c <= 'Z')) {
-				c -= difference ;
-		}
-		return c;
-		
-}
 
 void CL_DownloadFileName(char *dest, int destlen, char *fn)
 {
@@ -273,14 +263,7 @@ void CL_ParseDownload (void)
 	{
 		// request next block
 // change display routines by zoid
-#if 0
-		Com_Printf (".");
-		if (10*(percent/10) != cls.downloadpercent)
-		{
-			cls.downloadpercent = 10*(percent/10);
-			Com_Printf ("%i%%", cls.downloadpercent);
-		}
-#endif
+
 		cls.downloadpercent = percent;
 
 		MSG_WriteByte (&cls.netchan.message, clc_stringcmd);
@@ -291,7 +274,6 @@ void CL_ParseDownload (void)
 		char	oldn[MAX_OSPATH];
 		char	newn[MAX_OSPATH];
 
-//		Com_Printf ("100%%\n");
 
 		fclose (cls.download);
 
@@ -389,7 +371,7 @@ CL_ParseBaseline
 void CL_ParseBaseline (void)
 {
 	entity_state_t	*es;
-	unsigned int	bits; //Changed -Maniac
+	unsigned int	bits;
 	int				newnum;
 	entity_state_t	nullstate;
 
@@ -423,10 +405,6 @@ void CL_LoadClientinfo (clientinfo_t *ci, char *s)
 	// isolate the player's name
 	strncpy(ci->name, s, sizeof(ci->name));
 	ci->name[sizeof(ci->name)-1] = 0;
-
-	//From q2ace -Maniac
-//	strncpy(ci->name, s, 20);
-//	ci->name[20] = 0;
 
 	t = strstr (s, "\\");
 	if (t)
@@ -565,7 +543,7 @@ void CL_ParseConfigString (void)
 	strncpy (olds, cl.configstrings[i], sizeof(olds));
 	olds[sizeof(olds) - 1] = 0;
 
-	strcpy (cl.configstrings[i], s);
+	strncpy (cl.configstrings[i], s, sizeof(cl.configstrings[i]));
 
 	// do something apropriate 
 
@@ -578,6 +556,12 @@ void CL_ParseConfigString (void)
 	}
 	else if (i >= CS_MODELS && i < CS_MODELS+MAX_MODELS)
 	{
+		if( i == CS_MODELS + 1 )
+		{
+			Q_strncpyz( cl.mapname, s + 5, sizeof( cl.mapname ) ); // skip "maps/"
+			cl.mapname[strlen( cl.mapname ) - 4] = 0; // cut off ".bsp"
+
+		}
 		if (cl.refresh_prepped)
 		{
 			cl.model_draw[i-CS_MODELS] = re.RegisterModel (cl.configstrings[i]);
@@ -686,110 +670,6 @@ void SHOWNET(char *s)
 
 /*
 =====================
-stristr()
-  case insensitive strstr()
-  (Shaws added: stristr())
-=====================
-*/
-char *stristr (const char *s1, const char *s2)
-{
-	char *cp = (char*) s1;
-	char *s, *t;
-	char l, r;
-
-	while (*cp) {
-		s = cp;
-		t = (char*)s2;
-		while (*s && *t) {
-			l = ( (*s >= 'A') && (*s <= 'Z') ) ? 
-				*s + 'a' - 'A' : *s;
-			r = ( (*t >= 'A') && (*t <= 'Z') ) ? 
-				*t + 'a' - 'A' : *t;
-			if ( l != r)
-				break;
-			s++, t++;
-		}
-
-		if (*t == '\0')
-			return cp;
-
-		cp++;
-	}
-	return 0; /* not found */
-}
-
-/*
-=====================
-x_p_version_check
-  reply to "p_version" -Maniac
-  (Shaws added: x_p_version_check(char *s) )
-=====================
-*/
-qboolean x_p_version_check (char *s)
-{
-
-	char ostr[32];
-
-	s = strchr(s, 58); // remove the name (everything before the first colon)
-
-	if (strstr(s, "!nocheatsay"))
-	{
-		if (cl.time > x_info.x_nocheatsay)
-		{
-			Com_sprintf(ostr, sizeof(ostr), "Using Apr Q2 v%s\n",APR_DISPLAYVERSION);
-			Cbuf_ExecuteText(EXEC_NOW, ostr);
-			x_info.x_nocheatsay = cl.time + 8000;
-		}
-	}
-	
-	if (strstr(s, "p_version"))
-	{
-		if (cl.time > x_info.x_pversion)
-		{
-			Com_sprintf(ostr, sizeof(ostr), "Using Apr Q2 v%s\n",APR_DISPLAYVERSION);
-			Cbuf_ExecuteText(EXEC_NOW, ostr);
-			x_info.x_pversion = cl.time + 8000;
-		}
-	}
-
-	return false;
-}
-
-/*
-Added bad_stufftext -Maniac
-=====================
-bad_stufftext
-  see if the server-stuffs should be allowed or not
-  (Shaws added: bad_stufftext )
-=====================
-*/
-qboolean bad_stufftext(char *s)
-{
-	int i = 0;
-	char *filterstuff[11] = {"kill",
-							"error",
-							"unbindall",
-							"unbind",
-							"bind",
-							"quit",
-							"sensitivity",
-							"+move",
-							"+back",
-							"+forward"};
-	
-	while ( filterstuff[i] != NULL )
-	{
-		if ( strstr(s, filterstuff[i]) )
-			return true;
-		i++;
-	}
-
-	return false;
-}
-
-
-/*
-=====================
 CL_ParseServerMessage
 =====================
 */
@@ -797,17 +677,26 @@ void CL_ParseServerMessage (void)
 {
 	int			cmd;
 	char		*s;
-	int			i,p;
-	char ostr[256];
+	int			i;
+	char texti[1024];
+	int highlight = 0;
+	int client = -1, skip = 0;
+	char *start = 0;
 
-	//Timestamps, -Maniac
 
-    extern cvar_t *cl_timestamps;
-    struct tm *ntime;
-    char tmpbuf[8];
-    time_t l_time;
-	char *temp_print,fmtd_print[1024];
-
+	//Added autoscreenshot from Q2ACE -Maniac
+    if (cl.doscreenshot == 2)
+	{
+		cl.doscreenshot = 0;
+		if (cl_autoscreenshot->value == 1)
+		{
+			  Cbuf_AddText("screenshot\n");
+		}
+		else if (cl_autoscreenshot->value == 2)
+		{
+			  Cbuf_AddText("screenshotjpg\n");
+		}
+    }
 	// End
 
 //
@@ -818,25 +707,7 @@ void CL_ParseServerMessage (void)
 	else if (cl_shownet->value >= 2)
 		Com_Printf ("------------------\n");
 
-	/*
-	* Added autoscreenshot from Q2ACE -Maniac
-	*/
-
-        if (cl.doscreenshot == 2) {
-
-                 cl.doscreenshot = 0;
-                 if (cl_autoscreenshot->value == 1)
-                 {
-                          Cbuf_AddText("screenshot\n") ;
-				 }
-                 else if (cl_autoscreenshot->value == 2)
-                 {
-                          Cbuf_AddText("screenshotjpg\n") ;
-                 }
-
-        }
-
-	// End
+	CL_LocPlace(); //locs -Maniac
 
 
 //
@@ -879,11 +750,8 @@ void CL_ParseServerMessage (void)
 			
 		case svc_disconnect:
 			Com_Error (ERR_DISCONNECT,"Server disconnected\n");
-			
-			//Added Chathud -Maniac
-                     clearchathud ();
-			// End
 
+			SCR_ClearChatHUD_f();
 			break;
 
 		case svc_reconnect:
@@ -896,159 +764,143 @@ void CL_ParseServerMessage (void)
 			cls.state = ca_connecting;
 			cls.connect_time = -99999;	// CL_CheckForResend() will fire immediately
 
-			//Changed Chathud -Maniac
-                       clearchathud ();
-			// End
-
+            SCR_ClearChatHUD_f();
 			break;
 
 		case svc_print:
 
 			i = MSG_ReadByte (&net_message);
+            s = MSG_ReadString (&net_message);
 
-			/*
-			 *  Changed, added autoscreenshot and autorecord & hud things -Maniac
-			 */
+			strncpy(texti, s, sizeof(texti) - 1);
+			strlwr(texti);
 
-            temp_print = MSG_ReadString (&net_message);
-			strcpy(fmtd_print,temp_print);
-			for(p=0; p<strlen(fmtd_print); p++)		// lowercase + base color
+			if (i == PRINT_HIGH)
 			{
-				fmtd_print[p]&=127;
-				fmtd_print[p]=custom_to_lower(fmtd_print[p]);
+				if(cl_autoscreenshot->value)
+				{
+					if (strstr(texti, "timelimit hit")) {
+						SCR_ClearChatHUD_f();
+						cl.doscreenshot = 1;
+					}
+					else if (strstr(texti, "capturelimit hit")) {
+						SCR_ClearChatHUD_f();
+						cl.doscreenshot = 1;
+					}
+					else if (strstr(texti, "fraglimit hit")) {
+						SCR_ClearChatHUD_f();
+						cl.doscreenshot = 1;
+					}
+					else if (strstr(texti, cl_customlimitmsg->string) ) {
+						SCR_ClearChatHUD_f();
+						cl.doscreenshot = 1;
+					}
+				}
+				
+				CL_ParseAutoRecord (texti);
+
 			}
 
-                        if ((i == PRINT_HIGH) && (cl_autoscreenshot->value > 0)) {
-                                
-								if (strstr(fmtd_print, "timelimit hit")) {
-                                             clearchathud ();
-                                             cl.doscreenshot = 1;
-                                }
-                                else if (strstr(fmtd_print, "capturelimit hit")) {
-                                             clearchathud ();
-                                             cl.doscreenshot = 1;
-                                }
-                                else if (strstr(fmtd_print, "fraglimit hit")) {
-                                             clearchathud ();
-                                             cl.doscreenshot = 1;
-                                }
-                                else if (strstr(fmtd_print, cl_customlimitmsg->string) ) {
-                                             clearchathud ();
-                                             cl.doscreenshot = 1;
-                                }
-                        }
-
-			if ((i == PRINT_HIGH) && (scr_autodemo->value))
-			{
-			
-				if (cl_recordstopatlimits->value)
-				{
-				
-					if (strstr(fmtd_print, "timelimit hit")) {
-						if (cls.demorecording) CL_Stop_f();
-
-					}
-					if (strstr(fmtd_print, "capturelimit hit")) {
-							if (cls.demorecording) CL_Stop_f();
-					}
-					if (strstr(fmtd_print, "fraglimit hit")) {
-							if (cls.demorecording) CL_Stop_f();
-					}
-
-					if (strstr(fmtd_print, cl_customlimitmsg->string) ) {
-							if (cls.demorecording) CL_Stop_f();
-					}
-
-				}
-
-				if (cl_recordstopatmatchsetup->value)
-				{
-
-					if (strstr(fmtd_print, cl_custommatchsetup->string )) {
-						if (cls.demorecording) {
-							// in matchsetup	
-							CL_Stop_f();
-						}
-						cls.canrecord = 0;
-				
-					}
-				}
-
-				if (cl_recordatmatchstart->value)
-				{
-						if (strstr(fmtd_print, cl_custommatchstart->string)) {
-							if (cls.demorecording) {
-									CL_Stop_f() ;
-							}
-						cls.canrecord = 1;
-						}
-				}
-			}
-
-				//End
 
 			if (i == PRINT_CHAT)
 			{
-				S_StartLocalSound ("misc/talk.wav");
 				con.ormask = 128;
 
-				// Changed, Chathud, -Maniac
-				addtochathud(temp_print);
 				// reply to P_VERSION
-				(void) x_p_version_check(fmtd_print);
-				// End
-			}
+				p_version_reply(texti);
 
+				// NiceAss: highlight people's names
+				// see which client said this. name with match closest to start of string is the one we go with.
+				// (Incase someone named bob says "joe" and joe is also in the server, it'll go with bob.)
+				for( i = 0; i < MAX_CLIENTS; i++ ) 
+				{ 
+					if( cl.clientinfo[i].name[0] )
+					{
+						char *tmp = strstr( s, cl.clientinfo[i].name ); 
 
-			if (((i == PRINT_HIGH) && (ignorewaves->value)) && (strstr(fmtd_print, "flipoff") || strstr(fmtd_print, "salute") || strstr(fmtd_print, "taunt") || strstr(fmtd_print, "wave") || strstr(fmtd_print, "point")))
-			{
+						if( tmp && ( tmp < start || client == -1 || ( tmp == start && strlen(cl.clientinfo[i].name) > strlen(cl.clientinfo[client].name) ) ) )
+						{ 
+						  client = i; 
+						  start = tmp; 
+						}
+					}
+				}
+
+				if( client > -1 )
+				{
+					if(start)
+					{
+						// skip the name 
+						start += strlen( cl.clientinfo[client].name ); 
+						// walk to a space (after the colon) 
+						while( *(start) != ' ' && *(start) != 0 )
+							start++;
+
+						if(*start != 0)
+							skip = strlen(texti) - strlen(start);
+					}
+
+					if(!strcmp(cl.clientinfo[client].name, name->string)) //Own chat text
+					{
+						if(cl_mychatcolor->value && cl_textcolors->value)
+						{
+							con.ormask = 0;
+							if(cl_mychatcolor->value < 1)
+								Cvar_SetValue ("cl_mychatcolor", 1);
+							else if(cl_mychatcolor->value > 7)
+								Cvar_SetValue ("cl_mychatcolor", 7);
+							Com_Printf ("^%i%s", (int)cl_mychatcolor->value, S_DISABLE_COLOR);
+						}
+
+					}
+					else
+					{
+						if(CL_Ignore(cl.clientinfo[client].name)) //do not show ignored msg
+							break;
+						
+						highlight = CL_Highlight(texti+skip);
+					}
+				}
+				
+
+				if(highlight == 1 || highlight == 3)
+					S_StartLocalSound ("misc/talk1.wav");
+				else
+					S_StartLocalSound ("misc/talk.wav");
+				
+
+				//Chathud
+				SCR_AddToChatHUD(s);
+
+				CL_Timestamp(true); //Timestamps
+
+				Com_Printf("%s", s);
+
+				con.ormask = 0;
+
 			}
-			// Changed, timestamps, -Maniac
-            else if (cl_timestamps->value)
+			else
 			{
-                                time( &l_time );
-                                ntime = localtime( &l_time );
-                                strftime( tmpbuf, 9, "%H:%M:%S", ntime );
-                                Com_Printf ("[%s] %s", tmpbuf, temp_print);
-            } else {
-			// End
-			Com_Printf ("%s", temp_print);
+				if ((i == PRINT_HIGH && ignorewaves->value) && (!strcmp(texti, "flipoff") || !strcmp(texti, "salute") || !strcmp(texti, "taunt") || !strcmp(texti, "wave") || !strcmp(texti, "point")))
+					break;
+
+				CL_HighlightNames(s);
+
+				CL_Timestamp(false); //Timestamps
+
+				Com_Printf ("%s", s);
 			}
-			con.ormask = 0;
 			break;
 			
 		case svc_centerprint:
-			//To do when alive -Maniac
 			s = MSG_ReadString (&net_message);
-			/*if (stristr(s,"camera...") > 0)
-			{
-				if ((cl.frame.playerstate.pmove.pm_type < PM_DEAD)  && (x_info.x_deadoralive==2)) {
-					x_info.x_deadoralive = 1; //don't repeat until set to 2 again
-					
-					if (cl_todo->value == 1)
-					{
-						Com_sprintf(ostr,sizeof(ostr), "%s\n", cl_todoalive->string);
-						Cbuf_AddText(ostr);
-						Cbuf_Execute() ;
-					}
-				}
-			} */
+			if (!strcmp(s, "ACTION!")) //Hack to show roundtime in aq2 mod -Maniac
+				cl.roundtime = cl.time;
 			SCR_CenterPrint (s);
 			break;
 			
 		case svc_stufftext:
 			s = MSG_ReadString (&net_message);
-			//Added check for bad stuff cmd -Maniac
-			strcpy(fmtd_print,s);
-			for(p=0; p<strlen(fmtd_print); p++)		// lowercase + base color
-			{
-				fmtd_print[p]&=127;
-				fmtd_print[p]=custom_to_lower(fmtd_print[p]);
-			}
-			if ( bad_stufftext(fmtd_print) ) { //Shaws: don't accept evil server stuffs
-				Com_Printf("An evil admin stuffed this to you: %s", s);
-				break;
-			}
 			Com_DPrintf ("stufftext: %s\n", s);
 			Cbuf_AddText (s);
 			break;
@@ -1118,4 +970,93 @@ void CL_ParseServerMessage (void)
 
 }
 
+//  reply to p_version & !nocheatsay -Maniac
+void p_version_reply (char *s)
+{
+	char ostr[32];
 
+	if (cl.time - cl.time_since_nocheatsay > 80000)
+	{
+		if (strstr(s, "!nocheatsay") || strstr(s, "p_version"))
+		{
+			Com_sprintf(ostr, sizeof(ostr), "say \"Apr Q2 v%s\"\n", APR_DISPLAYVERSION);
+			Cbuf_AddText(ostr);
+			cl.time_since_nocheatsay = cl.time;
+		}
+	}
+
+}
+
+void CL_HighlightNames( char *s )
+{
+	char *t;
+	int i;
+
+	if(!cl_highlightnames->value)
+		return;
+
+	// highlight peoples names
+	for( i = 0; i < MAX_CLIENTS; i++ ) 
+	{ 
+		if( cl.clientinfo[i].name[0] && strlen( cl.clientinfo[i].name ) > 1 )
+		{
+			char *tmp = strstr( s, cl.clientinfo[i].name );
+
+			if( tmp )
+			{
+				for( t = tmp; t < tmp + strlen( cl.clientinfo[i].name ); t++ )
+					*t |= 128;
+			}
+		}
+	}
+}
+
+int CL_Highlight ( char *s )
+{
+	int highlight = 0;
+
+	if(!cl_highlight->value)
+		return 0;
+
+	if (strlen(cl_highlightmsg->string) < 2)
+		return 0;
+
+	if (strstr(s, cl_highlightmsg->string))
+	{
+		highlight = cl_highlight->value;
+
+		if(highlight == 2 || highlight == 3)
+		{
+			con.ormask = 0;
+
+			if(cl_textcolors->value && cl_highlightcolor->value)
+			{
+				if(cl_highlightcolor->value < 1)
+					Cvar_SetValue ("cl_highlightcolor", 1);
+				else if(cl_highlightcolor->value > 7)
+					Cvar_SetValue ("cl_highlightcolor", 7);
+				Com_Printf ("^%i%s", (int)cl_highlightcolor->value, S_DISABLE_COLOR);
+			}
+		}
+
+		return highlight;
+	}
+
+	return 0;
+}
+
+void CL_Timestamp( qboolean chat )
+{
+
+    struct tm *ntime;
+    char tmpbuf[32];
+    time_t l_time;
+
+	if(!cl_timestamps->value || (!chat && cl_timestamps->value < 2))
+		return;
+
+	time( &l_time );
+	ntime = localtime( &l_time );
+	strftime( tmpbuf, sizeof(tmpbuf), cl_timestampsformat->string, ntime );
+	Com_Printf ("%s ", tmpbuf);
+}

@@ -110,6 +110,7 @@ void IN_MRestart(void);
 cvar_t	*m_filter;
 //Added m_xpfix cvar -Maniac
 cvar_t	*m_xpfix;
+cvar_t	*m_autosens;	// Psychospaz - Mouse Autosensitivity scaling
 
 qboolean	mlooking;
 
@@ -242,7 +243,7 @@ void IN_StartupMouse (void)
 
 	mouseinitialized = true;
 	mouseparmsvalid = SystemParametersInfo (SPI_GETMOUSE, 0, originalmouseparms, 0);
-	mouse_buttons = 3;
+	mouse_buttons = 5;
 }
 
 /*
@@ -315,8 +316,17 @@ void IN_MouseMove (usercmd_t *cmd)
 	old_mouse_x = mx;
 	old_mouse_y = my;
 
-	mouse_x *= sensitivity->value;
-	mouse_y *= sensitivity->value;
+	//psychospaz - zooming in preserves sensitivity
+	if (m_autosens->value)
+	{
+		mouse_x *= sensitivity->value * (cl.refdef.fov_x/90.0);
+		mouse_y *= sensitivity->value * (cl.refdef.fov_y/90.0);
+	}
+	else
+	{
+		mouse_x *= sensitivity->value;
+		mouse_y *= sensitivity->value;
+	}
 
 // add mouse X/Y movement to cmd
 	if ( (in_strafe.state & 1) || (lookstrafe->value && mlooking ))
@@ -363,7 +373,8 @@ void IN_Init (void)
     in_mouse				= Cvar_Get ("in_mouse",					"1",		CVAR_ARCHIVE);
 
 	//Added m_xpfix -Maniac
-	m_xpfix					= Cvar_Get ("m_xpfix",					"0",		0);
+	m_xpfix					= Cvar_Get ("m_xpfix",					"0",		CVAR_ARCHIVE);
+	m_autosens				= Cvar_Get ("m_autosens",				"0",		0);
 
 	// joystick variables
 	in_joystick				= Cvar_Get ("in_joystick",				"0",		CVAR_ARCHIVE);
@@ -419,6 +430,11 @@ IN_Shutdown
 void IN_Shutdown (void)
 {
 	IN_DeactivateMouse ();
+	Cmd_RemoveCommand ("+mlook");
+	Cmd_RemoveCommand ("-mlook");
+
+	Cmd_RemoveCommand ("m_restart");
+	Cmd_RemoveCommand ("joy_advancedupdate");
 }
 
 
@@ -435,6 +451,10 @@ void IN_Activate (qboolean active)
 {
 	in_appactive = active;
 	mouseactive = !active;		// force a new window check or turn off
+
+	IN_Frame(); // decide active state immediately,
+				// this fixes annoying windowed mode bug
+
 }
 
 
@@ -513,7 +533,7 @@ void IN_StartupJoystick (void)
 { 
 	int			numdevs;
 	JOYCAPS		jc;
-	MMRESULT	mmr;
+	MMRESULT	mmr = 0;
 	cvar_t		*cv;
 
  	// assume no joystick
@@ -598,6 +618,7 @@ PDWORD RawValuePointer (int axis)
 		return &ji.dwVpos;
 	}
 
+	return NULL;
 }
 
 

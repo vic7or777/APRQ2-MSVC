@@ -23,6 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 int	r_dlightframecount;
 
+#define	DLIGHT_CUTOFF	0
 
 /*
 =============================================================================
@@ -44,26 +45,30 @@ void R_MarkLights (dlight_t *light, int bit, mnode_t *node)
 	msurface_t	*surf;
 	int			i;
 	
-	if (node->contents != -1)
+	if (node->contents != CONTENTS_NODE)
 		return;
 
 	splitplane = node->plane;
-	dist = DotProduct (light->origin, splitplane->normal) - splitplane->dist;
+
+	if (splitplane->type < 3)
+		dist = light->origin[splitplane->type] - splitplane->dist;
+	else
+		dist = DotProduct (light->origin, splitplane->normal) - splitplane->dist;
 	
 //=====
 //PGM
-	i=light->intensity;
-	if(i<0)
-		i=-i;
+	i = light->intensity;
+	if (i < 0)
+		i = -i;
 //PGM
 //=====
 
-	if (dist > i)	// PGM (dist > light->intensity)
+	if (dist > i-DLIGHT_CUTOFF)	// PGM (dist > light->intensity)
 	{
 		R_MarkLights (light, bit, node->children[0]);
 		return;
 	}
-	if (dist < -i)	// PGM (dist < -light->intensity)
+	if (dist < -i+DLIGHT_CUTOFF)	// PGM (dist < -light->intensity)
 	{
 		R_MarkLights (light, bit, node->children[1]);
 		return;
@@ -91,16 +96,47 @@ void R_MarkLights (dlight_t *light, int bit, mnode_t *node)
 R_PushDlights
 =============
 */
-void R_PushDlights (model_t *model)
+void R_PushDlights (void)
 {
-	int		i;
-	dlight_t	*l;
+	int	i;
+	dlight_t *l;
+	vec3_t temp;
+	qboolean rotated = false;
+	vec3_t old_vpn, old_vup, old_vright;
+
+	if (currententity->angles[0] || currententity->angles[1] || currententity->angles[2])
+	{
+		rotated = true;
+		VectorCopy (vpn, old_vpn);
+		VectorCopy (vup, old_vup);
+		VectorCopy (vright, old_vright);
+		AngleVectors (currententity->angles, vright, vup, vpn);
+		VectorInverse (vup);
+	}
 
 	r_dlightframecount = r_framecount;
-	for (i=0, l = r_newrefdef.dlights ; i<r_newrefdef.num_dlights ; i++, l++)
+	if (rotated)
 	{
-		R_MarkLights ( l, 1<<i, 
-			model->nodes + model->firstnode);
+		for (i=0, l = r_newrefdef.dlights ; i<r_newrefdef.num_dlights ; i++, l++)
+		{
+			VectorSubtract (l->origin, currententity->origin, temp);
+			TransformVector (temp, l->origin);
+			R_MarkLights ( l, 1<<i, currentmodel->nodes + currentmodel->firstnode);
+			VectorAdd (temp, currententity->origin, l->origin);
+		}
+
+		VectorCopy (old_vpn, vpn);
+		VectorCopy (old_vup, vup);
+		VectorCopy (old_vright, vright);
+	} 
+	else
+	{
+		for (i=0, l = r_newrefdef.dlights ; i<r_newrefdef.num_dlights ; i++, l++)
+		{
+			VectorSubtract (l->origin, currententity->origin, l->origin);
+			R_MarkLights ( l, 1<<i, currentmodel->nodes + currentmodel->firstnode);
+			VectorAdd (l->origin, currententity->origin, l->origin);
+		}
 	}
 }
 
@@ -124,24 +160,28 @@ int RecursiveLightPoint (mnode_t *node, vec3_t start, vec3_t end)
 	mplane_t	*plane;
 	vec3_t		mid;
 	msurface_t	*surf;
-	int			s, t, ds, dt;
+	int			ds, dt;
 	int			i;
 	mtexinfo_t	*tex;
-	byte		*lightmap;
-	float		*scales;
-	int			maps;
-	float		samp;
 	int			r;
 
-	if (node->contents != -1)
+	if (node->contents != CONTENTS_NODE)
 		return -1;		// didn't hit anything
 	
 // calculate mid point
 
-// FIXME: optimize for axial
 	plane = node->plane;
-	front = DotProduct (start, plane->normal) - plane->dist;
-	back = DotProduct (end, plane->normal) - plane->dist;
+	if (plane->type < 3)
+	{
+		front = start[plane->type] - plane->dist;
+		back = end[plane->type] - plane->dist;
+	}
+	else
+	{
+		front = DotProduct (start, plane->normal) - plane->dist;
+		back = DotProduct (end, plane->normal) - plane->dist;
+	}
+
 	side = front < 0;
 	
 	if ( (back < 0) == side)
@@ -151,8 +191,6 @@ int RecursiveLightPoint (mnode_t *node, vec3_t start, vec3_t end)
 	mid[0] = start[0] + (end[0] - start[0])*frac;
 	mid[1] = start[1] + (end[1] - start[1])*frac;
 	mid[2] = start[2] + (end[2] - start[2])*frac;
-	if (plane->type < 3)	// axial planes
-		mid[plane->type] = plane->dist;
 
 // go down front side	
 	r = RecursiveLightPoint (node->children[side], start, mid);
@@ -169,34 +207,28 @@ int RecursiveLightPoint (mnode_t *node, vec3_t start, vec3_t end)
 	surf = r_worldmodel->surfaces + node->firstsurface;
 	for (i=0 ; i<node->numsurfaces ; i++, surf++)
 	{
-		if (surf->flags&(SURF_DRAWTURB|SURF_DRAWSKY)) 
+		if (surf->flags & (SURF_DRAWTURB|SURF_DRAWSKY)) 
 			continue;	// no lightmaps
 
 		tex = surf->texinfo;
 		
-		s = DotProduct (mid, tex->vecs[0]) + tex->vecs[0][3];
-		t = DotProduct (mid, tex->vecs[1]) + tex->vecs[1][3];
-		if (s < surf->texturemins[0] ||
-		t < surf->texturemins[1])
-			continue;
-		
-		ds = s - surf->texturemins[0];
-		dt = t - surf->texturemins[1];
-		
-		if ( ds > surf->extents[0] || dt > surf->extents[1] )
+		ds = DotProduct (mid, tex->vecs[0]) + tex->vecs[0][3] - surf->texturemins[0];
+		if (ds < 0 || ds > surf->extents[0])
 			continue;
 
-		if (!surf->samples)
-			return 0;
-
-		ds >>= 4;
-		dt >>= 4;
-
-		lightmap = surf->samples;
-		VectorCopy (vec3_origin, pointcolor);
-		if (lightmap)
+		dt = DotProduct (mid, tex->vecs[1]) + tex->vecs[1][3] - surf->texturemins[1];
+		if (dt < 0 || dt > surf->extents[1])
+			continue;
+		
+		if (surf->samples)
 		{
-			lightmap += dt * ((surf->extents[0]>>4)+1) + ds;
+			byte	*lightmap;
+			float	samp;
+			float	*scales;
+			int		maps;
+
+			lightmap = surf->samples + (dt>>4) * ((surf->extents[0]>>4)+1) + (ds>>4);
+			VectorClear (pointcolor);
 
 			for (maps = 0 ; maps < MAXLIGHTMAPS && surf->styles[maps] != 255 ;
 					maps++)
@@ -207,15 +239,16 @@ int RecursiveLightPoint (mnode_t *node, vec3_t start, vec3_t end)
 				lightmap += ((surf->extents[0]>>4)+1) *
 						((surf->extents[1]>>4)+1);
 			}
+
+			return 1;
 		}
 		
-		return 1;
+		return 0;
 	}
 
 // go down back side
 	return RecursiveLightPoint (node->children[!side], mid, end);
 }
-
 /*
 ===============
 R_LightPoint
@@ -245,7 +278,7 @@ void R_LightPoint (vec3_t p, vec3_t color)
 	
 	if (r == -1)
 	{
-		VectorCopy (vec3_origin, color);
+		VectorClear (color);
 	}
 	else
 	{
@@ -263,9 +296,9 @@ void R_LightPoint (vec3_t p, vec3_t color)
 						dl->origin,
 						dist);
 		add = dl->intensity - VectorLength(dist);
-		add *= (1.0/256);
 		if (add > 0)
 		{
+			add *= (1.0/256);
 			VectorMA (color, add, dl->color, color);
 		}
 	}
@@ -287,18 +320,30 @@ void R_AddDynamicLights (void)
 	int			lnum;
 	int			sd, td;
 	float		dist, rad, minlight;
-	vec3_t		impact, local;
+	vec3_t		impact, local, dlorigin;
+	vec3_t		temp;
 	int			s, t;
-	int			i;
 	int			smax, tmax;
 	mtexinfo_t	*tex;
 	dlight_t	*dl;
-	int			negativeLight;	//PGM
+	qboolean	negativeLight;	//PGM
+	qboolean	rotated = false;
+	vec3_t		old_vpn, old_vup, old_vright;
 
 	surf = r_drawsurf.surf;
 	smax = (surf->extents[0]>>4)+1;
 	tmax = (surf->extents[1]>>4)+1;
 	tex = surf->texinfo;
+
+	if (currententity->angles[0] || currententity->angles[1] || currententity->angles[2])
+	{
+		rotated = true;
+		VectorCopy (vpn, old_vpn);
+		VectorCopy (vup, old_vup);
+		VectorCopy (vright, old_vright);
+		AngleVectors (currententity->angles, vright, vup, vpn);
+		VectorInverse (vup);
+	}
 
 	for (lnum=0 ; lnum<r_newrefdef.num_dlights ; lnum++)
 	{
@@ -310,27 +355,42 @@ void R_AddDynamicLights (void)
 
 //=====
 //PGM
-		negativeLight = 0;
-		if(rad < 0)
+		negativeLight = false;
+		if (rad < 0)
 		{
-			negativeLight = 1;
+			negativeLight = true;
 			rad = -rad;
 		}
 //PGM
 //=====
 
-		dist = DotProduct (dl->origin, surf->plane->normal) -
-				surf->plane->dist;
+		VectorSubtract (dl->origin, currententity->origin, dlorigin);
+
+		if (rotated)
+		{
+			VectorCopy (dlorigin, temp);
+			TransformVector (temp, dlorigin);
+		}
+
+		if (surf->plane->type < 3)
+			dist = dlorigin[surf->plane->type] - surf->plane->dist;
+		else
+			dist = DotProduct (dlorigin, surf->plane->normal) - surf->plane->dist;
+
 		rad -= fabs(dist);
-		minlight = 32;		// dl->minlight;
+		minlight = DLIGHT_CUTOFF;		// dl->minlight;
 		if (rad < minlight)
 			continue;
 		minlight = rad - minlight;
 
-		for (i=0 ; i<3 ; i++)
+		if (surf->plane->type < 3)
 		{
-			impact[i] = dl->origin[i] -
-					surf->plane->normal[i]*dist;
+			VectorCopy (dlorigin, impact);
+			impact[surf->plane->type] -= dist;
+		} 
+		else 
+		{
+			VectorMA (dlorigin, -dist, surf->plane->normal, impact);
 		}
 
 		local[0] = DotProduct (impact, tex->vecs[0]) + tex->vecs[0][3];
@@ -355,7 +415,7 @@ void R_AddDynamicLights (void)
 					dist = td + (sd>>1);
 //====
 //PGM
-				if(!negativeLight)
+				if (!negativeLight)
 				{
 					if (dist < minlight)
 						blocklights[t*smax + s] += (rad - dist)*256;
@@ -364,13 +424,20 @@ void R_AddDynamicLights (void)
 				{
 					if (dist < minlight)
 						blocklights[t*smax + s] -= (rad - dist)*256;
-					if(blocklights[t*smax + s] < minlight)
+					if (blocklights[t*smax + s] < minlight)
 						blocklights[t*smax + s] = minlight;
 				}
 //PGM
 //====
 			}
 		}
+	}
+
+	if (rotated)
+	{
+		VectorCopy (old_vpn, vpn);
+		VectorCopy (old_vup, vup);
+		VectorCopy (old_vright, vright);
 	}
 }
 

@@ -170,11 +170,21 @@ void R_RecursiveClipBPoly (bedge_t *pedges, mnode_t *pnode, msurface_t *psurf)
 // transform the BSP plane into model space
 // FIXME: cache these?
 	splitplane = pnode->plane;
-	tplane.dist = splitplane->dist -
-			DotProduct(r_entorigin, splitplane->normal);
-	tplane.normal[0] = DotProduct (entity_rotation[0], splitplane->normal);
-	tplane.normal[1] = DotProduct (entity_rotation[1], splitplane->normal);
-	tplane.normal[2] = DotProduct (entity_rotation[2], splitplane->normal);
+
+	if (splitplane->type < 3)
+	{
+		tplane.dist = splitplane->dist - r_entorigin[splitplane->type];
+		tplane.normal[0] = entity_rotation[0][splitplane->type];
+		tplane.normal[1] = entity_rotation[1][splitplane->type];
+		tplane.normal[2] = entity_rotation[2][splitplane->type];
+	}
+	else
+	{
+		tplane.dist = splitplane->dist - DotProduct(r_entorigin, splitplane->normal);
+		tplane.normal[0] = DotProduct (entity_rotation[0], splitplane->normal);
+		tplane.normal[1] = DotProduct (entity_rotation[1], splitplane->normal);
+		tplane.normal[2] = DotProduct (entity_rotation[2], splitplane->normal);
+	}
 
 // clip edges to BSP plane
 	for ( ; pedges ; pedges = pnextedge)
@@ -302,16 +312,18 @@ void R_RecursiveClipBPoly (bedge_t *pedges, mnode_t *pnode, msurface_t *psurf)
 			{
 				if (pn->contents != CONTENTS_NODE)
 				{
-					if (pn->contents != CONTENTS_SOLID)
+					mleaf_t *pl = (mleaf_t *)pn;
+
+					if (pl->contents != CONTENTS_SOLID)
 					{
 						if (r_newrefdef.areabits)
 						{
-							area = ((mleaf_t *)pn)->area;
+							area = pl->area;
 							if (! (r_newrefdef.areabits[area>>3] & (1<<(area&7)) ) )
 								continue;		// not visible
 						}
 
-						r_currentbkey = ((mleaf_t *)pn)->key;
+						r_currentbkey = pl->key;
 						R_RenderBmodelFace (psideedges[i], psurf);
 					}
 				}
@@ -355,7 +367,11 @@ void R_DrawSolidClippedSubmodelPolygons (model_t *pmodel, mnode_t *topnode)
 	// find which side of the node we are on
 		pplane = psurf->plane;
 
-		dot = DotProduct (modelorg, pplane->normal) - pplane->dist;
+		if ( pplane->type < 3 ) {
+			dot = modelorg[pplane->type] - pplane->dist;
+		} else {
+			dot = DotProduct (modelorg, pplane->normal) - pplane->dist;
+		}
 
 	// draw the polygon
 		if (( !(psurf->flags & SURF_PLANEBACK) && (dot < -BACKFACE_EPSILON)) ||
@@ -430,7 +446,11 @@ void R_DrawSubmodelPolygons (model_t *pmodel, int clipflags, mnode_t *topnode)
 	// find which side of the node we are on
 		pplane = psurf->plane;
 
-		dot = DotProduct (modelorg, pplane->normal) - pplane->dist;
+		if ( pplane->type < 3 ) {
+			dot = modelorg[pplane->type] - pplane->dist;
+		} else {
+			dot = DotProduct (modelorg, pplane->normal) - pplane->dist;
+		}
 
 	// draw the polygon
 		if (((psurf->flags & SURF_PLANEBACK) && (dot < -BACKFACE_EPSILON)) ||
@@ -443,9 +463,6 @@ void R_DrawSubmodelPolygons (model_t *pmodel, int clipflags, mnode_t *topnode)
 		}
 	}
 }
-
-
-int c_drawnode;
 
 /*
 ================
@@ -503,10 +520,9 @@ void R_RecursiveWorldNode (mnode_t *node, int clipflags)
 		}
 	}
 
-c_drawnode++;
 
 // if a leaf node, draw stuff
-	if (node->contents != -1)
+	if (node->contents != CONTENTS_NODE)
 	{
 		pleaf = (mleaf_t *)node;
 
@@ -539,20 +555,10 @@ c_drawnode++;
 	// find which side of the node we are on
 		plane = node->plane;
 
-		switch (plane->type)
-		{
-		case PLANE_X:
-			dot = modelorg[0] - plane->dist;
-			break;
-		case PLANE_Y:
-			dot = modelorg[1] - plane->dist;
-			break;
-		case PLANE_Z:
-			dot = modelorg[2] - plane->dist;
-			break;
-		default:
+		if ( plane->type < 3 ) {
+			dot = modelorg[plane->type] - plane->dist;
+		} else {
 			dot = DotProduct (modelorg, plane->normal) - plane->dist;
-			break;
 		}
 	
 		if (dot >= 0)
@@ -621,10 +627,9 @@ void R_RenderWorld (void)
 	if ( r_newrefdef.rdflags & RDF_NOWORLDMODEL )
 		return;
 
-	c_drawnode=0;
-
 	// auto cycle the world frame for texture animation
 	r_worldentity.frame = (int)(r_newrefdef.time*2);
+	r_worldentity.model = r_worldmodel;
 	currententity = &r_worldentity;
 
 	VectorCopy (r_origin, modelorg);

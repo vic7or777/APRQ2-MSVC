@@ -32,8 +32,6 @@ aff8entryvec_table dd LDraw8, LDraw7, LDraw6, LDraw5
 
 lzistepx dd 0	
 
- externdef _rand1k:dword	
- externdef _rand1k_index:dword	
  externdef _alias_colormap:dword
 
 ;PGM

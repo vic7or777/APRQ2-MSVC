@@ -43,8 +43,6 @@ byte		r_warpbuffer[WARP_WIDTH * WARP_HEIGHT];
 swstate_t sw_state;
 
 void		*colormap;
-vec3_t		viewlightvec;
-alight_t	r_viewlighting = {128, 192, viewlightvec};
 float		r_time1;
 int			r_numallocatededges;
 float		r_aliasuvscale = 1.0;
@@ -90,10 +88,8 @@ mplane_t	screenedge[4];
 //
 int		r_framecount = 1;	// so frame counts initialized to 0 don't match
 int		r_visframecount;
-int		d_spanpixcount;
 int		r_polycount;
 int		r_drawnpolycount;
-int		r_wholepolycount;
 
 int			*pfrustum_indexes[4];
 int			r_frustum_indexes[4*6];
@@ -685,7 +681,7 @@ mnode_t *R_FindTopnode (vec3_t mins, vec3_t maxs)
 		}
 		
 		splitplane = node->plane;
-		sides = BOX_ON_PLANE_SIDE(mins, maxs, (cplane_t *)splitplane);
+		sides = BoxOnPlaneSide (mins, maxs, (cplane_t *)splitplane);
 		
 		if (sides == 3)
 			return node;	// this is the splitter
@@ -815,7 +811,7 @@ void R_DrawBEntitiesOnList (void)
 		R_RotateBmodel ();
 
 	// calculate dynamic lighting for bmodel
-		R_PushDlights (currentmodel);
+		R_PushDlights ();
 
 		if (topnode->contents == CONTENTS_NODE)
 		{
@@ -1005,7 +1001,7 @@ void R_RenderFrame (refdef_t *fd)
 
 	R_MarkLeaves ();	// done here so we know if we're in water
 
-	R_PushDlights (r_worldmodel);
+	R_PushDlights ();
 
 	R_EdgeDrawing ();
 
@@ -1346,6 +1342,11 @@ void Draw_GetPalette (void)
 
 struct image_s *R_RegisterSkin (char *name);
 
+void R_AddDecal	(vec3_t origin, vec3_t dir, float red, float green, float blue, float alpha,
+				 float size, int type, int flags, float angle)
+{
+	//Hackish way to enable decals only in gl mode :/
+}
 /*
 @@@@@@@@@@@@@@@@@@@@@
 GetRefAPI
@@ -1371,6 +1372,7 @@ refexport_t GetRefAPI (refimport_t rimp)
 
 	re.DrawGetPicSize = Draw_GetPicSize;
 	re.DrawPic = Draw_Pic;
+	re.DrawScaledPic = Draw_ScaledPic; //For crosshair -Maniac
 	re.DrawStretchPic = Draw_StretchPic;
 	re.DrawChar = Draw_Char;
 	re.DrawTileClear = Draw_TileClear;
@@ -1387,6 +1389,8 @@ refexport_t GetRefAPI (refimport_t rimp)
 	re.EndFrame = SWimp_EndFrame;
 
 	re.AppActivate = SWimp_AppActivate;
+
+	re.AddDecal = R_AddDecal;
 
 	Swap_Init ();
 

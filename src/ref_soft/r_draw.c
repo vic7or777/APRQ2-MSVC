@@ -71,7 +71,7 @@ It can be clipped to the top of the screen to allow the console to be
 smoothly scrolled off.
 ================
 */
-void Draw_Char (int x, int y, int num)
+void Draw_Char (int x, int y, int num, int color, float alpha)
 {
 	byte			*dest;
 	byte			*source;
@@ -217,7 +217,7 @@ void Draw_StretchPicImplementation (int x, int y, int w, int h, image_t	*pic)
 Draw_StretchPic
 =============
 */
-void Draw_StretchPic (int x, int y, int w, int h, char *name)
+void Draw_StretchPic (int x, int y, int w, int h, char *name, float alpha)
 {
 	image_t	*pic;
 
@@ -250,7 +250,7 @@ void Draw_StretchRaw (int x, int y, int w, int h, int cols, int rows, byte *data
 Draw_Pic
 =============
 */
-void Draw_Pic (int x, int y, char *name)
+void Draw_Pic (int x, int y, char *name, float alpha)
 {
 	image_t			*pic;
 	byte			*dest, *source;
@@ -332,6 +332,11 @@ void Draw_Pic (int x, int y, char *name)
 			}
 		}
 	}
+}
+
+void Draw_ScaledPic (int x, int y, float scale, char *pic, float red, float green, float blue, float alpha)
+{
+	Draw_Pic (x, y, pic, 1);
 }
 
 /*

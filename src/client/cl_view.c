@@ -24,16 +24,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <vfw.h>
 #include "avi.h"
 
-//=============
-//
-// development tools for weapons
-//
-int			gun_frame;
-struct model_s	*gun_model;
-
-//=============
-
-cvar_t		*crosshair;
 cvar_t		*cl_testparticles;
 cvar_t		*cl_testentities;
 cvar_t		*cl_testlights;
@@ -50,6 +40,11 @@ entity_t	r_entities[MAX_ENTITIES];
 
 int			r_numparticles;
 particle_t	r_particles[MAX_PARTICLES];
+
+// Stainmaps: Begin // -Maniac
+int			r_numstains;
+stain_t		r_stains[MAX_STAINS];
+// Stainmaps: End
 
 lightstyle_t	r_lightstyles[MAX_LIGHTSTYLES];
 
@@ -100,6 +95,26 @@ void V_AddParticle (vec3_t org, int color, float alpha)
 	p->color = color;
 	p->alpha = alpha;
 }
+
+/*
+//Added addstain -Maniac
+=====================
+V_AddStain
+
+=====================
+*/
+void V_AddStain (vec3_t org, vec3_t color, float size)
+{
+	stain_t	*s;
+
+	if (r_numstains >= MAX_STAINS)
+		return;
+	s = &r_stains[r_numstains++];
+	VectorCopy (org, s->origin);
+	VectorCopy (color, s->color);
+	s->size = size;
+}
+
 
 /*
 =====================
@@ -355,10 +370,13 @@ void CL_PrepRefresh (void)
 	// start the cd track
 	CDAudio_Play (atoi(cl.configstrings[CS_CDTRACK]), true);
 
-	//Added pversion time -Maniac
-	x_info.x_pversion = cl.time;
-	x_info.x_nocheatsay = cl.time;
-//	x_info.x_deadoralive = 2;
+	//Added locs and stuff -Maniac
+	if(cl_autorecord->value)
+		CL_Stop_f();
+
+	CL_LoadLoc();
+	cl.time_since_nocheatsay = 0;
+	cl.roundtime = 0;
 }
 
 /*
@@ -374,70 +392,17 @@ float CalcFov (float fov_x, float width, float height)
 	if (fov_x < 1 || fov_x > 179)
 		Com_Error (ERR_DROP, "Bad fov: %f", fov_x);
 
-	x = width/tan(fov_x*(0.002777777777778*M_PI));
+	x = width/tan(fov_x/360*M_PI);
 
 	a = atan (height/x);
 
-	a = a*114.59165581759554875079179651068;
+	a = a*360/M_PI;
 
 	return a;
 }
 
 //============================================================================
 
-// gun frame debugging functions
-void V_Gun_Next_f (void)
-{
-	gun_frame++;
-	Com_Printf ("frame %i\n", gun_frame);
-}
-
-void V_Gun_Prev_f (void)
-{
-	gun_frame--;
-	if (gun_frame < 0)
-		gun_frame = 0;
-	Com_Printf ("frame %i\n", gun_frame);
-}
-
-void V_Gun_Model_f (void)
-{
-	char	name[MAX_QPATH];
-
-	if (Cmd_Argc() != 2)
-	{
-		gun_model = NULL;
-		return;
-	}
-	Com_sprintf (name, sizeof(name), "models/%s/tris.md2", Cmd_Argv(1));
-	gun_model = re.RegisterModel (name);
-}
-
-//============================================================================
-
-
-/*
-=================
-SCR_DrawCrosshair
-=================
-*/
-void SCR_DrawCrosshair (void)
-{
-	if (!crosshair->value)
-		return;
-
-	if (crosshair->modified)
-	{
-		crosshair->modified = false;
-		SCR_TouchPics ();
-	}
-
-	if (!crosshair_pic[0])
-		return;
-
-	re.DrawPic (scr_vrect.x + ((scr_vrect.width - crosshair_width)>>1)
-	, scr_vrect.y + ((scr_vrect.height - crosshair_height)>>1), crosshair_pic);
-}
 
 /*
 ==================
@@ -525,6 +490,12 @@ void V_RenderView( float stereo_separation )
 			VectorClear (cl.refdef.blend);
 		}
 
+		// Stainmaps: Begin -Maniac
+		cl.refdef.num_newstains = r_numstains;
+		cl.refdef.newstains = r_stains;
+		r_numstains = 0;
+		// Stainmaps: End
+
 		cl.refdef.num_entities = r_numentities;
 		cl.refdef.entities = r_entities;
 		cl.refdef.num_particles = r_numparticles;
@@ -549,8 +520,6 @@ void V_RenderView( float stereo_separation )
 	SCR_AddDirtyPoint (scr_vrect.x, scr_vrect.y);
 	SCR_AddDirtyPoint (scr_vrect.x+scr_vrect.width-1,
 		scr_vrect.y+scr_vrect.height-1);
-
-	SCR_DrawCrosshair ();
 }
 
 
@@ -573,13 +542,7 @@ V_Init
 */
 void V_Init (void)
 {
-	Cmd_AddCommand ("gun_next", V_Gun_Next_f);
-	Cmd_AddCommand ("gun_prev", V_Gun_Prev_f);
-	Cmd_AddCommand ("gun_model", V_Gun_Model_f);
-
 	Cmd_AddCommand ("viewpos", V_Viewpos_f);
-
-	crosshair = Cvar_Get ("crosshair", "0", CVAR_ARCHIVE);
 
 	cl_testblend = Cvar_Get ("cl_testblend", "0", 0);
 	cl_testparticles = Cvar_Get ("cl_testparticles", "0", 0);

@@ -143,7 +143,7 @@ typedef struct mnode_s
 typedef struct mleaf_s
 {
 // common with node
-	int			contents;		// wil be something other than CONTENTS_NODE
+	int			contents;		// will be something other than CONTENTS_NODE
 	int			visframe;		// node needs to be traversed if current
 
 	short		minmaxs[6];		// for bounding box culling
@@ -183,12 +183,6 @@ typedef struct model_s
 // volume occupied by the model graphics
 //		
 	vec3_t		mins, maxs;
-
-//
-// solid volume for clipping (sent from server)
-//
-	qboolean	clipbox;
-	vec3_t		clipmins, clipmaxs;
 
 //
 // brush model

@@ -447,6 +447,10 @@ void R_SetupFrame (void)
 // current viewleaf
 	if ( !( r_newrefdef.rdflags & RDF_NOWORLDMODEL ) )
 	{
+		r_worldentity.model = r_worldmodel;
+		currententity = &r_worldentity;
+		currentmodel = r_worldmodel;
+
 		r_viewleaf = Mod_PointInLeaf (r_origin, r_worldmodel);
 		r_viewcluster = r_viewleaf->cluster;
 	}
@@ -490,10 +494,8 @@ void R_SetupFrame (void)
 
 // clear frame counts
 	c_faceclip = 0;
-	d_spanpixcount = 0;
 	r_polycount = 0;
 	r_drawnpolycount = 0;
-	r_wholepolycount = 0;
 	r_amodels_drawn = 0;
 	r_outofsurfaces = 0;
 	r_outofedges = 0;
@@ -513,21 +515,6 @@ void R_SetupFrame (void)
 
 	d_aflatcolor = 0;
 }
-
-
-#if	!id386
-
-/*
-================
-R_SurfacePatch
-================
-*/
-void R_SurfacePatch (void)
-{
-	// we only patch code on Intel
-}
-
-#endif	// !id386
 
 
 /* 

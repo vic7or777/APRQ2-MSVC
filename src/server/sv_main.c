@@ -57,27 +57,6 @@ void Master_Shutdown (void);
 
 //============================================================================
 
-/* 
-===================== 
-GetClientFromAdr 
-Given an netadr_t, returns the matching client. Added, fix net_packed -Maniac
-===================== 
-*/ 
-client_t *GetClientFromAdr (netadr_t address)
-{ 
-    client_t	*cl; 
-    int			i; 
-
-    for (i = 0; i < maxclients->value; i++) 
-    { 
-        cl = &svs.clients[i]; 
-        if (NET_CompareBaseAdr(cl->netchan.remote_address, address)) 
-            break; 
-    } 
-    return cl; 
-}
-
-
 /*
 =====================
 SV_DropClient

@@ -1,0 +1,494 @@
+/*
+Copyright (C) 2003 Andrey Nazarov
+
+This program is free software; you can redistribute it and/or
+modify it under the terms of the GNU General Public License
+as published by the Free Software Foundation; either version 2
+of the License, or (at your option) any later version.
+
+This program is distributed in the hope that it will be useful,
+but WITHOUT ANY WARRANTY; without even the implied warranty of
+MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  
+
+See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License
+along with this program; if not, write to the Free Software
+Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+
+*/
+
+#include "client.h"
+
+cvar_t	*cl_clan;
+cvar_t	*cl_autorecord;
+cvar_t	*cl_customlimitmsg;
+cvar_t	*cl_recordstopatlimits;
+cvar_t	*cl_recordstopatmatchsetup;
+cvar_t	*cl_custommatchsetup;
+cvar_t	*cl_custommatchstart;
+cvar_t	*cl_recordatmatchstart;
+cvar_t	*cl_dontrecorduntilmatchstart;
+
+/*
+====================
+CL_WriteDemoMessage
+
+Dumps the current net message, prefixed by the length
+====================
+*/
+void CL_WriteDemoMessage( void )
+{
+	int		len, swlen;
+
+	// the first eight bytes are just packet sequencing stuff
+	len = net_message.cursize - 8;
+
+	swlen = LittleLong( len );
+
+	if(swlen > 0) // skip bad packets
+	{
+		fwrite( &swlen, 4, 1, cls.demofile);
+		fwrite( net_message.data + 8, len, 1, cls.demofile);
+	}
+}
+
+/*
+====================
+CL_CloseDemoFile
+====================
+*/
+void CL_CloseDemoFile( void )
+{
+	if( !cls.demofile )
+		return;
+
+	fclose( cls.demofile );
+	 
+	cls.demofile = NULL;
+}
+
+
+/*
+====================
+CL_Stop_f
+
+stop recording a demo
+====================
+*/
+void CL_Stop_f( void )
+{
+	int		len;
+
+	if( !cls.demorecording )
+	{
+		Com_Printf( "Not recording a demo.\n" );
+		return;
+	}
+
+	// finish up
+	len = -1;
+	fwrite (&len, 4, 1, cls.demofile);
+	CL_CloseDemoFile();
+
+	cls.demorecording = false;
+	Com_Printf( "Stopped demo.\n" );
+}
+
+void CL_Stop_Autorecord_f (void)
+{
+	int len;
+
+	if (!cls.demorecording)
+	{
+		Com_Printf ("Not recording a demo.\n");
+		return;
+	}
+
+	// finish up
+	len = -1;
+	fwrite (&len, 4, 1, cls.demofile);
+	CL_CloseDemoFile();
+
+	cls.demorecording = false;
+
+	Cvar_SetValue("cl_autorecord", 0);
+	Com_Printf ("Stopped demo and autorecord.\n");
+}
+
+/*
+====================
+CL_Record_f
+
+record <demoname>
+
+Begins recording a demo from the current position
+====================
+*/
+void CL_Record_f( void )
+{
+	char	name[MAX_OSPATH];
+	char	buf_data[MAX_MSGLEN];
+	sizebuf_t	buf;
+	int		i;
+	int		len;
+	entity_state_t	*ent;
+	entity_state_t	nullstate;
+	char *string;
+    struct 		tm *ntime;
+    char 		tmpbuf[32];
+    time_t		l_time;
+
+	if( Cmd_Argc() < 2 || (Cmd_Argc() == 1 && strlen(cl_clan->string) < 2)) {
+		Com_Printf( "Usage: %s <demoname>\n", Cmd_Argv( 0 ) );
+		return;
+	}
+
+	if( cls.demorecording )
+	{
+		Com_Printf( "Already recording.\n" );
+		return;
+	}
+
+	if( cls.state != ca_active )
+	{
+		Com_Printf( "You must be in a level to record.\n" );
+		return;
+	}
+
+	//
+	// open the demo file
+	//
+    if (strlen(cl_clan->string) > 2 && Cmd_Argc() == 1)
+    {
+		time( &l_time );
+        ntime = localtime( &l_time );
+        strftime( tmpbuf, sizeof(tmpbuf), "%Y-%m-%d", ntime );
+
+        Com_sprintf (name, sizeof(name), "%s/demos/%s_%s_%s.dm2", FS_Gamedir(), tmpbuf, cl_clan->string, cl.mapname);
+        for (i=2; i<100; i++)
+        {
+			cls.demofile = fopen (name, "rb");
+			if (!cls.demofile)
+				break;
+			fclose (cls.demofile);
+			Com_sprintf (name, sizeof(name), "%s/demos/%s_%s_%s_%i%i.dm2", FS_Gamedir(), tmpbuf, cl_clan->string, cl.mapname, (int)(i/10)%10, i%10);
+		}
+		if (i == 100)
+		{
+			Com_Printf ("ERROR: Too many demos with same name.\n");
+			return;
+		}
+    }
+	else
+	{
+		Com_sprintf( name, sizeof( name ), "%s/demos/%s.dm2", FS_Gamedir(), Cmd_Argv( 1 ) );
+	}
+
+
+	FS_CreatePath( name );
+	cls.demofile = fopen (name, "wb");
+	if( !cls.demofile )
+	{
+		Com_Printf( "ERROR: Couldn't open demo file %s.\n", name );
+		return;
+	}
+
+	Com_Printf( "Recording client demo to %s.\n", name );
+
+	cls.demorecording = true;
+
+	// don't start saving messages until a non-delta compressed message is received
+	cls.demowaiting = true;
+
+	//
+	// write out messages to hold the startup information
+	//
+	SZ_Init( &buf, buf_data, sizeof( buf_data ) );
+
+	// send the serverdata
+	MSG_WriteByte( &buf, svc_serverdata );
+	MSG_WriteLong( &buf, PROTOCOL_VERSION );
+	MSG_WriteLong( &buf, 0x10000 + cl.servercount );
+	MSG_WriteByte( &buf, 1 );	// demos are always attract loops
+	MSG_WriteString( &buf, cl.gamedir );
+	MSG_WriteShort( &buf, cl.playernum );
+
+	MSG_WriteString( &buf, cl.configstrings[CS_NAME] );
+
+	// configstrings
+	for( i=0 ; i<MAX_CONFIGSTRINGS ; i++ )
+	{
+		string = cl.configstrings[i];
+		if( !string[0] )
+			continue;
+		
+		if( buf.cursize + strlen( string ) + 32 > buf.maxsize )
+		{	// write it out
+			len = LittleLong (buf.cursize);
+			fwrite (&len, 4, 1, cls.demofile);
+			fwrite (buf.data, buf.cursize, 1, cls.demofile);
+			buf.cursize = 0;
+		}
+
+		MSG_WriteByte( &buf, svc_configstring );
+		MSG_WriteShort( &buf, i );
+		MSG_WriteString( &buf, string );
+
+	}
+
+	// baselines
+	memset (&nullstate, 0, sizeof(nullstate));
+	for( i=1; i<MAX_EDICTS ; i++ )
+	{
+		ent = &cl_entities[i].baseline;
+		if( !ent->modelindex )
+			continue;
+
+		if( buf.cursize + 64 > buf.maxsize )
+		{	// write it out
+			len = LittleLong (buf.cursize);
+			fwrite (&len, 4, 1, cls.demofile);
+			fwrite (buf.data, buf.cursize, 1, cls.demofile);
+			buf.cursize = 0;
+		}
+
+		MSG_WriteByte( &buf, svc_spawnbaseline );		
+		MSG_WriteDeltaEntity( &nullstate, &cl_entities[i].baseline, &buf, true, false );
+	}
+
+	MSG_WriteByte( &buf, svc_stufftext );
+	MSG_WriteString( &buf, "precache\n" );
+
+	// write it to the demo file
+	len = LittleLong (buf.cursize);
+	fwrite (&len, 4, 1, cls.demofile);
+	fwrite (buf.data, buf.cursize, 1, cls.demofile);
+
+	// the rest of the demo file will be individual frames
+}
+
+//----------------------------------------------------
+//		AUTO RECORD
+//----------------------------------------------------
+void CL_ParseAutoRecord (char *s)
+{
+	if (!cl_autorecord->value)
+		return;
+
+	if (cl_recordstopatlimits->value)
+	{
+		if (strstr(s, "timelimit hit"))
+		{
+			if (cls.demorecording)
+				CL_Stop_f();
+			return;
+		}
+		if (strstr(s, "capturelimit hit"))
+		{
+			if (cls.demorecording)
+				CL_Stop_f();
+			return;
+		}
+		if (strstr(s, "fraglimit hit"))
+		{
+			if (cls.demorecording)
+				CL_Stop_f();
+			return;
+		}
+		if (strstr(s, cl_customlimitmsg->string))
+		{
+			if (cls.demorecording)
+				CL_Stop_f();
+			return;
+		}
+	}
+
+	if (cl_recordstopatmatchsetup->value)
+	{
+		if (strstr(s, cl_custommatchsetup->string ))
+		{
+			if (cls.demorecording)
+				CL_Stop_f();
+			return;
+		}
+	}
+
+	if (cl_recordatmatchstart->value)
+	{
+		if (strstr(s, cl_custommatchstart->string))
+		{
+			if (cls.demorecording)
+					CL_Stop_f();
+			return;
+		}
+	}
+}
+
+void SCR_AutoDemo(void)
+{
+	struct          tm *ntime;
+    char            tmpbuf[32], fname[MAX_MSGLEN];
+    time_t          l_time;
+
+
+	if (!cl_autorecord->value)
+		return;
+
+	if(cls.demorecording)
+		return;
+	
+	if(cl.attractloop)
+		return;
+	
+	time( &l_time );
+	ntime = localtime( &l_time );
+	strftime( tmpbuf, sizeof(tmpbuf), "%Y-%m-%d_%H-%M-%S", ntime );
+	
+	if(strlen(cl_clan->string) > 2)
+		Com_sprintf(fname, sizeof(fname), "record %s_%s_%s",tmpbuf, cl_clan->string, cl.mapname);
+	else
+		Com_sprintf(fname, sizeof(fname), "record %s_%s",tmpbuf, cl.mapname);	
+
+	Cbuf_AddText(fname);
+}
+
+/*
+==============
+CL_Demo_List_f
+==============
+*/
+void CL_Demo_List_f ( void )
+{
+
+	char	findname[1024];
+	char	**dirnames;
+	int		ndirs;
+	char	*tmp;
+
+	sprintf(findname, "%s/demos/*%s*.dm2", FS_Gamedir(), Cmd_Argv( 1 )) ;
+
+	tmp = findname;
+
+	while( *tmp != 0 )
+	{
+		if ( *tmp == '\\' ) 
+			*tmp = '/';
+		tmp++;
+	}
+	Com_Printf( "Directory of %s\n", findname );
+	Com_Printf( "----\n" );
+
+	if( ( dirnames = FS_ListFiles( findname, &ndirs, 0, 0 ) ) != 0 )
+	{
+		int i;
+
+		for( i = 0; i < ndirs-1; i++ )
+		{
+			if( strrchr( dirnames[i], '/' ) )
+				Com_Printf( "%u %s\n", i, strrchr( dirnames[i], '/' ) + 1 );
+			else
+				Com_Printf( "%u %s\n", i, dirnames[i] );
+
+			free( dirnames[i] );
+		}
+		free( dirnames );
+	}
+
+	Com_Printf( "\n" );
+}
+
+/*
+==============
+CL_Demo_Play_f
+==============
+*/
+void CL_Demo_Play_f ( void )
+{
+
+	char	findname[1024];
+	char	**dirnames;
+	int		ndirs;
+	int		find;
+	char	buf[1024] ;
+	int		found;
+	char	*tmp;
+
+	found = 0;
+
+	if(Cmd_Argc() == 1)
+	{
+		Com_Printf("Usage: %s <id> [search card]", Cmd_Argv(0)) ;
+		return;
+	}
+
+	find = atoi(Cmd_Argv (1));
+
+	sprintf (findname, "%s/demos/*%s*.dm2", FS_Gamedir(), Cmd_Argv( 2 ));
+
+	tmp = findname;
+
+	while( *tmp != 0 )
+	{
+		if ( *tmp == '\\' ) 
+			*tmp = '/';
+		tmp++;
+	}
+
+	Com_Printf( "Directory of %s\n", findname );
+	Com_Printf( "----\n" );
+
+	if( ( dirnames = FS_ListFiles( findname, &ndirs, 0, 0 ) ) != 0 )
+	{
+		int i;
+
+		for( i = 0; i < ndirs-1; i++ )
+		{
+			if (i == find)
+			{
+				if( strrchr( dirnames[i], '/' ) )
+				{
+					Com_Printf( "%u %s\n", i, strrchr( dirnames[i], '/' ) + 1 );
+					found = 1;
+					sprintf(buf, "demomap %s\n", strrchr( dirnames[i], '/' ) + 1);
+				}	
+				else
+					Com_Printf( "%u %s\n", i, dirnames[i] );
+			}
+
+			free( dirnames[i] );
+		}
+		free( dirnames );
+	}
+
+	Com_Printf( "\n" );
+
+	if (found)		
+		Cbuf_AddText(buf);
+}
+
+/*
+====================
+CL_InitDemos
+====================
+*/
+void CL_InitDemos( void )
+{
+	cl_clan = Cvar_Get ("cl_clan", "", 0);
+	Cmd_AddCommand( "record", CL_Record_f );
+	Cmd_AddCommand( "stop", CL_Stop_f );
+	Cmd_AddCommand ("stopautorecord", CL_Stop_Autorecord_f);
+
+	Cmd_AddCommand ("demolist", CL_Demo_List_f );
+	Cmd_AddCommand ("demoplay", CL_Demo_Play_f );
+
+	cl_autorecord = Cvar_Get("cl_autorecord", "0", 0);
+	cl_customlimitmsg = Cvar_Get ("cl_customlimitmsg", "timelimit hit", 0);
+	cl_recordstopatlimits = Cvar_Get("cl_recordstopatlimits", "0", 0);
+	cl_recordstopatmatchsetup = Cvar_Get("cl_recordstopatmatchsetup", "0", 0);
+	cl_custommatchsetup = Cvar_Get("cl_custommatchsetup", "has put the server in match setup mode", 0);
+	cl_custommatchstart = Cvar_Get("cl_custommatchstart", "has started the match", 0);
+	cl_recordatmatchstart = Cvar_Get( "cl_recordatmatchstart", "0", 0);
+}
+
+

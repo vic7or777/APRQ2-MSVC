@@ -75,8 +75,7 @@ int			numnodes;
 cnode_t		map_nodes[MAX_MAP_NODES+6];		// extra for box hull
 
 int			numleafs = 1;	// allow leaf funcs to be called without a map
-cleaf_t		map_leafs[MAX_MAP_LEAFS];
-int			emptyleaf, solidleaf;
+cleaf_t		map_leafs[MAX_MAP_LEAFS+1];		 // extra for box hull
 
 int			numleafbrushes;
 unsigned short	map_leafbrushes[MAX_MAP_LEAFBRUSHES];
@@ -292,8 +291,8 @@ void CMod_LoadLeafs (lump_t *l)
 	if (count < 1)
 		Com_Error (ERR_DROP, "Map with no leafs");
 	// need to save space for box planes
-	if (count > MAX_MAP_PLANES)
-		Com_Error (ERR_DROP, "Map has too many planes");
+	if (count > MAX_MAP_LEAFS)
+		Com_Error (ERR_DROP, "Map has too many leafs");
 
 	out = map_leafs;	
 	numleafs = count;
@@ -313,18 +312,6 @@ void CMod_LoadLeafs (lump_t *l)
 
 	if (map_leafs[0].contents != CONTENTS_SOLID)
 		Com_Error (ERR_DROP, "Map leaf 0 is not CONTENTS_SOLID");
-	solidleaf = 0;
-	emptyleaf = -1;
-	for (i=1 ; i<numleafs ; i++)
-	{
-		if (!map_leafs[i].contents)
-		{
-			emptyleaf = i;
-			break;
-		}
-	}
-	if (emptyleaf == -1)
-		Com_Error (ERR_DROP, "Map does not have an empty leaf");
 }
 
 /*
@@ -585,7 +572,9 @@ cmodel_t *CM_LoadMap (char *name, qboolean clientload, unsigned *checksum)
 		return &map_cmodels[0];			// cinematic servers won't have anything at all
 	}
 
+	//
 	// load the file
+	//
 	length = FS_LoadFile (name, (void **)&buf);
 	if (!buf)
 		Com_Error (ERR_DROP, "Couldn't load %s", name);
@@ -740,7 +729,7 @@ void CM_InitBoxHull (void)
 		// nodes
 		c = &map_nodes[box_headnode+i];
 		c->plane = map_planes + (numplanes+i*2);
-		c->children[side] = -1 - emptyleaf;
+		c->children[side] = -1 - numleafs;
 		if (i != 5)
 			c->children[side^1] = box_headnode+i + 1;
 		else
@@ -853,18 +842,16 @@ void CM_BoxLeafnums_r (int nodenum)
 		if (nodenum < 0)
 		{
 			if (leaf_count >= leaf_maxcount)
-			{
-//				Com_Printf ("CM_BoxLeafnums_r: overflow\n");
 				return;
-			}
+
 			leaf_list[leaf_count++] = -1 - nodenum;
 			return;
 		}
 	
 		node = &map_nodes[nodenum];
 		plane = node->plane;
-//		s = BoxOnPlaneSide (leaf_mins, leaf_maxs, plane);
-		s = BOX_ON_PLANE_SIDE(leaf_mins, leaf_maxs, plane);
+		s = BoxOnPlaneSide (leaf_mins, leaf_maxs, plane);
+
 		if (s == 1)
 			nodenum = node->children[0];
 		else if (s == 2)
@@ -1270,12 +1257,6 @@ void CM_RecursiveHullCheck (int num, float p1f, float p2f, vec3_t p1, vec3_t p2)
 	}
 
 
-#if 0
-CM_RecursiveHullCheck (node->children[0], p1f, p2f, p1, p2);
-CM_RecursiveHullCheck (node->children[1], p1f, p2f, p1, p2);
-return;
-#endif
-
 	// see which sides we need to consider
 	if (t1 >= offset && t2 >= offset)
 	{
@@ -1499,9 +1480,16 @@ trace_t		CM_TransformedBoxTrace (vec3_t start, vec3_t end,
 		trace.plane.normal[2] = DotProduct (temp, up);
 	}
 
-	trace.endpos[0] = start[0] + trace.fraction * (end[0] - start[0]);
-	trace.endpos[1] = start[1] + trace.fraction * (end[1] - start[1]);
-	trace.endpos[2] = start[2] + trace.fraction * (end[2] - start[2]);
+	if (trace.fraction == 1)	
+	{	
+		VectorCopy (end, trace.endpos);	
+	}	
+	else	
+	{
+		trace.endpos[0] = start[0] + trace.fraction * (end[0] - start[0]);
+		trace.endpos[1] = start[1] + trace.fraction * (end[1] - start[1]);
+		trace.endpos[2] = start[2] + trace.fraction * (end[2] - start[2]);
+	}
 
 	return trace;
 }

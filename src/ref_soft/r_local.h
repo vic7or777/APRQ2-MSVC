@@ -77,8 +77,9 @@ typedef unsigned char pixel_t;
 
 typedef struct vrect_s
 {
-	int                             x,y,width,height;
-	struct vrect_s  *pnext;
+	int		x, y;
+	int		width, height;
+	struct	vrect_s  *pnext;
 } vrect_t;
 
 typedef struct
@@ -327,15 +328,7 @@ typedef struct
 } drawsurf_t;
 
 
-
-typedef struct {
-	int                     ambientlight;
-	int                     shadelight;
-	float           *plightvec;
-} alight_t;
-
 // clipped bmodel edges
-
 typedef struct bedge_s
 {
 	mvertex_t               *v[2];
@@ -436,7 +429,6 @@ VARS
 ====================================================
 */
 
-extern int              d_spanpixcount;
 extern int              r_framecount;           // sequence # of current frame since Quake
 									//  started
 extern float    r_aliasuvscale;         // scale-up factor for screen u and v
@@ -650,7 +642,7 @@ void D_DrawSurfaces (void);
 void R_InsertNewEdges (edge_t *edgestoadd, edge_t *edgelist);
 void R_StepActiveU (edge_t *pedge);
 void R_RemoveEdges (edge_t *pedge);
-void R_PushDlights (model_t *model);
+void R_PushDlights (void);
 
 extern void R_Surf8Start (void);
 extern void R_Surf8End (void);
@@ -663,7 +655,6 @@ extern void R_RotateBmodel (void);
 
 extern int      c_faceclip;
 extern int      r_polycount;
-extern int      r_wholepolycount;
 
 extern int                      ubasestep, errorterm, erroradjustup, erroradjustdown;
 
@@ -775,10 +766,11 @@ void    R_RenderFrame (refdef_t *fd);
 struct image_s  *Draw_FindPic (char *name);
 
 void    Draw_GetPicSize (int *w, int *h, char *name);
-void    Draw_Pic (int x, int y, char *name);
-void    Draw_StretchPic (int x, int y, int w, int h, char *name);
+void    Draw_Pic (int x, int y, char *name, float alpha);
+void	Draw_ScaledPic (int x, int y, float scale, char *name, float red, float green, float blue, float alpha);
+void    Draw_StretchPic (int x, int y, int w, int h, char *name, float alpha);
 void    Draw_StretchRaw (int x, int y, int w, int h, int cols, int rows, byte *data);
-void    Draw_Char (int x, int y, int c);
+void    Draw_Char (int x, int y, int c, int color, float alpha);
 void    Draw_TileClear (int x, int y, int w, int h, char *name);
 void    Draw_Fill (int x, int y, int w, int h, int c);
 void    Draw_FadeScreen (void);

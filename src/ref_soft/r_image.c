@@ -100,10 +100,7 @@ void LoadPCX (char *filename, byte **pic, byte **palette, int *width, int *heigh
 	//
 	len = ri.FS_LoadFile (filename, (void **)&raw);
 	if (!raw)
-	{
-		ri.Con_Printf (PRINT_DEVELOPER, "Bad pcx file %s\n", filename);
 		return;
-	}
 
 	//
 	// parse the PCX file
@@ -129,6 +126,7 @@ void LoadPCX (char *filename, byte **pic, byte **palette, int *width, int *heigh
 		|| pcx->ymax >= 480)
 	{
 		ri.Con_Printf (PRINT_ALL, "Bad pcx file %s\n", filename);
+		ri.FS_FreeFile ((void *)pcx);
 		return;
 	}
 
@@ -171,12 +169,12 @@ void LoadPCX (char *filename, byte **pic, byte **palette, int *width, int *heigh
 
 	if ( raw - (byte *)pcx > len)
 	{
-		ri.Con_Printf (PRINT_DEVELOPER, "PCX file %s was malformed", filename);
+		ri.Con_Printf (PRINT_DEVELOPER, "LoadPCX: file %s was malformed", filename);
 		free (*pic);
 		*pic = NULL;
 	}
 
-	ri.FS_FreeFile (pcx);
+	ri.FS_FreeFile ((void *)pcx);
 }
 
 /*
@@ -219,10 +217,7 @@ void LoadTGA (char *name, byte **pic, int *width, int *height)
 	//
 	length = ri.FS_LoadFile (name, (void **)&buffer);
 	if (!buffer)
-	{
-		ri.Con_Printf (PRINT_DEVELOPER, "Bad tga file %s\n", name);
 		return;
-	}
 
 	buf_p = buffer;
 
@@ -247,12 +242,20 @@ void LoadTGA (char *name, byte **pic, int *width, int *height)
 	targa_header.attributes = *buf_p++;
 
 	if (targa_header.image_type!=2 
-		&& targa_header.image_type!=10) 
-		ri.Sys_Error (ERR_DROP, "LoadTGA: Only type 2 and 10 targa RGB images supported\n");
+		&& targa_header.image_type!=10)
+	{
+		ri.Con_Printf (PRINT_ALL, "LoadTGA: Only type 2 and 10 targa RGB images supported. Image:(%s).\n", name);
+		ri.FS_FreeFile (buffer);
+		return;
+	}
 
 	if (targa_header.colormap_type !=0 
 		|| (targa_header.pixel_size!=32 && targa_header.pixel_size!=24))
-		ri.Sys_Error (ERR_DROP, "LoadTGA: Only 32 or 24 bit images supported (no colormaps)\n");
+	{
+		ri.Con_Printf (PRINT_ALL, "LoadTGA: Only 32 or 24 bit images supported (no colormaps). Image:(%s).\n", name);
+		ri.FS_FreeFile (buffer);
+		return;
+	}
 
 	columns = targa_header.width;
 	rows = targa_header.height;

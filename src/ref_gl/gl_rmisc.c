@@ -21,8 +21,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "gl_local.h"
 //Added jpeglib for screenshotjpg, -Maniac
-#include "jpeglib.h"
-
+#include "jpeglib.h"	//Heffo - JPEG Screenshots
 /*
 ==================
 R_InitParticleTexture
@@ -40,62 +39,63 @@ byte	dottexture[8][8] =
 	{0,0,0,0,0,0,0,0},
 };
 
-//Changed -Maniac
-byte	missing_texture[16][16] =
-{
-	{1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
-	{1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
-	{1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
-	{1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
-	{1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
-	{1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
-	{1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
-	{1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
-	{1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
-	{1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
-	{1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
-	{1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
-	{1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
-	{1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
-	{1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
-	{1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
-};
-
 void R_InitParticleTexture (void)
 {
 	int		x,y;
 	byte	data[8][8][4];
-	byte	notex[16][16][4];
 
 	//
 	// particle texture
+	//
+	byte	data1[16][16][4];
+	int		dx2, dy, d;
+
+	for (x = 0; x < 16; x++) {
+		dx2 = x - 8;
+		dx2 *= dx2;
+		for (y = 0; y < 16; y++) {
+			dy = y - 8;
+			d = 255 - 4 * (dx2 + (dy * dy));
+			if (d <= 0) {
+				d = 0;
+				data1[y][x][0] = 0;
+				data1[y][x][1] = 0;
+				data1[y][x][2] = 0;
+			} else {
+				data1[y][x][0] = 255;
+				data1[y][x][1] = 255;
+				data1[y][x][2] = 255;
+			}
+
+			data1[y][x][3] = (byte) d;
+		}
+	}
+	r_particletexture = GL_FindImage("pics/particle.tga",it_sprite);
+	if(!r_particletexture)
+		r_particletexture = GL_LoadPic ("***particle***", (byte *)data1, 16, 16, 0, 32, 0);
+
+	//
+	// also use this for bad textures, but without alpha
 	//
 	for (x=0 ; x<8 ; x++)
 	{
 		for (y=0 ; y<8 ; y++)
 		{
-			data[y][x][0] = 255;
-			data[y][x][1] = 255;
-			data[y][x][2] = 255;
-			data[y][x][3] = dottexture[x][y]*255;
+			data[y][x][0] = dottexture[x&3][y&3]*255;
+			data[y][x][1] = 0; // dottexture[x&3][y&3]*255;
+			data[y][x][2] = 0; //dottexture[x&3][y&3]*255;
+			data[y][x][3] = 255;
 		}
 	}
-	r_particletexture = GL_LoadPic ("***particle***", (byte *)data, 8, 8, it_sprite, 32);
+	r_notexture = GL_LoadPic ("***r_notexture***", (byte *)data, 8, 8, it_wall, 32, 0);
 
-	//
-	// also use this for bad textures, but without alpha
-	//
-	for (x=0 ; x<16 ; x++)
-	{
-		for (y=0 ; y<16 ; y++)
-		{
-			notex[y][x][0] = missing_texture[x][y]*255;
-			notex[y][x][1] = 0; // dottexture[x&3][y&3]*255;
-			notex[y][x][2] = 0; //dottexture[x&3][y&3]*255;
-			notex[y][x][3] = 255;
-		}
-	}
-	r_notexture = GL_LoadPic ("***r_notexture***", (byte *)notex, 16, 16, it_wall, 32);
+	r_caustictexture = GL_FindImage("pics/caustic.png", it_wall);
+	if(!r_caustictexture)
+		r_caustictexture = r_notexture;
+
+	r_bholetexture = GL_FindImage("pics/bullethole.png", it_sprite);
+	if(!r_bholetexture)
+		r_bholetexture = r_notexture;
 }
 
 /* 
@@ -106,11 +106,8 @@ void R_InitParticleTexture (void)
 ============================================================================== 
 */ 
 
-//void GL_ScreenShot_PNG (void);
-
 /*
  * Added screenshotjpg, -Maniac
- * Copied from Q2ICE project (http://q2ice.iceware.net)
  */
 /* 
 ================== 
@@ -130,7 +127,7 @@ void GL_ScreenShot_JPG (void)
 
 		// Changed screenshot naming, -Maniac
         struct          tm *ntime;
-        char            tmpbuf[20];
+        char            tmpbuf[32];
         time_t          l_time;
 
 
@@ -149,7 +146,7 @@ void GL_ScreenShot_JPG (void)
 		Com_sprintf (picname, sizeof(picname), "%s_%s", tmpbuf, ri.FS_Mapname());
         Com_sprintf (checkname, sizeof(checkname), "%s/scrnshot/%s.jpg", ri.FS_Gamedir(), picname);
 		
-        for (i=1 ; i<=99 ; i++)
+        for (i=2 ; i<=99 ; i++)
         {
 			file = fopen (checkname, "rb");
 			if (!file)
@@ -264,7 +261,7 @@ void GL_ScreenShot_f (void)
 	// Changed screenshot naming, -Maniac
 
     struct          tm *ntime;
-    char            tmpbuf[20];
+    char            tmpbuf[32];
     time_t          l_time;
 
 
@@ -282,7 +279,7 @@ void GL_ScreenShot_f (void)
 	Com_sprintf (picname, sizeof(picname), "%s_%s", tmpbuf, ri.FS_Mapname());
     Com_sprintf (checkname, sizeof(checkname), "%s/scrnshot/%s.tga", ri.FS_Gamedir(), picname);
 		
-    for (i=1 ; i<=99 ; i++)
+    for (i=2 ; i<=99 ; i++)
 	{
 		f = fopen (checkname, "rb");
 		if (!f)
@@ -344,18 +341,19 @@ void GL_Strings_f( void )
 */
 void GL_SetDefaultState( void )
 {
-	qglClearColor (1,0, 0.5 , 0.5);
+	//qglClearColor (1,0, 0.5 , 0.5);
+	qglClearColor (0,0,0,0.5);
 	qglCullFace(GL_FRONT);
 	qglEnable(GL_TEXTURE_2D);
 
 	qglEnable(GL_ALPHA_TEST);
-	gl_state.alpha_test=true;
 	qglAlphaFunc(GL_GREATER, 0.666);
 
 	qglDisable (GL_DEPTH_TEST);
 	qglDisable (GL_CULL_FACE);
 	qglDisable (GL_BLEND);
-	gl_state.blend=false;
+
+	qglDisable(GL_FOG);
 
 	qglColor4f (1,1,1,1);
 
@@ -406,10 +404,12 @@ void GL_UpdateSwapInterval( void )
 	{
 		gl_swapinterval->modified = false;
 
+#ifdef _WIN32
 		if ( !gl_state.stereo_enabled ) 
 		{
 			if ( qwglSwapIntervalEXT )
 				qwglSwapIntervalEXT( gl_swapinterval->value );
 		}
+#endif
 	}
 }

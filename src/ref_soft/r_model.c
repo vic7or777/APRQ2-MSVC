@@ -197,10 +197,14 @@ mleaf_t *Mod_PointInLeaf (vec3_t p, model_t *model)
 	node = model->nodes;
 	while (1)
 	{
-		if (node->contents != -1)
+		if (node->contents != CONTENTS_NODE)
 			return (mleaf_t *)node;
 		plane = node->plane;
-		d = DotProduct (p,plane->normal) - plane->dist;
+		if ( plane->type < 3 ) {
+			d = p[plane->type] - plane->dist;
+		} else {
+			d = DotProduct (p, plane->normal) - plane->dist;
+		}
 		if (d > 0)
 			node = node->children[0];
 		else
@@ -314,32 +318,6 @@ void Mod_LoadLighting (lump_t *l)
 		else
 			loadmodel->lightdata[i] = in[2];
 	}
-}
-
-
-int		r_leaftovis[MAX_MAP_LEAFS];
-int		r_vistoleaf[MAX_MAP_LEAFS];
-int		r_numvisleafs;
-
-void	R_NumberLeafs (mnode_t *node)
-{
-	mleaf_t	*leaf;
-	int		leafnum;
-
-	if (node->contents != -1)
-	{
-		leaf = (mleaf_t *)node;
-		leafnum = leaf - loadmodel->leafs;
-		if (leaf->contents & CONTENTS_SOLID)
-			return;
-		r_leaftovis[leafnum] = r_numvisleafs;
-		r_vistoleaf[r_numvisleafs] = leafnum;
-		r_numvisleafs++;
-		return;
-	}
-
-	R_NumberLeafs (node->children[0]);
-	R_NumberLeafs (node->children[1]);
 }
 
 
@@ -682,7 +660,7 @@ Mod_SetParent
 void Mod_SetParent (mnode_t *node, mnode_t *parent)
 {
 	node->parent = parent;
-	if (node->contents != -1)
+	if (node->contents != CONTENTS_NODE)
 		return;
 	Mod_SetParent (node->children[0], node);
 	Mod_SetParent (node->children[1], node);
@@ -716,8 +694,7 @@ void Mod_LoadNodes (lump_t *l)
 			out->minmaxs[3+j] = LittleShort (in->maxs[j]);
 		}
 	
-		p = LittleLong(in->planenum);
-		out->plane = loadmodel->planes + p;
+		out->plane = loadmodel->planes + LittleLong(in->planenum);
 
 		out->firstsurface = LittleShort (in->firstface);
 		out->numsurfaces = LittleShort (in->numfaces);
@@ -907,8 +884,6 @@ void Mod_LoadBrushModel (model_t *mod, void *buffer)
 	Mod_LoadLeafs (&header->lumps[LUMP_LEAFS]);
 	Mod_LoadNodes (&header->lumps[LUMP_NODES]);
 	Mod_LoadSubmodels (&header->lumps[LUMP_MODELS]);
-	r_numvisleafs = 0;
-	R_NumberLeafs (loadmodel->nodes);
 	
 //
 // set up the submodels

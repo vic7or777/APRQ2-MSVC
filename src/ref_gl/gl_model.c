@@ -57,10 +57,14 @@ mleaf_t *Mod_PointInLeaf (vec3_t p, model_t *model)
 	node = model->nodes;
 	while (1)
 	{
-		if (node->contents != -1)
+		if (node->contents != CONTENTS_NODE)
 			return (mleaf_t *)node;
 		plane = node->plane;
-		d = DotProduct (p,plane->normal) - plane->dist;
+		if ( plane->type < 3 ) {
+			d = p[plane->type] - plane->dist;
+		} else {
+			d = DotProduct (p, plane->normal) - plane->dist;
+		}
 		if (d > 0)
 			node = node->children[0];
 		else
@@ -294,8 +298,11 @@ void Mod_LoadLighting (lump_t *l)
 		loadmodel->lightdata = NULL;
 		return;
 	}
-	loadmodel->lightdata = Hunk_Alloc ( l->filelen);	
+
+	loadmodel->lightdata = Hunk_Alloc (l->filelen);
+	loadmodel->staindata = Hunk_Alloc (l->filelen);	// Stainmaps
 	memcpy (loadmodel->lightdata, mod_base + l->fileofs, l->filelen);
+	memcpy (loadmodel->staindata, mod_base + l->fileofs, l->filelen);	// Stainmaps
 }
 
 
@@ -398,10 +405,9 @@ void Mod_LoadSubmodels (lump_t *l)
 		{	// spread the mins / maxs by a pixel
 			out->mins[j] = LittleFloat (in->mins[j]) - 1;
 			out->maxs[j] = LittleFloat (in->maxs[j]) + 1;
-			out->origin[j] = LittleFloat (in->origin[j]);
 		}
-		out->radius = RadiusFromBounds (out->mins, out->maxs);
 		out->headnode = LittleLong (in->headnode);
+		out->radius = RadiusFromBounds (out->mins, out->maxs);
 		out->firstface = LittleLong (in->firstface);
 		out->numfaces = LittleLong (in->numfaces);
 	}
@@ -468,30 +474,9 @@ void Mod_LoadTexinfo (lump_t *l)
 		else
 		    out->next = NULL;
 		
-        if (gl_loadtga->value)
-        {
-				Com_sprintf (name, sizeof(name), "textures/%s.tga", in->texture);
-				out->image = GL_FindImage (name, it_wall);
-		
-				if (!out->image)
-				{
-						/*Com_sprintf (name, sizeof(name), "textures/%s.png", in->texture);
-						out->image = GL_FindImage (name, it_wall);
-		
-						if (!out->image)
-						{*/
-								Com_sprintf (name, sizeof(name), "textures/%s.wal", in->texture);
-								out->image = GL_FindImage (name, it_wall);
-						//}
-				}
-        }
-        else
-        {
+		Com_sprintf (name, sizeof(name), "textures/%s.wal", in->texture);
 
-				Com_sprintf (name, sizeof(name), "textures/%s.wal", in->texture);
-				out->image = GL_FindImage (name, it_wall);
-        }
-
+		out->image = GL_FindImage (name, it_wall);
 		if (!out->image)
 		{
 			ri.Con_Printf (PRINT_ALL, "Couldn't load %s\n", name);
@@ -552,14 +537,12 @@ void CalcSurfaceExtents (msurface_t *s)
 
 	for (i=0 ; i<2 ; i++)
 	{	
-		bmins[i] = floor(mins[i] * 0.0625);
-		bmaxs[i] = ceil(maxs[i] * 0.0625);
+		bmins[i] = floor(mins[i] / 16);
+		bmaxs[i] = ceil(maxs[i] / 16);
 
 		s->texturemins[i] = bmins[i] * 16;
 		s->extents[i] = (bmaxs[i] - bmins[i]) * 16;
 
-//		if ( !(tex->flags & TEX_SPECIAL) && s->extents[i] > 512 /* 256 */ )
-//			ri.Sys_Error (ERR_DROP, "Bad surface extents");
 	}
 }
 
@@ -622,28 +605,25 @@ void Mod_LoadFaces (lump_t *l)
 			out->styles[i] = in->styles[i];
 		i = LittleLong(in->lightofs);
 		if (i == -1)
+		{
 			out->samples = NULL;
+			out->stain_samples = NULL;
+		}
 		else
+		{
 			out->samples = loadmodel->lightdata + i;
+			out->stain_samples = loadmodel->staindata + i;
+		}
 		
 		// set the drawing flags
 		if (out->texinfo->flags & SURF_WARP)
-		{
 			out->flags |= SURF_DRAWTURB;
-			for (i=0 ; i<2 ; i++)
-			{
-				out->extents[i] = 16384;
-				out->texturemins[i] = -8192;
-			}
-			GL_SubdivideSurface (out);	// cut up polygon for warps
-		}
 
 		// create lightmaps and polygons
 		if ( !(out->texinfo->flags & (SURF_SKY|SURF_TRANS33|SURF_TRANS66|SURF_WARP) ) )
 			GL_CreateSurfaceLightmap (out);
 
-		if (! (out->texinfo->flags & SURF_WARP) ) 
-			GL_BuildPolygonFromSurface(out);
+		GL_BuildPolygonFromSurface(out);
 
 	}
 
@@ -659,7 +639,7 @@ Mod_SetParent
 void Mod_SetParent (mnode_t *node, mnode_t *parent)
 {
 	node->parent = parent;
-	if (node->contents != -1)
+	if (node->contents != CONTENTS_NODE)
 		return;
 	Mod_SetParent (node->children[0], node);
 	Mod_SetParent (node->children[1], node);
@@ -693,12 +673,11 @@ void Mod_LoadNodes (lump_t *l)
 			out->minmaxs[3+j] = LittleShort (in->maxs[j]);
 		}
 	
-		p = LittleLong(in->planenum);
-		out->plane = loadmodel->planes + p;
+		out->plane = loadmodel->planes + LittleLong (in->planenum);
 
 		out->firstsurface = LittleShort (in->firstface);
 		out->numsurfaces = LittleShort (in->numfaces);
-		out->contents = -1;	// differentiate from leafs
+		out->contents = CONTENTS_NODE;	// differentiate from leafs
 
 		for (j=0 ; j<2 ; j++)
 		{
@@ -722,8 +701,7 @@ void Mod_LoadLeafs (lump_t *l)
 {
 	dleaf_t 	*in;
 	mleaf_t 	*out;
-	int			i, j, count, p;
-//	glpoly_t	*poly;
+	int			i, j, count;
 
 	in = (void *)(mod_base + l->fileofs);
 	if (l->filelen % sizeof(*in))
@@ -742,8 +720,7 @@ void Mod_LoadLeafs (lump_t *l)
 			out->minmaxs[3+j] = LittleShort (in->maxs[j]);
 		}
 
-		p = LittleLong(in->contents);
-		out->contents = p;
+		out->contents = LittleLong(in->contents);
 
 		out->cluster = LittleShort(in->cluster);
 		out->area = LittleShort(in->area);
@@ -753,17 +730,11 @@ void Mod_LoadLeafs (lump_t *l)
 		out->nummarksurfaces = LittleShort(in->numleaffaces);
 		
 		// gl underwater warp
-#if 0
-		if (out->contents & (CONTENTS_WATER|CONTENTS_SLIME|CONTENTS_LAVA|CONTENTS_THINWATER) )
+		if (out->contents & (CONTENTS_WATER|CONTENTS_SLIME|CONTENTS_LAVA/*|CONTENTS_THINWATER*/) )
 		{
 			for (j=0 ; j<out->nummarksurfaces ; j++)
-			{
 				out->firstmarksurface[j]->flags |= SURF_UNDERWATER;
-				for (poly = out->firstmarksurface[j]->polys ; poly ; poly=poly->next)
-					poly->flags |= SURF_UNDERWATER;
-			}
 		}
-#endif
 	}	
 }
 
@@ -841,7 +812,7 @@ void Mod_LoadPlanes (lump_t *l)
 	if (l->filelen % sizeof(*in))
 		ri.Sys_Error (ERR_DROP, "MOD_LoadBmodel: funny lump size in %s",loadmodel->name);
 	count = l->filelen / sizeof(*in);
-	out = Hunk_Alloc ( count*2*sizeof(*out));	
+	out = Hunk_Alloc ( count*sizeof(*out));	
 	
 	loadmodel->planes = out;
 	loadmodel->numplanes = count;
@@ -886,7 +857,7 @@ void Mod_LoadBrushModel (model_t *mod, void *buffer)
 // swap all the lumps
 	mod_base = (byte *)header;
 
-	for (i=0 ; i<sizeof(dheader_t)*0.25 ; i++)
+	for (i=0 ; i<sizeof(dheader_t)/4 ; i++)
 		((int *)header)[i] = LittleLong ( ((int *)header)[i]);
 
 // load into heap
@@ -930,7 +901,7 @@ void Mod_LoadBrushModel (model_t *mod, void *buffer)
 		if (i == 0)
 			*loadmodel = *starmod;
 
-		starmod->numleafs = bm->visleafs;
+//		starmod->numleafs = bm->visleafs;
 	}
 }
 
@@ -967,7 +938,7 @@ void Mod_LoadAliasModel (model_t *mod, void *buffer)
 	pheader = Hunk_Alloc (LittleLong(pinmodel->ofs_end));
 	
 	// byte swap the header fields and sanity check
-	for (i=0 ; i<sizeof(dmdl_t)*0.25 ; i++)
+	for (i=0 ; i<sizeof(dmdl_t)/4 ; i++)
 		((int *)pheader)[i] = LittleLong (((int *)buffer)[i]);
 
 	if (pheader->skinheight > MAX_LBM_HEIGHT)
@@ -1131,6 +1102,8 @@ void R_BeginRegistration (char *model)
 	r_oldviewcluster = -1;		// force markleafs
 
 	Com_sprintf (fullname, sizeof(fullname), "maps/%s.bsp", model);
+
+	GL_ClearDecals (); //Decals -Maniac
 
 	// explicitly free the old map if different
 	// this guarantees that mod_known[0] is the world map

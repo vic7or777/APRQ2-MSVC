@@ -48,7 +48,7 @@ void SV_SetMaster_f (void)
 	}
 
 	// make sure the server is listed public
-	Cvar_Set ("public", "1");
+	Cvar_Set ("sv_public", "1");
 
 	for (i=1 ; i<MAX_MASTERS ; i++)
 		memset (&master_adr[i], 0, sizeof(master_adr[i]));

@@ -21,7 +21,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "client.h"
 
-
 extern	struct model_s	*cl_mod_powerscreen;
 
 //PGM
@@ -35,161 +34,6 @@ FRAME PARSING
 
 =========================================================================
 */
-
-#if 0
-
-typedef struct
-{
-	int		modelindex;
-	int		num; // entity number
-	int		effects;
-	vec3_t	origin;
-	vec3_t	oldorigin;
-	vec3_t	angles;
-	qboolean present;
-} projectile_t;
-
-#define	MAX_PROJECTILES	64
-projectile_t	cl_projectiles[MAX_PROJECTILES];
-
-void CL_ClearProjectiles (void)
-{
-	int i;
-
-	for (i = 0; i < MAX_PROJECTILES; i++) {
-//		if (cl_projectiles[i].present)
-//			Com_DPrintf("PROJ: %d CLEARED\n", cl_projectiles[i].num);
-		cl_projectiles[i].present = false;
-	}
-}
-
-/*
-=====================
-CL_ParseProjectiles
-
-Flechettes are passed as efficient temporary entities
-=====================
-*/
-void CL_ParseProjectiles (void)
-{
-	int		i, c, j;
-	byte	bits[8];
-	byte	b;
-	projectile_t	pr;
-	int lastempty = -1;
-	qboolean old = false;
-
-	c = MSG_ReadByte (&net_message);
-	for (i=0 ; i<c ; i++)
-	{
-		bits[0] = MSG_ReadByte (&net_message);
-		bits[1] = MSG_ReadByte (&net_message);
-		bits[2] = MSG_ReadByte (&net_message);
-		bits[3] = MSG_ReadByte (&net_message);
-		bits[4] = MSG_ReadByte (&net_message);
-		pr.origin[0] = ( ( bits[0] + ((bits[1]&15)<<8) ) <<1) - 4096;
-		pr.origin[1] = ( ( (bits[1]>>4) + (bits[2]<<4) ) <<1) - 4096;
-		pr.origin[2] = ( ( bits[3] + ((bits[4]&15)<<8) ) <<1) - 4096;
-		VectorCopy(pr.origin, pr.oldorigin);
-
-		if (bits[4] & 64)
-			pr.effects = EF_BLASTER;
-		else
-			pr.effects = 0;
-
-		if (bits[4] & 128) {
-			old = true;
-			bits[0] = MSG_ReadByte (&net_message);
-			bits[1] = MSG_ReadByte (&net_message);
-			bits[2] = MSG_ReadByte (&net_message);
-			bits[3] = MSG_ReadByte (&net_message);
-			bits[4] = MSG_ReadByte (&net_message);
-			pr.oldorigin[0] = ( ( bits[0] + ((bits[1]&15)<<8) ) <<1) - 4096;
-			pr.oldorigin[1] = ( ( (bits[1]>>4) + (bits[2]<<4) ) <<1) - 4096;
-			pr.oldorigin[2] = ( ( bits[3] + ((bits[4]&15)<<8) ) <<1) - 4096;
-		}
-
-		bits[0] = MSG_ReadByte (&net_message);
-		bits[1] = MSG_ReadByte (&net_message);
-		bits[2] = MSG_ReadByte (&net_message);
-
-		pr.angles[0] = 360*bits[0]*0.00390625;
-		pr.angles[1] = 360*bits[1]*0.00390625;
-		pr.modelindex = bits[2];
-
-		b = MSG_ReadByte (&net_message);
-		pr.num = (b & 0x7f);
-		if (b & 128) // extra entity number byte
-			pr.num |= (MSG_ReadByte (&net_message) << 7);
-
-		pr.present = true;
-
-		// find if this projectile already exists from previous frame 
-		for (j = 0; j < MAX_PROJECTILES; j++) {
-			if (cl_projectiles[j].modelindex) {
-				if (cl_projectiles[j].num == pr.num) {
-					// already present, set up oldorigin for interpolation
-					if (!old)
-						VectorCopy(cl_projectiles[j].origin, pr.oldorigin);
-					cl_projectiles[j] = pr;
-					break;
-				}
-			} else
-				lastempty = j;
-		}
-
-		// not present previous frame, add it
-		if (j == MAX_PROJECTILES) {
-			if (lastempty != -1) {
-				cl_projectiles[lastempty] = pr;
-			}
-		}
-	}
-}
-
-/*
-=============
-CL_LinkProjectiles
-
-=============
-*/
-void CL_AddProjectiles (void)
-{
-	int		i, j;
-	projectile_t	*pr;
-	entity_t		ent;
-
-	memset (&ent, 0, sizeof(ent));
-
-	for (i=0, pr=cl_projectiles ; i < MAX_PROJECTILES ; i++, pr++)
-	{
-		// grab an entity to fill in
-		if (pr->modelindex < 1)
-			continue;
-		if (!pr->present) {
-			pr->modelindex = 0;
-			continue; // not present this frame (it was in the previous frame)
-		}
-
-		ent.model = cl.model_draw[pr->modelindex];
-
-		// interpolate origin
-		for (j=0 ; j<3 ; j++)
-		{
-			ent.origin[j] = ent.oldorigin[j] = pr->oldorigin[j] + cl.lerpfrac * 
-				(pr->origin[j] - pr->oldorigin[j]);
-
-		}
-
-		if (pr->effects & EF_BLASTER)
-			CL_BlasterTrail (pr->oldorigin, ent.origin);
-		V_AddLight (pr->origin, 200, 1, 1, 0);
-
-		VectorCopy (pr->angles, ent.angles);
-		V_AddEntity (&ent);
-	}
-}
-#endif
 
 /*
 =================
@@ -610,10 +454,10 @@ void CL_ParsePlayerstate (frame_t *oldframe, frame_t *newframe)
 
 	if (flags & PS_BLEND)
 	{
-		state->blend[0] = MSG_ReadByte (&net_message)*0.003921568627450980392156862745098;
-		state->blend[1] = MSG_ReadByte (&net_message)*0.003921568627450980392156862745098;
-		state->blend[2] = MSG_ReadByte (&net_message)*0.003921568627450980392156862745098;
-		state->blend[3] = MSG_ReadByte (&net_message)*0.003921568627450980392156862745098;
+		state->blend[0] = MSG_ReadByte (&net_message)/255.0;
+		state->blend[1] = MSG_ReadByte (&net_message)/255.0;
+		state->blend[2] = MSG_ReadByte (&net_message)/255.0;
+		state->blend[3] = MSG_ReadByte (&net_message)/255.0;
 	}
 
 	if (flags & PS_FOV)
@@ -667,10 +511,6 @@ void CL_ParseFrame (void)
 	frame_t		*old;
 
 	memset (&cl.frame, 0, sizeof(cl.frame));
-
-#if 0
-	CL_ClearProjectiles(); // clear projectiles for new frame
-#endif
 
 	cl.frame.serverframe = MSG_ReadLong (&net_message);
 	cl.frame.deltaframe = MSG_ReadLong (&net_message);
@@ -738,11 +578,6 @@ void CL_ParseFrame (void)
 		Com_Error (ERR_DROP, "CL_ParseFrame: not packetentities");
 	CL_ParsePacketEntities (old, &cl.frame);
 
-#if 0
-	if (cmd == svc_packetentities2)
-		CL_ParseProjectiles();
-#endif
-
 	// save the frame off in the backup array for later delta comparisons
 	cl.frames[cl.frame.serverframe & UPDATE_MASK] = cl.frame;
 
@@ -751,16 +586,16 @@ void CL_ParseFrame (void)
 		// getting a valid frame message ends the connection process
 		if (cls.state != ca_active)
 		{
-			//Addec pversion time -Maniac
-		//	x_info.x_pversion = cl.time;
-		//	x_info.x_nocheatsay = cl.time;
-
 			cls.state = ca_active;
 			cl.force_refdef = true;
 			cl.predicted_origin[0] = cl.frame.playerstate.pmove.origin[0]*0.125;
 			cl.predicted_origin[1] = cl.frame.playerstate.pmove.origin[1]*0.125;
 			cl.predicted_origin[2] = cl.frame.playerstate.pmove.origin[2]*0.125;
 			VectorCopy (cl.frame.playerstate.viewangles, cl.predicted_angles);
+
+			SCR_ClearLagometer();
+			SCR_ClearChatHUD_f();
+
 			if (cls.disable_servercount != cl.servercount
 				&& cl.refresh_prepped)
 				SCR_EndLoadingPlaque ();	// get rid of loading plaque
@@ -780,54 +615,6 @@ INTERPOLATE BETWEEN FRAMES TO GET RENDERING PARMS
 
 ==========================================================================
 */
-
-struct model_s *S_RegisterSexedModel (entity_state_t *ent, char *base)
-{
-	int				n;
-	char			*p;
-	struct model_s	*mdl;
-	char			model[MAX_QPATH];
-	char			buffer[MAX_QPATH];
-
-	// determine what model the client is using
-	model[0] = 0;
-	n = CS_PLAYERSKINS + ent->number - 1;
-	if (cl.configstrings[n][0])
-	{
-		p = strchr(cl.configstrings[n], '\\');
-		if (p)
-		{
-			p += 1;
-			strcpy(model, p);
-			p = strchr(model, '/');
-			if (p)
-				*p = 0;
-		}
-	}
-	// if we can't figure it out, they're male
-	if (!model[0])
-		strcpy(model, "male");
-
-	Com_sprintf (buffer, sizeof(buffer), "players/%s/%s", model, base+1);
-	mdl = re.RegisterModel(buffer);
-	if (!mdl) {
-		// not found, try default weapon model
-		Com_sprintf (buffer, sizeof(buffer), "players/%s/weapon.md2", model);
-		mdl = re.RegisterModel(buffer);
-		if (!mdl) {
-			// no, revert to the male model
-			Com_sprintf (buffer, sizeof(buffer), "players/%s/%s", "male", base+1);
-			mdl = re.RegisterModel(buffer);
-			if (!mdl) {
-				// last try, default male weapon.md2
-				Com_sprintf (buffer, sizeof(buffer), "players/male/weapon.md2");
-				mdl = re.RegisterModel(buffer);
-			}
-		} 
-	}
-
-	return mdl;
-}
 
 // PMM - used in shell code 
 extern int Developer_searchpath (int who);
@@ -1338,6 +1125,8 @@ void CL_AddPacketEntities (frame_t *frame)
 CL_AddViewWeapon
 ==============
 */
+extern cvar_t *cl_gunalpha;
+
 void CL_AddViewWeapon (player_state_t *ps, player_state_t *ops)
 {
 	entity_t	gun;		// view model
@@ -1353,10 +1142,7 @@ void CL_AddViewWeapon (player_state_t *ps, player_state_t *ops)
 
 	memset (&gun, 0, sizeof(gun));
 
-	if (gun_model)
-		gun.model = gun_model;	// development tool
-	else
-		gun.model = cl.model_draw[ps->gunindex];
+	gun.model = cl.model_draw[ps->gunindex];
 	if (!gun.model)
 		return;
 
@@ -1367,21 +1153,20 @@ void CL_AddViewWeapon (player_state_t *ps, player_state_t *ops)
 		gun.angles[i] = cl.refdef.viewangles[i] + LerpAngle (ops->gunangles[i], ps->gunangles[i], cl.lerpfrac);
 	}
 
-	if (gun_frame)
-	{
-		gun.frame = gun_frame;	// development tool
-		gun.oldframe = gun_frame;	// development tool
-	}
-	else
-	{
-		gun.frame = ps->gunframe;
-		if (gun.frame == 0)
-			gun.oldframe = 0;	// just changed weapons, don't lerp from old
-		else
-			gun.oldframe = ops->gunframe;
-	}
 
-	gun.flags = RF_MINLIGHT | RF_DEPTHHACK | RF_WEAPONMODEL;
+	gun.frame = ps->gunframe;
+	if (gun.frame == 0)
+		gun.oldframe = 0;	// just changed weapons, don't lerp from old
+	else
+		gun.oldframe = ops->gunframe;
+
+	if(cl_gunalpha->value < 1)
+	{
+		gun.flags = RF_MINLIGHT | RF_DEPTHHACK | RF_WEAPONMODEL | RF_TRANSLUCENT;
+		gun.alpha = cl_gunalpha->value;
+	} else {
+		gun.flags = RF_MINLIGHT | RF_DEPTHHACK | RF_WEAPONMODEL;
+	}
 	gun.backlerp = 1.0 - cl.lerpfrac;
 	VectorCopy (gun.origin, gun.oldorigin);	// don't lerp at all
 	V_AddEntity (&gun);
@@ -1402,7 +1187,6 @@ void CL_CalcViewValues (void)
 	centity_t	*ent;
 	frame_t		*oldframe;
 	player_state_t	*ps, *ops;
-	//char ostr[256]; // -Maniac
 
 	// find the previous frame to interpolate from
 	ps = &cl.frame.playerstate;
@@ -1429,7 +1213,9 @@ void CL_CalcViewValues (void)
 		backlerp = 1.0 - lerp;
 		for (i=0 ; i<3 ; i++)
 		{
-			cl.refdef.vieworg[i] = cl.predicted_origin[i] + ops->viewoffset[i] + cl.lerpfrac * (ps->viewoffset[i] - ops->viewoffset[i])	- backlerp * cl.prediction_error[i];
+			cl.refdef.vieworg[i] = cl.predicted_origin[i] + ops->viewoffset[i]
+				+ lerp * (ps->viewoffset[i] - ops->viewoffset[i])
+				- backlerp * cl.prediction_error[i];
 		}
 
 		// smooth out stair climbing
@@ -1459,17 +1245,6 @@ void CL_CalcViewValues (void)
 
 	for (i=0 ; i<3 ; i++)
 		cl.refdef.viewangles[i] += LerpAngle (ops->kick_angles[i], ps->kick_angles[i], lerp);
-
-	//To do when die -Maniac
-	/*if ((cl.frame.playerstate.pmove.pm_type == PM_DEAD) && (x_info.x_deadoralive==1)) {
-		x_info.x_deadoralive = 2; //don't repeat until set to 1 again
-		if (cl_todo->value)
-		{
-			Com_sprintf(ostr,sizeof(ostr), "%s\n", cl_tododie->string);
-			Cbuf_AddText(ostr);
-			Cbuf_Execute() ;
-		}
-	}*/
 
 	AngleVectors (cl.refdef.viewangles, cl.v_forward, cl.v_right, cl.v_up);
 
@@ -1516,18 +1291,12 @@ void CL_AddEntities (void)
 	if (cl_timedemo->value)
 		cl.lerpfrac = 1.0;
 
-//	CL_AddPacketEntities (&cl.frame);
-//	CL_AddTEnts ();
-//	CL_AddParticles ();
-//	CL_AddDLights ();
-//	CL_AddLightStyles ();
-
 	CL_CalcViewValues ();
 	// PMM - moved this here so the heat beam has the right values for the vieworg, and can lock the beam to the gun
 	CL_AddPacketEntities (&cl.frame);
-#if 0
-	CL_AddProjectiles ();
-#endif
+
+	CL_AddViewLocs(); //ViewLocs from nocheat -Maniac
+
 	CL_AddTEnts ();
 	CL_AddParticles ();
 	CL_AddDLights ();

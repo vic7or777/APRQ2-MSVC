@@ -44,6 +44,8 @@ glwstate_t glw_state;
 extern cvar_t *vid_fullscreen;
 extern cvar_t *vid_ref;
 
+qboolean	have_stencil = false;
+
 static qboolean VerifyDriver( void )
 {
 	char buffer[1024];
@@ -59,6 +61,8 @@ static qboolean VerifyDriver( void )
 /*
 ** VID_CreateWindow
 */
+#include "resource.h"
+
 #define	WINDOW_CLASS_NAME	"Quake 2"
 
 qboolean VID_CreateWindow( int width, int height, qboolean fullscreen )
@@ -74,7 +78,7 @@ qboolean VID_CreateWindow( int width, int height, qboolean fullscreen )
     wc.cbClsExtra    = 0;
     wc.cbWndExtra    = 0;
     wc.hInstance     = glw_state.hInstance;
-    wc.hIcon         = 0;
+    wc.hIcon         = LoadIcon(glw_state.hInstance, MAKEINTRESOURCE(IDI_ICON1));
     wc.hCursor       = LoadCursor (NULL,IDC_ARROW);
 	wc.hbrBackground = (void *)COLOR_GRAYTEXT;
     wc.lpszMenuName  = 0;
@@ -145,7 +149,8 @@ qboolean VID_CreateWindow( int width, int height, qboolean fullscreen )
 	SetFocus( glw_state.hWnd );
 
 	// let the sound and input subsystems know about the new window
-	ri.Vid_NewWindow (width, height);
+	//ri.Vid_NewWindow (width, height);
+	ri.Vid_NewWindow( width / gl_scale->value, height / gl_scale->value); //gl_scale -Maniac
 
 	return true;
 }
@@ -398,14 +403,14 @@ qboolean GLimp_InitGL (void)
 		PFD_SUPPORT_OPENGL |			// support OpenGL
 		PFD_DOUBLEBUFFER,				// double buffered
 		PFD_TYPE_RGBA,					// RGBA type
-		32,								// 24-bit color depth Changed from 24 -Maniac
+		24,								// 24-bit color depth
 		0, 0, 0, 0, 0, 0,				// color bits ignored
 		0,								// no alpha buffer
 		0,								// shift bit ignored
 		0,								// no accumulation buffer
 		0, 0, 0, 0, 					// accum bits ignored
-		24,								// 32-bit z-buffer	Changed from 32 -Maniac
-		0,								// no stencil buffer Changed from 0 -Maniac
+		24,								// 32-bit z-buffer
+		8,								// no stencil buffer
 		0,								// no auxiliary buffer
 		PFD_MAIN_PLANE,					// main layer
 		0,								// reserved
@@ -530,7 +535,28 @@ qboolean GLimp_InitGL (void)
 	/*
 	** print out PFD specifics 
 	*/
-	ri.Con_Printf( PRINT_ALL, "GL PFD: color(%d-bits) Z(%d-bit)\n", ( int ) pfd.cColorBits, ( int ) pfd.cDepthBits );
+	//Changed for stencil shadows & get max texture size -Maniac
+//	ri.Con_Printf( PRINT_ALL, "GL PFD: color(%d-bits) Z(%d-bit)\n", ( int ) pfd.cColorBits, ( int ) pfd.cDepthBits );
+	ri.Con_Printf( PRINT_ALL, "GL PFD: Color(%dbits) Depth(%dbits) Stencil(%dbits)\n", ( int ) pfd.cColorBits, ( int ) pfd.cDepthBits, (int) pfd.cStencilBits );
+	{
+		char	buffer[1024];
+
+		strcpy( buffer, qglGetString( GL_RENDERER ) );
+		strlwr( buffer );
+		if (strstr(buffer, "Voodoo3"))
+		{
+			ri.Con_Printf( PRINT_ALL, "... Voodoo3 has no stencil buffer\n" );
+			have_stencil = false;
+		}
+		else
+		{
+			if (pfd.cStencilBits)
+			{
+				ri.Con_Printf( PRINT_ALL, "... Using stencil buffer\n" );
+				have_stencil = true;	// Stencil shadows -MrG
+			}
+		}
+	}
 
 	return true;
 

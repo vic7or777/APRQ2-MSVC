@@ -44,7 +44,7 @@ CFG=ref_gl - Win32 Debug Alpha
 # PROP Target_Dir "."
 CPP=cl.exe
 # ADD BASE CPP /nologo /MT /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_WINDOWS" /YX /c
-# ADD CPP /nologo /G5 /MT /W4 /GX /O2 /D "NDEBUG" /D "WIN32" /D "_WINDOWS" /YX /FD /c
+# ADD CPP /nologo /G5 /MT /W3 /GX /O2 /D "NDEBUG" /D "WIN32" /D "_WINDOWS" /YX /FD /c
 MTL=midl.exe
 # ADD BASE MTL /nologo /D "NDEBUG" /win32
 # ADD MTL /nologo /D "NDEBUG" /mktyplib203 /win32
@@ -56,7 +56,7 @@ BSC32=bscmake.exe
 # ADD BSC32 /nologo
 LINK32=link.exe
 # ADD BASE LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:windows /dll /machine:I386
-# ADD LINK32 kernel32.lib user32.lib gdi32.lib winmm.lib /nologo /subsystem:windows /dll /machine:I386 /out:"d:\games\quake2\aq2_gl.dll"
+# ADD LINK32 kernel32.lib user32.lib gdi32.lib winmm.lib libjpeg.lib /nologo /subsystem:windows /dll /machine:I386 /out:"d:\games\quake2\aq2_gl.dll"
 # SUBTRACT LINK32 /incremental:yes /debug
 
 !ELSEIF  "$(CFG)" == "ref_gl - Win32 Debug"
@@ -86,7 +86,7 @@ BSC32=bscmake.exe
 # ADD BSC32 /nologo
 LINK32=link.exe
 # ADD BASE LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:windows /dll /debug /machine:I386
-# ADD LINK32 kernel32.lib user32.lib gdi32.lib winmm.lib /nologo /subsystem:windows /dll /incremental:no /map /debug /machine:I386
+# ADD LINK32 kernel32.lib user32.lib gdi32.lib winmm.lib libjpeg.lib /nologo /subsystem:windows /dll /incremental:no /map /debug /machine:I386 /out:"d:\games\quake2\aq2_gl.dll"
 # SUBTRACT LINK32 /profile
 
 !ELSEIF  "$(CFG)" == "ref_gl - Win32 Debug Alpha"
@@ -165,6 +165,21 @@ LINK32=link.exe
 # PROP Default_Filter "cpp;c;cxx;rc;def;r;odl;hpj;bat;for;f90"
 # Begin Source File
 
+SOURCE=.\gl_decal.c
+
+!IF  "$(CFG)" == "ref_gl - Win32 Release"
+
+!ELSEIF  "$(CFG)" == "ref_gl - Win32 Debug"
+
+!ELSEIF  "$(CFG)" == "ref_gl - Win32 Debug Alpha"
+
+!ELSEIF  "$(CFG)" == "ref_gl - Win32 Release Alpha"
+
+!ENDIF 
+
+# End Source File
+# Begin Source File
+
 SOURCE=.\gl_draw.c
 
 !IF  "$(CFG)" == "ref_gl - Win32 Release"
@@ -175,9 +190,9 @@ SOURCE=.\gl_draw.c
 
 DEP_CPP_GL_DR=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
+	"..\qshared\q_shared.h"\
 	".\gl_local.h"\
 	".\gl_model.h"\
 	".\qgl.h"\
@@ -191,9 +206,9 @@ NODEP_CPP_GL_DR=\
 
 DEP_CPP_GL_DR=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
+	"..\qshared\q_shared.h"\
 	".\gl_local.h"\
 	".\gl_model.h"\
 	".\qgl.h"\
@@ -218,9 +233,9 @@ SOURCE=.\gl_image.c
 
 DEP_CPP_GL_IM=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
+	"..\qshared\q_shared.h"\
 	".\gl_local.h"\
 	".\gl_model.h"\
 	".\qgl.h"\
@@ -234,9 +249,9 @@ NODEP_CPP_GL_IM=\
 
 DEP_CPP_GL_IM=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
+	"..\qshared\q_shared.h"\
 	".\gl_local.h"\
 	".\gl_model.h"\
 	".\qgl.h"\
@@ -261,9 +276,9 @@ SOURCE=.\gl_light.c
 
 DEP_CPP_GL_LI=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
+	"..\qshared\q_shared.h"\
 	".\gl_local.h"\
 	".\gl_model.h"\
 	".\qgl.h"\
@@ -277,9 +292,9 @@ NODEP_CPP_GL_LI=\
 
 DEP_CPP_GL_LI=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
+	"..\qshared\q_shared.h"\
 	".\gl_local.h"\
 	".\gl_model.h"\
 	".\qgl.h"\
@@ -304,9 +319,9 @@ SOURCE=.\gl_mesh.c
 
 DEP_CPP_GL_ME=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
+	"..\qshared\q_shared.h"\
 	".\anorms.h"\
 	".\anormtab.h"\
 	".\gl_local.h"\
@@ -322,9 +337,9 @@ NODEP_CPP_GL_ME=\
 
 DEP_CPP_GL_ME=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
+	"..\qshared\q_shared.h"\
 	".\anorms.h"\
 	".\anormtab.h"\
 	".\gl_local.h"\
@@ -351,9 +366,9 @@ SOURCE=.\gl_model.c
 
 DEP_CPP_GL_MO=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
+	"..\qshared\q_shared.h"\
 	".\gl_local.h"\
 	".\gl_model.h"\
 	".\qgl.h"\
@@ -367,9 +382,9 @@ NODEP_CPP_GL_MO=\
 
 DEP_CPP_GL_MO=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
+	"..\qshared\q_shared.h"\
 	".\gl_local.h"\
 	".\gl_model.h"\
 	".\qgl.h"\
@@ -378,6 +393,21 @@ NODEP_CPP_GL_MO=\
 	".\L\gl.h"\
 	".\L\glu.h"\
 	
+
+!ENDIF 
+
+# End Source File
+# Begin Source File
+
+SOURCE=.\gl_png.c
+
+!IF  "$(CFG)" == "ref_gl - Win32 Release"
+
+!ELSEIF  "$(CFG)" == "ref_gl - Win32 Debug"
+
+!ELSEIF  "$(CFG)" == "ref_gl - Win32 Debug Alpha"
+
+!ELSEIF  "$(CFG)" == "ref_gl - Win32 Release Alpha"
 
 !ENDIF 
 
@@ -394,9 +424,9 @@ SOURCE=.\gl_rmain.c
 
 DEP_CPP_GL_RM=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
+	"..\qshared\q_shared.h"\
 	".\gl_local.h"\
 	".\gl_model.h"\
 	".\qgl.h"\
@@ -410,9 +440,9 @@ NODEP_CPP_GL_RM=\
 
 DEP_CPP_GL_RM=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
+	"..\qshared\q_shared.h"\
 	".\gl_local.h"\
 	".\gl_model.h"\
 	".\qgl.h"\
@@ -437,9 +467,9 @@ SOURCE=.\gl_rmisc.c
 
 DEP_CPP_GL_RMI=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
+	"..\qshared\q_shared.h"\
 	".\gl_local.h"\
 	".\gl_model.h"\
 	".\qgl.h"\
@@ -453,9 +483,9 @@ NODEP_CPP_GL_RMI=\
 
 DEP_CPP_GL_RMI=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
+	"..\qshared\q_shared.h"\
 	".\gl_local.h"\
 	".\gl_model.h"\
 	".\qgl.h"\
@@ -480,9 +510,9 @@ SOURCE=.\gl_rsurf.c
 
 DEP_CPP_GL_RS=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
+	"..\qshared\q_shared.h"\
 	".\gl_local.h"\
 	".\gl_model.h"\
 	".\qgl.h"\
@@ -496,9 +526,9 @@ NODEP_CPP_GL_RS=\
 
 DEP_CPP_GL_RS=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
+	"..\qshared\q_shared.h"\
 	".\gl_local.h"\
 	".\gl_model.h"\
 	".\qgl.h"\
@@ -523,9 +553,9 @@ SOURCE=.\gl_warp.c
 
 DEP_CPP_GL_WA=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
+	"..\qshared\q_shared.h"\
 	".\gl_local.h"\
 	".\gl_model.h"\
 	".\qgl.h"\
@@ -540,9 +570,9 @@ NODEP_CPP_GL_WA=\
 
 DEP_CPP_GL_WA=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
+	"..\qshared\q_shared.h"\
 	".\gl_local.h"\
 	".\gl_model.h"\
 	".\qgl.h"\
@@ -568,9 +598,9 @@ SOURCE=..\win32\glw_imp.c
 
 DEP_CPP_GLW_I=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
+	"..\qshared\q_shared.h"\
 	"..\win32\glw_win.h"\
 	"..\win32\winquake.h"\
 	".\gl_local.h"\
@@ -586,9 +616,9 @@ NODEP_CPP_GLW_I=\
 
 DEP_CPP_GLW_I=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
+	"..\qshared\q_shared.h"\
 	"..\win32\glw_win.h"\
 	"..\win32\winquake.h"\
 	".\gl_local.h"\
@@ -605,7 +635,7 @@ NODEP_CPP_GLW_I=\
 # End Source File
 # Begin Source File
 
-SOURCE=..\game\q_shared.c
+SOURCE=..\qshared\q_shared.c
 
 !IF  "$(CFG)" == "ref_gl - Win32 Release"
 
@@ -614,13 +644,13 @@ SOURCE=..\game\q_shared.c
 !ELSEIF  "$(CFG)" == "ref_gl - Win32 Debug Alpha"
 
 DEP_CPP_Q_SHA=\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	
 
 !ELSEIF  "$(CFG)" == "ref_gl - Win32 Release Alpha"
 
 DEP_CPP_Q_SHA=\
-	"..\game\q_shared.h"\
+	"..\qshared\q_shared.h"\
 	
 
 !ENDIF 
@@ -637,18 +667,18 @@ SOURCE=..\win32\q_shwin.c
 !ELSEIF  "$(CFG)" == "ref_gl - Win32 Debug Alpha"
 
 DEP_CPP_Q_SHW=\
-	"..\game\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
+	"..\qshared\q_shared.h"\
 	"..\win32\winquake.h"\
 	
 
 !ELSEIF  "$(CFG)" == "ref_gl - Win32 Release Alpha"
 
 DEP_CPP_Q_SHW=\
-	"..\game\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
+	"..\qshared\q_shared.h"\
 	"..\win32\winquake.h"\
 	
 
@@ -667,9 +697,9 @@ SOURCE=..\win32\qgl_win.c
 
 DEP_CPP_QGL_W=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
+	"..\qshared\q_shared.h"\
 	"..\win32\glw_win.h"\
 	".\gl_local.h"\
 	".\gl_model.h"\
@@ -684,9 +714,9 @@ NODEP_CPP_QGL_W=\
 
 DEP_CPP_QGL_W=\
 	"..\client\ref.h"\
-	"..\game\q_shared.h"\
 	"..\qcommon\qcommon.h"\
 	"..\qcommon\qfiles.h"\
+	"..\qshared\q_shared.h"\
 	"..\win32\glw_win.h"\
 	".\gl_local.h"\
 	".\gl_model.h"\
@@ -696,21 +726,6 @@ NODEP_CPP_QGL_W=\
 	".\L\gl.h"\
 	".\L\glu.h"\
 	
-
-!ENDIF 
-
-# End Source File
-# Begin Source File
-
-SOURCE=.\sul_png.c
-
-!IF  "$(CFG)" == "ref_gl - Win32 Release"
-
-!ELSEIF  "$(CFG)" == "ref_gl - Win32 Debug"
-
-!ELSEIF  "$(CFG)" == "ref_gl - Win32 Debug Alpha"
-
-!ELSEIF  "$(CFG)" == "ref_gl - Win32 Release Alpha"
 
 !ENDIF 
 
@@ -729,6 +744,10 @@ SOURCE=.\anormtab.h
 # End Source File
 # Begin Source File
 
+SOURCE=.\gl_decal.h
+# End Source File
+# Begin Source File
+
 SOURCE=.\gl_local.h
 # End Source File
 # Begin Source File
@@ -737,7 +756,15 @@ SOURCE=.\gl_model.h
 # End Source File
 # Begin Source File
 
+SOURCE=.\glext.h
+# End Source File
+# Begin Source File
+
 SOURCE=..\win32\glw_win.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\jmorecfg.h
 # End Source File
 # Begin Source File
 
@@ -745,7 +772,7 @@ SOURCE=.\jpeglib.h
 # End Source File
 # Begin Source File
 
-SOURCE=..\game\q_shared.h
+SOURCE=..\qshared\q_shared.h
 # End Source File
 # Begin Source File
 
@@ -778,18 +805,6 @@ SOURCE=..\win32\winquake.h
 # Begin Source File
 
 SOURCE=.\ref_gl.def
-# End Source File
-# Begin Source File
-
-SOURCE=.\libjpeg.lib
-# End Source File
-# Begin Source File
-
-SOURCE=..\lib\libpng3.lib
-# End Source File
-# Begin Source File
-
-SOURCE=..\lib\zlib.lib
 # End Source File
 # End Group
 # End Target

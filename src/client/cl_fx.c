@@ -1274,7 +1274,7 @@ void CL_BlasterTrail (vec3_t start, vec3_t end)
 	len = VectorNormalize (vec);
 
 	dec = 5;
-	VectorScale (vec, 5, vec);
+	VectorScale (vec, dec, vec);
 
 	// FIXME: this is a really silly way to have a loop
 	while (len > 0)
@@ -1325,7 +1325,7 @@ void CL_QuadTrail (vec3_t start, vec3_t end)
 	len = VectorNormalize (vec);
 
 	dec = 5;
-	VectorScale (vec, 5, vec);
+	VectorScale (vec, dec, vec);
 
 	while (len > 0)
 	{
@@ -1375,7 +1375,7 @@ void CL_FlagTrail (vec3_t start, vec3_t end, float color)
 	len = VectorNormalize (vec);
 
 	dec = 5;
-	VectorScale (vec, 5, vec);
+	VectorScale (vec, dec, vec);
 
 	while (len > 0)
 	{
@@ -1695,7 +1695,7 @@ void CL_IonripperTrail (vec3_t start, vec3_t ent)
 	len = VectorNormalize (vec);
 
 	dec = 5;
-	VectorScale (vec, 5, vec);
+	VectorScale (vec, dec, vec);
 
 	while (len > 0)
 	{
@@ -1986,7 +1986,7 @@ void CL_TrapParticles (entity_t *ent)
 	len = VectorNormalize (vec);
 
 	dec = 5;
-	VectorScale (vec, 5, vec);
+	VectorScale (vec, dec, vec);
 
 	// FIXME: this is a really silly way to have a loop
 	while (len > 0)
@@ -2166,6 +2166,7 @@ void CL_AddParticles (void)
 	vec3_t			org;
 	int				color;
 	cparticle_t		*active, *tail;
+	vec3_t			rgbcolor;
 
 	active = NULL;
 	tail = NULL;
@@ -2185,6 +2186,16 @@ void CL_AddParticles (void)
 				free_particles = p;
 				continue;
 			}
+			else if(alpha <= 0.3 && p->color == 0xe8)
+			{
+ 				rgbcolor[0] = 1.0f;
+ 				rgbcolor[1] = 0.8f;//51
+ 				rgbcolor[2] = 0.8f;//51
+ 				V_AddStain(p->org, rgbcolor, 18);
+ 				p->next = free_particles;
+ 				free_particles = p;
+ 				continue;
+ 			}
 		}
 		else
 		{

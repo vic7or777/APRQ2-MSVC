@@ -25,23 +25,17 @@ key up events are sent even if in console mode
 
 */
 
+int			anykeydown;
 
-#define		MAXCMDLINE	256
-char	key_lines[32][MAXCMDLINE];
-int		key_linepos;
-int		shift_down=false;
-int	anykeydown;
-
-int		edit_line=0;
-int		history_line=0;
-
-int		key_waiting;
-char	*keybindings[256];
+int			key_waiting;
+char		*keybindings[256];
 qboolean	consolekeys[256];	// if true, can't be rebound while in console
-qboolean	menubound[256];	// if true, can't be rebound while in menu
-int		keyshift[256];		// key to map to if shift held down in console
-int		key_repeats[256];	// if > 1, it is autorepeating
+qboolean	menubound[256];		// if true, can't be rebound while in menu
+int			keyshift[256];		// key to map to if shift held down in console
+int			key_repeats[256];	// if > 1, it is autorepeating
 qboolean	keydown[256];
+
+qboolean	shift_down	= false;
 
 typedef struct
 {
@@ -64,6 +58,7 @@ keyname_t keynames[] =
 	{"ALT", K_ALT},
 	{"CTRL", K_CTRL},
 	{"SHIFT", K_SHIFT},
+	{"CAPSLOCK", K_CAPSLOCK},
 	
 	{"F1", K_F1},
 	{"F2", K_F2},
@@ -88,6 +83,8 @@ keyname_t keynames[] =
 	{"MOUSE1", K_MOUSE1},
 	{"MOUSE2", K_MOUSE2},
 	{"MOUSE3", K_MOUSE3},
+	{"MOUSE4", K_MOUSE4},
+	{"MOUSE5", K_MOUSE5},
 
 	{"JOY1", K_JOY1},
 	{"JOY2", K_JOY2},
@@ -154,290 +151,17 @@ keyname_t keynames[] =
 };
 
 /*
-==============================================================================
-
-			LINE TYPING INTO THE CONSOLE
-
-==============================================================================
+===================
+Key_IsDown
+===================
 */
-//Changed completecommand one from q2ice -Maniac
-qboolean Cmd_IsComplete (char *cmd);
-void CompleteCommand (void)
+qboolean Key_IsDown( int key )
 {
-	char	*cmd, *s;
+	if( key < 0 || key > 255 )
+		return false;
 
-	s = key_lines[edit_line]+1;
-	if (*s == '\\' || *s == '/')
-		s++;
-
-	cmd = Cmd_CompleteCommand (s);
-	if (cmd)
-	{
-		key_lines[edit_line][1] = '/';
-		strcpy (key_lines[edit_line]+2, cmd);
-		key_linepos = strlen(cmd)+2;
-		if (Cmd_IsComplete(cmd)) {
-		key_lines[edit_line][key_linepos] = ' ';
-		key_linepos++;
-		key_lines[edit_line][key_linepos] = 0;
-		} else {
-			key_lines[edit_line][key_linepos] = 0;
-		}
-		return;
-	}
+	return keydown[key];
 }
-
-/*
-====================
-Key_Console
-
-Interactive line editing and console scrollback
-====================
-*/
-void Key_Console (int key)
-{
-
-	switch ( key )
-	{
-	case K_KP_SLASH:
-		key = '/';
-		break;
-	case K_KP_MINUS:
-		key = '-';
-		break;
-	case K_KP_PLUS:
-		key = '+';
-		break;
-	case K_KP_HOME:
-		key = '7';
-		break;
-	case K_KP_UPARROW:
-		key = '8';
-		break;
-	case K_KP_PGUP:
-		key = '9';
-		break;
-	case K_KP_LEFTARROW:
-		key = '4';
-		break;
-	case K_KP_5:
-		key = '5';
-		break;
-	case K_KP_RIGHTARROW:
-		key = '6';
-		break;
-	case K_KP_END:
-		key = '1';
-		break;
-	case K_KP_DOWNARROW:
-		key = '2';
-		break;
-	case K_KP_PGDN:
-		key = '3';
-		break;
-	case K_KP_INS:
-		key = '0';
-		break;
-	case K_KP_DEL:
-		key = '.';
-		break;
-	}
-
-	if ( ( toupper( key ) == 'V' && keydown[K_CTRL] ) ||
-		 ( ( ( key == K_INS ) || ( key == K_KP_INS ) ) && keydown[K_SHIFT] ) )
-	{
-		char *cbd;
-		
-		if ( ( cbd = Sys_GetClipboardData() ) != 0 )
-		{
-			int i;
-
-			strtok( cbd, "\n\r\b" );
-
-			i = strlen( cbd );
-			if ( i + key_linepos >= MAXCMDLINE)
-				i= MAXCMDLINE - key_linepos;
-
-			if ( i > 0 )
-			{
-				cbd[i]=0;
-				strcat( key_lines[edit_line], cbd );
-				key_linepos += i;
-			}
-			free( cbd );
-		}
-
-		return;
-	}
-
-	if ( key == 'l' && keydown[K_CTRL] ) 
-	{
-			Cbuf_AddText ("clear\n");
-			return;
-	}
-
-	if ( key == K_ENTER || key == K_KP_ENTER )
-	{	// backslash text are commands, else chat
-		if (key_lines[edit_line][1] == '\\' || key_lines[edit_line][1] == '/')
-			Cbuf_AddText (key_lines[edit_line]+2);	// skip the >
-		else
-			Cbuf_AddText (key_lines[edit_line]+1);	// valid command
-
-		Cbuf_AddText ("\n");
-		Com_Printf ("%s\n",key_lines[edit_line]);
-		edit_line = (edit_line + 1) & 31;
-		history_line = edit_line;
-		key_lines[edit_line][0] = ']';
-		key_linepos = 1;
-		if (cls.state == ca_disconnected)
-			SCR_UpdateScreen ();	// force an update, because the command
-									// may take some time
-		return;
-	}
-
-	if (key == K_TAB)
-	{	// command completion
-		CompleteCommand ();
-		return;
-	}
-	
-	if ( ( key == K_BACKSPACE ) || ( key == K_LEFTARROW ) || ( key == K_KP_LEFTARROW ) || ( ( key == 'h' ) && ( keydown[K_CTRL] ) ) )
-	{
-		if (key_linepos > 1)
-			key_linepos--;
-		return;
-	}
-
-	if ( ( key == K_UPARROW ) || ( key == K_KP_UPARROW ) ||
-		 ( ( key == 'p' ) && keydown[K_CTRL] ) )
-	{
-		do
-		{
-			history_line = (history_line - 1) & 31;
-		} while (history_line != edit_line
-				&& !key_lines[history_line][1]);
-		if (history_line == edit_line)
-			history_line = (edit_line+1)&31;
-		strcpy(key_lines[edit_line], key_lines[history_line]);
-		key_linepos = strlen(key_lines[edit_line]);
-		return;
-	}
-
-	if ( ( key == K_DOWNARROW ) || ( key == K_KP_DOWNARROW ) ||
-		 ( ( key == 'n' ) && keydown[K_CTRL] ) )
-	{
-		if (history_line == edit_line) return;
-		do
-		{
-			history_line = (history_line + 1) & 31;
-		}
-		while (history_line != edit_line
-			&& !key_lines[history_line][1]);
-		if (history_line == edit_line)
-		{
-			key_lines[edit_line][0] = ']';
-			key_linepos = 1;
-		}
-		else
-		{
-			strcpy(key_lines[edit_line], key_lines[history_line]);
-			key_linepos = strlen(key_lines[edit_line]);
-		}
-		return;
-	}
-
-	if (key == K_PGUP || key == K_KP_PGUP || key == K_MWHEELUP) //Added mwheel support to console -Maniac
-	{
-		con.display -= 2;
-		return;
-	}
-
-	if (key == K_PGDN || key == K_KP_PGDN || key == K_MWHEELDOWN ) //Added mwheel support to console -Maniac
-	{
-		con.display += 2;
-		if (con.display > con.current)
-			con.display = con.current;
-		return;
-	}
-
-	if (key == K_HOME || key == K_KP_HOME )
-	{
-		con.display = con.current - con.totallines + 10;
-		return;
-	}
-
-	if (key == K_END || key == K_KP_END )
-	{
-		con.display = con.current;
-		return;
-	}
-	
-	if (key < 32 || key > 127)
-		return;	// non printable
-		
-	if (key_linepos < MAXCMDLINE-1)
-	{
-		key_lines[edit_line][key_linepos] = key;
-		key_linepos++;
-		key_lines[edit_line][key_linepos] = 0;
-	}
-
-}
-
-//============================================================================
-
-qboolean	chat_team;
-char		chat_buffer[MAXCMDLINE];
-int			chat_bufferlen = 0;
-
-void Key_Message (int key)
-{
-
-	if ( key == K_ENTER || key == K_KP_ENTER )
-	{
-		if (chat_team)
-			Cbuf_AddText ("say_team \"");
-		else
-			Cbuf_AddText ("say \"");
-		Cbuf_AddText(chat_buffer);
-		Cbuf_AddText("\"\n");
-
-		cls.key_dest = key_game;
-		chat_bufferlen = 0;
-		chat_buffer[0] = 0;
-		return;
-	}
-
-	if (key == K_ESCAPE)
-	{
-		cls.key_dest = key_game;
-		chat_bufferlen = 0;
-		chat_buffer[0] = 0;
-		return;
-	}
-
-	if (key < 32 || key > 127)
-		return;	// non printable
-
-	if (key == K_BACKSPACE)
-	{
-		if (chat_bufferlen)
-		{
-			chat_bufferlen--;
-			chat_buffer[chat_bufferlen] = 0;
-		}
-		return;
-	}
-
-	if (chat_bufferlen == sizeof(chat_buffer)-1)
-		return; // all full
-
-	chat_buffer[chat_bufferlen++] = key;
-	chat_buffer[chat_bufferlen] = 0;
-}
-
-//============================================================================
-
 
 /*
 ===================
@@ -645,13 +369,6 @@ Key_Init
 void Key_Init (void)
 {
 	int		i;
-
-	for (i = 0; i < 32; i++)
-	{
-		key_lines[i][0] = ']';
-		key_lines[i][1] = 0;
-	}
-	key_linepos = 1;
 	
 // init ascii characters in console mode
 	for (i = 32; i < 128; i++)
@@ -685,10 +402,9 @@ void Key_Init (void)
 	consolekeys[K_KP_MINUS] = true;
 	consolekeys[K_KP_5] = true;
 
-	//Added mwheel support to console -Manaic
 	consolekeys[K_MWHEELUP] = true;
 	consolekeys[K_MWHEELDOWN] = true;
-	//End
+	consolekeys[K_DEL] = true;
 
 	consolekeys['`'] = false;
 	consolekeys['~'] = false;
@@ -755,18 +471,23 @@ void Key_Event (int key, qboolean down, unsigned time)
 	if (down)
 	{
 		key_repeats[key]++;
-		if (key != K_BACKSPACE 
-			&& key != K_PAUSE 
-			&& key != K_PGUP 
-			&& key != K_KP_PGUP 
-			&& key != K_PGDN
-			&& key != K_KP_PGDN
-			&& key_repeats[key] > 1)
-			return;	// ignore most autorepeats
-			
-	//	if (key >= 200 && !keybindings[key]) *Changed mwheel support -Maniac
-		if (key >= 200 && !keybindings[key] && key != K_MWHEELDOWN && key != K_MWHEELUP)
-			Com_Printf ("%s is unbound, hit F4 to set.\n", Key_KeynumToString (key) );
+
+		if (key_repeats[key] > 1)
+		{
+			if (key != K_BACKSPACE 
+				&& key != K_PAUSE 
+				&& key != K_PGUP 
+				&& key != K_KP_PGUP 
+				&& key != K_PGDN
+				&& key != K_KP_PGDN
+				&& key != K_DEL
+				&& key != K_LEFTARROW && key != K_RIGHTARROW
+				&& key != K_UPARROW && key != K_DOWNARROW
+				&& (key < 32 || key > 126 || key == '`'))
+				return;	// ignore most autorepeats
+		}
+	//	if (key >= 200 && !keybindings[key])
+	//		Com_Printf ("%s is unbound, hit F4 to set.\n", Key_KeynumToString (key) );
 	}
 	else
 	{
@@ -870,11 +591,6 @@ void Key_Event (int key, qboolean down, unsigned time)
 	|| (cls.key_dest == key_console && !consolekeys[key])
 	|| (cls.key_dest == key_game && ( cls.state == ca_active || !consolekeys[key] ) ) )
 	{
-		//Added mwhee support -Maniac
-		if (((cls.key_dest == key_console && cls.state == 4) || (cls.key_dest == 0 && cls.state == 1)) && (key == K_MWHEELDOWN || key == K_MWHEELUP))
-        goto SkipKeys;
-		//End
-
 		kb = keybindings[key];
 		if (kb)
 		{
@@ -891,8 +607,6 @@ void Key_Event (int key, qboolean down, unsigned time)
 		}
 		return;
 	}
-
-SkipKeys: //Added -Maniac
 
 	if (!down)
 		return;		// other systems only care about key down events

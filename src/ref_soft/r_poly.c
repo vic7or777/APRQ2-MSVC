@@ -17,7 +17,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 */
-#include <assert.h>
+//#include <assert.h>
 #include "r_local.h"
 
 #define AFFINE_SPANLET_SIZE      16
@@ -1212,9 +1212,9 @@ void R_DrawAlphaSurfaces( void )
 
 		// PGM - pass down all the texinfo flags, not just SURF_WARP.
 		if (s->texinfo->flags & SURF_TRANS66)
-			R_ClipAndDrawPoly( 0.60f, (s->texinfo->flags & SURF_WARP|SURF_FLOWING), true );
+			R_ClipAndDrawPoly( 0.60f, (s->texinfo->flags & (SURF_WARP|SURF_FLOWING)), true );
 		else
-			R_ClipAndDrawPoly( 0.30f, (s->texinfo->flags & SURF_WARP|SURF_FLOWING), true );
+			R_ClipAndDrawPoly( 0.30f, (s->texinfo->flags & (SURF_WARP|SURF_FLOWING)), true );
 //PGM
 //=======
 

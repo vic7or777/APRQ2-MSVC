@@ -22,14 +22,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "r_local.h"
 
-int	rand1k[] = {
-#include "rand1k.h"
-};
-
-#define MASK_1K	0x3FF
-
-int		rand1k_index = 0;
-
 // TODO: put in span spilling to shrink list size
 // !!! if this is changed, it must be changed in d_polysa.s too !!!
 #define DPS_MAXSPANS			MAXHEIGHT+1	
@@ -120,9 +112,7 @@ void R_PolysetDrawSpans8_33 (spanpackage_t *pspanpackage);
 void R_PolysetDrawSpans8_66 (spanpackage_t *pspanpackage);
 void R_PolysetDrawSpans8_Opaque (spanpackage_t *pspanpackage);
 
-void R_PolysetDrawThreshSpans8 (spanpackage_t *pspanpackage);
 void R_PolysetCalcGradients (int skinwidth);
-void R_DrawNonSubdiv (void);
 void R_PolysetSetEdgeTable (void);
 void R_RasterizeAliasPolySmooth (void);
 void R_PolysetScanLeftEdge(int height);
@@ -737,83 +727,6 @@ void R_PolysetCalcGradients (int skinwidth)
 
 /*
 ================
-R_PolysetDrawThreshSpans8
-
-Random fizzle fade rasterizer
-================
-*/
-void R_PolysetDrawThreshSpans8 (spanpackage_t *pspanpackage)
-{
-	int		lcount;
-	byte	*lpdest;
-	byte	*lptex;
-	int		lsfrac, ltfrac;
-	int		llight;
-	int		lzi;
-	short	*lpz;
-
-	do
-	{
-		lcount = d_aspancount - pspanpackage->count;
-
-		errorterm += erroradjustup;
-		if (errorterm >= 0)
-		{
-			d_aspancount += d_countextrastep;
-			errorterm -= erroradjustdown;
-		}
-		else
-		{
-			d_aspancount += ubasestep;
-		}
-
-		if (lcount)
-		{
-			lpdest = pspanpackage->pdest;
-			lptex = pspanpackage->ptex;
-			lpz = pspanpackage->pz;
-			lsfrac = pspanpackage->sfrac;
-			ltfrac = pspanpackage->tfrac;
-			llight = pspanpackage->light;
-			lzi = pspanpackage->zi;
-
-			do
-			{
-				if ((lzi >> 16) >= *lpz)
-				{
-					rand1k_index = (rand1k_index + 1) & MASK_1K;
-
-					if (rand1k[rand1k_index] <= r_affinetridesc.vis_thresh)
-					{
-						*lpdest = ((byte *)vid.colormap)[*lptex + (llight & 0xFF00)];
-						*lpz = lzi >> 16;
-					}
-				}
-
-				lpdest++;
-				lzi += r_zistepx;
-				lpz++;
-				llight += r_lstepx;
-				lptex += a_ststepxwhole;
-				lsfrac += a_sstepxfrac;
-				lptex += lsfrac >> 16;
-				lsfrac &= 0xFFFF;
-				ltfrac += a_tstepxfrac;
-				if (ltfrac & 0x10000)
-				{
-					lptex += r_affinetridesc.skinwidth;
-					ltfrac &= 0xFFFF;
-				}
-			} while (--lcount);
-		}
-
-		pspanpackage++;
-	} while (pspanpackage->count != -999999);
-}
-
-
-/*
-================
 R_PolysetDrawSpans8
 ================
 */
@@ -1076,10 +989,10 @@ void R_PolysetDrawSpans8_Opaque (spanpackage_t *pspanpackage)
 				if ((lzi >> 16) >= *lpz)
 				{
 //PGM
-					if(r_newrefdef.rdflags & RDF_IRGOGGLES && currententity->flags & RF_IR_VISIBLE)
+					if (iractive)
 						*lpdest = ((byte *)vid.colormap)[irtable[*lptex]];
 					else
-					*lpdest = ((byte *)vid.colormap)[*lptex + (llight & 0xFF00)];
+						*lpdest = ((byte *)vid.colormap)[*lptex + (llight & 0xFF00)];
 //PGM
 					*lpz = lzi >> 16;
 				}

@@ -1,0 +1,457 @@
+<html>
+<body>
+<pre>
+<h1>Build Log</h1>
+<h3>
+--------------------Configuration: quake2 - Win32 Release--------------------
+</h3>
+<h3>Command Lines</h3>
+Creating command line "rc.exe /l 0x409 /fo".\release/q2.res" /i "win32" /d "NDEBUG" "D:\q2source\source\quake2-3.21\win32\q2.rc"" 
+Creating temporary file "C:\WINDOWS\TEMP\RSP4A3.tmp" with contents
+[
+/nologo /G5 /MT /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_WINDOWS" /Fp".\release/quake2.pch" /YX /Fo".\release/" /Fd".\release/" /FD /c 
+"D:\q2source\source\quake2-3.21\client\cl_cin.c"
+"D:\q2source\source\quake2-3.21\client\cl_demo.c"
+"D:\q2source\source\quake2-3.21\client\cl_draw.c"
+"D:\q2source\source\quake2-3.21\client\cl_ents.c"
+"D:\q2source\source\quake2-3.21\client\cl_fx.c"
+"D:\q2source\source\quake2-3.21\client\cl_input.c"
+"D:\q2source\source\quake2-3.21\client\cl_inv.c"
+"D:\q2source\source\quake2-3.21\client\cl_loc.c"
+"D:\q2source\source\quake2-3.21\client\cl_main.c"
+"D:\q2source\source\quake2-3.21\client\cl_newfx.c"
+"D:\q2source\source\quake2-3.21\client\cl_parse.c"
+"D:\q2source\source\quake2-3.21\client\cl_pred.c"
+"D:\q2source\source\quake2-3.21\client\cl_scrn.c"
+"D:\q2source\source\quake2-3.21\client\cl_tent.c"
+"D:\q2source\source\quake2-3.21\client\cl_view.c"
+"D:\q2source\source\quake2-3.21\qcommon\cmd.c"
+"D:\q2source\source\quake2-3.21\qcommon\cmodel.c"
+"D:\q2source\source\quake2-3.21\qcommon\common.c"
+"D:\q2source\source\quake2-3.21\win32\conproc.c"
+"D:\q2source\source\quake2-3.21\qcommon\crc.c"
+"D:\q2source\source\quake2-3.21\qcommon\cvar.c"
+"D:\q2source\source\quake2-3.21\qcommon\files.c"
+"D:\q2source\source\quake2-3.21\qcommon\md4.c"
+"D:\q2source\source\quake2-3.21\qcommon\net_chan.c"
+"D:\q2source\source\quake2-3.21\qcommon\pmove.c"
+"D:\q2source\source\quake2-3.21\qshared\q_shared.c"
+"D:\q2source\source\quake2-3.21\server\sv_ccmds.c"
+"D:\q2source\source\quake2-3.21\server\sv_ents.c"
+"D:\q2source\source\quake2-3.21\server\sv_game.c"
+"D:\q2source\source\quake2-3.21\server\sv_init.c"
+"D:\q2source\source\quake2-3.21\server\sv_main.c"
+"D:\q2source\source\quake2-3.21\server\sv_send.c"
+"D:\q2source\source\quake2-3.21\server\sv_user.c"
+"D:\q2source\source\quake2-3.21\server\sv_world.c"
+"D:\q2source\source\quake2-3.21\client\snd_dma.c"
+"D:\q2source\source\quake2-3.21\client\snd_mem.c"
+"D:\q2source\source\quake2-3.21\client\snd_mix.c"
+"D:\q2source\source\quake2-3.21\win32\snd_win.c"
+"D:\q2source\source\quake2-3.21\win32\snd_winamp.c"
+"D:\q2source\source\quake2-3.21\win32\cd_win.c"
+"D:\q2source\source\quake2-3.21\win32\in_win.c"
+"D:\q2source\source\quake2-3.21\win32\net_wins.c"
+"D:\q2source\source\quake2-3.21\win32\q_shwin.c"
+"D:\q2source\source\quake2-3.21\win32\sys_win.c"
+"D:\q2source\source\quake2-3.21\win32\vid_dll.c"
+"D:\q2source\source\quake2-3.21\win32\vid_menu.c"
+"D:\q2source\source\quake2-3.21\client\avi_export.c"
+"D:\q2source\source\quake2-3.21\client\console.c"
+"D:\q2source\source\quake2-3.21\client\keys.c"
+"D:\q2source\source\quake2-3.21\game\m_flash.c"
+"D:\q2source\source\quake2-3.21\client\menu.c"
+"D:\q2source\source\quake2-3.21\client\qmenu.c"
+"D:\q2source\source\quake2-3.21\client\x86.c"
+]
+Creating command line "cl.exe @C:\WINDOWS\TEMP\RSP4A3.tmp" 
+Creating temporary file "C:\WINDOWS\TEMP\RSP4A4.tmp" with contents
+[
+vfw32.lib winmm.lib wsock32.lib kernel32.lib user32.lib gdi32.lib /nologo /subsystem:windows /incremental:no /pdb:".\release/aq2.pdb" /machine:I386 /out:"d:\games\quake2\aq2.exe" 
+".\release\cl_cin.obj"
+".\release\cl_demo.obj"
+".\release\cl_draw.obj"
+".\release\cl_ents.obj"
+".\release\cl_fx.obj"
+".\release\cl_input.obj"
+".\release\cl_inv.obj"
+".\release\cl_loc.obj"
+".\release\cl_main.obj"
+".\release\cl_newfx.obj"
+".\release\cl_parse.obj"
+".\release\cl_pred.obj"
+".\release\cl_scrn.obj"
+".\release\cl_tent.obj"
+".\release\cl_view.obj"
+".\release\cmd.obj"
+".\release\cmodel.obj"
+".\release\common.obj"
+".\release\conproc.obj"
+".\release\crc.obj"
+".\release\cvar.obj"
+".\release\files.obj"
+".\release\md4.obj"
+".\release\net_chan.obj"
+".\release\pmove.obj"
+".\release\q_shared.obj"
+".\release\sv_ccmds.obj"
+".\release\sv_ents.obj"
+".\release\sv_game.obj"
+".\release\sv_init.obj"
+".\release\sv_main.obj"
+".\release\sv_send.obj"
+".\release\sv_user.obj"
+".\release\sv_world.obj"
+".\release\snd_dma.obj"
+".\release\snd_mem.obj"
+".\release\snd_mix.obj"
+".\release\snd_win.obj"
+".\release\snd_winamp.obj"
+".\release\cd_win.obj"
+".\release\in_win.obj"
+".\release\net_wins.obj"
+".\release\q_shwin.obj"
+".\release\sys_win.obj"
+".\release\vid_dll.obj"
+".\release\vid_menu.obj"
+".\release\avi_export.obj"
+".\release\console.obj"
+".\release\keys.obj"
+".\release\m_flash.obj"
+".\release\menu.obj"
+".\release\qmenu.obj"
+".\release\x86.obj"
+".\release\q2.res"
+]
+Creating command line "link.exe @C:\WINDOWS\TEMP\RSP4A4.tmp"
+<h3>Output Window</h3>
+Compiling resources...
+Compiling...
+cl_cin.c
+cl_demo.c
+cl_draw.c
+cl_ents.c
+cl_fx.c
+cl_input.c
+cl_inv.c
+cl_loc.c
+cl_main.c
+cl_newfx.c
+cl_parse.c
+cl_pred.c
+cl_scrn.c
+cl_tent.c
+cl_view.c
+cmd.c
+cmodel.c
+common.c
+conproc.c
+crc.c
+cvar.c
+files.c
+md4.c
+net_chan.c
+pmove.c
+q_shared.c
+sv_ccmds.c
+sv_ents.c
+sv_game.c
+sv_init.c
+sv_main.c
+sv_send.c
+sv_user.c
+sv_world.c
+snd_dma.c
+snd_mem.c
+snd_mix.c
+snd_win.c
+snd_winamp.c
+cd_win.c
+in_win.c
+net_wins.c
+q_shwin.c
+sys_win.c
+vid_dll.c
+vid_menu.c
+avi_export.c
+console.c
+keys.c
+m_flash.c
+menu.c
+qmenu.c
+x86.c
+Linking...
+
+
+
+<h3>Results</h3>
+aq2.exe - 0 error(s), 0 warning(s)
+<h3>
+--------------------Configuration: ref_gl - Win32 Release--------------------
+</h3>
+<h3>Command Lines</h3>
+Creating temporary file "C:\WINDOWS\TEMP\RSP4A6.tmp" with contents
+[
+/nologo /G5 /MT /W3 /GX /O2 /D "NDEBUG" /D "WIN32" /D "_WINDOWS" /Fp".\release/ref_gl.pch" /YX /Fo".\release/" /Fd".\release/" /FD /c 
+"D:\q2source\source\quake2-3.21\ref_gl\gl_decal.c"
+"D:\q2source\source\quake2-3.21\ref_gl\gl_draw.c"
+"D:\q2source\source\quake2-3.21\ref_gl\gl_image.c"
+"D:\q2source\source\quake2-3.21\ref_gl\gl_light.c"
+"D:\q2source\source\quake2-3.21\ref_gl\gl_mesh.c"
+"D:\q2source\source\quake2-3.21\ref_gl\gl_model.c"
+"D:\q2source\source\quake2-3.21\ref_gl\gl_png.c"
+"D:\q2source\source\quake2-3.21\ref_gl\gl_rmain.c"
+"D:\q2source\source\quake2-3.21\ref_gl\gl_rmisc.c"
+"D:\q2source\source\quake2-3.21\ref_gl\gl_rsurf.c"
+"D:\q2source\source\quake2-3.21\ref_gl\gl_warp.c"
+"D:\q2source\source\quake2-3.21\win32\glw_imp.c"
+"D:\q2source\source\quake2-3.21\qshared\q_shared.c"
+"D:\q2source\source\quake2-3.21\win32\q_shwin.c"
+"D:\q2source\source\quake2-3.21\win32\qgl_win.c"
+]
+Creating command line "cl.exe @C:\WINDOWS\TEMP\RSP4A6.tmp" 
+Creating temporary file "C:\WINDOWS\TEMP\RSP4A7.tmp" with contents
+[
+kernel32.lib user32.lib gdi32.lib winmm.lib libjpeg.lib /nologo /subsystem:windows /dll /incremental:no /pdb:"..\release/aq2_gl.pdb" /machine:I386 /def:".\ref_gl.def" /out:"d:\games\quake2\aq2_gl.dll" /implib:"..\release/aq2_gl.lib" 
+".\release\gl_decal.obj"
+".\release\gl_draw.obj"
+".\release\gl_image.obj"
+".\release\gl_light.obj"
+".\release\gl_mesh.obj"
+".\release\gl_model.obj"
+".\release\gl_png.obj"
+".\release\gl_rmain.obj"
+".\release\gl_rmisc.obj"
+".\release\gl_rsurf.obj"
+".\release\gl_warp.obj"
+".\release\glw_imp.obj"
+".\release\q_shared.obj"
+".\release\q_shwin.obj"
+".\release\qgl_win.obj"
+]
+Creating command line "link.exe @C:\WINDOWS\TEMP\RSP4A7.tmp"
+<h3>Output Window</h3>
+Compiling...
+gl_decal.c
+gl_draw.c
+gl_image.c
+gl_light.c
+gl_mesh.c
+gl_model.c
+gl_png.c
+gl_rmain.c
+gl_rmisc.c
+gl_rsurf.c
+gl_warp.c
+glw_imp.c
+q_shared.c
+q_shwin.c
+qgl_win.c
+Linking...
+   Creating library ..\release/aq2_gl.lib and object ..\release/aq2_gl.exp
+LINK : warning LNK4089: all references to "WINMM.dll" discarded by /OPT:REF
+
+
+
+<h3>Results</h3>
+aq2_gl.dll - 0 error(s), 1 warning(s)
+<h3>
+--------------------Configuration: ref_soft - Win32 Release--------------------
+</h3>
+<h3>Command Lines</h3>
+Creating temporary file "C:\WINDOWS\TEMP\RSP4AB.bat" with contents
+[
+@echo off
+ml /c /Cp /coff /Fo.\..\release\r_varsa.obj /Zm /Zi .\r_varsa.asm
+]
+Creating command line "C:\WINDOWS\TEMP\RSP4AB.bat"
+Creating temporary file "C:\WINDOWS\TEMP\RSP4AC.bat" with contents
+[
+@echo off
+ml /c /Cp /coff /Fo.\..\release\r_surf8.obj /Zm /Zi .\r_surf8.asm
+]
+Creating command line "C:\WINDOWS\TEMP\RSP4AC.bat"
+Creating temporary file "C:\WINDOWS\TEMP\RSP4AD.bat" with contents
+[
+@echo off
+ml /c /Cp /coff /Fo.\..\release\r_spr8.obj /Zm /Zi .\r_spr8.asm
+]
+Creating command line "C:\WINDOWS\TEMP\RSP4AD.bat"
+Creating temporary file "C:\WINDOWS\TEMP\RSP4AE.bat" with contents
+[
+@echo off
+ml /c /Cp /coff /Fo.\..\release\r_scana.obj /Zm /Zi .\r_scana.asm
+]
+Creating command line "C:\WINDOWS\TEMP\RSP4AE.bat"
+Creating temporary file "C:\WINDOWS\TEMP\RSP4AF.bat" with contents
+[
+@echo off
+ml /c /Cp /coff /Fo.\..\release\r_polysa.obj /Zm /Zi .\r_polysa.asm
+]
+Creating command line "C:\WINDOWS\TEMP\RSP4AF.bat"
+Creating temporary file "C:\WINDOWS\TEMP\RSP4B0.bat" with contents
+[
+@echo off
+ml /c /Cp /coff /Fo.\..\release\r_edgea.obj /Zm /Zi .\r_edgea.asm
+]
+Creating command line "C:\WINDOWS\TEMP\RSP4B0.bat"
+Creating temporary file "C:\WINDOWS\TEMP\RSP4B1.bat" with contents
+[
+@echo off
+ml /c /Cp /coff /Fo.\..\release\r_drawa.obj /Zm /Zi .\r_drawa.asm
+]
+Creating command line "C:\WINDOWS\TEMP\RSP4B1.bat"
+Creating temporary file "C:\WINDOWS\TEMP\RSP4B2.bat" with contents
+[
+@echo off
+ml /c /Cp /coff /Fo.\..\release\r_draw16.obj /Zm /Zi .\r_draw16.asm
+]
+Creating command line "C:\WINDOWS\TEMP\RSP4B2.bat"
+Creating temporary file "C:\WINDOWS\TEMP\RSP4B3.bat" with contents
+[
+@echo off
+ml /c /Cp /coff /Fo.\..\release\r_aclipa.obj /Zm /Zi .\r_aclipa.asm
+]
+Creating command line "C:\WINDOWS\TEMP\RSP4B3.bat"
+Creating temporary file "C:\WINDOWS\TEMP\RSP4B4.tmp" with contents
+[
+/nologo /G5 /MT /W3 /GX /O2 /D "WIN32" /D "NDEBUG" /D "_WINDOWS" /Fp".\release/ref_soft.pch" /YX /Fo".\release/" /c 
+"D:\q2source\source\quake2-3.21\qshared\q_shared.c"
+"D:\q2source\source\quake2-3.21\win32\q_shwin.c"
+"D:\q2source\source\quake2-3.21\ref_soft\r_aclip.c"
+"D:\q2source\source\quake2-3.21\ref_soft\r_alias.c"
+"D:\q2source\source\quake2-3.21\ref_soft\r_bsp.c"
+"D:\q2source\source\quake2-3.21\ref_soft\r_draw.c"
+"D:\q2source\source\quake2-3.21\ref_soft\r_edge.c"
+"D:\q2source\source\quake2-3.21\ref_soft\r_image.c"
+"D:\q2source\source\quake2-3.21\ref_soft\r_light.c"
+"D:\q2source\source\quake2-3.21\ref_soft\r_main.c"
+"D:\q2source\source\quake2-3.21\ref_soft\r_misc.c"
+"D:\q2source\source\quake2-3.21\ref_soft\r_model.c"
+"D:\q2source\source\quake2-3.21\ref_soft\r_part.c"
+"D:\q2source\source\quake2-3.21\ref_soft\r_poly.c"
+"D:\q2source\source\quake2-3.21\ref_soft\r_polyse.c"
+"D:\q2source\source\quake2-3.21\ref_soft\r_rast.c"
+"D:\q2source\source\quake2-3.21\ref_soft\r_scan.c"
+"D:\q2source\source\quake2-3.21\ref_soft\r_sprite.c"
+"D:\q2source\source\quake2-3.21\ref_soft\r_surf.c"
+"D:\q2source\source\quake2-3.21\win32\rw_ddraw.c"
+"D:\q2source\source\quake2-3.21\win32\rw_dib.c"
+"D:\q2source\source\quake2-3.21\win32\rw_imp.c"
+]
+Creating command line "cl.exe @C:\WINDOWS\TEMP\RSP4B4.tmp" 
+Performing Custom Build Step on .\r_varsa.asm
+Microsoft (R) Macro Assembler Version 6.15.8803
+Copyright (C) Microsoft Corp 1981-2000.  All rights reserved.
+
+ Assembling: .\r_varsa.asm
+Performing Custom Build Step on .\r_surf8.asm
+Microsoft (R) Macro Assembler Version 6.15.8803
+Copyright (C) Microsoft Corp 1981-2000.  All rights reserved.
+
+ Assembling: .\r_surf8.asm
+Performing Custom Build Step on .\r_spr8.asm
+Microsoft (R) Macro Assembler Version 6.15.8803
+Copyright (C) Microsoft Corp 1981-2000.  All rights reserved.
+
+ Assembling: .\r_spr8.asm
+Performing Custom Build Step on .\r_scana.asm
+Microsoft (R) Macro Assembler Version 6.15.8803
+Copyright (C) Microsoft Corp 1981-2000.  All rights reserved.
+
+ Assembling: .\r_scana.asm
+Performing Custom Build Step on .\r_polysa.asm
+Microsoft (R) Macro Assembler Version 6.15.8803
+Copyright (C) Microsoft Corp 1981-2000.  All rights reserved.
+
+ Assembling: .\r_polysa.asm
+Performing Custom Build Step on .\r_edgea.asm
+Microsoft (R) Macro Assembler Version 6.15.8803
+Copyright (C) Microsoft Corp 1981-2000.  All rights reserved.
+
+ Assembling: .\r_edgea.asm
+Performing Custom Build Step on .\r_drawa.asm
+Microsoft (R) Macro Assembler Version 6.15.8803
+Copyright (C) Microsoft Corp 1981-2000.  All rights reserved.
+
+ Assembling: .\r_drawa.asm
+Performing Custom Build Step on .\r_draw16.asm
+Microsoft (R) Macro Assembler Version 6.15.8803
+Copyright (C) Microsoft Corp 1981-2000.  All rights reserved.
+
+ Assembling: .\r_draw16.asm
+Performing Custom Build Step on .\r_aclipa.asm
+Microsoft (R) Macro Assembler Version 6.15.8803
+Copyright (C) Microsoft Corp 1981-2000.  All rights reserved.
+
+ Assembling: .\r_aclipa.asm
+Creating temporary file "C:\WINDOWS\TEMP\RSP4B5.tmp" with contents
+[
+kernel32.lib user32.lib gdi32.lib winmm.lib /nologo /subsystem:windows /dll /incremental:no /pdb:"..\release/aq2_soft.pdb" /machine:I386 /def:".\ref_soft.def" /out:"d:\games\quake2\aq2_soft.dll" /implib:"..\release/aq2_soft.lib" 
+".\release\q_shared.obj"
+".\release\q_shwin.obj"
+".\release\r_aclip.obj"
+".\release\r_alias.obj"
+".\release\r_bsp.obj"
+".\release\r_draw.obj"
+".\release\r_edge.obj"
+".\release\r_image.obj"
+".\release\r_light.obj"
+".\release\r_main.obj"
+".\release\r_misc.obj"
+".\release\r_model.obj"
+".\release\r_part.obj"
+".\release\r_poly.obj"
+".\release\r_polyse.obj"
+".\release\r_rast.obj"
+".\release\r_scan.obj"
+".\release\r_sprite.obj"
+".\release\r_surf.obj"
+".\release\rw_ddraw.obj"
+".\release\rw_dib.obj"
+".\release\rw_imp.obj"
+"\q2source\source\quake2-3.21\release\r_aclipa.obj"
+"\q2source\source\quake2-3.21\release\r_draw16.obj"
+"\q2source\source\quake2-3.21\release\r_drawa.obj"
+"\q2source\source\quake2-3.21\release\r_edgea.obj"
+"\q2source\source\quake2-3.21\release\r_polysa.obj"
+"\q2source\source\quake2-3.21\release\r_scana.obj"
+"\q2source\source\quake2-3.21\release\r_spr8.obj"
+"\q2source\source\quake2-3.21\release\r_surf8.obj"
+"\q2source\source\quake2-3.21\release\r_varsa.obj"
+]
+Creating command line "link.exe @C:\WINDOWS\TEMP\RSP4B5.tmp"
+<h3>Output Window</h3>
+Compiling...
+q_shared.c
+q_shwin.c
+r_aclip.c
+r_alias.c
+r_bsp.c
+r_draw.c
+r_edge.c
+r_image.c
+r_light.c
+r_main.c
+r_misc.c
+r_model.c
+r_part.c
+r_poly.c
+r_polyse.c
+r_rast.c
+r_scan.c
+r_sprite.c
+r_surf.c
+rw_ddraw.c
+rw_dib.c
+rw_imp.c
+Linking...
+   Creating library ..\release/aq2_soft.lib and object ..\release/aq2_soft.exp
+
+
+
+<h3>Results</h3>
+aq2_soft.dll - 0 error(s), 0 warning(s)
+</pre>
+</body>
+</html>
