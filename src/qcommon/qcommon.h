@@ -20,7 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 // qcommon.h -- definitions common between client and server, but not game.dll
 
-#include "../qshared/q_shared.h"
+#include "../game/q_shared.h"
 
 
 #define	VERSION		3.21
@@ -29,50 +29,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 
 #define APR_APPNAME "Apr"
-#define APR_DISPLAYVERSION "1.161"
-
-#ifdef WIN32
-
-#ifdef NDEBUG
-#define BUILDSTRING "Win32 RELEASE"
-#else
-#define BUILDSTRING "Win32 DEBUG"
-#endif
-
-#ifdef _M_IX86
-#define	CPUSTRING	"x86"
-#elif defined _M_ALPHA
-#define	CPUSTRING	"AXP"
-#endif
-
-#elif defined __linux__
-
-#define BUILDSTRING "Linux"
-
-#ifdef __i386__
-#define CPUSTRING "i386"
-#elif defined __alpha__
-#define CPUSTRING "axp"
-#else
-#define CPUSTRING "Unknown"
-#endif
-
-#elif defined __sun__
-
-#define BUILDSTRING "Solaris"
-
-#ifdef __i386__
-#define CPUSTRING "i386"
-#else
-#define CPUSTRING "sparc"
-#endif
-
-#else	// !WIN32
-
-#define BUILDSTRING "NON-WIN32"
-#define	CPUSTRING	"NON-WIN32"
-
-#endif
+#define APR_VERSION "1.17"
 
 //============================================================================
 
@@ -132,16 +89,6 @@ void	MSG_ReadDir (sizebuf_t *sb, vec3_t vector);
 
 void	MSG_ReadData (sizebuf_t *sb, void *buffer, int size);
 
-//============================================================================
-
-extern	qboolean		bigendien;
-
-extern	short	BigShort (short l);
-extern	short	LittleShort (short l);
-extern	int		BigLong (int l);
-extern	int		LittleLong (int l);
-extern	float	BigFloat (float l);
-extern	float	LittleFloat (float l);
 
 //============================================================================
 
@@ -155,7 +102,7 @@ void COM_AddParm (char *parm);
 void COM_Init (void);
 void COM_InitArgv (int argc, char **argv);
 
-char *CopyString (char *in);
+char *CopyString (const char *in);
 
 //============================================================================
 
@@ -355,10 +302,6 @@ The game starts with a Cbuf_AddText ("exec quake.rc\n"); Cbuf_Execute ();
 
 */
 
-#define	EXEC_NOW	0		// don't return until completed
-#define	EXEC_INSERT	1		// insert at current position, but don't run yet
-#define	EXEC_APPEND	2		// add to end of the command buffer
-
 void Cbuf_Init (void);
 // allocates an initial text buffer that will grow as needed
 
@@ -412,12 +355,12 @@ void	Cmd_AddCommand (char *cmd_name, xcommand_t function);
 // The cmd_name is referenced later, so it should not be in temp memory
 // if function is NULL, the command will be forwarded to the server
 // as a clc_stringcmd instead of executed locally
-void	Cmd_RemoveCommand (char *cmd_name);
+void	Cmd_RemoveCommand (const char *cmd_name);
 
 qboolean Cmd_Exists (char *cmd_name);
 // used by the cvar code to check for cvar / command name overlap
 
-char 	*Cmd_CompleteCommand (char *partial);
+char 	*Cmd_CompleteCommand (const char *partial);
 // attempts to match a partial command for automatic command line completion
 // returns NULL if nothing fits
 
@@ -466,33 +409,33 @@ interface from being ambiguous.
 
 extern	cvar_t	*cvar_vars;
 
-cvar_t *Cvar_Get (char *var_name, char *value, int flags);
+cvar_t *Cvar_Get (const char *var_name, const char *value, int flags);
 // creates the variable if it doesn't exist, or returns the existing one
 // if it exists, the value will not be changed, but flags will be ORed in
 // that allows variables to be unarchived without needing bitflags
 
-cvar_t 	*Cvar_Set (char *var_name, char *value);
+cvar_t 	*Cvar_Set (const char *var_name, const char *value);
 // will create the variable if it doesn't exist
 
-cvar_t *Cvar_ForceSet (char *var_name, char *value);
+cvar_t *Cvar_ForceSet (const char *var_name, const char *value);
 // will set the variable even if NOSET or LATCH
 
-cvar_t 	*Cvar_FullSet (char *var_name, char *value, int flags);
+cvar_t 	*Cvar_FullSet (const char *var_name, const char *value, int flags);
 
-void	Cvar_SetValue (char *var_name, float value);
+void	Cvar_SetValue (const char *var_name, float value);
 // expands value to a string and calls Cvar_Set
 
-float	Cvar_VariableValue (char *var_name);
+float	Cvar_VariableValue (const char *var_name);
 // returns 0 if not defined or non numeric
 
-char	*Cvar_VariableString (char *var_name);
+char	*Cvar_VariableString (const char *var_name);
 // returns an empty string if not defined
 
-char 	*Cvar_CompleteVariable (char *partial);
+char 	*Cvar_CompleteVariable (const char *partial);
 // attempts to match a partial variable name for command line completion
 // returns NULL if nothing fits
 
-void	Cvar_GetLatchedVars (void);
+void	Cvar_GetLatchedVars (int flags);
 // any CVAR_LATCHED variables that have been set will now take effect
 
 qboolean Cvar_Command (void);
@@ -531,7 +474,8 @@ NET
 #define	MAX_MSGLEN		1400		// max length of a message
 #define	PACKET_HEADER	10			// two ints and a short
 
-typedef enum {NA_LOOPBACK, NA_BROADCAST, NA_IP, NA_IPX, NA_BROADCAST_IPX} netadrtype_t;
+//typedef enum {NA_LOOPBACK, NA_BROADCAST, NA_IP, NA_IPX, NA_BROADCAST_IPX} netadrtype_t;
+typedef enum {NA_LOOPBACK, NA_BROADCAST, NA_IP} netadrtype_t;
 
 typedef enum {NS_CLIENT, NS_SERVER} netsrc_t;
 
@@ -540,7 +484,7 @@ typedef struct
 	netadrtype_t	type;
 
 	byte	ip[4];
-	byte	ipx[10];
+	//byte	ipx[10];
 
 	unsigned short	port;
 } netadr_t;
@@ -551,13 +495,13 @@ void		NET_Shutdown (void);
 void		NET_Config (qboolean multiplayer);
 
 qboolean	NET_GetPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_message);
-void		NET_SendPacket (netsrc_t sock, int length, void *data, netadr_t to);
+void		NET_SendPacket (netsrc_t sock, int length, const void *data, const netadr_t *to);
 
-qboolean	NET_CompareAdr (netadr_t a, netadr_t b);
-qboolean	NET_CompareBaseAdr (netadr_t a, netadr_t b);
-qboolean	NET_IsLocalAddress (netadr_t adr);
-char		*NET_AdrToString (netadr_t a);
-qboolean	NET_StringToAdr (char *s, netadr_t *a);
+qboolean	NET_CompareAdr (const netadr_t *a, const netadr_t *b);
+qboolean	NET_CompareBaseAdr (const netadr_t *a, const netadr_t *b);
+qboolean	NET_IsLocalAddress (const netadr_t *adr);
+char		*NET_AdrToString (const netadr_t *a);
+qboolean	NET_StringToAdr (const char *s, netadr_t *a);
 void		NET_Sleep(int msec);
 
 //============================================================================
@@ -606,15 +550,15 @@ extern	byte		net_message_buffer[MAX_MSGLEN];
 
 
 void Netchan_Init (void);
-void Netchan_Setup (netsrc_t sock, netchan_t *chan, netadr_t adr, int qport);
+void Netchan_Setup (netsrc_t sock, netchan_t *chan, netadr_t *adr, int qport);
 
 qboolean Netchan_NeedReliable (netchan_t *chan);
 void Netchan_Transmit (netchan_t *chan, int length, byte *data);
-void Netchan_OutOfBand (int net_socket, netadr_t adr, int length, byte *data);
-void Netchan_OutOfBandPrint (int net_socket, netadr_t adr, char *format, ...);
+void Netchan_OutOfBand (int net_socket, const netadr_t *adr, int length, byte *data);
+void Netchan_OutOfBandPrint (int net_socket, const netadr_t *adr, const char *format, ...);
 qboolean Netchan_Process (netchan_t *chan, sizebuf_t *msg);
 
-qboolean Netchan_CanReliable (netchan_t *chan);
+//qboolean Netchan_CanReliable (netchan_t *chan);
 
 
 /*
@@ -628,8 +572,8 @@ CMODEL
 
 #include "../qcommon/qfiles.h"
 
-cmodel_t	*CM_LoadMap (char *name, qboolean clientload, unsigned *checksum);
-cmodel_t	*CM_InlineModel (char *name);	// *1, *2, etc
+cmodel_t	*CM_LoadMap (const char *name, qboolean clientload, unsigned *checksum);
+cmodel_t	*CM_InlineModel (const char *name);	// *1, *2, etc
 
 int			CM_NumClusters (void);
 int			CM_NumInlineModels (void);
@@ -697,17 +641,16 @@ FILESYSTEM
 */
 
 void	FS_InitFilesystem (void);
-void	FS_SetGamedir (char *dir);
+void	FS_SetGamedir (const char *dir);
 char	*FS_Gamedir (void);
-char	*FS_Mapname (void); // -Maniac
 char	*FS_NextPath (char *prevpath);
 void	FS_ExecAutoexec (void);
 
-int		FS_FOpenFile (char *filename, FILE **file);
+int		FS_FOpenFile (const char *filename, FILE **file);
 void	FS_FCloseFile (FILE *f);
 // note: this can't be called from another DLL, due to MS libc issues
 
-int		FS_LoadFile (char *path, void **buffer);
+int		FS_LoadFile (const char *path, void **buffer);
 // a null buffer will just return the file length without loading
 // a -1 length is not present
 
@@ -718,7 +661,7 @@ void	FS_FreeFile (void *buffer);
 
 void	FS_CreatePath (char *path);
 
-char **FS_ListFiles( char *findname, int *numfiles, unsigned musthave, unsigned canthave );
+char **FS_ListFiles( const char *findname, int *numfiles, unsigned musthave, unsigned canthave );
 
 /*
 ==============================================================
@@ -742,9 +685,9 @@ MISC
 
 void		Com_BeginRedirect (int target, char *buffer, int buffersize, void (*flush));
 void		Com_EndRedirect (void);
-void 		Com_Printf (char *fmt, ...);
-void 		Com_DPrintf (char *fmt, ...);
-void 		Com_Error (int code, char *fmt, ...);
+void 		Com_Printf (const char *fmt, ...);
+void 		Com_DPrintf (const char *fmt, ...);
+void 		Com_Error (int code, const char *fmt, ...);
 void 		Com_Quit (void);
 
 int			Com_ServerState (void);		// this should have just been a cvar...
@@ -753,7 +696,6 @@ void		Com_SetServerState (int state);
 unsigned	Com_BlockChecksum (void *buffer, int length);
 byte		COM_BlockSequenceCRCByte (byte *base, int length, int sequence);
 
-int Com_WildCmp( const char *filter, const char *string, int ignoreCase );
 int SortStrcmp( const void *p1, const void *p2 );
 
 float	frand(void);	// 0 ti 1
@@ -805,9 +747,9 @@ void	*Sys_GetGameAPI (void *parms);
 // loads the game dll and calls the api init function
 
 char	*Sys_ConsoleInput (void);
-void	Sys_ConsoleOutput (char *string);
+void	Sys_ConsoleOutput (const char *string);
 void	Sys_SendKeyEvents (void);
-void	Sys_Error (char *error, ...);
+void	Sys_Error (const char *error, ...);
 void	Sys_Quit (void);
 char	*Sys_GetClipboardData( void );
 void	Sys_CopyProtect (void);
@@ -824,24 +766,14 @@ void CL_Init (void);
 void CL_Drop (void);
 void CL_Shutdown (void);
 void CL_Frame (int msec);
-void Con_Print (char *text);
+void Con_Print (const char *text);
 void SCR_BeginLoadingPlaque (void);
 
 void SV_Init (void);
 void SV_Shutdown (char *finalmsg, qboolean reconnect);
 void SV_Frame (int msec);
 
-//Added font stuff -Maniac
-// ------------[Font Stuff]------------
-#define FC_BLACK	0	// 1
-#define FC_RED		1	// 2
-#define FC_GREEN	2	// 4
-#define FC_YELLOW	3	// 8
-#define FC_BLUE		4	// 16
-#define FC_CYAN		5	// 32
-#define FC_MAGETA	6	// 64
-#define FC_WHITE	7	// 128
-// ------------------------------------
+char *CL_Mapname (void);
 
 #define Q_COLOR_ESCAPE	'^'
 #define COLOR_BLACK		'0'
@@ -853,7 +785,7 @@ void SV_Frame (int msec);
 #define COLOR_MAGENTA	'6'
 #define COLOR_WHITE		'7'
 
-#define Q_IsColorString(p)	( p && *(p) == Q_COLOR_ESCAPE && (*((p)+1) == COLOR_BLACK || *((p)+1) == COLOR_RED || *((p)+1) == COLOR_GREEN || *((p)+1) == COLOR_YELLOW || *((p)+1) == COLOR_BLUE || *((p)+1) == COLOR_CYAN || *((p)+1) == COLOR_MAGENTA || *((p)+1) == COLOR_WHITE))
+#define Q_IsColorString(p)	( p && *(p) == Q_COLOR_ESCAPE && *((p) + 1) >= '0' && *((p) + 1) <= '9')
 #define S_DISABLE_COLOR	"^DC"
 #define S_ENABLE_COLOR	"^EC"
 #define S_COLOR_BLACK	"^0"
@@ -866,3 +798,4 @@ void SV_Frame (int msec);
 #define S_COLOR_WHITE	"^7"
 
 #define ColorIndex(c)	( ( (c) - '0' ) & 7 )
+

@@ -21,6 +21,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <sys/stat.h>
 #include <errno.h>
 #include <stdio.h>
+#include <ctype.h>
 #include <dirent.h>
 #include <unistd.h>
 #include <sys/mman.h>
@@ -30,19 +31,31 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "../qcommon/qcommon.h"
 
+#if defined(__FreeBSD__)
+#include <machine/param.h>
+#endif
+
 //===============================================================================
 
 byte *membase;
 int maxhunksize;
 int curhunksize;
 
+#ifdef __FreeBSD__
+#define MMAP_ANON MAP_ANON
+#else
+#define MMAP_ANON MAP_ANONYMOUS
+#endif
+
 void *Hunk_Begin (int maxsize)
 {
 	// reserve a huge chunk of memory, but don't commit any yet
 	maxhunksize = maxsize + sizeof(int);
 	curhunksize = 0;
+
 	membase = mmap(0, maxhunksize, PROT_READ|PROT_WRITE, 
-		MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+		MAP_PRIVATE|MMAP_ANON, -1, 0);
+
 	if (membase == NULL || membase == (byte *)-1)
 		Sys_Error("unable to virtual allocate %d bytes", maxsize);
 
@@ -68,7 +81,25 @@ int Hunk_End (void)
 {
 	byte *n;
 
+#if defined(__FreeBSD__)
+  size_t old_size = maxhunksize;
+  size_t new_size = curhunksize + sizeof(int);
+  void * unmap_base;
+  size_t unmap_len;
+
+  new_size = round_page(new_size);
+  old_size = round_page(old_size);
+  if (new_size > old_size)
+  	n = 0; /* error */
+  else if (new_size < old_size)
+  {
+    unmap_base = (caddr_t)(membase + new_size);
+    unmap_len = old_size - new_size;
+    n = munmap(unmap_base, unmap_len) + membase;
+  }
+#else
 	n = mremap(membase, maxhunksize, curhunksize + sizeof(int), 0);
+#endif
 	if (n != membase)
 		Sys_Error("Hunk_End:  Could not remap virtual block (%d)", errno);
 	*((int *)membase) = curhunksize + sizeof(int);
@@ -115,17 +146,9 @@ int Sys_Milliseconds (void)
 	return curtime;
 }
 
-void Sys_Mkdir (char *path)
+void Sys_Mkdir (const char *path)
 {
     mkdir (path, 0777);
-}
-
-char *strlwr (char *s)
-{
-	while (*s) {
-		*s = tolower(*s);
-		s++;
-	}
 }
 
 //============================================
@@ -135,7 +158,7 @@ static	char	findpath[MAX_OSPATH];
 static	char	findpattern[MAX_OSPATH];
 static	DIR		*fdir;
 
-static qboolean CompareAttributes(char *path, char *name,
+static qboolean CompareAttributes(const char *path, const char *name,
 	unsigned musthave, unsigned canthave )
 {
 	struct stat st;
@@ -145,21 +168,21 @@ static qboolean CompareAttributes(char *path, char *name,
 	if (strcmp(name, ".") == 0 || strcmp(name, "..") == 0)
 		return false;
 
-	return true;
-
+	//return true;
+	sprintf(fn, "%s/%s", path, name);
 	if (stat(fn, &st) == -1)
 		return false; // shouldn't happen
 
-	if ( ( st.st_mode & S_IFDIR ) && ( canthave & SFF_SUBDIR ) )
+	if ( ( canthave & SFF_SUBDIR ) && S_ISDIR(st.st_mode) )
 		return false;
 
-	if ( ( musthave & SFF_SUBDIR ) && !( st.st_mode & S_IFDIR ) )
+	if ( ( musthave & SFF_SUBDIR ) && !S_ISDIR(st.st_mode) )
 		return false;
 
 	return true;
 }
 
-char *Sys_FindFirst (char *path, unsigned musthave, unsigned canhave)
+char *Sys_FindFirst (const char *path, unsigned musthave, unsigned canhave)
 {
 	struct dirent *d;
 	char *p;

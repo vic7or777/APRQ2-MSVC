@@ -96,13 +96,15 @@ void CL_ColorFlash (vec3_t pos, int ent, int intensity, float r, float g, float 
 {
 	cdlight_t	*dl;
 
-	if((vidref_val == VIDREF_SOFT) && ((r < 0) || (g<0) || (b<0)))
+#ifndef GL_QUAKE
+	if((r < 0) || (g<0) || (b<0))
 	{
 		intensity = -intensity;
 		r = -r;
 		g = -g;
 		b = -b;
 	}
+#endif
 
 	dl = CL_AllocDlight (ent);
 	VectorCopy (pos,  dl->origin);
@@ -264,7 +266,7 @@ void CL_ForceWall (vec3_t start, vec3_t end, int color)
 	}
 }
 
-void CL_FlameEffects (centity_t *ent, vec3_t origin)
+/*void CL_FlameEffects (centity_t *ent, vec3_t origin)
 {
 	int			n, count;
 	int			j;
@@ -321,7 +323,7 @@ void CL_FlameEffects (centity_t *ent, vec3_t origin)
 		p->vel[2] = 20 + crand()*5;
 	}
 
-}
+}*/
 
 
 /*
@@ -529,11 +531,11 @@ void CL_Heatbeam (vec3_t start, vec3_t forward)
 	// FIXME - pmm - these might end up using old values?
 	VectorCopy (cl.v_right, right);
 	VectorCopy (cl.v_up, up);
-	if (vidref_val == VIDREF_GL)
-	{ // GL mode
-		VectorMA (move, -0.5, right, move);
-		VectorMA (move, -0.5, up, move);
-	}
+#ifdef GL_QUAKE
+	// GL mode
+	VectorMA (move, -0.5, right, move);
+	VectorMA (move, -0.5, up, move);
+#endif
 	// otherwise assume SOFT
 
 	ltime = (float) cl.time/1000.0;

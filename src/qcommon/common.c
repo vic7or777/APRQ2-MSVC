@@ -21,8 +21,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "qcommon.h"
 #include <setjmp.h>
 
-#define	MAXPRINTMSG	4096
-
 #define MAX_NUM_ARGVS	50
 
 
@@ -98,14 +96,14 @@ Both client and server can use this, and it will output
 to the apropriate place.
 =============
 */
-void Com_Printf (char *fmt, ...)
+void Com_Printf (const char *fmt, ...)
 {
 	va_list		argptr;
 	char		msg[MAXPRINTMSG];
-	int			skip, i;
+	int			i, skip = 0;
 
 	va_start (argptr,fmt);
-	vsprintf (msg,fmt,argptr);
+	vsnprintf(msg, MAXPRINTMSG, fmt, argptr);
 	va_end (argptr);
 
 	if (rd_target)
@@ -121,39 +119,40 @@ void Com_Printf (char *fmt, ...)
 
 	Con_Print (msg);
 
-	//Remove color triggers -Maniac
+	//Remove color triggers
 	if (Q_IsColorString( msg ) && !strncmp(msg+2, S_DISABLE_COLOR, 3))
 		skip = 5;
+		//memmove( msg, msg + 5, sizeof(msg) );
 	else if (!strncmp(msg, S_ENABLE_COLOR, 3))
 		skip = 3;
-	else
-		skip = 0;
+		//memmove( msg, msg + 3, sizeof(msg) );
 
 	// Strip the last bit off
-	for( i = skip; msg[i] != 0; i++ ) {
+	for( i = 0; msg[i] != 0; i++ ) {
+		//if(Q_IsColorString(msg+i))
+			//memmove( msg + i, msg + i + 2, sizeof(msg) - i );
 		msg[i] &= 127;
-
 	}
 
 	// also echo to debugging console
 	Sys_ConsoleOutput (msg+skip);
 
 	// logfile
-	if (logfile_active && logfile_active->value)
+	if (logfile_active && logfile_active->integer)
 	{
 		char	name[MAX_QPATH];
 		
 		if (!logfile)
 		{
 			Com_sprintf (name, sizeof(name), "%s/qconsole.log", FS_Gamedir ());
-			if (logfile_active->value > 2)
+			if (logfile_active->integer > 2)
 				logfile = fopen (name, "a");
 			else
 				logfile = fopen (name, "w");
 		}
 		if (logfile)
 			fprintf (logfile, "%s", msg+skip);
-		if (logfile_active->value > 1)
+		if (logfile_active->integer > 1)
 			fflush (logfile);		// force it to save every time
 	}
 }
@@ -166,16 +165,16 @@ Com_DPrintf
 A Com_Printf that only shows up if the "developer" cvar is set
 ================
 */
-void Com_DPrintf (char *fmt, ...)
+void Com_DPrintf (const char *fmt, ...)
 {
 	va_list		argptr;
 	char		msg[MAXPRINTMSG];
 		
-	if (!developer || !developer->value)
+	if (!developer || !developer->integer)
 		return;			// don't confuse non-developers with techie stuff...
 
 	va_start (argptr,fmt);
-	vsprintf (msg,fmt,argptr);
+	vsnprintf(msg, MAXPRINTMSG, fmt, argptr);
 	va_end (argptr);
 	
 	Com_Printf ("%s", msg);
@@ -190,7 +189,7 @@ Both client and server can use this, and it will
 do the apropriate things.
 =============
 */
-void Com_Error (int code, char *fmt, ...)
+void Com_Error (int code, const char *fmt, ...)
 {
 	va_list		argptr;
 	static char		msg[MAXPRINTMSG];
@@ -201,7 +200,7 @@ void Com_Error (int code, char *fmt, ...)
 	recursive = true;
 
 	va_start (argptr,fmt);
-	vsprintf (msg,fmt,argptr);
+	vsnprintf(msg, MAXPRINTMSG, fmt, argptr);
 	va_end (argptr);
 	
 	if (code == ERR_DISCONNECT)
@@ -1019,7 +1018,7 @@ Adds the given string at the end of the current argument list
 void COM_AddParm (char *parm)
 {
 	if (com_argc == MAX_NUM_ARGVS)
-		Com_Error (ERR_FATAL, "COM_AddParm: MAX_NUM)ARGS");
+		Com_Error (ERR_FATAL, "COM_AddParm: MAX_NUM_ARGVS");
 	com_argv[com_argc++] = parm;
 }
 
@@ -1038,7 +1037,7 @@ int	memsearch (byte *start, int count, int search)
 }
 
 
-char *CopyString (char *in)
+char *CopyString (const char *in)
 {
 	char	*out;
 	
@@ -1100,31 +1099,6 @@ int SortStrcmp( const void *p1, const void *p2 ) {
 }
 
 /*
- =================
- Com_WildCmp
-
- Wildcard compare.
- Returns non-zero if matches, zero otherwise.
- =================
-*/
-int Com_WildCmp (const char *filter, const char *string, int ignoreCase){
-
-        switch (*filter){
-        case '\0':
-                return !*string;
-
-        case '*':
-                return Com_WildCmp(filter + 1, string, ignoreCase) || *string && Com_WildCmp(filter, string + 1, ignoreCase);
-
-        case '?':
-                return *string && Com_WildCmp(filter + 1, string + 1, ignoreCase);
-
-        default:
-                return ((*filter == *string) || (ignoreCase && (toupper(*filter) == toupper(*string)))) && Com_WildCmp(filter + 1, string + 1, ignoreCase);
-        }
-}
-
-/*
 ==============================================================================
 
 						ZONE MEMORY ALLOCATION
@@ -1156,6 +1130,9 @@ Z_Free
 void Z_Free (void *ptr)
 {
 	zhead_t	*z;
+
+	if (!ptr)
+		Com_Error (ERR_FATAL, "Z_Free: null pointer");
 
 	z = ((zhead_t *)ptr) - 1;
 
@@ -1207,6 +1184,9 @@ void *Z_TagMalloc (int size, int tag)
 {
 	zhead_t	*z;
 	
+	if (size <= 0)
+		Com_Error (ERR_FATAL, "Z_Malloc: trying to allocate %d bytes!", size);
+
 	size = size + sizeof(zhead_t);
 	z = malloc(size);
 	if (!z)
@@ -1251,6 +1231,7 @@ For proxy protecting
 
 ====================
 */
+/*
 byte	COM_BlockSequenceCheckByte (byte *base, int length, int sequence, int challenge)
 {
 	Sys_Error("COM_BlockSequenceCheckByte called\n");
@@ -1294,7 +1275,7 @@ byte	COM_BlockSequenceCheckByte (byte *base, int length, int sequence, int chall
 #endif
 	return 0;
 }
-
+*/
 static byte chktbl[1024] = {
 0x84, 0x47, 0x51, 0xc1, 0x93, 0x22, 0x21, 0x24, 0x2f, 0x66, 0x60, 0x4d, 0xb0, 0x7c, 0xda,
 0x88, 0x54, 0x15, 0x2b, 0xc6, 0x6c, 0x89, 0xc5, 0x9d, 0x48, 0xee, 0xe6, 0x8a, 0xb5, 0xf4,
@@ -1476,7 +1457,7 @@ void Qcommon_Init (int argc, char **argv)
 
 	// init commands and vars
     Cmd_AddCommand ("z_stats", Z_Stats_f);
-    Cmd_AddCommand ("error", Com_Error_f);
+    //Cmd_AddCommand ("error", Com_Error_f);
 
 	host_speeds = Cvar_Get ("host_speeds", "0", 0);
 	log_stats = Cvar_Get ("log_stats", "0", 0);
@@ -1491,11 +1472,11 @@ void Qcommon_Init (int argc, char **argv)
 	dedicated = Cvar_Get ("dedicated", "0", CVAR_NOSET);
 #endif
 
-	s = va("%4.2f %s %s %s", VERSION, CPUSTRING, __DATE__, BUILDSTRING);
+	s = va("AprQ2 v%s %s %s %s", APR_VERSION, CPUSTRING, __DATE__, BUILDSTRING);
 	Cvar_Get ("version", s, CVAR_SERVERINFO|CVAR_NOSET);
 
 
-	if (dedicated->value)
+	if (dedicated->integer)
 		Cmd_AddCommand ("quit", Com_Quit);
 
 	Sys_Init ();
@@ -1509,8 +1490,8 @@ void Qcommon_Init (int argc, char **argv)
 	// add + commands from command line
 	if (!Cbuf_AddLateCommands ())
 	{	// if the user didn't give any commands, run default action
-		if (!dedicated->value)
-			Cbuf_AddText ("d1\n");
+		if (!dedicated->integer)
+			Cbuf_AddText ("toggleconsole\n");
 		else
 			Cbuf_AddText ("dedicated_start\n");
 		Cbuf_Execute ();
@@ -1532,7 +1513,7 @@ Qcommon_Frame
 void Qcommon_Frame (int msec)
 {
 	char	*s;
-	int		time_before, time_between, time_after;
+	int		time_before = 0, time_between = 0, time_after = 0;
 
 	if (setjmp (abortframe) )
 		return;			// an ERR_DROP was thrown
@@ -1540,7 +1521,7 @@ void Qcommon_Frame (int msec)
 	if ( log_stats->modified )
 	{
 		log_stats->modified = false;
-		if ( log_stats->value )
+		if ( log_stats->integer )
 		{
 			if ( log_stats_file )
 			{
@@ -1561,8 +1542,8 @@ void Qcommon_Frame (int msec)
 		}
 	}
 
-	if (fixedtime->value)
-		msec = fixedtime->value;
+	if (fixedtime->integer)
+		msec = fixedtime->integer;
 	else if (timescale->value)
 	{
 		if(timescale->value > 400)
@@ -1573,7 +1554,7 @@ void Qcommon_Frame (int msec)
 			msec = 1;
 	}
 
-	if (showtrace->value)
+	if (showtrace->integer)
 	{
 		extern	int c_traces, c_brush_traces;
 		extern	int	c_pointcontents;
@@ -1584,32 +1565,29 @@ void Qcommon_Frame (int msec)
 		c_pointcontents = 0;
 	}
 
-	if (dedicated->value)
+	do
 	{
-		do
-		{
-			s = Sys_ConsoleInput ();
-			if (s)
-				Cbuf_AddText (va("%s\n",s));
-		} while (s);
-		Cbuf_Execute ();
-	}
+		s = Sys_ConsoleInput ();
+		if (s)
+			Cbuf_AddText (va("%s\n",s));
+	} while (s);
+	Cbuf_Execute ();
 
-	if (host_speeds->value)
+	if (host_speeds->integer)
 		time_before = Sys_Milliseconds ();
 
 	SV_Frame (msec);
 
-	if (host_speeds->value)
+	if (host_speeds->integer)
 		time_between = Sys_Milliseconds ();		
 
 	CL_Frame (msec);
 
-	if (host_speeds->value)
+	if (host_speeds->integer)
 		time_after = Sys_Milliseconds ();		
 
 
-	if (host_speeds->value)
+	if (host_speeds->integer)
 	{
 		int			all, sv, gm, cl, rf;
 

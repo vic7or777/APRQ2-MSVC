@@ -32,7 +32,7 @@ image_t		*draw_chars;				// 8*8 graphic characters
 Draw_FindPic
 ================
 */
-image_t *Draw_FindPic (char *name)
+image_t *Draw_FindPic (const char *name)
 {
 	image_t	*image;
 	char	fullname[MAX_QPATH];
@@ -92,9 +92,9 @@ void Draw_Char (int x, int y, int num, int color, float alpha)
 
 #ifdef PARANOID
 	if (y > vid.height - 8 || x < 0 || x > vid.width - 8)
-		ri.Sys_Error (ERR_FATAL,"Con_DrawCharacter: (%i, %i)", x, y);
+		Com_Error (ERR_FATAL,"Con_DrawCharacter: (%i, %i)", x, y);
 	if (num < 0 || num > 255)
-		ri.Sys_Error (ERR_FATAL,"Con_DrawCharacter: char %i", num);
+		Com_Error (ERR_FATAL,"Con_DrawCharacter: char %i", num);
 #endif
 
 	row = num>>4;
@@ -141,7 +141,7 @@ void Draw_Char (int x, int y, int num, int color, float alpha)
 Draw_GetPicSize
 =============
 */
-void Draw_GetPicSize (int *w, int *h, char *pic)
+void Draw_GetPicSize (int *w, int *h, const char *pic)
 {
 	image_t *gl;
 
@@ -172,7 +172,7 @@ void Draw_StretchPicImplementation (int x, int y, int w, int h, image_t	*pic)
 		(x + w > vid.width) ||
 		(y + h > vid.height))
 	{
-		ri.Sys_Error (ERR_FATAL,"Draw_Pic: bad coordinates");
+		Com_Error (ERR_FATAL,"Draw_Pic: bad coordinates");
 	}
 
 	height = h;
@@ -217,14 +217,14 @@ void Draw_StretchPicImplementation (int x, int y, int w, int h, image_t	*pic)
 Draw_StretchPic
 =============
 */
-void Draw_StretchPic (int x, int y, int w, int h, char *name, float alpha)
+void Draw_StretchPic (int x, int y, int w, int h, const char *name, float alpha)
 {
 	image_t	*pic;
 
 	pic = Draw_FindPic (name);
 	if (!pic)
 	{
-		ri.Con_Printf (PRINT_ALL, "Can't find pic: %s\n", name);
+		Com_DPrintf ( "Can't find pic: %s\n", name);
 		return;
 	}
 	Draw_StretchPicImplementation (x, y, w, h, pic);
@@ -250,7 +250,7 @@ void Draw_StretchRaw (int x, int y, int w, int h, int cols, int rows, byte *data
 Draw_Pic
 =============
 */
-void Draw_Pic (int x, int y, char *name, float alpha)
+void Draw_Pic (int x, int y, const char *name, float alpha)
 {
 	image_t			*pic;
 	byte			*dest, *source;
@@ -261,14 +261,14 @@ void Draw_Pic (int x, int y, char *name, float alpha)
 	pic = Draw_FindPic (name);
 	if (!pic)
 	{
-		ri.Con_Printf (PRINT_ALL, "Can't find pic: %s\n", name);
+		Com_DPrintf ( "Can't find pic: %s\n", name);
 		return;
 	}
 
 	if ((x < 0) ||
 		(x + pic->width > vid.width) ||
 		(y + pic->height > vid.height))
-		return;	//	ri.Sys_Error (ERR_FATAL,"Draw_Pic: bad coordinates");
+		return;	//	Com_Error (ERR_FATAL,"Draw_Pic: bad coordinates");
 
 	height = pic->height;
 	source = pic->pixels[0];
@@ -334,7 +334,7 @@ void Draw_Pic (int x, int y, char *name, float alpha)
 	}
 }
 
-void Draw_ScaledPic (int x, int y, float scale, char *pic, float red, float green, float blue, float alpha)
+void Draw_ScaledPic (int x, int y, float scale, const char *pic, float red, float green, float blue, float alpha)
 {
 	Draw_Pic (x, y, pic, 1);
 }
@@ -347,7 +347,7 @@ This repeats a 64*64 tile graphic to fill the screen around a sized down
 refresh window.
 =============
 */
-void Draw_TileClear (int x, int y, int w, int h, char *name)
+void Draw_TileClear (int x, int y, int w, int h, const char *name)
 {
 	int			i, j;
 	byte		*psrc;
@@ -375,7 +375,7 @@ void Draw_TileClear (int x, int y, int w, int h, char *name)
 	pic = Draw_FindPic (name);
 	if (!pic)
 	{
-		ri.Con_Printf (PRINT_ALL, "Can't find pic: %s\n", name);
+		Com_DPrintf ( "Can't find pic: %s\n", name);
 		return;
 	}
 	x2 = x + w;

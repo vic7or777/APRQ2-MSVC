@@ -50,11 +50,11 @@ void VID_CreateWindow( int width, int height, int stylebits )
 	int				x, y, w, h;
 	int				exstyle;
 
-	vid_xpos = ri.Cvar_Get ("vid_xpos", "0", 0);
-	vid_ypos = ri.Cvar_Get ("vid_ypos", "0", 0);
-	vid_fullscreen = ri.Cvar_Get ("vid_fullscreen", "0", CVAR_ARCHIVE );
+	vid_xpos = Cvar_Get ("vid_xpos", "0", 0);
+	vid_ypos = Cvar_Get ("vid_ypos", "0", 0);
+	vid_fullscreen = Cvar_Get ("vid_fullscreen", "0", CVAR_ARCHIVE );
 
-	if ( vid_fullscreen->value )
+	if ( vid_fullscreen->integer )
 		exstyle = WS_EX_TOPMOST;
 	else
 		exstyle = 0;
@@ -72,7 +72,7 @@ void VID_CreateWindow( int width, int height, int stylebits )
     wc.lpszClassName = WINDOW_CLASS_NAME;
 
     if (!RegisterClass (&wc) )
-		ri.Sys_Error (ERR_FATAL, "Couldn't register window class");
+		Com_Error (ERR_FATAL, "Couldn't register window class");
 
 	r.left = 0;
 	r.top = 0;
@@ -83,8 +83,8 @@ void VID_CreateWindow( int width, int height, int stylebits )
 
 	w = r.right - r.left;
 	h = r.bottom - r.top;
-	x = vid_xpos->value;
-	y = vid_ypos->value;
+	x = vid_xpos->integer;
+	y = vid_ypos->integer;
 
 	sww_state.hWnd = CreateWindowEx (
 		exstyle,
@@ -98,7 +98,7 @@ void VID_CreateWindow( int width, int height, int stylebits )
 		 NULL);
 
 	if (!sww_state.hWnd)
-		ri.Sys_Error (ERR_FATAL, "Couldn't create window");
+		Com_Error (ERR_FATAL, "Couldn't create window");
 	
 	ShowWindow( sww_state.hWnd, SW_SHOWNORMAL );
 	UpdateWindow( sww_state.hWnd );
@@ -106,7 +106,7 @@ void VID_CreateWindow( int width, int height, int stylebits )
 	SetFocus( sww_state.hWnd );
 
 	// let the sound and input subsystems know about the new window
-	ri.Vid_NewWindow (width, height);
+	VID_NewWindow (width, height);
 }
 
 /*
@@ -268,15 +268,15 @@ rserr_t SWimp_SetMode( int *pwidth, int *pheight, int mode, qboolean fullscreen 
 	const char *win_fs[] = { "W", "FS" };
 	rserr_t retval = rserr_ok;
 
-	ri.Con_Printf (PRINT_ALL, "setting mode %d:", mode );
+	Com_Printf ("setting mode %d:", mode );
 
-	if ( !ri.Vid_GetModeInfo( pwidth, pheight, mode ) )
+	if ( !VID_GetModeInfo( pwidth, pheight, mode ) )
 	{
-		ri.Con_Printf( PRINT_ALL, " invalid mode\n" );
+		Com_Printf ( " invalid mode\n" );
 		return rserr_invalid_mode;
 	}
 
-	ri.Con_Printf( PRINT_ALL, " %d %d %s\n", *pwidth, *pheight, win_fs[fullscreen] );
+	Com_Printf ( " %d %d %s\n", *pwidth, *pheight, win_fs[fullscreen] );
 
 	sww_state.initializing = true;
 	if ( fullscreen )
@@ -358,13 +358,13 @@ void SWimp_SetPalette( const unsigned char *palette )
 */
 void SWimp_Shutdown( void )
 {
-	ri.Con_Printf( PRINT_ALL, "Shutting down SW imp\n" );
+	Com_Printf ( "Shutting down SW imp\n" );
 	DIB_Shutdown();
 	DDRAW_Shutdown();
 
 	if ( sww_state.hWnd )
 	{
-		ri.Con_Printf( PRINT_ALL, "...destroying window\n" );
+		Com_Printf ( "...destroying window\n" );
 		ShowWindow( sww_state.hWnd, SW_SHOWNORMAL );	// prevents leaving empty slots in the taskbar
 		DestroyWindow (sww_state.hWnd);
 		sww_state.hWnd = NULL;
@@ -391,7 +391,7 @@ void SWimp_AppActivate( qboolean active )
 		{
 			if ( sww_state.initializing )
 				return;
-			if ( vid_fullscreen->value )
+			if ( vid_fullscreen->integer )
 				ShowWindow( sww_state.hWnd, SW_MINIMIZE );
 		}
 	}
@@ -410,7 +410,7 @@ void Sys_MakeCodeWriteable (unsigned long startaddr, unsigned long length)
 	DWORD  flOldProtect;
 
 	if (!VirtualProtect((LPVOID)startaddr, length, PAGE_READWRITE, &flOldProtect))
- 		ri.Sys_Error(ERR_FATAL, "Protection change failed\n");
+ 		Com_Error(ERR_FATAL, "Protection change failed\n");
 }
 
 /*

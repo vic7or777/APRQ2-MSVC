@@ -27,11 +27,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "winquake.h"
 //#include "zmouse.h"
 
-// Structure containing functions exported from refresh DLL
-refexport_t	re;
-
-//AVI EXPORT -Maniac
-GLAVI_ReadFrameData_t GLAVI_ReadFrameData;
 
 cvar_t *win_noalttab;
 
@@ -43,15 +38,12 @@ static UINT MSH_MOUSEWHEEL;
 
 // Console variables that we need to access from this module
 cvar_t		*vid_gamma;
-cvar_t		*vid_ref;			// Name of Refresh DLL loaded
 cvar_t		*vid_xpos;			// X coordinate of window position
 cvar_t		*vid_ypos;			// Y coordinate of window position
 cvar_t		*vid_fullscreen;
 
 // Global variables used internally by this module
 viddef_t	viddef;				// global video state; used by other modules
-HINSTANCE	reflib_library;		// Handle to refresh DLL 
-qboolean	reflib_active = 0;
 
 HWND        cl_hwnd;            // Main window handle for life of program
 
@@ -63,36 +55,21 @@ static qboolean s_alttab_disabled;
 
 extern	unsigned	sys_msg_time;
 
+qboolean vid_restart = false;
+qboolean vid_active = false;
+
 // WIN32 helper functions
 extern qboolean s_win95;
 
-static void WIN_DisableAltTab( void )
+static void WIN_ToggleAltTab( qboolean enable )
 {
-	if ( s_alttab_disabled )
-		return;
+	if (enable) {
+		if (!s_alttab_disabled)
+			return;
 
-	if ( s_win95 )
-	{
-		BOOL old;
-
-		SystemParametersInfo( SPI_SCREENSAVERRUNNING, 1, &old, 0 );
-	}
-	else
-	{
-		RegisterHotKey( 0, 0, MOD_ALT, VK_TAB );
-		RegisterHotKey( 0, 1, MOD_ALT, VK_RETURN );
-	}
-	s_alttab_disabled = true;
-}
-
-static void WIN_EnableAltTab( void )
-{
-	if ( s_alttab_disabled )
-	{
 		if ( s_win95 )
 		{
 			BOOL old;
-
 			SystemParametersInfo( SPI_SCREENSAVERRUNNING, 0, &old, 0 );
 		}
 		else
@@ -103,57 +80,27 @@ static void WIN_EnableAltTab( void )
 
 		s_alttab_disabled = false;
 	}
-}
-
-/*
-==========================================================================
-
-DLL GLUE
-
-==========================================================================
-*/
-
-#define	MAXPRINTMSG	4096
-void VID_Printf (int print_level, char *fmt, ...)
-{
-	va_list		argptr;
-	char		msg[MAXPRINTMSG];
-	static qboolean	inupdate;
-	
-	va_start (argptr,fmt);
-	vsprintf (msg,fmt,argptr);
-	va_end (argptr);
-
-	if (print_level == PRINT_ALL)
+	else
 	{
-		Com_Printf ("%s", msg);
-	}
-	else if ( print_level == PRINT_DEVELOPER )
-	{
-		Com_DPrintf ("%s", msg);
-	}
-	else if ( print_level == PRINT_ALERT )
-	{
-		MessageBox( 0, msg, "PRINT_ALERT", MB_ICONWARNING );
-		OutputDebugString( msg );
+		if ( s_alttab_disabled )
+			return;
+
+		if ( s_win95 )
+		{
+			BOOL old;
+			SystemParametersInfo( SPI_SCREENSAVERRUNNING, 1, &old, 0 );
+		}
+		else
+		{
+			RegisterHotKey( 0, 0, MOD_ALT, VK_TAB );
+			RegisterHotKey( 0, 1, MOD_ALT, VK_RETURN );
+		}
+		s_alttab_disabled = true;
 	}
 }
 
-void VID_Error (int err_level, char *fmt, ...)
-{
-	va_list		argptr;
-	char		msg[MAXPRINTMSG];
-	static qboolean	inupdate;
-	
-	va_start (argptr,fmt);
-	vsprintf (msg,fmt,argptr);
-	va_end (argptr);
-
-	Com_Error (err_level,"%s", msg);
-}
 
 //==========================================================================
-//Added capslock -Maniac
 byte        scantokey[128] = 
 					{ 
 //  0           1       2       3       4       5       6       7 
@@ -240,7 +187,7 @@ int MapKey (int key)
 	}
 }
 
-void AppActivate(BOOL fActive, BOOL minimize)
+void VID_AppActivate(BOOL fActive, BOOL minimize)
 {
 	Minimized = minimize;
 
@@ -253,27 +200,19 @@ void AppActivate(BOOL fActive, BOOL minimize)
 		ActiveApp = false;
 
 	// minimize/restore mouse-capture on demand
-	if (!ActiveApp)
-	{
-		IN_Activate (false);
-		CDAudio_Activate (false);
-		S_Activate (false);
+	IN_Activate (ActiveApp);
+#ifdef CD_AUDIO
+	CDAudio_Activate (ActiveApp);
+#endif
+	S_Activate (ActiveApp);
 
-		if ( win_noalttab->value )
-		{
-			WIN_EnableAltTab();
-		}
-	}
-	else
+	if ( win_noalttab->integer )
 	{
-		IN_Activate (true);
-		CDAudio_Activate (true);
-		S_Activate (true);
-		if ( win_noalttab->value )
-		{
-			WIN_DisableAltTab();
-		}
+		WIN_ToggleAltTab(!ActiveApp);
 	}
+
+	if ( vid_active )
+		R_AppActivate( ActiveApp );
 }
 
 /*
@@ -284,7 +223,6 @@ main window procedure
 ====================
 */
 
-//New Mouse buttons -Maniac
 #ifndef WM_XBUTTONDOWN 
    #define WM_XBUTTONDOWN      0x020B 
    #define WM_XBUTTONUP		   0x020C 
@@ -293,6 +231,16 @@ main window procedure
    #define MK_XBUTTON1         0x0020 
    #define MK_XBUTTON2         0x0040 
 #endif 
+
+#ifndef MK_XBUTTON3	
+	#define MK_XBUTTON3         0x0080	
+	#define MK_XBUTTON4         0x0100	
+#endif	
+
+#ifndef MK_XBUTTON5	
+	#define MK_XBUTTON5         0x0200	
+#endif	
+
 
 LONG WINAPI MainWndProc (
     HWND    hWnd,
@@ -362,10 +310,8 @@ LONG WINAPI MainWndProc (
 			fActive = LOWORD(wParam);
 			fMinimized = (BOOL) HIWORD(wParam);
 
-			AppActivate( fActive != WA_INACTIVE, fMinimized);
+			VID_AppActivate( fActive != WA_INACTIVE, fMinimized);
 
-			if ( reflib_active )
-				re.AppActivate( !( fActive == WA_INACTIVE ) );
 		}
         return DefWindowProc (hWnd, uMsg, wParam, lParam);
 
@@ -375,7 +321,7 @@ LONG WINAPI MainWndProc (
 			RECT r;
 			int		style;
 
-			if (!vid_fullscreen->value)
+			if (!vid_fullscreen->integer)
 			{
 				xPos = (short) LOWORD(lParam);    // horizontal position 
 				yPos = (short) HIWORD(lParam);    // vertical position 
@@ -405,7 +351,7 @@ LONG WINAPI MainWndProc (
 	case WM_MBUTTONDOWN:
 	case WM_MBUTTONUP:
 	case WM_MOUSEMOVE:
-	case WM_XBUTTONDOWN: //Added new mouse buttons -Maniac
+	case WM_XBUTTONDOWN:
 	case WM_XBUTTONUP:
 		{
 			int	temp;
@@ -427,10 +373,16 @@ LONG WINAPI MainWndProc (
 			if (wParam & MK_XBUTTON2) 
 				temp |= 16;
 
+			if (wParam & MK_XBUTTON3) 
+				temp |= 32;
+
+			if (wParam & MK_XBUTTON4) 
+				temp |= 64;
+
 			IN_MouseEvent (temp);
 		}
 		break;
-	//Added close etc button to window mode -Maniac
+
 	case WM_SYSCOMMAND:
 		switch (wParam) 
 		{ 
@@ -450,7 +402,7 @@ LONG WINAPI MainWndProc (
 		{
 			if ( vid_fullscreen )
 			{
-				Cvar_SetValue( "vid_fullscreen", !vid_fullscreen->value );
+				Cvar_SetValue( "vid_fullscreen", !vid_fullscreen->integer );
 			}
 			return 0;
 		}
@@ -464,13 +416,14 @@ LONG WINAPI MainWndProc (
 		Key_Event( MapKey( lParam ), false, sys_msg_time);
 		break;
 
+#ifdef CD_AUDIO
 	case MM_MCINOTIFY:
 		{
 			LONG CDAudio_MessageHandler(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 			lRet = CDAudio_MessageHandler (hWnd, uMsg, wParam, lParam);
 		}
 		break;
-
+#endif
 	default:	// pass all unhandled messages to DefWindowProc
         return DefWindowProc (hWnd, uMsg, wParam, lParam);
     }
@@ -490,7 +443,7 @@ cause the entire video mode and refresh DLL to be reset on the next frame.
 */
 void VID_Restart_f (void)
 {
-	vid_ref->modified = true;
+	vid_restart = true;
 }
 
 void VID_Front_f( void )
@@ -511,7 +464,6 @@ typedef struct vidmode_s
 	int         mode;
 } vidmode_t;
 
-//Added new resolutions -Maniac
 vidmode_t vid_modes[] =
 {
 	{ "Mode 0: 320x240",	 320,  240,	0  },
@@ -527,7 +479,7 @@ vidmode_t vid_modes[] =
 	{ "Mode 10: 2048x1536",	2048, 1536,	10 },
 	{ "Mode 11: 1024x480",	1024,  480,	11 },
 	{ "Mode 12: 1280x768",	1280,  768,	12 },
-	{ "Mode 13: 1280x1024",	1280, 1024,	13 },
+	{ "Mode 13: 1280x1024",	1280, 1024,	13 }
 };
 
 qboolean VID_GetModeInfo( int *width, int *height, int mode )
@@ -544,7 +496,7 @@ qboolean VID_GetModeInfo( int *width, int *height, int mode )
 /*
 ** VID_UpdateWindowPosAndSize
 */
-void VID_UpdateWindowPosAndSize( int x, int y )
+void VID_UpdateWindowPosAndSize( void )
 {
 	RECT r;
 	int		style;
@@ -561,7 +513,7 @@ void VID_UpdateWindowPosAndSize( int x, int y )
 	w = r.right - r.left;
 	h = r.bottom - r.top;
 
-	MoveWindow( cl_hwnd, vid_xpos->value, vid_ypos->value, w, h, TRUE );
+	MoveWindow( cl_hwnd, vid_xpos->integer, vid_ypos->integer, w, h, TRUE );
 }
 
 /*
@@ -575,105 +527,6 @@ void VID_NewWindow ( int width, int height)
 	cl.force_refdef = true;		// can't use a paused refdef
 }
 
-void VID_FreeReflib (void)
-{
-	if ( !FreeLibrary( reflib_library ) )
-		Com_Error( ERR_FATAL, "Reflib FreeLibrary failed" );
-	memset (&re, 0, sizeof(re));
-	reflib_library = NULL;
-	reflib_active  = false;
-}
-
-/*
-==============
-VID_LoadRefresh
-==============
-*/
-qboolean VID_LoadRefresh( char *name )
-{
-	refimport_t	ri;
-	GetRefAPI_t	GetRefAPI;
-	
-	if ( reflib_active )
-	{
-		re.Shutdown();
-		VID_FreeReflib ();
-	}
-
-	Com_Printf( "------- Loading %s -------\n", name );
-
-	if ( ( reflib_library = LoadLibrary( name ) ) == 0 )
-	{
-		Com_Printf( "LoadLibrary(\"%s\") failed\n", name );
-
-		return false;
-	}
-
-	ri.Cmd_AddCommand = Cmd_AddCommand;
-	ri.Cmd_RemoveCommand = Cmd_RemoveCommand;
-	ri.Cmd_Argc = Cmd_Argc;
-	ri.Cmd_Argv = Cmd_Argv;
-	ri.Cmd_ExecuteText = Cbuf_ExecuteText;
-	ri.Con_Printf = VID_Printf;
-	ri.Sys_Error = VID_Error;
-	ri.FS_LoadFile = FS_LoadFile;
-	ri.FS_FreeFile = FS_FreeFile;
-	ri.FS_Gamedir = FS_Gamedir;
-	ri.FS_Mapname = FS_Mapname; // -Maniac
-	ri.Cvar_Get = Cvar_Get;
-	ri.Cvar_Set = Cvar_Set;
-	ri.Cvar_SetValue = Cvar_SetValue;
-	ri.Vid_GetModeInfo = VID_GetModeInfo;
-	ri.Vid_MenuInit = VID_MenuInit;
-	ri.Vid_NewWindow = VID_NewWindow;
-
-	if ( ( GetRefAPI = (void *) GetProcAddress( reflib_library, "GetRefAPI" ) ) == 0 )
-		Com_Error( ERR_FATAL, "GetProcAddress failed on %s", name );
-
-	re = GetRefAPI( ri );
-
-	if (re.api_version != API_VERSION)
-	{
-		VID_FreeReflib ();
-		Com_Error (ERR_FATAL, "%s has incompatible api_version", name);
-	}
-
-	if ( re.Init( global_hInstance, MainWndProc ) == -1 )
-	{
-		re.Shutdown();
-		VID_FreeReflib ();
-		return false;
-	}
-
-	//AVI EXPORT -Maniac
-	if ( ( GLAVI_ReadFrameData = (void *) GetProcAddress( reflib_library, "GLAVI_ReadFrameData" ) ) == 0)
-	{
-		GLAVI_ReadFrameData = NULL;
-		Com_Printf("No AVI Export Extensions found in renderer, AVI Export is unavailable\n");
-	}
-	else
-	{
-		Com_Printf("AVI Export Extensions found, AVI Export is enabled\n");
-	}
-
-	Com_Printf( "------------------------------------\n");
-	reflib_active = true;
-
-//======
-//PGM
-	vidref_val = VIDREF_OTHER;
-	if(vid_ref)
-	{
-		if(!strcmp (vid_ref->string, "gl"))
-			vidref_val = VIDREF_GL;
-		else if(!strcmp(vid_ref->string, "soft"))
-			vidref_val = VIDREF_SOFT;
-	}
-//PGM
-//======
-
-	return true;
-}
 
 /*
 ============
@@ -686,55 +539,49 @@ update the rendering DLL and/or video mode to match.
 */
 void VID_CheckChanges (void)
 {
-	char name[100];
 
 	if ( win_noalttab->modified )
 	{
-		if ( win_noalttab->value )
+		if ( win_noalttab->integer )
 		{
-			WIN_DisableAltTab();
+			WIN_ToggleAltTab(false);
 		}
 		else
 		{
-			WIN_EnableAltTab();
+			WIN_ToggleAltTab(true);
 		}
 		win_noalttab->modified = false;
 	}
 
-	if ( vid_ref->modified )
+	if ( vid_restart )
 	{
 		cl.force_refdef = true;		// can't use a paused refdef
 		S_StopAllSounds();
-	}
-	while (vid_ref->modified)
-	{
+
 		/*
 		** refresh has changed
 		*/
-		vid_ref->modified = false;
 		vid_fullscreen->modified = true;
 		cl.refresh_prepped = false;
 		cls.disable_screen = true;
 
-		//Changed dll naming -Maniac
-		Com_sprintf( name, sizeof(name), "aq2_%s.dll", vid_ref->string );
-		if ( !VID_LoadRefresh( name ) )
-		{
-			if ( strcmp (vid_ref->string, "soft") == 0 )
-				Com_Error (ERR_FATAL, "Couldn't fall back to software refresh!");
-			//if ( strcmp (vid_ref->string, "gl") == 0 )
-			//	Com_Error (ERR_FATAL, "Couldn't fall back to gl refresh!");
-			
-			Cvar_Set( "vid_ref", "soft" );
+		VID_Shutdown();
 
-			/*
-			** drop the console if we fail to load a refresh
-			*/
-			if ( cls.key_dest != key_console )
-			{
-				Con_ToggleConsole_f();
-			}
+		Com_Printf( "-------- [Loading Renderer] --------\n" );
+
+		//Swap_Init ();
+
+		if ( R_Init( global_hInstance, MainWndProc ) == -1 )
+		{
+			R_Shutdown();
+			vid_active = false;
+			Com_Error (ERR_FATAL, "Couldn't initialize renderer!");
 		}
+
+		Com_Printf( "------------------------------------\n");
+
+		vid_restart = false;
+		vid_active = true;
 		cls.disable_screen = false;
 	}
 
@@ -743,8 +590,8 @@ void VID_CheckChanges (void)
 	*/
 	if ( vid_xpos->modified || vid_ypos->modified )
 	{
-		if (!vid_fullscreen->value)
-			VID_UpdateWindowPosAndSize( vid_xpos->value, vid_ypos->value );
+		if (!vid_fullscreen->integer)
+			VID_UpdateWindowPosAndSize();
 
 		vid_xpos->modified = false;
 		vid_ypos->modified = false;
@@ -759,7 +606,6 @@ VID_Init
 void VID_Init (void)
 {
 	/* Create the video variables so we know how to start the graphics drivers */
-	vid_ref = Cvar_Get ("vid_ref", "gl", CVAR_ARCHIVE); //Changed form soft -Maniac
 	vid_xpos = Cvar_Get ("vid_xpos", "3", CVAR_ARCHIVE);
 	vid_ypos = Cvar_Get ("vid_ypos", "22", CVAR_ARCHIVE);
 	vid_fullscreen = Cvar_Get ("vid_fullscreen", "0", CVAR_ARCHIVE);
@@ -778,6 +624,8 @@ void VID_Init (void)
 	putenv("FX_GLIDE_NO_SPLASH=0");
 		
 	/* Start the graphics mode and load refresh DLL */
+	vid_restart = true;
+	vid_active = false;
 	VID_CheckChanges();
 }
 
@@ -788,10 +636,10 @@ VID_Shutdown
 */
 void VID_Shutdown (void)
 {
-	if ( reflib_active )
+	if ( vid_active )
 	{
-		re.Shutdown ();
-		VID_FreeReflib ();
+		R_Shutdown ();
+		vid_active = false;
 	}
 }
 

@@ -20,8 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // r_misc.c
 
 #include "gl_local.h"
-//Added jpeglib for screenshotjpg, -Maniac
-#include "jpeglib.h"	//Heffo - JPEG Screenshots
+
 /*
 ==================
 R_InitParticleTexture
@@ -70,8 +69,8 @@ void R_InitParticleTexture (void)
 			data1[y][x][3] = (byte) d;
 		}
 	}
-	r_particletexture = GL_FindImage("pics/particle.tga",it_sprite);
-	if(!r_particletexture)
+	//r_particletexture = GL_FindImage("pics/particle.tga",it_sprite);
+	//if(!r_particletexture)
 		r_particletexture = GL_LoadPic ("***particle***", (byte *)data1, 16, 16, 0, 32, 0);
 
 	//
@@ -96,6 +95,7 @@ void R_InitParticleTexture (void)
 	r_bholetexture = GL_FindImage("pics/bullethole.png", it_sprite);
 	if(!r_bholetexture)
 		r_bholetexture = r_notexture;
+
 }
 
 /* 
@@ -105,136 +105,95 @@ void R_InitParticleTexture (void)
  
 ============================================================================== 
 */ 
-
-/*
- * Added screenshotjpg, -Maniac
- */
+qboolean WriteJPG( const char *name, byte *buffer, int width, int height, int quality );
+qboolean WriteTGA( const char *name, byte *buffer, int width, int height );
 /* 
 ================== 
-GL_ScreenShot_JPG
-By Robert 'Heffo' Heffernan
+GL_ScreenShot_f
 ================== 
-*/
-void GL_ScreenShot_JPG (void)
+*/  
+void GL_ScreenShot_f (void) 
 {
-        struct jpeg_compress_struct             cinfo;
-        struct jpeg_error_mgr                   jerr;
-        byte                                    *rgbdata;
-        JSAMPROW                                s[1];
-        FILE                                    *file;
-        char                                    picname[80], checkname[MAX_OSPATH];
-        int                                     i, offset;
+	FILE	*f;
+	byte	*buffer;
+	int		i;
+	char	picname[80], checkname[MAX_OSPATH];
+	struct	tm *ntime;
+	char	date[32], map[32] = "\0";
+	time_t	l_time;
+	qboolean jpg = false;
 
-		// Changed screenshot naming, -Maniac
-        struct          tm *ntime;
-        char            tmpbuf[32];
-        time_t          l_time;
+	if(CL_Mapname()[0])
+		Com_sprintf(map, sizeof(map), "_%s", CL_Mapname());
 
-
-        // Create the scrnshots directory if it doesn't exist
-        Com_sprintf (checkname, sizeof(checkname), "%s/scrnshot", ri.FS_Gamedir());
-        Sys_Mkdir (checkname);
+	if(!Q_stricmp( Cmd_Argv( 0 ), "screenshotjpg" ))
+		jpg = true;
 
 
-		// Changed screenshot naming, -Maniac
+    // Create the scrnshots directory if it doesn't exist
+    Com_sprintf (checkname, sizeof(checkname), "%s/scrnshot", FS_Gamedir());
+    Sys_Mkdir (checkname);
 
-        time( &l_time );
-        ntime = localtime( &l_time );
-        strftime( tmpbuf, sizeof(tmpbuf), "%Y-%m-%d_%H-%M", ntime );
+	if(Cmd_Argc() == 1)
+	{
+		time( &l_time );
+		ntime = localtime( &l_time );
+		strftime( date, sizeof(date), "%Y-%m-%d_%H-%M", ntime );
 
-        // Find a file name to save it to
-		Com_sprintf (picname, sizeof(picname), "%s_%s", tmpbuf, ri.FS_Mapname());
-        Com_sprintf (checkname, sizeof(checkname), "%s/scrnshot/%s.jpg", ri.FS_Gamedir(), picname);
-		
-        for (i=2 ; i<=99 ; i++)
-        {
-			file = fopen (checkname, "rb");
-			if (!file)
+		// Find a file name to save it to
+		for (i=0 ; i<=100 ; i++)
+		{
+			if(jpg)
+				Com_sprintf (picname, sizeof(picname), "%s%s-%02i.jpg", date, map, i);
+			else
+				Com_sprintf (picname, sizeof(picname), "%s%s-%02i.tga", date, map, i);
+			Com_sprintf (checkname, sizeof(checkname), "%s/scrnshot/%s", FS_Gamedir(), picname);
+			f = fopen (checkname, "rb");
+			if (!f)
 				break;	// file doesn't exist
-			fclose (file);
-			Com_sprintf (picname, sizeof(picname), "%s_%s_%i%i", tmpbuf, ri.FS_Mapname(), (int)(i/10)%10, i%10);
-			Com_sprintf (checkname, sizeof(checkname), "%s/scrnshot/%s.jpg", ri.FS_Gamedir(), picname);
-        }
-        if (i==100)
-        {
-			ri.Con_Printf (PRINT_ALL, "SCR_JPGScreenShot_f: Couldn't create a file\n"); 
+			fclose (f);
+		}
+		if (i == 100)
+		{
+			Com_Printf ("GL_ScreenShot_f: Couldn't create a file\n"); 
 			return;
-        }
+		}
+	}
+	else
+	{
+			if(jpg)
+				Com_sprintf (picname, sizeof(picname), "%s.jpg", Cmd_Argv( 1 ));
+			else
+				Com_sprintf (picname, sizeof(picname), "%s.tga", Cmd_Argv( 1 ));
 
-        // Open the file for Binary Output
-        file = fopen(checkname, "wb");
-        if(!file)
-        {
-                ri.Con_Printf (PRINT_ALL, "GL_ScreenShot_JPG: Couldn't create a file\n");
-                return;
-        }
+			Com_sprintf( checkname, sizeof(checkname), "%s/scrnshot/%s", FS_Gamedir(), picname );
+	}
 
-        // Allocate room for a copy of the framebuffer
-        rgbdata = malloc(vid.width * vid.height * 3);
-        if(!rgbdata)
-        {
-                fclose(file);
-                return;
-        }
+	if( jpg ) {
+		buffer = malloc(vid.width * vid.height * 3);
+		qglReadPixels( 0, 0, vid.width, vid.height, GL_RGB, GL_UNSIGNED_BYTE, buffer);
 
-        // Read the framebuffer into our storage
-        qglReadPixels(0, 0, vid.width, vid.height, GL_RGB, GL_UNSIGNED_BYTE, rgbdata);
+		if( WriteJPG(checkname, buffer, vid.width, vid.height, gl_screenshot_quality->integer) )
+			Com_Printf( "Wrote %s\n", picname );
+	} else {
+		buffer = malloc(vid.width * vid.height * 3 + 18);
+		memset (buffer, 0, 18);
+		qglReadPixels( 0, 0, vid.width, vid.height, GL_RGB, GL_UNSIGNED_BYTE, buffer + 18 ); 
 
-        // Initialise the JPEG compression object
-        cinfo.err = jpeg_std_error(&jerr);
-        jpeg_create_compress(&cinfo);
-        jpeg_stdio_dest(&cinfo, file);
+		if( WriteTGA(checkname, buffer, vid.width, vid.height) )
+			Com_Printf( "Wrote %s\n", picname );
+	}
 
-        // Setup JPEG Parameters
-        cinfo.image_width = vid.width;   
-        cinfo.image_height = vid.height;
-        cinfo.in_color_space = JCS_RGB;
-        cinfo.input_components = 3;
-        jpeg_set_defaults(&cinfo);
-        if((gl_screenshot_quality->value >= 101) | (gl_screenshot_quality->value <= 0))
-                ri.Cvar_Set("gl_screenshot_quality", "85");
-        jpeg_set_quality(&cinfo, gl_screenshot_quality->value, TRUE);
-
-        // start compression
-        jpeg_start_compress(&cinfo, true);
-
-        // feed scanline data
-        offset = (cinfo.image_width * cinfo.image_height * 3) - (cinfo.image_width * 3);
-        while(cinfo.next_scanline < cinfo.image_height)
-        {
-                s[0] = &rgbdata[offset - (cinfo.next_scanline * (cinfo.image_width * 3))];
-                jpeg_write_scanlines(&cinfo, s, 1);
-        }
-
-        // finish compression
-        jpeg_finish_compress(&cinfo);
-
-        // destroy JPEG object
-        jpeg_destroy_compress(&cinfo);
-
-        // close File
-        fclose(file);
-
-        // free temp framebuffer
-        free(rgbdata);
-
-        // Done!
-        ri.Con_Printf (PRINT_ALL, "Wrote %s.jpg\n", picname);
-}
+	free( buffer );
+} 
 
 /* 
 ================== 
-GLAVI_ReadFrameData - Grabs a frame for exporting to AVI EXPORT -Maniac
-This function uses a non-quake-standard export to the main exe
-I put this here so I wouldn't have to link the OpenGL libs into
-the main exe.
-
-  DON'T FORGET TO CHECK THE REF_GL.DEF FILE FOR CHANGES!
-
+GLAVI_ReadFrameData - Grabs a frame for exporting to AVI EXPORT
 By Robert 'Heffo' Heffernan
 ================== 
 */
-
+#ifdef AVI_EXPORT
 void GLAVI_ReadFrameData (byte *buffer)
 {
 	if(!buffer)
@@ -243,97 +202,16 @@ void GLAVI_ReadFrameData (byte *buffer)
 	qglReadPixels(0, 0, vid.width, vid.height, GL_BGR_EXT, GL_UNSIGNED_BYTE, buffer);
 	return;
 }
-
-/* 
-================== 
-GL_ScreenShot_f
-================== 
-*/  
-void GL_ScreenShot_f (void) 
-{
-	byte		*buffer;
-	char		picname[80]; 
-	char		checkname[MAX_OSPATH];
-	int			i, c, temp;
-	FILE		*f;
-
-
-	// Changed screenshot naming, -Maniac
-
-    struct          tm *ntime;
-    char            tmpbuf[32];
-    time_t          l_time;
-
-
-	// create the scrnshots directory if it doesn't exist
-	Com_sprintf (checkname, sizeof(checkname), "%s/scrnshot", ri.FS_Gamedir());
-	Sys_Mkdir (checkname);
-
-
-    time( &l_time );
-    ntime = localtime( &l_time );
-    strftime( tmpbuf, sizeof(tmpbuf), "%Y-%m-%d_%H-%M", ntime );
-
-
-    // Find a file name to save it to
-	Com_sprintf (picname, sizeof(picname), "%s_%s", tmpbuf, ri.FS_Mapname());
-    Com_sprintf (checkname, sizeof(checkname), "%s/scrnshot/%s.tga", ri.FS_Gamedir(), picname);
-		
-    for (i=2 ; i<=99 ; i++)
-	{
-		f = fopen (checkname, "rb");
-		if (!f)
-			break;	// file doesn't exist
-		fclose (f);
-		Com_sprintf (picname, sizeof(picname), "%s_%s_%i%i", tmpbuf, ri.FS_Mapname(), (int)(i/10)%10, i%10);
-		Com_sprintf (checkname, sizeof(checkname), "%s/scrnshot/%s.tga", ri.FS_Gamedir(), picname);
-    }
-    if (i==100)
-    {
-		ri.Con_Printf (PRINT_ALL, "SCR_ScreenShot_f: Couldn't create a file\n");
-		return;
-    }
-
-
-	buffer = malloc(vid.width*vid.height*3 + 18);
-	memset (buffer, 0, 18);
-	buffer[2] = 2;		// uncompressed type
-	buffer[12] = vid.width&255;
-	buffer[13] = vid.width>>8;
-	buffer[14] = vid.height&255;
-	buffer[15] = vid.height>>8;
-	buffer[16] = 24;	// pixel size
-
-	qglReadPixels (0, 0, vid.width, vid.height, GL_RGB, GL_UNSIGNED_BYTE, buffer+18 ); 
-
-	// swap rgb to bgr
-	c = 18+vid.width*vid.height*3;
-	for (i=18 ; i<c ; i+=3)
-	{
-		temp = buffer[i];
-		buffer[i] = buffer[i+2];
-		buffer[i+2] = temp;
-	}
-
-	f = fopen (checkname, "wb");
-	fwrite (buffer, 1, c, f);
-	fclose (f);
-
-	free (buffer);
-	//Change -Maniac
-	//ri.Con_Printf (PRINT_ALL, "Wrote %s\n", picname);
-	  ri.Con_Printf (PRINT_ALL, "Wrote %s.tga\n", picname);
-} 
-
+#endif
 /*
 ** GL_Strings_f
 */
 void GL_Strings_f( void )
 {
-	ri.Con_Printf (PRINT_ALL, "GL_VENDOR: %s\n", gl_config.vendor_string );
-	ri.Con_Printf (PRINT_ALL, "GL_RENDERER: %s\n", gl_config.renderer_string );
-	ri.Con_Printf (PRINT_ALL, "GL_VERSION: %s\n", gl_config.version_string );
-	ri.Con_Printf (PRINT_ALL, "GL_EXTENSIONS: %s\n", gl_config.extensions_string );
+	Com_Printf ("GL_VENDOR: %s\n", gl_config.vendor_string );
+	Com_Printf ("GL_RENDERER: %s\n", gl_config.renderer_string );
+	Com_Printf ("GL_VERSION: %s\n", gl_config.version_string );
+	Com_Printf ("GL_EXTENSIONS: %s\n", gl_config.extensions_string );
 }
 
 /*
@@ -342,7 +220,7 @@ void GL_Strings_f( void )
 void GL_SetDefaultState( void )
 {
 	//qglClearColor (1,0, 0.5 , 0.5);
-	qglClearColor (0,0,0,0.5);
+	qglClearColor (0,0,0,1);
 	qglCullFace(GL_FRONT);
 	qglEnable(GL_TEXTURE_2D);
 
@@ -358,7 +236,7 @@ void GL_SetDefaultState( void )
 	qglColor4f (1,1,1,1);
 
 	qglPolygonMode (GL_FRONT_AND_BACK, GL_FILL);
-	qglShadeModel (GL_FLAT);
+	qglShadeModel (GL_SMOOTH);
 
 	GL_TextureMode( gl_texturemode->string );
 	GL_TextureAlphaMode( gl_texturealphamode->string );
@@ -388,7 +266,7 @@ void GL_SetDefaultState( void )
 		qglPointParameterfvEXT( GL_DISTANCE_ATTENUATION_EXT, attenuations );
 	}
 
-	if ( qglColorTableEXT && gl_ext_palettedtexture->value )
+	if ( qglColorTableEXT && gl_ext_palettedtexture->integer )
 	{
 		qglEnable( GL_SHARED_TEXTURE_PALETTE_EXT );
 

@@ -84,10 +84,11 @@ int CCheckParm (char *parm)
 void InitConProc (int argc, char **argv)
 {
 	unsigned	threadAddr;
-	HANDLE		hFile;
-	HANDLE		heventParent;
-	HANDLE		heventChild;
+	HANDLE		hFile = NULL;
+	HANDLE		heventParent = NULL;
+	HANDLE		heventChild = NULL;
 	int			t;
+	HANDLE		hThread;
 
 	ccom_argc = argc;
 	ccom_argv = argv;
@@ -134,12 +135,14 @@ void InitConProc (int argc, char **argv)
 		return;
 	}
 
-	if (!_beginthreadex (NULL, 0, RequestProc, NULL, 0, &threadAddr))
+//	if (!_beginthreadex (NULL, 0, RequestProc, NULL, 0, &threadAddr))
+	if( !(hThread = CreateThread( NULL, 0, RequestProc, NULL, 0, &threadAddr )) )
 	{
 		CloseHandle (heventDone);
 		printf ("Couldn't create QHOST thread\n");
 		return;
 	}
+	CloseHandle( hThread );
 
 // save off the input/output handles.
 	hStdout = GetStdHandle (STD_OUTPUT_HANDLE);
@@ -215,7 +218,7 @@ unsigned _stdcall RequestProc (void *arg)
 		SetEvent (heventChildSend);
 	}
 
-	_endthreadex (0);
+//	_endthreadex (0);
 	return 0;
 }
 
@@ -428,4 +431,5 @@ BOOL SetConsoleCXCY(HANDLE hStdout, int cx, int cy)
  
 	return TRUE;
 }
+
      

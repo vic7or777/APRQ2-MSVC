@@ -44,7 +44,7 @@ void Inv_DrawString (int x, int y, char *string)
 {
 	while (*string)
 	{
-		re.DrawChar (x, y, *string++, FC_WHITE, 1);
+		Draw_Char (x, y, *string++, COLOR_WHITE, 1);
 		x+=8;
 	}
 }
@@ -58,7 +58,7 @@ void Inv_DrawAltString (int x, int y, char *string)
 {
 	while (*string)
 	{
-		re.DrawChar (x, y, 128|*string++, FC_WHITE, 1);
+		Draw_Char (x, y, 128|*string++, COLOR_WHITE, 1);
 		x += 8;
 	}
 }
@@ -110,7 +110,7 @@ void CL_DrawInventory (void)
 	// repaint everything next frame
 	SCR_DirtyScreen ();
 
-	re.DrawPic (x, y+8, "inventory", cl_hudalpha->value);
+	Draw_Pic (x, y+8, "inventory", cl_hudalpha->value);
 
 	y += 24;
 	x += 24;
@@ -137,7 +137,7 @@ void CL_DrawInventory (void)
 		else	// draw a blinky cursor by the selected item
 		{
 			if ( (int)(cls.realtime*10) & 1)
-				re.DrawChar (x-8, y, 15, FC_WHITE, 1);
+				Draw_Char (x-8, y, 15, COLOR_WHITE, 1);
 
 			Inv_DrawString (x, y, string);
 		}
@@ -146,5 +146,3 @@ void CL_DrawInventory (void)
 
 
 }
-
-

@@ -23,18 +23,16 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include <windows.h>
 
-#include <dsound.h>
+//#include <dsound.h>
 
-//Added close, minimi & maximisize buttons to windows mode -Maniac
-//#define	WINDOW_STYLE	(WS_OVERLAPPED|WS_BORDER|WS_CAPTION|WS_VISIBLE)
 #define	WINDOW_STYLE	(WS_OVERLAPPED|WS_BORDER|WS_CAPTION|WS_VISIBLE|WS_SYSMENU|WS_MINIMIZEBOX|WS_MAXIMIZEBOX)
 
 extern	HINSTANCE	global_hInstance;
 
-extern LPDIRECTSOUND pDS;
-extern LPDIRECTSOUNDBUFFER pDSBuf;
+//extern LPDIRECTSOUND pDS;
+//extern LPDIRECTSOUNDBUFFER pDSBuf;
 
-extern DWORD gSndBufSize;
+//extern DWORD gSndBufSize;
 
 extern HWND			cl_hwnd;
 extern qboolean		ActiveApp, Minimized;

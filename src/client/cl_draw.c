@@ -21,6 +21,14 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 //
 // cl_draw.c - draw all 2D elements during active gameplay
 //
+
+void SCR_ExecuteLayoutString( char *s );
+void SCR_DrawInventory( void );
+void SCR_DrawNet( void );
+void SCR_CheckDrawCenterString( void );
+
+static cvar_t *scr_draw2d;
+
 #define DSF_LEFT		1
 #define DSF_RIGHT		2
 #define DSF_BOTTOM		4
@@ -37,49 +45,6 @@ void SCR_DrawNet( void );
 void SCR_CheckDrawCenterString( void );
 
 static cvar_t *scr_draw2d;
-
-/*
-=================
-SCR_AdjustFrom640
-=================
-*/
-void SCR_AdjustFrom640( float *x, float *y, float *w, float *h, qboolean refdef ) {
-	float xscale;
-	float yscale;
-	float xofs;
-	float yofs;
-
-	if( refdef ) {
-		xscale = cl.refdef.width / 640.0f;
-		yscale = cl.refdef.height / 480.0f;
-		xofs = cl.refdef.x;
-		yofs = cl.refdef.y;
-	} else {
-		xscale = viddef.width / 640.0f;
-		yscale = viddef.height / 480.0f;
-		xofs = 0;
-		yofs = 0;
-	}
-
-	if( x ) {
-		*x *= xscale;
-		*x += xofs;
-	}
-
-	if( y ) {
-		*y *= yscale;
-		*y += yofs;
-	}
-
-	if( w ) {
-		*w *= xscale;
-	}
-
-	if( h ) {
-		*h *= yscale;
-	}
-
-}
 
 /*
 ==============
@@ -110,7 +75,7 @@ void SCR_DrawString( int xpos, int ypos, char *string, int flags ) {
 	}
 
 	if( flags & DSF_SELECTED ) {
-		re.DrawFill( x - 1, y, (len << 3) + 2, 10, 16 );
+		Draw_Fill( x - 1, y, (len << 3) + 2, 10, 16 );
 	}
 
 	if( flags & DSF_HIGHLIGHT ) {
@@ -120,7 +85,7 @@ void SCR_DrawString( int xpos, int ypos, char *string, int flags ) {
 	}
 
 	if( flags & DSF_UNDERLINE ) {
-		re.DrawFill( x, y + 9, len << 3, 1, 0xDF );
+		Draw_Fill( x, y + 9, len << 3, 1, 0xDF );
 	}
 }
 
@@ -128,7 +93,7 @@ void SCR_DrawString( int xpos, int ypos, char *string, int flags ) {
 ===============================================================================
 
 LAGOMETER
-
+from q2pro
 ===============================================================================
 */
 
@@ -230,13 +195,13 @@ static void SCR_DrawLagometer( void )
 	int color;
 	int startTime, endTime;
 
-	if( scr_drawlagometer->value < 1 )
+	if( scr_drawlagometer->integer < 1 )
 		return;
 
 	x = viddef.width - LAG_WIDTH - 1;
 	y = viddef.height - 96 - LAG_HEIGHT - 1;
 
-	re.DrawFill( x, y, LAG_WIDTH, LAG_HEIGHT, 0x04 );
+	Draw_Fill( x, y, LAG_WIDTH, LAG_HEIGHT, 0x04 );
 
 	ping = 0;
 	count = 0;
@@ -251,7 +216,7 @@ static void SCR_DrawLagometer( void )
 		v = scr_lagometer.ping[j];
 		if( v == -1000 )
 		{
-			re.DrawFill( x + LAG_WIDTH - i, y, 1, LAG_HEIGHT, 0xF2 );
+			Draw_Fill( x + LAG_WIDTH - i, y, 1, LAG_HEIGHT, 0xF2 );
 		}
 		else
 		{
@@ -271,22 +236,22 @@ static void SCR_DrawLagometer( void )
 			if( v > LAG_HEIGHT )
 				v = LAG_HEIGHT;
 
-			re.DrawFill( x + LAG_WIDTH - i, y + LAG_HEIGHT - v, 1, v, color );
+			Draw_Fill( x + LAG_WIDTH - i, y + LAG_HEIGHT - v, 1, v, color );
 		
 
 		}
 	}
 
 	//border...
-	re.DrawFill (x-1,				y,				LAG_WIDTH+2,		1,					0);
-	re.DrawFill (x-1,				y+LAG_HEIGHT,	LAG_WIDTH+2,		1,					0);
+	Draw_Fill (x-1,				y,				LAG_WIDTH+2,		1,					0);
+	Draw_Fill (x-1,				y+LAG_HEIGHT,	LAG_WIDTH+2,		1,					0);
 
-	re.DrawFill (x-1	,			y,				1,					LAG_HEIGHT,			0);
-	re.DrawFill (x+LAG_WIDTH,		y,				1,					LAG_HEIGHT,			0);
+	Draw_Fill (x-1	,			y,				1,					LAG_HEIGHT,			0);
+	Draw_Fill (x+LAG_WIDTH,		y,				1,					LAG_HEIGHT,			0);
 //
 // draw ping
 //
-	if( scr_drawlagometer->value < 2 )
+	if( scr_drawlagometer->integer < 2 )
 		return;
 
 	i = count ? ping / count : 0;
@@ -297,7 +262,7 @@ static void SCR_DrawLagometer( void )
 //
 // draw download speed
 //
-	if( scr_drawlagometer->value < 3 )
+	if( scr_drawlagometer->integer < 3 )
 		return;
 
 	i = scr_lagometer.inPacketNum - LAG_SAMPLES/8 + 1;
@@ -377,9 +342,12 @@ void SCR_ClearChatHUD_f( void )
 SCR_AddToChatHUD
 ==============
 */
-void SCR_AddToChatHUD( char *string )
+void SCR_AddToChatHUD( const char *string, qboolean mm2 )
 {
 	int i;
+
+	if(cl_chathud->integer > 2 && !mm2)
+		return;
 
 	for(i = 0; i < MAX_CHAT_LINES - 1; i++)
 		memcpy(chathudtext[i], chathudtext[i+1], MAX_CHAT_LENGTH);
@@ -399,31 +367,31 @@ void SCR_DrawChatHUD( void )
 {
     int i, y, x;
 
-	if(!cl_chathud->value)
+	if(!cl_chathud->integer)
 		return;
 
-	if (cl_chathudlines->value > MAX_CHAT_LINES)
+	if (cl_chathudlines->integer > MAX_CHAT_LINES)
 		Cvar_SetValue ("cl_chathudlines", MAX_CHAT_LINES);
-	else if (cl_chathudlines->value < 1)
+	else if (cl_chathudlines->integer < 1)
 		Cvar_SetValue ("cl_chathudlines", 1);
 
 
-	if(cl_chathudx->value || cl_chathudy->value)
+	if(cl_chathudx->integer || cl_chathudy->integer)
 	{
-		x = cl_chathudx->value;
-		y = cl_chathudy->value;
+		x = cl_chathudx->integer;
+		y = cl_chathudy->integer;
 	}
 	else
 	{
 		x = 5;
-		y = viddef.height-22-8*cl_chathudlines->value;
+		y = viddef.height-22-8*cl_chathudlines->integer;
 	}
 
-    for (i = MAX_CHAT_LINES - cl_chathudlines->value; i < MAX_CHAT_LINES; i++)
+    for (i = MAX_CHAT_LINES - cl_chathudlines->integer; i < MAX_CHAT_LINES; i++)
 	{
 		if(chathudtext[i][0])
 		{
-            if (cl_chathud->value == 2)
+            if (cl_chathud->integer &= 2)
 				DrawAltString(x, y, chathudtext[i]);
 			else
 				DrawString(x, y, chathudtext[i]);
@@ -457,17 +425,17 @@ static void SCR_DrawClock( void )
 	char stime[32];
 	time_t l_time;
 
-	if(!cl_clock->value)
+	if(!cl_clock->integer)
 		return;
 
 	time( &l_time );
 	ntime = localtime( &l_time ); 
 	strftime( stime, sizeof(stime), cl_clockformat->string, ntime );
 
-	if(cl_clockx->value || cl_clocky->value)
-		DrawColorString(cl_clockx->value, cl_clocky->value, stime, cl_clock->value, 1);
+	if(cl_clockx->integer || cl_clocky->integer)
+		DrawColorString(cl_clockx->integer, cl_clocky->integer, stime, cl_clock->integer, 1);
 	else
-		DrawColorString(5, viddef.height-10, stime, cl_clock->value, 1);
+		DrawColorString(5, viddef.height-10, stime, cl_clock->integer, 1);
 }
 
 /*
@@ -494,7 +462,7 @@ static void SCR_DrawFPS( void )
 	static int prevTime = 0, index = 0;
 	static char fps[32];
 
-	if(!cl_fps->value)
+	if(!cl_fps->integer)
 		return;
 
 	index++;
@@ -509,10 +477,10 @@ static void SCR_DrawFPS( void )
 	if (index <= FPS_FRAMES)
 		return;
 
-	if(cl_fpsx->value || cl_fpsy->value)
-		DrawColorString (cl_fpsx->value, cl_fpsy->value, fps, cl_fps->value, 1);
+	if(cl_fpsx->integer || cl_fpsy->integer)
+		DrawColorString (cl_fpsx->integer, cl_fpsy->integer, fps, cl_fps->integer, 1);
 	else
-		DrawColorString (5, viddef.height-20, fps, cl_fps->value, 1);
+		DrawColorString (5, viddef.height-20, fps, cl_fps->integer, 1);
 
 }
 
@@ -539,11 +507,11 @@ static void SCR_ShowTIME(void)
 	int		time, hour, mins, secs;
 	int		color;
 
-	if(!cl_maptime->value)
+	if(!cl_maptime->integer)
 		return;
 
-	if(cl_maptime->value >= 11)
-		time = (cl.time - cl.roundtime) / 1000;
+	if(cl_maptime->integer >= 11)
+		time = (cl.time - cls.roundtime) / 1000;
 	else
 		time = cl.time / 1000;
 
@@ -556,13 +524,13 @@ static void SCR_ShowTIME(void)
 	else
 		Com_sprintf(temp, sizeof(temp), "%i:%02i", mins, secs);
 
-	if (cl_maptime->value > 10)
-		color = cl_maptime->value - 10;
+	if (cl_maptime->integer > 10)
+		color = cl_maptime->integer - 10;
 	else
-		color = cl_maptime->value;
+		color = cl_maptime->integer;
 
-	if(cl_maptimex->value || cl_maptimey->value)
-		DrawColorString (cl_maptimex->value, cl_maptimey->value, temp, color, 1);
+	if(cl_maptimex->integer || cl_maptimey->integer)
+		DrawColorString (cl_maptimex->integer, cl_maptimey->integer, temp, color, 1);
 	else
 		DrawColorString (77, viddef.height-10, temp, color, 1);
 }
@@ -593,7 +561,7 @@ static void SCR_DrawCrosshair (void)
 {
 	float	alpha = ch_alpha->value;
 
-	if (!crosshair->value)
+	if (!crosshair->integer)
 		return;
 
 	if (crosshair->modified)
@@ -608,7 +576,7 @@ static void SCR_DrawCrosshair (void)
 	if (ch_pulse->value)
 		alpha = (0.75*ch_alpha->value) + (0.25*ch_alpha->value)*sin(anglemod((cl.time*0.005)*ch_pulse->value));
 
-	re.DrawScaledPic (scr_vrect.x + ((scr_vrect.width - crosshair_width)>>1)
+	Draw_ScaledPic (scr_vrect.x + ((scr_vrect.width - crosshair_width)>>1)
 	, scr_vrect.y + ((scr_vrect.height - crosshair_height)>>1), ch_scale->value, crosshair_pic, ch_red->value, ch_green->value, ch_blue->value, alpha);
 
 }
@@ -620,7 +588,7 @@ SCR_Draw2D
 */
 void SCR_Draw2D( void )
 {
-	if(!scr_draw2d->value)
+	if(!scr_draw2d->integer)
 		return;
 
 	SCR_DrawCrosshair ();
@@ -681,4 +649,3 @@ void SCR_InitDraw( void )
 
 	scr_drawlagometer = Cvar_Get( "scr_drawlagometer", "0", 0 );
 }
-

@@ -31,7 +31,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <GL/gl.h>
 
 #ifdef __linux__
-//#include <GL/fxmesa.h>
 #include <GL/glx.h>
 #endif
 
@@ -381,7 +380,7 @@ extern  void ( APIENTRY * qglViewport )(GLint x, GLint y, GLsizei width, GLsizei
 
 extern	void ( APIENTRY * qglPointParameterfEXT)( GLenum param, GLfloat value );
 extern	void ( APIENTRY * qglPointParameterfvEXT)( GLenum param, const GLfloat *value );
-extern	void ( APIENTRY * qglColorTableEXT)( int, int, int, int, int, const void * );
+extern	void ( APIENTRY * qglColorTableEXT)(GLenum, GLenum, GLsizei, GLenum, GLenum, const GLvoid *);
 
 extern	void ( APIENTRY * qglLockArraysEXT) (int , int);
 extern	void ( APIENTRY * qglUnlockArraysEXT) (void);
@@ -433,27 +432,9 @@ extern BOOL ( WINAPI * qwglSetDeviceGammaRampEXT ) ( const unsigned char *pRed, 
 #ifdef __linux__
 
 // local function in dll
-extern void *qwglGetProcAddress(char *symbol);
+extern void *qwglGetProcAddress(const GLubyte *procName);
 
 extern void (*qgl3DfxSetPaletteEXT)(GLuint *);
-
-/*
-//FX Mesa Functions
-extern fxMesaContext (*qfxMesaCreateContext)(GLuint win, GrScreenResolution_t, GrScreenRefresh_t, const GLint attribList[]);
-extern fxMesaContext (*qfxMesaCreateBestContext)(GLuint win, GLint width, GLint height, const GLint attribList[]);
-extern void (*qfxMesaDestroyContext)(fxMesaContext ctx);
-extern void (*qfxMesaMakeCurrent)(fxMesaContext ctx);
-extern fxMesaContext (*qfxMesaGetCurrentContext)(void);
-extern void (*qfxMesaSwapBuffers)(void);
-*/
-
-//GLX Functions
-extern XVisualInfo * (*qglXChooseVisual)( Display *dpy, int screen, int *attribList );
-extern GLXContext (*qglXCreateContext)( Display *dpy, XVisualInfo *vis, GLXContext shareList, Bool direct );
-extern void (*qglXDestroyContext)( Display *dpy, GLXContext ctx );
-extern Bool (*qglXMakeCurrent)( Display *dpy, GLXDrawable drawable, GLXContext ctx);
-extern void (*qglXCopyContext)( Display *dpy, GLXContext src, GLXContext dst, GLuint mask );
-extern void (*qglXSwapBuffers)( Display *dpy, GLXDrawable drawable );
 
 // 3dfxSetPaletteEXT shunt
 void Fake_glColorTableEXT( GLenum target, GLenum internalformat,
@@ -462,6 +443,7 @@ void Fake_glColorTableEXT( GLenum target, GLenum internalformat,
 
 #endif // linux
 
+#ifndef __linux__
 /*
 ** extension constants
 */
@@ -476,11 +458,49 @@ void Fake_glColorTableEXT( GLenum target, GLenum internalformat,
 #define GL_SHARED_TEXTURE_PALETTE_EXT		0x81FB
 #endif
 
-#define GL_TEXTURE0_SGIS					0x835E
-#define GL_TEXTURE1_SGIS					0x835F
 #define GL_TEXTURE0_ARB						0x84C0
 #define GL_TEXTURE1_ARB						0x84C1
+#endif
 
-extern int GL_TEXTURE0, GL_TEXTURE1;
+#define GL_TEXTURE0_SGIS					0x835E
+#define GL_TEXTURE1_SGIS					0x835F
+extern unsigned int QGL_TEXTURE0, QGL_TEXTURE1;
+
+#ifndef GL_NV_texture_rectangle
+#define GL_TEXTURE_RECTANGLE_NV           0x84F5
+#define GL_TEXTURE_BINDING_RECTANGLE_NV   0x84F6
+#define GL_PROXY_TEXTURE_RECTANGLE_NV     0x84F7
+#define GL_MAX_RECTANGLE_TEXTURE_SIZE_NV  0x84F8
+#endif
+
+/* GL_ARB_texture_compression */
+#ifndef GL_ARB_texture_compression
+#define GL_ARB_texture_compression
+
+#define GL_COMPRESSED_ALPHA_ARB								0x84E9
+#define GL_COMPRESSED_LUMINANCE_ARB							0x84EA
+#define GL_COMPRESSED_LUMINANCE_ALPHA_ARB					0x84EB
+#define GL_COMPRESSED_INTENSITY_ARB							0x84EC
+#define GL_COMPRESSED_RGB_ARB								0x84ED
+#define GL_COMPRESSED_RGBA_ARB								0x84EE
+#define GL_TEXTURE_COMPRESSION_HINT_ARB						0x84EF
+#define GL_TEXTURE_IMAGE_SIZE_ARB							0x86A0
+#define GL_TEXTURE_COMPRESSED_ARB							0x86A1
+#define GL_NUM_COMPRESSED_TEXTURE_FORMATS_ARB				0x86A2
+#define GL_COMPRESSED_TEXTURE_FORMATS_ARB					0x86A3
+#endif /* GL_ARB_texture_compression */
+
+#ifndef GL_EXT_polygon_offset
+#define GL_EXT_polygon_offset 1
+#define GL_POLYGON_OFFSET_EXT             0x8037
+#define GL_POLYGON_OFFSET_FACTOR_EXT      0x8038
+#define GL_POLYGON_OFFSET_BIAS_EXT        0x8039
+#endif /* GL_POLYGON_OFFSET */
+
+#ifndef GL_SGIS_generate_mipmap
+#define GL_SGIS_generate_mipmap 1
+#define GL_GENERATE_MIPMAP_SGIS           0x8191
+#define GL_GENERATE_MIPMAP_HINT_SGIS      0x8192
+#endif
 
 #endif

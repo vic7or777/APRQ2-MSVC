@@ -3323,7 +3323,7 @@ void GLimp_EnableLogging( qboolean enable )
 
 			asctime( newtime );
 
-			sprintf( buffer, "%s/gl.log", ri.FS_Gamedir() ); 
+			sprintf( buffer, "%s/gl.log", FS_Gamedir() ); 
 			log_fp = fopen( buffer, "wt");
 
 			fprintf( log_fp, "%s\n", asctime( newtime ) );

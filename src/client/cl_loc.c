@@ -16,7 +16,7 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
-LOC support by NiceAss, modified by Maniac
+LOC support by NiceAss
 */
 #include "client.h"
 
@@ -30,18 +30,21 @@ typedef struct
 	qboolean used;
 }loc_t;
 
-loc_t locations[MAX_LOCATIONS];
+static loc_t locations[MAX_LOCATIONS];
 
-static cvar_t	*cl_enablelocs;
+static qboolean LocsFound = false;
 static cvar_t	*cl_drawlocs;
 
+static char loc_here[LOC_LABEL_LEN];
+static char loc_there[LOC_LABEL_LEN];
+
 //returns first free loc slot if theres a any
-int CL_FreeLoc(void)
+static int CL_FreeLoc(void)
 {
 	int i;
 
 	for (i = 0; i < MAX_LOCATIONS; i++) {
-		if (locations[i].used == false)
+		if (!locations[i].used)
 			return i;
 	}
 
@@ -51,10 +54,13 @@ int CL_FreeLoc(void)
 void CL_LoadLoc(void)
 {
 	FILE *f;
+	int count = 0;
 
 	memset(locations, 0, sizeof(loc_t) * MAX_LOCATIONS);
 
-	f = fopen(va("locs/%s.loc", cl.mapname), "r");
+	LocsFound = false;
+
+	f = fopen(va("locs/%s.loc", cls.mapname), "r");
 	if (!f)
 		return;
 
@@ -110,31 +116,32 @@ void CL_LoadLoc(void)
 		locations[index].origin[2] = atoi(token3);
 		strcpy(locations[index].name, token4);
 		locations[index].used = true;
+		count++;
 	}
 
-	Com_Printf("%s.loc found and loaded\n", cl.mapname);
+	if(count) {
+		LocsFound = true;
+		Com_Printf("%s.loc found and loaded\n", cls.mapname);
+	}
 
 	fclose(f);
 }
 
 // return the index of the closest location
-int CL_LocIndex(short origin[3])
+static int CL_LocIndex(short origin[3])
 {
-	short diff[3];
-	float minDist = -1, dist;
-	int locIndex = -1;
+	vec3_t	dir;
+	float	dist, minDist = -1;
+	int		locIndex = -1;
 	int	i;
 
 	for(i = 0; i < MAX_LOCATIONS; i++) {
-
-		if(locations[i].used == false)
+		if(!locations[i].used)
 			continue;
 
-		VectorSubtract( origin, locations[i].origin, diff );
-
-		dist = diff[0]*diff[0]/64.0f + diff[1]*diff[1]/64.0f + diff[2]*diff[2]/64.0f;
-
-		if(dist < minDist || minDist == -1)	{
+		VectorSubtract( locations[i].origin, origin, dir );
+		dist = VectorLength (dir);
+		if (dist < minDist || minDist == -1) {
 			minDist = dist;
 			locIndex = i;
 		}
@@ -143,7 +150,7 @@ int CL_LocIndex(short origin[3])
 	return locIndex;
 }
 
-void CL_LocDelete(int index)
+static void CL_LocDelete(int index)
 {
 
 	if (index < MAX_LOCATIONS && index >= 0 && locations[index].used)
@@ -156,7 +163,7 @@ void CL_LocDelete(int index)
 		Com_Printf("Cant find location number %i.\n", index);
 }
 
-void CL_LocAdd(char *name)
+static void CL_LocAdd(char *name)
 {
 	int index = CL_FreeLoc();
 
@@ -165,23 +172,27 @@ void CL_LocAdd(char *name)
 		return;
 	}
 
-	locations[index].origin[0] = cl.frame.playerstate.pmove.origin[0];
-	locations[index].origin[1] = cl.frame.playerstate.pmove.origin[1];
-	locations[index].origin[2] = cl.frame.playerstate.pmove.origin[2];
-	
-	strcpy(locations[index].name, name);
-	locations[index].used=true;
+	VectorCopy(cl.frame.playerstate.pmove.origin, locations[index].origin);
 
-	Com_Printf("Location %i. %s added at (%d %d %d)\n", index, name, 
-		cl.frame.playerstate.pmove.origin[0],
-		cl.frame.playerstate.pmove.origin[1],
-		cl.frame.playerstate.pmove.origin[2] );
+	Q_strncpyz(locations[index].name, name, sizeof(locations[index].name));
+	locations[index].used = true;
+	LocsFound = true;
+
+	Com_Printf("Location %s added at (%d %d %d)\n", name, 
+		locations[index].origin[0],
+		locations[index].origin[1],
+		locations[index].origin[2] );
 }
 
-void CL_LocWrite(char *filename)
+static void CL_LocWrite(char *filename)
 {
 	int i;
 	FILE *f;
+
+	if (!LocsFound) {
+		Com_Printf("No locations what to write\n");
+		return;
+	}
 
 	Sys_Mkdir( "locs" );
 
@@ -206,15 +217,12 @@ void CL_LocWrite(char *filename)
 	Com_Printf("locs/%s.loc successfully written.\n", filename);
 }
 
-void CL_LocPlace(void)
+static void CL_LocPlace(void)
 {
 	trace_t tr;
 	vec3_t end;
 	short there[3];
-	int	index1, index2 = -1;
-
-	if(!cl_enablelocs->value)
-		return;
+	int	index1 = -1, index2 = -1;
 
 	index1 = CL_LocIndex(cl.frame.playerstate.pmove.origin);
 
@@ -225,80 +233,73 @@ void CL_LocPlace(void)
 	there[2] = tr.endpos[2] * 8;
 	index2 = CL_LocIndex(there);
 
-	if (index1 != -1)
-		strcpy(cl.loc_here, locations[index1].name);
+	if (index1 > -1)
+		strcpy(loc_here, locations[index1].name);
 	else
-		strcpy(cl.loc_here, "%L");
+		loc_here[0] = 0;
 
-	if (index2 != -1)
-		strcpy(cl.loc_there, locations[index2].name);
+	if (index2 > -1)
+		strcpy(loc_there, locations[index2].name);
 	else
-		strcpy(cl.loc_there, "%S");
+		loc_there[0] = 0;
 }
 
 void CL_AddViewLocs(void)
 {
-	int index = CL_LocIndex(cl.frame.playerstate.pmove.origin);
+	int nearestNum;
 	int i;
-	int num = 0;
+	vec3_t dir;
+	entity_t ent;
+	float dist;
 
-	if (!cl_drawlocs->value || !cl_enablelocs->value)
+	if (!LocsFound || !cl_drawlocs->integer)
 		return;
 
-	for (i = 0; i < MAX_LOCATIONS; i++) {
-		int dist;
-		entity_t ent;
+	nearestNum = CL_LocIndex(cl.frame.playerstate.pmove.origin);
+	if( nearestNum == -1 ) {
+		return;
+	}
 
-		if (locations[i].used == false)
+	memset(&ent, 0, sizeof(entity_t));
+	ent.skin = NULL;
+	ent.model = NULL;
+
+	for (i = 0; i < MAX_LOCATIONS; i++) {
+
+		if (!locations[i].used)
 			continue;
 
-		dist = (cl.frame.playerstate.pmove.origin[0] - locations[i].origin[0]) *
-		    (cl.frame.playerstate.pmove.origin[0] - locations[i].origin[0]) +
-		    (cl.frame.playerstate.pmove.origin[1] - locations[i].origin[1]) *
-		    (cl.frame.playerstate.pmove.origin[1] - locations[i].origin[1]) +
-		    (cl.frame.playerstate.pmove.origin[2] - locations[i].origin[2]) *
-		    (cl.frame.playerstate.pmove.origin[2] - locations[i].origin[2]);
+		VectorSubtract( cl.refdef.vieworg, locations[i].origin, dir );
+		dist = VectorLength( dir );
 
 		if (dist > 4000 * 4000)
 			continue;
 
-		memset(&ent, 0, sizeof(entity_t));
 		ent.origin[0] = locations[i].origin[0] * 0.125f;
 		ent.origin[1] = locations[i].origin[1] * 0.125f;
 		ent.origin[2] = locations[i].origin[2] * 0.125f;
-		ent.skinnum = 0;
-		ent.skin = NULL;
-		ent.model = NULL;
 
-		if (i == index)
+		if (i == nearestNum) {
 			ent.origin[2] += sin(cl.time * 0.01f) * 10.0f;
+		}
 
 		V_AddEntity(&ent);
-		num++;
 	}
 }
 
 // printf all markers in current location buffer
-void CL_LocList(void)
+static void CL_LocList(void)
 {
 	int i;
 
+	if (!LocsFound) {
+		Com_Printf("No locations found\n");
+		return;
+	}
 	for(i=0;i<MAX_LOCATIONS;i++) {
 		if(locations[i].used)
-			Com_Printf("Location Marker: %i at (%i,%i,%i) = %s\n", i, locations[i].origin[0],locations[i].origin[1],locations[i].origin[2],locations[i].name);
+			Com_Printf("Location Marker: %i at (%d %d %d) = %s\n", i, locations[i].origin[0],locations[i].origin[1],locations[i].origin[2],locations[i].name);
 	}
-}
-
-qboolean CL_LocsFound(void)
-{
-	int i;
-
-	for(i=0;i<MAX_LOCATIONS;i++) {
-		if(locations[i].used)
-			return true;
-	}
-
-	return false;
 }
 
 /*
@@ -319,7 +320,7 @@ void CL_LocAdd_f(void)
 
 void CL_LocDel_f(void)
 {
-	if(Cmd_Argc()!=2)
+	if(Cmd_Argc()!= 2)
 	{
 		Com_Printf("Usage: %s <index>\n", Cmd_Argv(0));
 		return;
@@ -352,15 +353,18 @@ void CL_SayTeam_Loc(void)
 	char *p ;
 	char *msg ;
 
-	if (!CL_LocsFound() || !cl_enablelocs->value)
+	if(Cmd_Argc()<=1)
+		return;
+
+	if (!LocsFound)
 	{
 		Com_sprintf(ostr,sizeof(outmsg), "%s %s\n", "say_team", Cmd_Args());
     	Cmd_ExecuteString(ostr);
-		return ;
+		return;
 	}
-	if(Cmd_Argc()<=1) {
-			return ;
-	}
+
+	CL_LocPlace();
+
 	Com_sprintf(buf, sizeof(buf), "%s", Cmd_Args());	// copy the argv to the buffer.
 	
 	msg = buf ;
@@ -375,16 +379,16 @@ void CL_SayTeam_Loc(void)
 			switch (*++msg) {
 				case 'l' :
 				case 'L' :
-					if (strlen(cl.loc_here) + (p - outmsg) < sizeof(outmsg) - 2) {
-						strcpy(p, cl.loc_here);
-						p += strlen(cl.loc_here);
+					if (loc_here[0] && strlen(loc_here) + (p - outmsg) < sizeof(outmsg) - 2) {
+						strcpy(p, loc_here);
+						p += strlen(loc_here);
 					}
 					break;
 				case 's' :
 				case 'S' :
-					if (strlen(cl.loc_there) + (p - outmsg) < sizeof(outmsg) - 2) {
-						strcpy(p, cl.loc_there);
-						p += strlen(cl.loc_there);
+					if (loc_there[0] && strlen(loc_there) + (p - outmsg) < sizeof(outmsg) - 2) {
+						strcpy(p, loc_there);
+						p += strlen(loc_there);
 					}
 					break;
 				default :
@@ -406,7 +410,6 @@ LOC_Init
 */
 void CL_InitLocs( void )
 {
-	cl_enablelocs = Cvar_Get("cl_enablelocs", "0", CVAR_ARCHIVE);
 	cl_drawlocs = Cvar_Get("cl_drawlocs", "0", 0);
 
 	Cmd_AddCommand ("loc_add", CL_LocAdd_f);

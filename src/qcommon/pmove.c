@@ -795,17 +795,18 @@ void PM_CheckSpecialMovement (void)
 PM_FlyMove
 ===============
 */
-void PM_FlyMove (qboolean doclip)
+//void PM_FlyMove (qboolean doclip)
+void PM_FlyMove (void)
 {
 	float	speed, drop, friction, control, newspeed;
 	float	currentspeed, addspeed, accelspeed;
-	int			i;
+//	int			i;
 	vec3_t		wishvel;
 	float		fmove, smove;
 	vec3_t		wishdir;
 	float		wishspeed;
-	vec3_t		end;
-	trace_t	trace;
+//	vec3_t		end;
+//	trace_t	trace;
 
 	pm->viewheight = 22;
 
@@ -874,17 +875,17 @@ void PM_FlyMove (qboolean doclip)
 	//for (i = 0; i < 3; i++)
 	//	pml.velocity[i] += accelspeed*wishdir[i];	
 
-	if (doclip) {
+/*	if (doclip) {
 		for (i = 0; i < 3; i++)
 			end[i] = pml.origin[i] + pml.frametime * pml.velocity[i];
 
 		trace = pm->trace (pml.origin, pm->mins, pm->maxs, end);
 
 		VectorCopy (trace.endpos, pml.origin);
-	} else {
+	} else {*/
 		// move
 		VectorMA (pml.origin, pml.frametime, pml.velocity, pml.origin);
-	}
+//	}
 }
 
 
@@ -1150,7 +1151,8 @@ void Pmove (pmove_t *pmove)
 
 	if (pm->s.pm_type == PM_SPECTATOR)
 	{
-		PM_FlyMove (false);
+		//PM_FlyMove (false);
+		PM_FlyMove ();
 		PM_SnapPosition ();
 		return;
 	}
@@ -1237,4 +1239,3 @@ void Pmove (pmove_t *pmove)
 
 	PM_SnapPosition ();
 }
-

@@ -34,7 +34,7 @@ typedef struct
 
 static partparms_t partparms;
 
-#if id386 && !defined __linux__
+#if id386 && !defined __linux__ && !defined __FreeBSD__
 
 static unsigned s_prefetch_address;
 
@@ -566,13 +566,15 @@ void R_DrawParticles (void)
 {
 	particle_t *p;
 	int         i;
+#if id386 && !defined __linux__ && !defined __FreeBSD__
 	extern unsigned long fpu_sp24_cw, fpu_chop_cw;
+#endif
 
 	VectorScale( vright, xscaleshrink, r_pright );
 	VectorScale( vup, yscaleshrink, r_pup );
 	VectorCopy( vpn, r_ppn );
 
-#if id386 && !defined __linux__
+#if id386 && !defined __linux__ && !defined __FreeBSD__
 	__asm fldcw word ptr [fpu_sp24_cw]
 #endif
 
@@ -589,7 +591,7 @@ void R_DrawParticles (void)
 		partparms.particle = p;
 		partparms.color    = p->color;
 
-#if id386 && !defined __linux__
+#if id386 && !defined __linux__ && !defined __FreeBSD__
 		if ( i < r_newrefdef.num_particles-1 )
 			s_prefetch_address = ( unsigned int ) ( p + 1 );
 		else
@@ -599,7 +601,7 @@ void R_DrawParticles (void)
 		R_DrawParticle();
 	}
 
-#if id386 && !defined __linux__
+#if id386 && !defined __linux__ && !defined __FreeBSD__
 	__asm fldcw word ptr [fpu_chop_cw]
 #endif
 

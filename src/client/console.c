@@ -48,35 +48,35 @@ static inputField_t chat_inputLines;
 qboolean	key_insert	= true;
 qboolean	chat_team;
 
-void DrawString (int x, int y, char *s)
+void DrawString (int x, int y, const char *s)
 {
 	while (*s)
 	{
-		re.DrawChar (x, y, *s, FC_WHITE, 1);
+		Draw_Char (x, y, *s, COLOR_WHITE, 1);
 		x+=8;
 		s++;
 	}
 }
 
-void DrawAltString (int x, int y, char *s)
+void DrawAltString (int x, int y, const char *s)
 {
 	while (*s)
 	{
-		re.DrawChar (x, y, *s ^ 0x80, FC_WHITE, 1);
+		Draw_Char (x, y, *s ^ 0x80, COLOR_WHITE, 1);
 		x+=8;
 		s++;
 	}
 }
 
-void DrawString2 (int x, int y, char *s, float alpha)
+void DrawString2 (int x, int y, const char *s, float alpha)
 {
-	int flags = FC_WHITE;
+	int flags = COLOR_WHITE;
 	qboolean colors = true;
 
 
 	if(Q_IsColorString( s ) && !strncmp(s+2, S_DISABLE_COLOR, 3))
 	{
-		if(cl_textcolors->value)
+		if(cl_textcolors->integer)
 			flags = ColorIndex(s[1]);
 
 		colors = false;
@@ -88,24 +88,24 @@ void DrawString2 (int x, int y, char *s, float alpha)
 
 		if ( Q_IsColorString( s ) && colors )
 		{
-			if(cl_textcolors->value)
+			if(cl_textcolors->integer)
 				flags = ColorIndex(s[1]);
 
 			s += 2;
 			continue;
 		}
 
-		re.DrawChar (x, y, *s, flags, alpha);
+		Draw_Char (x, y, *s, flags, alpha);
 		x+=8;
 		s++;
 	}
 }
 
-void DrawColorString (int x, int y, char *s, int color, float alpha)
+void DrawColorString (int x, int y, const char *s, int color, float alpha)
 {
 	while (*s)
 	{
-		re.DrawChar (x, y, *s, ColorIndex(clamp(color, 0, 7)), alpha);
+		Draw_Char (x, y, *s, ColorIndex(clamp(color, 0, 7)), alpha);
 		x+=8;
 		s++;
 	}
@@ -151,7 +151,7 @@ void Con_ToggleConsole_f (void)
 
 	if (cls.state == ca_disconnected)
 	{	// start the demo loop again
-		Cbuf_AddText ("d1\n");
+		//Cbuf_AddText ("d1\n");
 		return;
 	}
 
@@ -427,7 +427,7 @@ All console printing must go through this in order to be logged to disk
 If no console is visible, the text will appear at the top of the game window
 ================
 */
-void Con_Print (char *txt)
+void Con_Print (const char *txt)
 {
 	int		y;
 	int		c, l;
@@ -468,15 +468,10 @@ void Con_Print (char *txt)
 		
 		if (!con.x)
 		{
-			if (con_notifylines->value > MAX_CON_TIMES)
-				Cvar_SetValue ("con_notifylines", MAX_CON_TIMES);
-			else if (con_notifylines->value < 1)
-				Cvar_SetValue ("con_notifylines", 1);
-
 			Con_Linefeed ();
 		// mark time for transparent overlay
 			if (con.current >= 0)
-				con.times[con.current % (int)con_notifylines->value] = cls.realtime;
+				con.times[con.current % MAX_CON_TIMES] = cls.realtime;
 		}
 
 		switch (c)
@@ -508,7 +503,7 @@ void Con_Print (char *txt)
 Con_CenteredPrint
 ==============
 */
-void Con_CenteredPrint (char *text)
+void Con_CenteredPrint (const char *text)
 {
 	int		l;
 	char	buffer[1024];
@@ -530,7 +525,7 @@ DRAWING
 
 ==============================================================================
 */
-void Draw_Input( char *text, int x, int y, int curPos )
+void Draw_Input( const char *text, int x, int y, int curPos )
 {
 	int cursorPos;
 	int i, len = strlen(text);
@@ -545,15 +540,15 @@ void Draw_Input( char *text, int x, int y, int curPos )
 	}
 
 	for( i=0 ; i<con.linewidth && text[i]; i++ )
-		re.DrawChar( x + (i<<3), y, text[i], FC_WHITE, 1);
+		Draw_Char( x + (i<<3), y, text[i], COLOR_WHITE, 1);
 	
 	// add the cursor frame
 	if ((int)(cls.realtime>>8)&1)
 	{
 		if (curPos == len)
-			re.DrawChar ( x+cursorPos*8, y, 11, FC_WHITE, 1);
+			Draw_Char ( x+cursorPos*8, y, 11, COLOR_WHITE, 1);
 		else
-			re.DrawChar ( x+cursorPos*8, y+4, key_insert ? '_' : 11, FC_WHITE, 1);
+			Draw_Char ( x+cursorPos*8, y+4, key_insert ? '_' : 11, COLOR_WHITE, 1);
 	}
 }
 /*
@@ -573,7 +568,7 @@ void Con_DrawInput (void)
 		return;		// don't draw anything (always draw if not active)
 
 	// draw command prompt
-	re.DrawChar( x, y, ']', FC_WHITE, 1);
+	Draw_Char( x, y, ']', COLOR_WHITE, 1);
 	x += 8;
 
 	// draw it
@@ -594,32 +589,35 @@ void Con_DrawNotify (void)
 	int		i;
 	int		time;
 	int		skip;
-	int		notifylines;
 	float	alpha = 1;
+	int lines;
 
 	v = 0;
+	
+	lines = con_notifylines->integer;
+	clamp(lines, 0, MAX_CON_TIMES);
 
-	notifylines = (int)con_notifylines->value;
-	clamp(notifylines, 1, MAX_CON_TIMES);
-
-	for (i= con.current - notifylines + 1 ; i<=con.current ; i++)
+	if (lines)
 	{
-		if (i < 0)
-			continue;
-		time = con.times[i % notifylines];
-		if (time == 0)
-			continue;
-		time = cls.realtime - time;
-		if (time > con_notifytime->value*1000)
-			continue;
-		text = con.text + (i % con.totallines)*con.linewidth;
-		
-		if (con_notifyfade->value)
-			alpha = 0.1 + 0.9*(con_notifytime->value-(time*0.0015)+(con_notifytime->value/2)) / con_notifytime->value;
+		for (i= con.current - lines + 1 ; i<=con.current ; i++)
+		{
+			if (i < 0)
+				continue;
+			time = con.times[i % MAX_CON_TIMES];
+			if (time == 0)
+				continue;
+			time = cls.realtime - time;
+			if (time > con_notifytime->value*1000)
+				continue;
+			text = con.text + (i % con.totallines)*con.linewidth;
+			
+			if (con_notifyfade->value)
+				alpha = 0.1 + 0.9*(con_notifytime->value-(time*0.0015)+(con_notifytime->value/2)) / con_notifytime->value;
 
-		Draw_StringLen (8, v, text, con.linewidth, alpha);
+			Draw_StringLen (8, v, text, con.linewidth, alpha);
 
-		v += 8;
+			v += 8;
+		}
 	}
 
 
@@ -676,14 +674,14 @@ void Con_DrawConsole (float frac, qboolean ingame)
 		alpha = con_alpha->value;
 
 	// draw the background
-	re.DrawStretchPic (0, lines-viddef.height, viddef.width, viddef.height, "conback", alpha);
+	Draw_StretchPic (0, lines-viddef.height, viddef.width, viddef.height, "conback", alpha);
 	SCR_AddDirtyPoint (0,0);
 	SCR_AddDirtyPoint (viddef.width-1,lines-1);
 
-	Com_sprintf (version, sizeof(version), "%s v%s", APR_APPNAME, APR_DISPLAYVERSION);
+	Com_sprintf (version, sizeof(version), "%s v%s", APR_APPNAME, APR_VERSION);
 
 	for (x = 0; x < strlen(version); x++)
-		re.DrawChar (viddef.width-(strlen(version)*8+4)+x*8, lines-12, version[x] + 128, FC_WHITE, 1 );
+		Draw_Char (viddef.width-(strlen(version)*8+4)+x*8, lines-12, version[x] + 128, COLOR_WHITE, 1 );
 
 
 // draw the text
@@ -698,7 +696,7 @@ void Con_DrawConsole (float frac, qboolean ingame)
 	{
 	// draw arrows to show the buffer is backscrolled
 		for (x=0 ; x<con.linewidth ; x+=4)
-			re.DrawChar ( (x+1)<<3, y, '^', FC_WHITE, 1);
+			Draw_Char ( (x+1)<<3, y, '^', COLOR_WHITE, 1);
 	
 		y -= 8;
 		rows--;
@@ -758,7 +756,7 @@ void Con_DrawConsole (float frac, qboolean ingame)
 		// draw it
 		y = con.vislines-12;
 		for (i = 0; i < strlen(dlbar); i++)
-			re.DrawChar ( (i+1)<<3, y, dlbar[i], FC_WHITE, 1);
+			Draw_Char ( (i+1)<<3, y, dlbar[i], COLOR_WHITE, 1);
 	}
 //ZOID
 
@@ -774,7 +772,13 @@ void Con_DrawConsole (float frac, qboolean ingame)
 ==============================================================================
 */
 
-qboolean Cmd_IsComplete (char *cmd);
+void IF_Init( inputField_t *field )
+{
+	memset( field->text[field->editLine], 0, sizeof(field->text[field->editLine]) );
+	field->cursorPos = 0;
+}
+
+qboolean Cmd_IsComplete (const char *cmd);
 void CompleteCommand (void)
 {
 	char	*cmd, *text;
@@ -789,22 +793,16 @@ void CompleteCommand (void)
 	cmd = Cmd_CompleteCommand (text);
 	if (cmd)
 	{
+		IF_Init(&con_inputLines);
 		con_inputLines.text[con_inputLines.editLine][0] = '/';
 		strcpy (con_inputLines.text[con_inputLines.editLine]+1, cmd);
-		con_inputLines.cursorPos = strlen(cmd)+1;
+		con_inputLines.cursorPos = strlen(con_inputLines.text[con_inputLines.editLine]);
 		if (Cmd_IsComplete(cmd)) {
 			con_inputLines.text[con_inputLines.editLine][con_inputLines.cursorPos] = ' ';
 			con_inputLines.cursorPos++;
 		}
-		con_inputLines.text[con_inputLines.editLine][con_inputLines.cursorPos] = 0;
 		return;
 	}
-}
-
-void IF_Init( inputField_t *field )
-{
-	memset( field->text[field->editLine], 0, sizeof(field->text[field->editLine]) );
-	field->cursorPos = 0;
 }
 
 void IF_CharEvent( inputField_t *field, int key )
@@ -835,10 +833,13 @@ void IF_KeyEvent( inputField_t *field, int key )
 		{
 			int i;
 
-			strtok( cbd, "\n\r\b" );
+			//strtok( cbd, "\n\r\b" );
 
 			for( i=0; cbd[i]; i++ )
 			{
+				if(cbd[i] == '\n')
+					cbd[i] = ' ';
+
 				IF_CharEvent (field, cbd[i]);
 			}
 			free( cbd );
@@ -1032,19 +1033,19 @@ void Key_Console (int key)
 
 	if (key == K_PGUP || key == K_KP_PGUP || key == K_MWHEELUP)
 	{
-		if (con_scrlines->value < 1)
+		if (con_scrlines->integer < 1)
 			Cvar_SetValue ("con_scrlines", 1);
 
-		con.display -= (int)con_scrlines->value;
+		con.display -= con_scrlines->integer;
 		return;
 	}
 
 	if (key == K_PGDN || key == K_KP_PGDN || key == K_MWHEELDOWN)
 	{
-		if (con_scrlines->value < 1)
+		if (con_scrlines->integer < 1)
 			Cvar_SetValue ("con_scrlines", 1);
 
-		con.display += (int)con_scrlines->value;
+		con.display += con_scrlines->integer;
 		if (con.display > con.current)
 			con.display = con.current;
 		return;
@@ -1140,16 +1141,16 @@ void Key_Message (int key)
 
 		chat_inputLines.editLine = (chat_inputLines.editLine + 1) & HISTORY_MASK;
 		chat_inputLines.historyLine = chat_inputLines.editLine;
-		cls.key_dest = key_game;
 		IF_Init(&chat_inputLines);
+		cls.key_dest = key_game;
 		return;
 	}
 
 	if (key == K_ESCAPE)
 	{
-		cls.key_dest = key_game;
 		chat_inputLines.historyLine = chat_inputLines.editLine;
 		IF_Init(&chat_inputLines);
+		cls.key_dest = key_game;
 		return;
 	}
 

@@ -18,17 +18,18 @@
 */
 
 #include "gl_local.h"
+#ifdef _WIN32
 #include "../lib/png.h"
-
-#pragma comment(lib, "zlibr.lib")
-#pragma comment(lib, "libpngr.lib")
+#else
+#include <libpng/png.h>
+#endif
 
 typedef struct {
-    BYTE *Buffer;
+    byte *Buffer;
     int Pos;
 } TPngFileBuffer;
 
-void __cdecl PngReadFunc(png_struct *Png, png_bytep buf, png_size_t size)
+void PngReadFunc(png_struct *Png, png_bytep buf, png_size_t size)
 {
     TPngFileBuffer *PngFileBuffer=(TPngFileBuffer*)png_get_io_ptr(Png);
     memcpy(buf,PngFileBuffer->Buffer+PngFileBuffer->Pos,size);
@@ -42,28 +43,26 @@ by R1CH
 =============
 */
 
-void LoadPNG (char *filename, byte **pic, int *width, int *height)
+void LoadPNG (const char *filename, byte **pic, int *width, int *height)
 {
 	int				i, rowptr;
 	png_structp		png_ptr;
 	png_infop		info_ptr;
 	png_infop		end_info;
-
 	unsigned char	**row_pointers;
-
 	TPngFileBuffer	PngFileBuffer = {NULL,0};
 
 	*pic = NULL;
 
-	ri.FS_LoadFile (filename, &PngFileBuffer.Buffer);
+	FS_LoadFile (filename, (void **)&PngFileBuffer.Buffer);
 
     if (!PngFileBuffer.Buffer)
 		return;
 
 	if ((png_check_sig(PngFileBuffer.Buffer, 8)) == 0)
 	{
-		ri.FS_FreeFile (PngFileBuffer.Buffer); 
-		ri.Con_Printf (PRINT_ALL, "LoadPNG: Not a PNG file: %s\n", filename);
+		FS_FreeFile (PngFileBuffer.Buffer); 
+		Com_Printf ("LoadPNG: Not a PNG file: %s\n", filename);
 		return;
     }
 
@@ -73,8 +72,8 @@ void LoadPNG (char *filename, byte **pic, int *width, int *height)
 
     if (!png_ptr)
 	{
-		ri.FS_FreeFile (PngFileBuffer.Buffer);
-		ri.Con_Printf (PRINT_ALL, "LoadPNG: Bad PNG file: %s\n", filename);
+		FS_FreeFile (PngFileBuffer.Buffer);
+		Com_Printf ("LoadPNG: Bad PNG file: %s\n", filename);
 		return;
 	}
 
@@ -82,8 +81,8 @@ void LoadPNG (char *filename, byte **pic, int *width, int *height)
     if (!info_ptr)
 	{
         png_destroy_read_struct(&png_ptr, (png_infopp)NULL, (png_infopp)NULL);
-		ri.FS_FreeFile (PngFileBuffer.Buffer);
-		ri.Con_Printf (PRINT_ALL, "LoadPNG: Bad PNG file: %s\n", filename);
+		FS_FreeFile (PngFileBuffer.Buffer);
+		Com_Printf ("LoadPNG: Bad PNG file: %s\n", filename);
 		return;
     }
     
@@ -91,8 +90,8 @@ void LoadPNG (char *filename, byte **pic, int *width, int *height)
     if (!end_info)
 	{
         png_destroy_read_struct(&png_ptr, &info_ptr, (png_infopp)NULL);
-		ri.FS_FreeFile (PngFileBuffer.Buffer);
-		ri.Con_Printf (PRINT_ALL, "LoadPNG: Bad PNG file: %s\n", filename);
+		FS_FreeFile (PngFileBuffer.Buffer);
+		Com_Printf ("LoadPNG: Bad PNG file: %s\n", filename);
 		return;
     }
 
@@ -130,10 +129,12 @@ void LoadPNG (char *filename, byte **pic, int *width, int *height)
 		}
 	}
 
-	*width = info_ptr->width;
-	*height = info_ptr->height;
+	if (width)
+		*width = info_ptr->width;
+	if (height)
+		*height = info_ptr->height;
 
 	png_destroy_read_struct(&png_ptr, &info_ptr, &end_info);
 
-	ri.FS_FreeFile (PngFileBuffer.Buffer);
+	FS_FreeFile (PngFileBuffer.Buffer);
 }

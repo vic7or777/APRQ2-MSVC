@@ -313,19 +313,19 @@ void SV_BeginDownload_f(void)
 
 	// hacked by zoid to allow more control over download
 	// first off, no .. or global allow check
-	if (strstr (name, "..") || !allow_download->value
+	if (strstr (name, "..") || !allow_download->integer
 		// leading dot is no good
 		|| *name == '.' 
 		// leading slash bad as well, must be in subdir
 		|| *name == '/'
 		// next up, skin check
-		|| (strncmp(name, "players/", 8) == 0 && !allow_download_players->value)
+		|| (strncmp(name, "players/", 8) == 0 && !allow_download_players->integer)
 		// now models
-		|| (strncmp(name, "models/", 7) == 0 && !allow_download_models->value)
+		|| (strncmp(name, "models/", 7) == 0 && !allow_download_models->integer)
 		// now sounds
-		|| (strncmp(name, "sound/", 6) == 0 && !allow_download_sounds->value)
+		|| (strncmp(name, "sound/", 6) == 0 && !allow_download_sounds->integer)
 		// now maps (note special case for maps, must not be in pak)
-		|| (strncmp(name, "maps/", 5) == 0 && !allow_download_maps->value)
+		|| (strncmp(name, "maps/", 5) == 0 && !allow_download_maps->integer)
 		// MUST be in a subdirectory	
 		|| !strstr (name, "/") )	
 	{	// don't allow anything with .. path
@@ -507,7 +507,7 @@ void SV_ClientThink (client_t *cl, usercmd_t *cmd)
 {
 	cl->commandMsec -= cmd->msec;
 
-	if (cl->commandMsec < 0 && sv_enforcetime->value )
+	if (cl->commandMsec < 0 && sv_enforcetime->integer )
 	{
 		Com_DPrintf ("commandMsec underflow from %s\n", cl->name);
 		return;
@@ -616,7 +616,7 @@ void SV_ExecuteClientMessage (client_t *cl)
 				return;
 			}
 
-			if (!sv_paused->value)
+			if (!sv_paused->integer)
 			{
 				net_drop = cl->netchan.dropped;
 				if (net_drop < 20)
@@ -657,4 +657,3 @@ void SV_ExecuteClientMessage (client_t *cl)
 		}
 	}
 }
-

@@ -83,8 +83,7 @@ DLL GLUE
 ==========================================================================
 */
 
-#define	MAXPRINTMSG	4096
-void VID_Printf (int print_level, char *fmt, ...)
+void VID_Printf (int print_level, const char *fmt, ...)
 {
 	va_list		argptr;
 	char		msg[MAXPRINTMSG];
@@ -100,7 +99,7 @@ void VID_Printf (int print_level, char *fmt, ...)
 		Com_DPrintf ("%s", msg);
 }
 
-void VID_Error (int err_level, char *fmt, ...)
+void VID_Error (int err_level, const char *fmt, ...)
 {
 	va_list		argptr;
 	char		msg[MAXPRINTMSG];
@@ -227,7 +226,7 @@ qboolean VID_LoadRefresh( char *name )
 			RW_IN_Shutdown_fp();
 		KBD_Close_fp = NULL;
 		RW_IN_Shutdown_fp = NULL;
-		re.Shutdown();
+		R_Shutdown();
 		VID_FreeReflib ();
 	}
 
@@ -256,23 +255,23 @@ qboolean VID_LoadRefresh( char *name )
 
 #endif
 
-	ri.Cmd_AddCommand = Cmd_AddCommand;
-	ri.Cmd_RemoveCommand = Cmd_RemoveCommand;
-	ri.Cmd_Argc = Cmd_Argc;
-	ri.Cmd_Argv = Cmd_Argv;
-	ri.Cmd_ExecuteText = Cbuf_ExecuteText;
+	Cmd_AddCommand = Cmd_AddCommand;
+	Cmd_RemoveCommand = Cmd_RemoveCommand;
+	Cmd_Argc = Cmd_Argc;
+	Cmd_Argv = Cmd_Argv;
+	Cbuf_ExecuteText = Cbuf_ExecuteText;
 	ri.Con_Printf = VID_Printf;
-	ri.Sys_Error = VID_Error;
-	ri.FS_LoadFile = FS_LoadFile;
-	ri.FS_FreeFile = FS_FreeFile;
-	ri.FS_Gamedir = FS_Gamedir;
+	Com_Error = VID_Error;
+	FS_LoadFile = FS_LoadFile;
+	FS_FreeFile = FS_FreeFile;
+	FS_Gamedir = FS_Gamedir;
 	ri.FS_Mapname = FS_Mapname; // -Maniac
-	ri.Cvar_Get = Cvar_Get;
-	ri.Cvar_Set = Cvar_Set;
-	ri.Cvar_SetValue = Cvar_SetValue;
-	ri.Vid_GetModeInfo = VID_GetModeInfo;
-	ri.Vid_MenuInit = VID_MenuInit;
-	ri.Vid_NewWindow = VID_NewWindow;
+	Cvar_Get = Cvar_Get;
+	Cvar_Set = Cvar_Set;
+	Cvar_SetValue = Cvar_SetValue;
+	VID_GetModeInfo = VID_GetModeInfo;
+	VID_MenuInit = VID_MenuInit;
+	VID_NewWindow = VID_NewWindow;
 
 #ifndef REF_HARD_LINKED
 	if ( ( GetRefAPI = (void *) dlsym( reflib_library, "GetRefAPI" ) ) == 0 )
@@ -318,9 +317,9 @@ qboolean VID_LoadRefresh( char *name )
 	}
 #endif
 
-	if ( re.Init( 0, 0 ) == -1 )
+	if ( R_Init( 0, 0 ) == -1 )
 	{
-		re.Shutdown();
+		R_Shutdown();
 		VID_FreeReflib ();
 		return false;
 	}
@@ -452,7 +451,7 @@ void VID_Shutdown (void)
 			RW_IN_Shutdown_fp();
 		KBD_Close_fp = NULL;
 		RW_IN_Shutdown_fp = NULL;
-		re.Shutdown ();
+		R_Shutdown ();
 		VID_FreeReflib ();
 	}
 }
@@ -461,13 +460,15 @@ void VID_Shutdown (void)
 /*****************************************************************************/
 /* INPUT                                                                     */
 /*****************************************************************************/
-
+#ifdef JOYSTICK
 cvar_t	*in_joystick;
-
+#endif
 // This if fake, it's acutally done by the Refresh load
 void IN_Init (void)
 {
+#ifdef JOYSTICK
 	in_joystick	= Cvar_Get ("in_joystick", "0", CVAR_ARCHIVE);
+#endif
 }
 
 void Real_IN_Init (void)

@@ -56,7 +56,9 @@ void *Hunk_Begin (int maxsize)
 
 void *Hunk_Alloc (int size)
 {
+#ifdef VIRTUAL_ALLOC
 	void	*buf;
+#endif
 
 	// round to cacheline
 	size = (size+31)&~31;
@@ -116,7 +118,7 @@ void Hunk_Free (void *base)
 Sys_Milliseconds
 ================
 */
-//AVI EXPORT -Maniac
+//AVI EXPORT
 cvar_t	*avi_fps;
 int	curtime;
 int Sys_Milliseconds (void)
@@ -130,8 +132,8 @@ int Sys_Milliseconds (void)
 		initialized = true;
 	}
 
-	//AVI EXPORT -Maniac
-	if(avi_fps && avi_fps->value)
+	//AVI EXPORT
+	if(avi_fps && avi_fps->integer)
 		return (curtime++) - base;
 
 	curtime = timeGetTime() - base;
@@ -139,7 +141,7 @@ int Sys_Milliseconds (void)
 	return curtime;
 }
 
-void Sys_Mkdir (char *path)
+void Sys_Mkdir (const char *path)
 {
 	_mkdir (path);
 }
@@ -148,7 +150,7 @@ void Sys_Mkdir (char *path)
 
 char	findbase[MAX_OSPATH];
 char	findpath[MAX_OSPATH];
-int		findhandle;
+int		findhandle = -1;
 
 static qboolean CompareAttributes( unsigned found, unsigned musthave, unsigned canthave )
 {
@@ -177,32 +179,30 @@ static qboolean CompareAttributes( unsigned found, unsigned musthave, unsigned c
 	return true;
 }
 
-char *Sys_FindFirst (char *path, unsigned musthave, unsigned canthave )
+char *Sys_FindFirst (const char *path, unsigned musthave, unsigned canthave )
 {
 	struct _finddata_t findinfo;
 
-	if (findhandle)
+	if (findhandle != -1)
 		Sys_Error ("Sys_BeginFind without close");
 	findhandle = 0;
 
 	COM_FilePath (path, findbase);
 	findhandle = _findfirst(path, &findinfo);
 
-	//Changed, Player setup bug fix -Maniac
-	while ((findhandle != -1))
+	while (findhandle != -1)
 	{
-		if (CompareAttributes(findinfo.attrib, musthave, canthave))
+		if (!CompareAttributes(findinfo.attrib, musthave, canthave))
+		{
+			_findclose(findhandle);
+			findhandle =  _findnext ( findhandle, &findinfo );
+		}
+		else
 		{
 			Com_sprintf (findpath, sizeof(findpath), "%s/%s", findbase, findinfo.name);
 			return findpath;
 		}
-		else if (_findnext(findhandle, &findinfo) == -1)
-		{
-			_findclose(findhandle);
-			findhandle = -1;
-		}
 	}
-	//End
 
 	return NULL; 
 }
@@ -214,7 +214,6 @@ char *Sys_FindNext ( unsigned musthave, unsigned canthave )
 	if (findhandle == -1)
 		return NULL;
 
-	//Changed, Player setup bug fix -Maniac
 	while (_findnext(findhandle, &findinfo) != -1)
 	{
 		if (CompareAttributes(findinfo.attrib, musthave, canthave))
@@ -223,7 +222,6 @@ char *Sys_FindNext ( unsigned musthave, unsigned canthave )
 			return findpath;
 		}
 	}
-	//End
 
 	return NULL; 
 }
@@ -233,7 +231,7 @@ void Sys_FindClose (void)
 {
 	if (findhandle != -1)
 		_findclose (findhandle);
-	findhandle = 0;
+	findhandle = -1;
 }
 
 

@@ -22,17 +22,18 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #  include <windows.h>
 #endif
 
-#include <stdio.h>
+#include <GL/gl.h>
 
-//#include <GL/gl.h>
-#include <GL/glu.h>
-#include "glext.h"
-#include <math.h>
-
-#ifndef __linux__
-#ifndef GL_COLOR_INDEX8_EXT
-#define GL_COLOR_INDEX8_EXT GL_COLOR_INDEX
+#ifdef __linux__
+#  include <GL/glx.h>
+#else
+# include <GL/glu.h>
 #endif
+
+#ifdef SOLARIS
+#  ifndef GL_COLOR_INDEX8_EXT
+	 #define GL_COLOR_INDEX8_EXT GL_COLOR_INDEX
+#  endif
 #endif
 
 #include "../client/ref.h"
@@ -48,41 +49,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 // fall over
 #define	ROLL	2
-
-//Added tga header -Maniac
-// Truevision Targa header
-typedef struct _TargaHeader {
-	unsigned char 	id_length, colormap_type, image_type;
-	unsigned short	colormap_index, colormap_length;
-	unsigned char	colormap_size;
-	unsigned short	x_origin, y_origin, width, height;
-	unsigned char	pixel_size, attributes;
-} TargaHeader;
-
-// Definitions for image types
-#define TGA_Null		0	// no image data
-#define TGA_Map			1	// Uncompressed, color-mapped images
-#define TGA_RGB			2	// Uncompressed, RGB images
-#define TGA_Mono		3	// Uncompressed, black and white images
-#define TGA_RLEMap		9	// Runlength encoded color-mapped images
-#define TGA_RLERGB		10	// Runlength encoded RGB images
-#define TGA_RLEMono		11	// Compressed, black and white images
-#define TGA_CompMap		32	// Compressed color-mapped data, using Huffman, Delta, and runlength encoding
-#define TGA_CompMap4	33	// Compressed color-mapped data, using Huffman, Delta, and runlength encoding. 4-pass quadtree-type process
-
-// Definitions for interleave flag
-#define TGA_IL_None		0	// non-interleaved
-#define TGA_IL_Two		1	// two-way (even/odd) interleaving
-#define TGA_IL_Four		2	// four way interleaving
-#define TGA_IL_Reserved	3	// reserved
-
-// Definitions for origin flag
-#define TGA_O_UPPER		0	// Origin in lower left-hand corner
-#define TGA_O_LOWER		1	// Origin in upper left-hand corner
-
-#define MAXCOLORS 16384
-// Truevision Targa header
-
 
 #ifndef __VIDDEF_T
 #define __VIDDEF_T
@@ -119,7 +85,8 @@ typedef enum
 
 typedef struct image_s
 {
-	char	name[MAX_QPATH];			// game path, including extension
+	char	name[MAX_QPATH];			// game path, not including extension
+	char	extension[8];				//extension
 	imagetype_t	type;
 	int		width, height;				// source image
 	int		upload_width, upload_height;	// after power of two and picmip
@@ -130,7 +97,8 @@ typedef struct image_s
 	qboolean	scrap;
 	qboolean	has_alpha;
 
-	int		bits; //-Maniac
+	int		bits;
+	struct image_s	*hashNext;
 	qboolean paletted;
 } image_t;
 
@@ -153,9 +121,6 @@ typedef enum
 } rserr_t;
 
 #include "gl_model.h"
-
-void GL_BeginRendering (int *x, int *y, int *width, int *height);
-void GL_EndRendering (void);
 
 void GL_SetDefaultState( void );
 void GL_UpdateSwapInterval( void );
@@ -237,10 +202,9 @@ extern cvar_t	*gl_particle_att_a;
 extern cvar_t	*gl_particle_att_b;
 extern cvar_t	*gl_particle_att_c;
 
-extern	cvar_t	*gl_nosubimage;
+//extern	cvar_t	*gl_nosubimage;
 extern	cvar_t	*gl_bitdepth;
 extern	cvar_t	*gl_mode;
-extern	cvar_t	*gl_log;
 extern	cvar_t	*gl_lightmap;
 extern	cvar_t	*gl_shadows;
 extern	cvar_t	*gl_dynamic;
@@ -260,7 +224,7 @@ extern	cvar_t	*gl_polyblend;
 extern	cvar_t	*gl_flashblend;
 extern	cvar_t	*gl_lightmaptype;
 extern	cvar_t	*gl_modulate;
-extern	cvar_t	*gl_playermip;
+//extern	cvar_t	*gl_playermip;
 extern	cvar_t	*gl_drawbuffer;
 extern	cvar_t	*gl_3dlabs_broken;
 extern  cvar_t  *gl_driver;
@@ -293,6 +257,7 @@ extern	cvar_t	*gl_fog;
 
 extern	cvar_t	*gl_decals;
 extern	cvar_t	*gl_decals_time;
+extern	cvar_t	*gl_coloredlightmaps;
 
 //End
 
@@ -333,9 +298,6 @@ int 	R_Init( void *hinstance, void *hWnd );
 void	R_Shutdown( void );
 
 void R_RenderView (refdef_t *fd);
-//Added GL_ScreenShot_JPG function, -Maniac
-void GL_ScreenShot_JPG (void);
-//End
 
 void GL_ScreenShot_f (void);
 void R_DrawAliasModel (void);
@@ -359,46 +321,33 @@ void R_ClearSkyBox (void);
 void R_DrawSkyBox (void);
 void R_MarkLights (dlight_t *light, int bit, mnode_t *node);
 
-#if 0
-short LittleShort (short l);
-short BigShort (short l);
-int	LittleLong (int l);
-float LittleFloat (float f);
 
-char	*va(char *format, ...);
-// does a varargs printf into a temp buffer
-#endif
-
-void COM_StripExtension (char *in, char *out);
-
-void	Draw_GetPicSize (int *w, int *h, char *name);
-void	Draw_Pic (int x, int y, char *name, float alpha);
-//added alpha for transparent console -Maniac
-void	Draw_StretchPic (int x, int y, int w, int h, char *name, float alpha);
-void	Draw_ScaledPic (int x, int y, float scale, char *name, float red, float green, float blue, float alpha);
+void	Draw_GetPicSize (int *w, int *h, const char *name);
+void	Draw_Pic (int x, int y, const char *name, float alpha);
+void	Draw_StretchPic (int x, int y, int w, int h, const char *name, float alpha);
+void	Draw_ScaledPic (int x, int y, float scale, const char *name, float red, float green, float blue, float alpha);
 void	Draw_Char (int x, int y, int c, int color, float alpha);
-void	Draw_TileClear (int x, int y, int w, int h, char *name);
+void	Draw_TileClear (int x, int y, int w, int h, const char *name);
 void	Draw_Fill (int x, int y, int w, int h, int c);
 void	Draw_FadeScreen (void);
 void	Draw_StretchRaw (int x, int y, int w, int h, int cols, int rows, byte *data);
 
 void	R_BeginFrame( float camera_separation );
 void	R_SwapBuffers( int );
-void	R_SetPalette ( const unsigned char *palette);
+void	R_CinematicSetPalette ( const unsigned char *palette);
 
 int		Draw_GetPalette (void);
 
 void GL_ResampleTexture (unsigned *in, int inwidth, int inheight, unsigned *out,  int outwidth, int outheight);
 
-struct image_s *R_RegisterSkin (char *name);
+struct image_s *R_RegisterSkin (const char *name);
 
-//Added loadpng -Maniac
-void LoadPNG (char *filename, byte **pic, int *width, int *height);
-void LoadPCX (char *filename, byte **pic, byte **palette, int *width, int *height);
 
-image_t *GL_LoadPic (char *name, byte *pic, int width, int height, imagetype_t type, int bits, int scale);
-image_t	*GL_FindImage (char *name, imagetype_t type);
-void	GL_TextureMode( char *string );
+void LoadPCX (const char *filename, byte **pic, byte **palette, int *width, int *height);
+
+image_t *GL_LoadPic (const char *name, byte *pic, int width, int height, imagetype_t type, int bits, int scale);
+image_t	*GL_FindImage (const char *name, imagetype_t type);
+void	GL_TextureMode( const char *string );
 void	GL_ImageList_f (void);
 
 void	GL_SetTexturePalette( unsigned palette[256] );
@@ -408,8 +357,8 @@ void	GL_ShutdownImages (void);
 
 void	GL_FreeUnusedImages (void);
 
-void GL_TextureAlphaMode( char *string );
-void GL_TextureSolidMode( char *string );
+void GL_TextureAlphaMode( const char *string );
+void GL_TextureSolidMode( const char *string );
 
 /*
 ** GL extension emulation functions
@@ -423,22 +372,22 @@ void GL_DrawParticles( int n, const particle_t particles[], const unsigned color
 #define GL_RENDERER_VOODOO2   	0x00000002
 #define GL_RENDERER_VOODOO_RUSH	0x00000004
 #define GL_RENDERER_BANSHEE		0x00000008
-#define		GL_RENDERER_3DFX		0x0000000F
+#define	GL_RENDERER_3DFX		0x0000000F
 
 #define GL_RENDERER_PCX1		0x00000010
 #define GL_RENDERER_PCX2		0x00000020
 #define GL_RENDERER_PMX			0x00000040
-#define		GL_RENDERER_POWERVR		0x00000070
+#define	GL_RENDERER_POWERVR		0x00000070
 
 #define GL_RENDERER_PERMEDIA2	0x00000100
 #define GL_RENDERER_GLINT_MX	0x00000200
 #define GL_RENDERER_GLINT_TX	0x00000400
 #define GL_RENDERER_3DLABS_MISC	0x00000800
-#define		GL_RENDERER_3DLABS	0x00000F00
+#define	GL_RENDERER_3DLABS	0x00000F00
 
 #define GL_RENDERER_REALIZM		0x00001000
 #define GL_RENDERER_REALIZM2	0x00002000
-#define		GL_RENDERER_INTERGRAPH	0x00003000
+#define	GL_RENDERER_INTERGRAPH	0x00003000
 
 #define GL_RENDERER_3DPRO		0x00004000
 #define GL_RENDERER_REAL3D		0x00008000
@@ -448,13 +397,13 @@ void GL_DrawParticles( int n, const particle_t particles[], const unsigned color
 #define GL_RENDERER_V1000		0x00040000
 #define GL_RENDERER_V2100		0x00080000
 #define GL_RENDERER_V2200		0x00100000
-#define		GL_RENDERER_RENDITION	0x001C0000
+#define	GL_RENDERER_RENDITION	0x001C0000
 
 #define GL_RENDERER_O2          0x00100000
 #define GL_RENDERER_IMPACT      0x00200000
 #define GL_RENDERER_RE			0x00400000
 #define GL_RENDERER_IR			0x00800000
-#define		GL_RENDERER_SGI			0x00F00000
+#define	GL_RENDERER_SGI			0x00F00000
 
 #define GL_RENDERER_MCD			0x01000000
 #define GL_RENDERER_OTHER		0x80000000
@@ -499,8 +448,6 @@ extern glconfig_t  gl_config;
 extern glstate_t   gl_state;
 
 
-// added vertex arrays -Maniac
-
 #define MAX_ARRAY MAX_PARTICLES*4
 
 #define VA_SetElem2(v,a,b)		((v)[0]=(a),(v)[1]=(b))
@@ -511,19 +458,8 @@ extern float	tex_array[MAX_ARRAY][2];
 extern float	vert_array[MAX_ARRAY][3];
 extern float	col_array[MAX_ARRAY][4];
 
-extern int	max_tsize;
 
 #include "gl_decal.h"
-
-/*
-====================================================================
-
-IMPORTED FUNCTIONS
-
-====================================================================
-*/
-
-extern	refimport_t	ri;
 
 
 /*
@@ -540,5 +476,3 @@ int 		GLimp_Init( void *hinstance, void *hWnd );
 void		GLimp_Shutdown( void );
 int     	GLimp_SetMode( int *pwidth, int *pheight, int mode, qboolean fullscreen );
 void		GLimp_AppActivate( qboolean active );
-void		GLimp_EnableLogging( qboolean enable );
-void		GLimp_LogNewFrame( void );

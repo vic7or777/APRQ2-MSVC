@@ -27,23 +27,36 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // An AVI Video exporter for DM2 files
 // By Robert 'Heffo' Heffernan
 //
-
 #include "client.h"
+#ifdef AVI_EXPORT
 #include <windows.h>
 #include <memory.h>
 #include <vfw.h>
-#include "avi.h"
 
-extern cvar_t	*avi_gamma_r;
-extern cvar_t	*avi_gamma_g;
-extern cvar_t	*avi_gamma_b;
-extern cvar_t	*avi_monochrome;
-extern cvar_t	*avi_border_size;
-extern cvar_t	*avi_border_r;
-extern cvar_t	*avi_border_g;
-extern cvar_t	*avi_border_b;
+typedef struct
+{
+	char				filename[MAX_OSPATH];
 
-extern GLAVI_ReadFrameData_t GLAVI_ReadFrameData;
+	long				frame;
+	DWORD				framerate;
+
+	BITMAPINFOHEADER	bitmapheader;
+	PAVIFILE			AVIFile;
+	PAVISTREAM			Stream;
+	PAVISTREAM			StreamCompressed;
+} avi_Data_t;
+
+cvar_t	*avi_fps;
+cvar_t	*avi_gamma_r;
+cvar_t	*avi_gamma_g;
+cvar_t	*avi_gamma_b;
+cvar_t	*avi_monochrome;
+cvar_t	*avi_border_size;
+cvar_t	*avi_border_r;
+cvar_t	*avi_border_g;
+cvar_t	*avi_border_b;
+
+void GLAVI_ReadFrameData (byte *buffer);
 extern viddef_t	viddef;
 avi_Data_t *avidm2;
 
@@ -51,10 +64,12 @@ avi_Data_t *AVI_InitExporter (char *filename, LPBITMAPINFOHEADER bitmapheader, D
 {
 	AVISTREAMINFO		streaminfo;
 	AVICOMPRESSOPTIONS	options;
-	AVICOMPRESSOPTIONS FAR * aoptions[1] = {&options};
+	AVICOMPRESSOPTIONS FAR * aoptions;
 	HRESULT				hr;
 	DWORD				vfwver;
 	avi_Data_t			*newavi;
+
+	aoptions =  &options;
 
 	if(!filename || !bitmapheader || !framerate)
 		return NULL;
@@ -158,6 +173,15 @@ void AVI_ReleaseExporter(avi_Data_t *avi)
 	AVIFileExit();
 }
 
+void AVI_StopExport(void)
+{
+	if(avi_fps->integer)
+	{
+		AVI_ReleaseExporter(avidm2);
+		Cvar_ForceSet("avi_fps", "0");
+	}
+}
+
 int AVI_WriteFrame (avi_Data_t *avi, byte *framedata)
 {
 	HRESULT hr;
@@ -209,14 +233,14 @@ void AVI_ProcessFrame (void)
 	int i, j;
 	byte *buf, *gam;
 
-	if (!cl.refresh_prepped || !avi_fps || !avi_fps->value)
+	if (!avi_fps->integer || !cl.refresh_prepped)
 		return;
 
 	buf = (byte *)malloc(viddef.width*viddef.height*3);
 	GLAVI_ReadFrameData(buf);
 
 	// Convert To Monochrome (if Needed)
-	if(avi_monochrome->value == 1)
+	if(avi_monochrome->integer)
 	{
 		gam = buf;
 		for(i=0;i<(viddef.width * viddef.height);i++)
@@ -327,14 +351,14 @@ void AVI_Export_f (void)
 	bmih.biCompression=BI_RGB;		//BI_RGB means BRG in reality
 
 	// Initialise AVI Exporter
-	Cvar_Set("avi_fps", Cmd_Argv(1));
+	Cvar_ForceSet("avi_fps", Cmd_Argv(1));
 	avidm2 = AVI_InitExporter(Cmd_Argv(3), &bmih, (DWORD)avi_fps->value);
 	if(!avidm2)
 	{
 		Com_Printf("Error initialising AVI Exporter\n");
 
 		AVI_ReleaseExporter(avidm2);
-		Cvar_Set("avi_fps", "0");
+		Cvar_ForceSet("avi_fps", "0");
 
 		return;
 	}
@@ -343,3 +367,18 @@ void AVI_Export_f (void)
 	AVI_InitGamma();
 	SV_Map (true, Cmd_Argv(2), false );
 }
+
+void CL_InitAVIExport( void )
+{
+	avi_fps = Cvar_Get("avi_fps", "0", CVAR_NOSET);
+	avi_gamma_r = Cvar_Get("avi_gamma_r", "1", 0);
+	avi_gamma_g = Cvar_Get("avi_gamma_g", "1", 0);
+	avi_gamma_b = Cvar_Get("avi_gamma_b", "1", 0);
+	avi_monochrome = Cvar_Get("avi_monochrome", "0", 0);
+	avi_border_size = Cvar_Get("avi_border_size", "0", 0);
+	avi_border_r = Cvar_Get("avi_border_r", "1", 0);
+	avi_border_g = Cvar_Get("avi_border_g", "1", 0);
+	avi_border_b = Cvar_Get("avi_border_b", "1", 0);
+	Cmd_AddCommand ("aviexport", AVI_Export_f);
+}
+#endif

@@ -25,6 +25,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 extern	unsigned	sys_msg_time;
 
+cvar_t	*in_mouse;
+
+#ifdef JOYSTICK
 // joystick defines and variables
 // where should defines be moved?
 #define JOY_ABSOLUTE_AXIS	0x00000000		// control like a joystick
@@ -51,7 +54,6 @@ DWORD	dwAxisMap[JOY_MAX_AXES];
 DWORD	dwControlMap[JOY_MAX_AXES];
 PDWORD	pdwRawValue[JOY_MAX_AXES];
 
-cvar_t	*in_mouse;
 cvar_t	*in_joystick;
 
 
@@ -88,15 +90,14 @@ DWORD		joy_numbuttons;
 
 static JOYINFOEX	ji;
 
-qboolean	in_appactive;
-
 // forward-referenced functions
 void IN_StartupJoystick (void);
 void Joy_AdvancedUpdate_f (void);
 void IN_JoyMove (usercmd_t *cmd);
+#endif
 
-//Added m_restart -Maniac
-void IN_MRestart(void);
+qboolean	in_appactive;
+
 
 /*
 ============================================================
@@ -115,16 +116,17 @@ cvar_t	*m_autosens;	// Psychospaz - Mouse Autosensitivity scaling
 qboolean	mlooking;
 
 void IN_MLookDown (void) { mlooking = true; }
-void IN_MLookUp (void) {
-mlooking = false;
-if (!freelook->value && lookspring->value)
-		IN_CenterView ();
+void IN_MLookUp (void)
+{
+	mlooking = false;
+	if (!freelook->integer && lookspring->integer)
+			IN_CenterView ();
 }
 
 int			mouse_buttons;
 int			mouse_oldbuttonstate;
 POINT		current_pos;
-int			mouse_x, mouse_y, old_mouse_x, old_mouse_y, mx_accum, my_accum;
+int			mouse_x, mouse_y, old_mouse_x, old_mouse_y; //mx_accum, my_accum;
 
 int			old_x, old_y;
 
@@ -132,8 +134,7 @@ qboolean	mouseactive;	// false when not focus app
 
 qboolean	restore_spi;
 qboolean	mouseinitialized;
-//Changed, added xpmouseparms -Maniac
-int		originalmouseparms[3], newmouseparms[3] = {0, 0, 1}, xpmouseparms[3]={0,0,0};
+int		originalmouseparms[3], newmouseparms[3] = {0, 0, 1}, xpmouseparms[3] = {0, 0, 0};
 qboolean	mouseparmsvalid;
 
 int			window_center_x, window_center_y;
@@ -153,7 +154,7 @@ void IN_ActivateMouse (void)
 
 	if (!mouseinitialized)
 		return;
-	if (!in_mouse->value)
+	if (!in_mouse->integer)
 	{
 		mouseactive = false;
 		return;
@@ -161,16 +162,12 @@ void IN_ActivateMouse (void)
 	if (mouseactive)
 		return;
 
-	mouseactive = true;
-
 	if (mouseparmsvalid)
 	{
-		//Changed, added m_xpfix -Maniac
-		if(!m_xpfix->value)
-			restore_spi = SystemParametersInfo (SPI_SETMOUSE, 0, newmouseparms, 0);
-		else
+		if(m_xpfix->integer)
 			restore_spi = SystemParametersInfo (SPI_SETMOUSE, 0, xpmouseparms, 0);
-		//End
+		else
+			restore_spi = SystemParametersInfo (SPI_SETMOUSE, 0, newmouseparms, 0);
 	}
 
 	width = GetSystemMetrics (SM_CXSCREEN);
@@ -196,6 +193,9 @@ void IN_ActivateMouse (void)
 
 	SetCapture ( cl_hwnd );
 	ClipCursor (&window_rect);
+
+	mouseactive = true;
+
 	while (ShowCursor (FALSE) >= 0)
 		;
 }
@@ -222,11 +222,10 @@ void IN_DeactivateMouse (void)
 
 	ClipCursor (NULL);
 	ReleaseCapture ();
+
 	while (ShowCursor (TRUE) < 0)
 		;
 }
-
-
 
 /*
 ===========
@@ -235,15 +234,21 @@ IN_StartupMouse
 */
 void IN_StartupMouse (void)
 {
-	cvar_t		*cv;
+	//cvar_t		*cv;
 
-	cv = Cvar_Get ("in_initmouse", "1", CVAR_NOSET);
-	if ( !cv->value ) 
+	//cv = Cvar_Get ("in_initmouse", "1", CVAR_NOSET);
+	if ( !in_mouse->integer ) 
 		return; 
 
 	mouseinitialized = true;
 	mouseparmsvalid = SystemParametersInfo (SPI_GETMOUSE, 0, originalmouseparms, 0);
-	mouse_buttons = 5;
+	mouse_buttons = 7;
+}
+
+void IN_Restart_f(void)
+{
+	IN_Shutdown();
+	IN_Init();
 }
 
 /*
@@ -261,14 +266,12 @@ void IN_MouseEvent (int mstate)
 // perform button actions
 	for (i=0 ; i<mouse_buttons ; i++)
 	{
-		if ( (mstate & (1<<i)) &&
-			!(mouse_oldbuttonstate & (1<<i)) )
+		if ( (mstate & (1<<i)) && !(mouse_oldbuttonstate & (1<<i)) )
 		{
 			Key_Event (K_MOUSE1 + i, true, sys_msg_time);
 		}
 
-		if ( !(mstate & (1<<i)) &&
-			(mouse_oldbuttonstate & (1<<i)) )
+		if ( !(mstate & (1<<i)) && (mouse_oldbuttonstate & (1<<i)) )
 		{
 				Key_Event (K_MOUSE1 + i, false, sys_msg_time);
 		}
@@ -302,7 +305,7 @@ void IN_MouseMove (usercmd_t *cmd)
 		return;
 #endif
 
-	if (m_filter->value)
+	if (m_filter->integer)
 	{
 		mouse_x = (mx + old_mouse_x) * 0.5;
 		mouse_y = (my + old_mouse_y) * 0.5;
@@ -316,8 +319,16 @@ void IN_MouseMove (usercmd_t *cmd)
 	old_mouse_x = mx;
 	old_mouse_y = my;
 
+	if( cls.key_dest == key_menu ) {
+		M_MouseMove( mx, my );
+		if (mx || my)
+			SetCursorPos (window_center_x, window_center_y);
+
+		return;
+	}
+
 	//psychospaz - zooming in preserves sensitivity
-	if (m_autosens->value)
+	if (m_autosens->integer)
 	{
 		mouse_x *= sensitivity->value * (cl.refdef.fov_x/90.0);
 		mouse_y *= sensitivity->value * (cl.refdef.fov_y/90.0);
@@ -329,19 +340,15 @@ void IN_MouseMove (usercmd_t *cmd)
 	}
 
 // add mouse X/Y movement to cmd
-	if ( (in_strafe.state & 1) || (lookstrafe->value && mlooking ))
+	if ( (in_strafe.state & 1) || (lookstrafe->integer && mlooking ))
 		cmd->sidemove += m_side->value * mouse_x;
 	else
 		cl.viewangles[YAW] -= m_yaw->value * mouse_x;
 
-	if ( (mlooking || freelook->value) && !(in_strafe.state & 1))
-	{
+	if ( (mlooking || freelook->integer) && !(in_strafe.state & 1))
 		cl.viewangles[PITCH] += m_pitch->value * mouse_y;
-	}
 	else
-	{
 		cmd->forwardmove -= m_forward->value * mouse_y;
-	}
 
 	// force the mouse to the center, so there's room to move
 	if (mx || my)
@@ -370,12 +377,12 @@ void IN_Init (void)
 {
 	// mouse variables
 	m_filter				= Cvar_Get ("m_filter",					"0",		0);
-    in_mouse				= Cvar_Get ("in_mouse",					"1",		CVAR_ARCHIVE);
+    in_mouse				= Cvar_Get ("in_mouse",					"1",		0);
 
-	//Added m_xpfix -Maniac
 	m_xpfix					= Cvar_Get ("m_xpfix",					"0",		CVAR_ARCHIVE);
 	m_autosens				= Cvar_Get ("m_autosens",				"0",		0);
 
+#ifdef JOYSTICK
 	// joystick variables
 	in_joystick				= Cvar_Get ("in_joystick",				"0",		CVAR_ARCHIVE);
 	joy_name				= Cvar_Get ("joy_name",					"joystick",	0);
@@ -396,6 +403,7 @@ void IN_Init (void)
 	joy_upsensitivity		= Cvar_Get ("joy_upsensitivity",		"-1",		0);
 	joy_pitchsensitivity	= Cvar_Get ("joy_pitchsensitivity",		"1",		0);
 	joy_yawsensitivity		= Cvar_Get ("joy_yawsensitivity",		"-1",		0);
+#endif
 
 	// centering
 	v_centermove			= Cvar_Get ("v_centermove",				"0.15",		0);
@@ -404,23 +412,15 @@ void IN_Init (void)
 	Cmd_AddCommand ("+mlook", IN_MLookDown);
 	Cmd_AddCommand ("-mlook", IN_MLookUp);
 
-	//Added m_restart -Maniac
-	Cmd_AddCommand ("m_restart", IN_MRestart);
+	Cmd_AddCommand ("m_restart", IN_Restart_f);
 
+#ifdef JOYSTICK
 	Cmd_AddCommand ("joy_advancedupdate", Joy_AdvancedUpdate_f);
+	IN_StartupJoystick ();
+#endif
 
 	IN_StartupMouse ();
-	IN_StartupJoystick ();
 }
-
-
-//Added m_restart -Maniac
-void IN_MRestart(void)
-{
-	IN_Shutdown();
-	IN_Init();
-}
-//End
 
 /*
 ===========
@@ -429,12 +429,16 @@ IN_Shutdown
 */
 void IN_Shutdown (void)
 {
-	IN_DeactivateMouse ();
 	Cmd_RemoveCommand ("+mlook");
 	Cmd_RemoveCommand ("-mlook");
 
 	Cmd_RemoveCommand ("m_restart");
+
+#ifdef JOYSTICK
 	Cmd_RemoveCommand ("joy_advancedupdate");
+#endif
+
+	IN_DeactivateMouse ();
 }
 
 
@@ -450,11 +454,9 @@ between a deactivate and an activate.
 void IN_Activate (qboolean active)
 {
 	in_appactive = active;
-	mouseactive = !active;		// force a new window check or turn off
-
-	IN_Frame(); // decide active state immediately,
-				// this fixes annoying windowed mode bug
-
+	//mouseactive = !active;		// force a new window check or turn off
+	if (!active)
+		IN_DeactivateMouse ();
 }
 
 
@@ -498,8 +500,10 @@ void IN_Move (usercmd_t *cmd)
 {
 	IN_MouseMove (cmd);
 
+#ifdef JOYSTICK
 	if (ActiveApp)
 		IN_JoyMove (cmd);
+#endif
 }
 
 
@@ -508,12 +512,12 @@ void IN_Move (usercmd_t *cmd)
 IN_ClearStates
 ===================
 */
-void IN_ClearStates (void)
+/*void IN_ClearStates (void)
 {
 	mx_accum = 0;
 	my_accum = 0;
 	mouse_oldbuttonstate = 0;
-}
+}*/
 
 
 /*
@@ -528,7 +532,8 @@ JOYSTICK
 =============== 
 IN_StartupJoystick 
 =============== 
-*/  
+*/
+#ifdef JOYSTICK
 void IN_StartupJoystick (void) 
 { 
 	int			numdevs;
@@ -541,7 +546,7 @@ void IN_StartupJoystick (void)
 
 	// abort startup if user requests no joystick
 	cv = Cvar_Get ("in_initjoy", "1", CVAR_NOSET);
-	if ( !cv->value ) 
+	if ( !cv->integer ) 
 		return; 
  
 	// verify joystick driver is present
@@ -693,7 +698,7 @@ void Joy_AdvancedUpdate_f (void)
 	}
 }
 
-
+#endif
 /*
 ===========
 IN_Commands
@@ -701,6 +706,7 @@ IN_Commands
 */
 void IN_Commands (void)
 {
+#ifdef JOYSTICK
 	int		i, key_index;
 	DWORD	buttonstate, povstate;
 
@@ -761,9 +767,10 @@ void IN_Commands (void)
 		}
 		joy_oldpovstate = povstate;
 	}
+#endif
 }
 
-
+#ifdef JOYSTICK
 /* 
 =============== 
 IN_ReadJoystick
@@ -812,7 +819,7 @@ void IN_JoyMove (usercmd_t *cmd)
 	}
 
 	// verify joystick is available and that the user wants to use it
-	if (!joy_avail || !in_joystick->value)
+	if (!joy_avail || !in_joystick->integer)
 	{
 		return; 
 	}
@@ -823,7 +830,7 @@ void IN_JoyMove (usercmd_t *cmd)
 		return;
 	}
 
-	if ( (in_speed.state & 1) ^ (int)cl_run->value)
+	if ( (in_speed.state & 1) ^ cl_run->integer)
 		speed = 2;
 	else
 		speed = 1;
@@ -934,4 +941,4 @@ void IN_JoyMove (usercmd_t *cmd)
 		}
 	}
 }
-
+#endif

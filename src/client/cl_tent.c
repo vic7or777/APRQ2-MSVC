@@ -82,7 +82,7 @@ void CL_BlasterParticles (vec3_t org, vec3_t dir);
 void CL_ExplosionParticles (vec3_t org);
 void CL_BFGExplosionParticles (vec3_t org);
 // RAFAEL
-void CL_BlueBlasterParticles (vec3_t org, vec3_t dir);
+//void CL_BlueBlasterParticles (vec3_t org, vec3_t dir);
 
 struct sfx_s	*cl_sfx_ric1;
 struct sfx_s	*cl_sfx_ric2;
@@ -165,35 +165,40 @@ CL_RegisterTEntModels
 */
 void CL_RegisterTEntModels (void)
 {
-	cl_mod_explode = re.RegisterModel ("models/objects/explode/tris.md2");
-	cl_mod_smoke = re.RegisterModel ("models/objects/smoke/tris.md2");
-	cl_mod_flash = re.RegisterModel ("models/objects/flash/tris.md2");
-	cl_mod_parasite_segment = re.RegisterModel ("models/monsters/parasite/segment/tris.md2");
-	cl_mod_grapple_cable = re.RegisterModel ("models/ctf/segment/tris.md2");
-	cl_mod_parasite_tip = re.RegisterModel ("models/monsters/parasite/tip/tris.md2");
-	cl_mod_explo4 = re.RegisterModel ("models/objects/r_explode/tris.md2");
-	cl_mod_bfg_explo = re.RegisterModel ("sprites/s_bfg2.sp2");
-	cl_mod_powerscreen = re.RegisterModel ("models/items/armor/effect/tris.md2");
+	cl_mod_explode = R_RegisterModel ("models/objects/explode/tris.md2");
+	cl_mod_smoke = R_RegisterModel ("models/objects/smoke/tris.md2");
+	cl_mod_flash = R_RegisterModel ("models/objects/flash/tris.md2");
+	cl_mod_parasite_segment = R_RegisterModel ("models/monsters/parasite/segment/tris.md2");
+	cl_mod_grapple_cable = R_RegisterModel ("models/ctf/segment/tris.md2");
+	cl_mod_parasite_tip = R_RegisterModel ("models/monsters/parasite/tip/tris.md2");
+	cl_mod_explo4 = R_RegisterModel ("models/objects/r_explode/tris.md2");
+	cl_mod_bfg_explo = R_RegisterModel ("sprites/s_bfg2.sp2");
+	cl_mod_powerscreen = R_RegisterModel ("models/items/armor/effect/tris.md2");
 
-	re.RegisterModel ("models/objects/laser/tris.md2");
-	re.RegisterModel ("models/objects/grenade2/tris.md2");
-	re.RegisterModel ("models/weapons/v_machn/tris.md2");
-	re.RegisterModel ("models/weapons/v_handgr/tris.md2");
-	re.RegisterModel ("models/weapons/v_shotg2/tris.md2");
-	re.RegisterModel ("models/objects/gibs/bone/tris.md2");
-	re.RegisterModel ("models/objects/gibs/sm_meat/tris.md2");
-	re.RegisterModel ("models/objects/gibs/bone2/tris.md2");
+	//r1: why are these being reigstered?
+	/*
+	R_RegisterModel ("models/objects/laser/tris.md2");
+	R_RegisterModel ("models/objects/grenade2/tris.md2");
+	R_RegisterModel ("models/weapons/v_machn/tris.md2");
+	R_RegisterModel ("models/weapons/v_handgr/tris.md2");
+	R_RegisterModel ("models/weapons/v_shotg2/tris.md2");
+	R_RegisterModel ("models/objects/gibs/bone/tris.md2");
+	R_RegisterModel ("models/objects/gibs/sm_meat/tris.md2");
+	R_RegisterModel ("models/objects/gibs/bone2/tris.md2");
 
-	re.RegisterPic ("w_machinegun");
-	re.RegisterPic ("a_bullets");
-	re.RegisterPic ("i_health");
-	re.RegisterPic ("a_grenades");
+	Draw_FindPic ("w_machinegun");
+	Draw_FindPic ("a_bullets");
+	Draw_FindPic ("i_health");
+	Draw_FindPic ("a_grenades");
+	*/
 
 //ROGUE
-	cl_mod_explo4_big = re.RegisterModel ("models/objects/r_explode2/tris.md2");
-	cl_mod_lightning = re.RegisterModel ("models/proj/lightning/tris.md2");
-	cl_mod_heatbeam = re.RegisterModel ("models/proj/beam/tris.md2");
-	cl_mod_monster_heatbeam = re.RegisterModel ("models/proj/widowbeam/tris.md2");
+#ifdef ROGUE
+	cl_mod_explo4_big = R_RegisterModel ("models/objects/r_explode2/tris.md2");
+	cl_mod_lightning = R_RegisterModel ("models/proj/lightning/tris.md2");
+	cl_mod_heatbeam = R_RegisterModel ("models/proj/beam/tris.md2");
+	cl_mod_monster_heatbeam = R_RegisterModel ("models/proj/widowbeam/tris.md2");
+#endif
 //ROGUE
 }	
 
@@ -718,11 +723,6 @@ void CL_ParseTEnt (void)
 		MSG_ReadPos (&net_message, pos);
 		MSG_ReadDir (&net_message, dir);
 		CL_ParticleEffect (pos, dir, 0xe8, 60);
-
- 		rgbcolor[0] = 1.0f;
- 		rgbcolor[1] = 0.8f;
- 		rgbcolor[2] = 0.8f;
-		V_AddStain(pos, rgbcolor, 30);
 		break;
 
 	case TE_GUNSHOT:			// bullet hitting wall
@@ -737,7 +737,9 @@ void CL_ParseTEnt (void)
 
 		if (type != TE_SPARKS)
 		{
-			re.AddDecal(pos, dir, 0, 0, 0, 1.0f, 2 + ((rand()%21*0.05) - 0.5), 1, 0, rand()%361);
+#ifdef GL_QUAKE
+			R_AddDecal(pos, dir, 0, 0, 0, 1.0f, 2 + ((rand()%21*0.05) - 0.5), 1, 0, rand()%361);
+#endif
 			CL_SmokeAndFlash(pos);
 
 			rgbcolor[0] = 0.89;
@@ -773,7 +775,9 @@ void CL_ParseTEnt (void)
 	case TE_SHOTGUN:			// bullet hitting wall
 		MSG_ReadPos (&net_message, pos);
 		MSG_ReadDir (&net_message, dir);
-		re.AddDecal(pos, dir, 0, 0, 0, 1.0f, 2 + ((rand()%21*0.05) - 0.5), 1, 0, rand()%361);
+#ifdef GL_QUAKE
+		R_AddDecal(pos, dir, 0, 0, 0, 1.0f, 2 + ((rand()%21*0.05) - 0.5), 1, 0, rand()%361);
+#endif
 		CL_ParticleEffect (pos, dir, 0, 20);
 		CL_SmokeAndFlash(pos);
 
@@ -1177,11 +1181,6 @@ void CL_ParseTEnt (void)
 		MSG_ReadPos (&net_message, pos);
 		MSG_ReadDir (&net_message, dir);
 		CL_ParticleEffect (pos, dir, 0xe8, 250);
-
-		rgbcolor[0] = 1;
-		rgbcolor[1] = 0;
-		rgbcolor[2] = 0;
-		V_AddStain(pos, rgbcolor, 30);
 		break;
 
 	case TE_CHAINFIST_SMOKE:
@@ -1366,7 +1365,7 @@ void CL_AddPlayerBeams (void)
 	float		yaw, pitch;
 	float		forward;
 	float		len, steps;
-	int			framenum;
+	int			framenum = 0;
 	float		model_length;
 	
 	float		hand_multiplier;
@@ -1376,9 +1375,9 @@ void CL_AddPlayerBeams (void)
 //PMM
 	if (hand)
 	{
-		if (hand->value == 2)
+		if (hand->integer == 2)
 			hand_multiplier = 0;
-		else if (hand->value == 1)
+		else if (hand->integer == 1)
 			hand_multiplier = -1;
 		else
 			hand_multiplier = 1;
@@ -1418,7 +1417,7 @@ void CL_AddPlayerBeams (void)
 				VectorMA (b->start, (hand_multiplier * b->offset[0]), cl.v_right, org);
 				VectorMA (     org, b->offset[1], cl.v_forward, org);
 				VectorMA (     org, b->offset[2], cl.v_up, org);
-				if ((hand) && (hand->value == 2)) {
+				if ((hand) && (hand->integer == 2)) {
 					VectorMA (org, -1, cl.v_up, org);
 				}
 				// FIXME - take these out when final
@@ -1454,7 +1453,7 @@ void CL_AddPlayerBeams (void)
 			VectorMA (dist, (hand_multiplier * b->offset[0]), r, dist);
 			VectorMA (dist, b->offset[1], f, dist);
 			VectorMA (dist, b->offset[2], u, dist);
-			if ((hand) && (hand->value == 2)) {
+			if ((hand) && (hand->integer == 2)) {
 				VectorMA (org, -1, cl.v_up, org);
 			}
 		}
@@ -1669,6 +1668,8 @@ void CL_AddExplosions (void)
 			ent->alpha = (5.0 - (float)f)/5.0;
 			ent->skinnum = 0;
 			ent->flags |= RF_TRANSLUCENT;
+			break;
+		default:
 			break;
 		}
 

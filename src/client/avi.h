@@ -27,7 +27,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // An AVI Video exporter for DM2 files
 // By Robert 'Heffo' Heffernan
 //
-
+#ifdef AVI_EXPORT
 typedef struct
 {
 	char				filename[MAX_OSPATH];
@@ -46,6 +46,5 @@ extern avi_Data_t *avidm2;
 
 avi_Data_t *AVI_InitExporter (char *filename, LPBITMAPINFOHEADER bitmapheader, DWORD framerate);
 void AVI_ReleaseExporter(avi_Data_t *avi);
-int AVI_WriteFrame (avi_Data_t *avi, byte *framedata);
-void AVI_Export_f (void);
 
+#endif

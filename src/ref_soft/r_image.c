@@ -25,6 +25,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 image_t		r_images[MAX_RIMAGES];
 int			numr_images;
 
+#define IMAGES_HASH_SIZE	64
+static image_t	*images_hash[IMAGES_HASH_SIZE];
 
 /*
 ===============
@@ -37,7 +39,7 @@ void	R_ImageList_f (void)
 	image_t	*image;
 	int		texels;
 
-	ri.Con_Printf (PRINT_ALL, "------------------\n");
+	Com_Printf ("------------------\n");
 	texels = 0;
 
 	for (i=0, image=r_images ; i<numr_images ; i++, image++)
@@ -48,26 +50,26 @@ void	R_ImageList_f (void)
 		switch (image->type)
 		{
 		case it_skin:
-			ri.Con_Printf (PRINT_ALL, "M");
+			Com_Printf ("M");
 			break;
 		case it_sprite:
-			ri.Con_Printf (PRINT_ALL, "S");
+			Com_Printf ("S");
 			break;
 		case it_wall:
-			ri.Con_Printf (PRINT_ALL, "W");
+			Com_Printf ("W");
 			break;
 		case it_pic:
-			ri.Con_Printf (PRINT_ALL, "P");
+			Com_Printf ("P");
 			break;
 		default:
-			ri.Con_Printf (PRINT_ALL, " ");
+			Com_Printf (" ");
 			break;
 		}
 
-		ri.Con_Printf (PRINT_ALL,  " %3i %3i : %s\n",
+		Com_Printf (" %3i %3i : %s%s\n",
 			image->width, image->height, image->name);
 	}
-	ri.Con_Printf (PRINT_ALL, "Total texel count: %i\n", texels);
+	Com_Printf ("Total texel count: %i\n", texels);
 }
 
 
@@ -84,7 +86,7 @@ PCX LOADING
 LoadPCX
 ==============
 */
-void LoadPCX (char *filename, byte **pic, byte **palette, int *width, int *height)
+void LoadPCX (const char *filename, byte **pic, byte **palette, int *width, int *height)
 {
 	byte	*raw;
 	pcx_t	*pcx;
@@ -98,7 +100,7 @@ void LoadPCX (char *filename, byte **pic, byte **palette, int *width, int *heigh
 	//
 	// load the file
 	//
-	len = ri.FS_LoadFile (filename, (void **)&raw);
+	len = FS_LoadFile (filename, (void **)&raw);
 	if (!raw)
 		return;
 
@@ -125,8 +127,8 @@ void LoadPCX (char *filename, byte **pic, byte **palette, int *width, int *heigh
 		|| pcx->xmax >= 640
 		|| pcx->ymax >= 480)
 	{
-		ri.Con_Printf (PRINT_ALL, "Bad pcx file %s\n", filename);
-		ri.FS_FreeFile ((void *)pcx);
+		Com_Printf ("Bad pcx file %s\n", filename);
+		FS_FreeFile ((void *)pcx);
 		return;
 	}
 
@@ -169,218 +171,12 @@ void LoadPCX (char *filename, byte **pic, byte **palette, int *width, int *heigh
 
 	if ( raw - (byte *)pcx > len)
 	{
-		ri.Con_Printf (PRINT_DEVELOPER, "LoadPCX: file %s was malformed", filename);
+		Com_DPrintf ( "LoadPCX: file %s was malformed", filename);
 		free (*pic);
 		*pic = NULL;
 	}
 
-	ri.FS_FreeFile ((void *)pcx);
-}
-
-/*
-=========================================================
-
-TARGA LOADING
-
-=========================================================
-*/
-
-typedef struct _TargaHeader {
-	unsigned char 	id_length, colormap_type, image_type;
-	unsigned short	colormap_index, colormap_length;
-	unsigned char	colormap_size;
-	unsigned short	x_origin, y_origin, width, height;
-	unsigned char	pixel_size, attributes;
-} TargaHeader;
-
-
-/*
-=============
-LoadTGA
-=============
-*/
-void LoadTGA (char *name, byte **pic, int *width, int *height)
-{
-	int		columns, rows, numPixels;
-	byte	*pixbuf;
-	int		row, column;
-	byte	*buf_p;
-	byte	*buffer;
-	int		length;
-	TargaHeader		targa_header;
-	byte			*targa_rgba;
-
-	*pic = NULL;
-
-	//
-	// load the file
-	//
-	length = ri.FS_LoadFile (name, (void **)&buffer);
-	if (!buffer)
-		return;
-
-	buf_p = buffer;
-
-	targa_header.id_length = *buf_p++;
-	targa_header.colormap_type = *buf_p++;
-	targa_header.image_type = *buf_p++;
-	
-	targa_header.colormap_index = LittleShort ( *((short *)buf_p) );
-	buf_p+=2;
-	targa_header.colormap_length = LittleShort ( *((short *)buf_p) );
-	buf_p+=2;
-	targa_header.colormap_size = *buf_p++;
-	targa_header.x_origin = LittleShort ( *((short *)buf_p) );
-	buf_p+=2;
-	targa_header.y_origin = LittleShort ( *((short *)buf_p) );
-	buf_p+=2;
-	targa_header.width = LittleShort ( *((short *)buf_p) );
-	buf_p+=2;
-	targa_header.height = LittleShort ( *((short *)buf_p) );
-	buf_p+=2;
-	targa_header.pixel_size = *buf_p++;
-	targa_header.attributes = *buf_p++;
-
-	if (targa_header.image_type!=2 
-		&& targa_header.image_type!=10)
-	{
-		ri.Con_Printf (PRINT_ALL, "LoadTGA: Only type 2 and 10 targa RGB images supported. Image:(%s).\n", name);
-		ri.FS_FreeFile (buffer);
-		return;
-	}
-
-	if (targa_header.colormap_type !=0 
-		|| (targa_header.pixel_size!=32 && targa_header.pixel_size!=24))
-	{
-		ri.Con_Printf (PRINT_ALL, "LoadTGA: Only 32 or 24 bit images supported (no colormaps). Image:(%s).\n", name);
-		ri.FS_FreeFile (buffer);
-		return;
-	}
-
-	columns = targa_header.width;
-	rows = targa_header.height;
-	numPixels = columns * rows;
-
-	if (width)
-		*width = columns;
-	if (height)
-		*height = rows;
-
-	targa_rgba = malloc (numPixels*4);
-	*pic = targa_rgba;
-
-	if (targa_header.id_length != 0)
-		buf_p += targa_header.id_length;  // skip TARGA image comment
-	
-	if (targa_header.image_type==2) {  // Uncompressed, RGB images
-		for(row=rows-1; row>=0; row--) {
-			pixbuf = targa_rgba + row*columns*4;
-			for(column=0; column<columns; column++) {
-				unsigned char red,green,blue,alphabyte;
-				switch (targa_header.pixel_size) {
-					case 24:
-							
-							blue = *buf_p++;
-							green = *buf_p++;
-							red = *buf_p++;
-							*pixbuf++ = red;
-							*pixbuf++ = green;
-							*pixbuf++ = blue;
-							*pixbuf++ = 255;
-							break;
-					case 32:
-							blue = *buf_p++;
-							green = *buf_p++;
-							red = *buf_p++;
-							alphabyte = *buf_p++;
-							*pixbuf++ = red;
-							*pixbuf++ = green;
-							*pixbuf++ = blue;
-							*pixbuf++ = alphabyte;
-							break;
-				}
-			}
-		}
-	}
-	else if (targa_header.image_type==10) {   // Runlength encoded RGB images
-		unsigned char red,green,blue,alphabyte,packetHeader,packetSize,j;
-		for(row=rows-1; row>=0; row--) {
-			pixbuf = targa_rgba + row*columns*4;
-			for(column=0; column<columns; ) {
-				packetHeader= *buf_p++;
-				packetSize = 1 + (packetHeader & 0x7f);
-				if (packetHeader & 0x80) {        // run-length packet
-					switch (targa_header.pixel_size) {
-						case 24:
-								blue = *buf_p++;
-								green = *buf_p++;
-								red = *buf_p++;
-								alphabyte = 255;
-								break;
-						case 32:
-								blue = *buf_p++;
-								green = *buf_p++;
-								red = *buf_p++;
-								alphabyte = *buf_p++;
-								break;
-					}
-	
-					for(j=0;j<packetSize;j++) {
-						*pixbuf++=red;
-						*pixbuf++=green;
-						*pixbuf++=blue;
-						*pixbuf++=alphabyte;
-						column++;
-						if (column==columns) { // run spans across rows
-							column=0;
-							if (row>0)
-								row--;
-							else
-								goto breakOut;
-							pixbuf = targa_rgba + row*columns*4;
-						}
-					}
-				}
-				else {                            // non run-length packet
-					for(j=0;j<packetSize;j++) {
-						switch (targa_header.pixel_size) {
-							case 24:
-									blue = *buf_p++;
-									green = *buf_p++;
-									red = *buf_p++;
-									*pixbuf++ = red;
-									*pixbuf++ = green;
-									*pixbuf++ = blue;
-									*pixbuf++ = 255;
-									break;
-							case 32:
-									blue = *buf_p++;
-									green = *buf_p++;
-									red = *buf_p++;
-									alphabyte = *buf_p++;
-									*pixbuf++ = red;
-									*pixbuf++ = green;
-									*pixbuf++ = blue;
-									*pixbuf++ = alphabyte;
-									break;
-						}
-						column++;
-						if (column==columns) { // pixel packet run spans across rows
-							column=0;
-							if (row>0)
-								row--;
-							else
-								goto breakOut;
-							pixbuf = targa_rgba + row*columns*4;
-						}						
-					}
-				}
-			}
-			breakOut:;
-		}
-	}
-
-	ri.FS_FreeFile (buffer);
+	FS_FreeFile ((void *)pcx);
 }
 
 
@@ -400,7 +196,7 @@ image_t *R_FindFreeImage (void)
 	if (i == numr_images)
 	{
 		if (numr_images == MAX_RIMAGES)
-			ri.Sys_Error (ERR_DROP, "MAX_RIMAGES");
+			Com_Error (ERR_DROP, "MAX_RIMAGES");
 		numr_images++;
 	}
 	image = &r_images[i];
@@ -414,15 +210,14 @@ GL_LoadPic
 
 ================
 */
-image_t *GL_LoadPic (char *name, byte *pic, int width, int height, imagetype_t type)
+image_t *GL_LoadPic (const char *name, byte *pic, int width, int height, imagetype_t type)
 {
 	image_t		*image;
 	int			i, c, b;
 
 	image = R_FindFreeImage ();
-	if (strlen(name) >= sizeof(image->name))
-		ri.Sys_Error (ERR_DROP, "Draw_LoadPic: \"%s\" is too long", name);
-	strcpy (image->name, name);
+
+	Q_strncpyz (image->name, name, sizeof(image->name));
 	image->registration_sequence = registration_sequence;
 
 	image->width = width;
@@ -448,18 +243,18 @@ image_t *GL_LoadPic (char *name, byte *pic, int width, int height, imagetype_t t
 R_LoadWal
 ================
 */
-image_t *R_LoadWal (char *name)
+image_t *R_LoadWal (const char *name)
 {
 	miptex_t	*mt;
 	int			ofs;
 	image_t		*image;
 	int			size;
 
-	ri.FS_LoadFile (name, (void **)&mt);
+	FS_LoadFile (name, (void **)&mt);
 	if (!mt)
 	{
-		ri.Con_Printf (PRINT_ALL, "R_LoadWal: can't load %s\n", name);
-		return r_notexture_mip;
+		Com_Printf ("R_LoadWal: can't load %s\n", name);
+		return NULL;
 	}
 
 	image = R_FindFreeImage ();
@@ -478,11 +273,28 @@ image_t *R_LoadWal (char *name)
 	ofs = LittleLong (mt->offsets[0]);
 	memcpy ( image->pixels[0], (byte *)mt + ofs, size);
 
-	ri.FS_FreeFile ((void *)mt);
+	FS_FreeFile ((void *)mt);
 
 	return image;
 }
 
+
+unsigned int IMG_HashKey (const char *name, int hashsize)
+{
+	int i;
+	unsigned int v;
+	unsigned int c;
+
+	v = 0;
+	for( i = 0; name[i]; i++ ) {
+		c = name[i];
+		if( c == '\\' )
+			c = '/';
+		v = (v + i) * 37 + c;
+	}
+
+	return v % hashsize;
+}
 
 /*
 ===============
@@ -491,54 +303,68 @@ R_FindImage
 Finds or loads the given image
 ===============
 */
-image_t	*R_FindImage (char *name, imagetype_t type)
+image_t	*R_FindImage (const char *name, imagetype_t type)
 {
 	image_t	*image;
-	int		i, len;
+	int		i, len = 0;
 	byte	*pic, *palette;
 	int		width, height;
+	char	pathname[MAX_QPATH];
+	unsigned int hash;
 
-	if (!name)
-		return NULL;	// ri.Sys_Error (ERR_DROP, "R_FindImage: NULL name");
-	len = strlen(name);
+	if (!name || !name[0])
+		return NULL;	// Com_Error (ERR_DROP, "R_FindImage: NULL name");
+
+	for( i = ( name[0] == '/' || name[0] == '\\' ); name[i] && (len < sizeof(pathname)-5); i++ ) {
+		if( name[i] == '\\' ) 
+			pathname[len++] = '/';
+		else
+			pathname[len++] = tolower( name[i] );
+	}
+
 	if (len<5)
-		return NULL;	// ri.Sys_Error (ERR_DROP, "R_FindImage: bad name: %s", name);
+		return NULL;	// Com_Error (ERR_DROP, "R_FindImage: bad name: %s", name);
 
+	pathname[len] = 0;
+
+	hash = IMG_HashKey(pathname, IMAGES_HASH_SIZE);
 	// look for it
-	for (i=0, image=r_images ; i<numr_images ; i++,image++)
+	for (image = images_hash[hash]; image; image = image->hashNext)
 	{
-		if (!strcmp(name, image->name))
+		if (!strcmp(pathname, image->name))
 		{
 			image->registration_sequence = registration_sequence;
 			return image;
 		}
 	}
 
-	//
 	// load the pic from disk
-	//
 	pic = NULL;
 	palette = NULL;
-	if (!strcmp(name+len-4, ".pcx"))
+
+	if (!strcmp(pathname+len-4, ".pcx"))
 	{
-		LoadPCX (name, &pic, &palette, &width, &height);
+		LoadPCX (pathname, &pic, &palette, &width, &height);
 		if (!pic)
-			return NULL;	// ri.Sys_Error (ERR_DROP, "R_FindImage: can't load %s", name);
-		image = GL_LoadPic (name, pic, width, height, type);
+			return NULL;	// Com_Error (ERR_DROP, "R_FindImage: can't load %s", name);
+		image = GL_LoadPic (pathname, pic, width, height, type);
 	}
-	else if (!strcmp(name+len-4, ".wal"))
+	else if (!strcmp(pathname+len-4, ".wal"))
 	{
-		image = R_LoadWal (name);
+		image = R_LoadWal (pathname);
+		if(!image)
+			return r_notexture_mip;
 	}
-	else if (!strcmp(name+len-4, ".tga"))
-		return NULL;	// ri.Sys_Error (ERR_DROP, "R_FindImage: can't load %s in software renderer", name);
 	else
-		return NULL;	// ri.Sys_Error (ERR_DROP, "R_FindImage: bad extension on: %s", name);
+		return NULL;	// Com_Error (ERR_DROP, "R_FindImage: bad extension on: %s", name);
 
 	if (pic)
 		free(pic);
 	if (palette)
 		free(palette);
+
+	image->hashNext = images_hash[hash];
+	images_hash[hash] = image;
 
 	return image;
 }
@@ -550,7 +376,7 @@ image_t	*R_FindImage (char *name, imagetype_t type)
 R_RegisterSkin
 ===============
 */
-struct image_s *R_RegisterSkin (char *name)
+struct image_s *R_RegisterSkin (const char *name)
 {
 	return R_FindImage (name, it_skin);
 }
@@ -567,7 +393,8 @@ will be freed.
 void R_FreeUnusedImages (void)
 {
 	int		i;
-	image_t	*image;
+	image_t	*image, *entry, **back;
+	unsigned int hash;
 
 	for (i=0, image=r_images ; i<numr_images ; i++, image++)
 	{
@@ -580,6 +407,18 @@ void R_FreeUnusedImages (void)
 			continue;		// free texture
 		if (image->type == it_pic)
 			continue;		// don't free pics
+
+		hash = IMG_HashKey (image->name, IMAGES_HASH_SIZE);
+		// delete it from hash table
+		for( back=&images_hash[hash], entry=images_hash[hash]; entry; back=&entry->hashNext, entry=entry->hashNext ) {
+			if( entry == image ) {
+				*back = entry->hashNext;
+				break;
+			}
+		}
+		if( !entry ) {
+			Com_Error (ERR_FATAL, "R_FreeUnusedImages: %s not found in hash array", image->name );
+		}
 		// free it
 		free (image->pixels[0]);	// the other mip levels just follow
 		memset (image, 0, sizeof(*image));
@@ -616,5 +455,7 @@ void	R_ShutdownImages (void)
 		free (image->pixels[0]);	// the other mip levels just follow
 		memset (image, 0, sizeof(*image));
 	}
+	numr_images = 0;
+	memset( images_hash, 0, sizeof(images_hash) );
 }
 

@@ -818,37 +818,32 @@ void CL_AddDLights (void)
 
 //=====
 //PGM
-	if(vidref_val == VIDREF_GL)
+#ifdef GL_QUAKE
+	for (i=0 ; i<MAX_DLIGHTS ; i++, dl++)
 	{
-		for (i=0 ; i<MAX_DLIGHTS ; i++, dl++)
-		{
-			if (!dl->radius)
-				continue;
-			V_AddLight (dl->origin, dl->radius,
-				dl->color[0], dl->color[1], dl->color[2]);
-		}
+		if (!dl->radius)
+			continue;
+		V_AddLight (dl->origin, dl->radius,
+			dl->color[0], dl->color[1], dl->color[2]);
 	}
-	else
+#else
+	for (i=0 ; i<MAX_DLIGHTS ; i++, dl++)
 	{
-		for (i=0 ; i<MAX_DLIGHTS ; i++, dl++)
-		{
-			if (!dl->radius)
-				continue;
+		if (!dl->radius)
+			continue;
 
-			// negative light in software. only black allowed
-			if ((dl->color[0] < 0) || (dl->color[1] < 0) || (dl->color[2] < 0))
-			{
-				dl->radius = -(dl->radius);
-				dl->color[0] = 1;
-				dl->color[1] = 1;
-				dl->color[2] = 1;
-			}
-			V_AddLight (dl->origin, dl->radius,
-				dl->color[0], dl->color[1], dl->color[2]);
+		// negative light in software. only black allowed
+		if ((dl->color[0] < 0) || (dl->color[1] < 0) || (dl->color[2] < 0))
+		{
+			dl->radius = -(dl->radius);
+			dl->color[0] = 1;
+			dl->color[1] = 1;
+			dl->color[2] = 1;
 		}
+		V_AddLight (dl->origin, dl->radius,
+			dl->color[0], dl->color[1], dl->color[2]);
 	}
-//PGM
-//=====
+#endif
 }
 
 
@@ -1800,7 +1795,7 @@ void CL_FlyParticles (vec3_t origin, int count)
 	int			i;
 	cparticle_t	*p;
 	float		angle;
-	float		sr, sp, sy, cr, cp, cy;
+	float		sp, sy, cp, cy;
 	vec3_t		forward;
 	float		dist = 64;
 	float		ltime;
@@ -1826,8 +1821,8 @@ void CL_FlyParticles (vec3_t origin, int count)
 		sp = sin(angle);
 		cp = cos(angle);
 		angle = ltime * avelocities[i][2];
-		sr = sin(angle);
-		cr = cos(angle);
+		//sr = sin(angle);
+		//cr = cos(angle);
 	
 		forward[0] = cp*cy;
 		forward[1] = cp*sy;
@@ -1902,7 +1897,7 @@ void CL_BfgParticles (entity_t *ent)
 	int			i;
 	cparticle_t	*p;
 	float		angle;
-	float		sr, sp, sy, cr, cp, cy;
+	float		sp, sy, cp, cy;
 	vec3_t		forward;
 	float		dist = 64;
 	vec3_t		v;
@@ -1925,8 +1920,8 @@ void CL_BfgParticles (entity_t *ent)
 		sp = sin(angle);
 		cp = cos(angle);
 		angle = ltime * avelocities[i][2];
-		sr = sin(angle);
-		cr = cos(angle);
+		//sr = sin(angle);
+		//cr = cos(angle);
 	
 		forward[0] = cp*cy;
 		forward[1] = cp*sy;
@@ -2162,7 +2157,7 @@ void CL_AddParticles (void)
 {
 	cparticle_t		*p, *next;
 	float			alpha;
-	float			time = 0, time2;
+	float			time = 0, time2 = 0;
 	vec3_t			org;
 	int				color;
 	cparticle_t		*active, *tail;
@@ -2189,12 +2184,9 @@ void CL_AddParticles (void)
 			else if(alpha <= 0.3 && p->color == 0xe8)
 			{
  				rgbcolor[0] = 1.0f;
- 				rgbcolor[1] = 0.8f;//51
- 				rgbcolor[2] = 0.8f;//51
+ 				rgbcolor[1] = 0.8f;
+ 				rgbcolor[2] = 0.8f;
  				V_AddStain(p->org, rgbcolor, 18);
- 				p->next = free_particles;
- 				free_particles = p;
- 				continue;
  			}
 		}
 		else
@@ -2258,7 +2250,7 @@ void CL_EntityEvent (entity_state_t *ent)
 		CL_TeleportParticles (ent->origin);
 		break;
 	case EV_FOOTSTEP:
-		if (cl_footsteps->value)
+		if (cl_footsteps->integer)
 			S_StartSound (NULL, ent->number, CHAN_BODY, cl_sfx_footsteps[rand()&3], 1, ATTN_NORM, 0);
 		break;
 	case EV_FALLSHORT:

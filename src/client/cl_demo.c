@@ -139,7 +139,7 @@ void CL_Record_f( void )
     char 		tmpbuf[32];
     time_t		l_time;
 
-	if( Cmd_Argc() < 2 || (Cmd_Argc() == 1 && strlen(cl_clan->string) < 2)) {
+	if( Cmd_Argc() < 2 && strlen(cl_clan->string) < 2) {
 		Com_Printf( "Usage: %s <demoname>\n", Cmd_Argv( 0 ) );
 		return;
 	}
@@ -159,20 +159,20 @@ void CL_Record_f( void )
 	//
 	// open the demo file
 	//
-    if (strlen(cl_clan->string) > 2 && Cmd_Argc() == 1)
+    if (Cmd_Argc() == 1 && strlen(cl_clan->string) > 2)
     {
 		time( &l_time );
         ntime = localtime( &l_time );
         strftime( tmpbuf, sizeof(tmpbuf), "%Y-%m-%d", ntime );
 
-        Com_sprintf (name, sizeof(name), "%s/demos/%s_%s_%s.dm2", FS_Gamedir(), tmpbuf, cl_clan->string, cl.mapname);
+        Com_sprintf (name, sizeof(name), "%s/demos/%s_%s_%s.dm2", FS_Gamedir(), tmpbuf, cl_clan->string, cls.mapname);
         for (i=2; i<100; i++)
         {
 			cls.demofile = fopen (name, "rb");
 			if (!cls.demofile)
 				break;
 			fclose (cls.demofile);
-			Com_sprintf (name, sizeof(name), "%s/demos/%s_%s_%s_%i%i.dm2", FS_Gamedir(), tmpbuf, cl_clan->string, cl.mapname, (int)(i/10)%10, i%10);
+			Com_sprintf (name, sizeof(name), "%s/demos/%s_%s_%s_%i%i.dm2", FS_Gamedir(), tmpbuf, cl_clan->string, cls.mapname, (int)(i/10)%10, i%10);
 		}
 		if (i == 100)
 		{
@@ -273,10 +273,10 @@ void CL_Record_f( void )
 //----------------------------------------------------
 void CL_ParseAutoRecord (char *s)
 {
-	if (!cl_autorecord->value)
+	if (!cl_autorecord->integer)
 		return;
 
-	if (cl_recordstopatlimits->value)
+	if (cl_recordstopatlimits->integer)
 	{
 		if (strstr(s, "timelimit hit"))
 		{
@@ -304,7 +304,7 @@ void CL_ParseAutoRecord (char *s)
 		}
 	}
 
-	if (cl_recordstopatmatchsetup->value)
+	if (cl_recordstopatmatchsetup->integer)
 	{
 		if (strstr(s, cl_custommatchsetup->string ))
 		{
@@ -314,7 +314,7 @@ void CL_ParseAutoRecord (char *s)
 		}
 	}
 
-	if (cl_recordatmatchstart->value)
+	if (cl_recordatmatchstart->integer)
 	{
 		if (strstr(s, cl_custommatchstart->string))
 		{
@@ -332,7 +332,7 @@ void SCR_AutoDemo(void)
     time_t          l_time;
 
 
-	if (!cl_autorecord->value)
+	if (!cl_autorecord->integer)
 		return;
 
 	if(cls.demorecording)
@@ -346,9 +346,9 @@ void SCR_AutoDemo(void)
 	strftime( tmpbuf, sizeof(tmpbuf), "%Y-%m-%d_%H-%M-%S", ntime );
 	
 	if(strlen(cl_clan->string) > 2)
-		Com_sprintf(fname, sizeof(fname), "record %s_%s_%s",tmpbuf, cl_clan->string, cl.mapname);
+		Com_sprintf(fname, sizeof(fname), "record %s_%s_%s",tmpbuf, cl_clan->string, cls.mapname);
 	else
-		Com_sprintf(fname, sizeof(fname), "record %s_%s",tmpbuf, cl.mapname);	
+		Com_sprintf(fname, sizeof(fname), "record %s_%s",tmpbuf, cls.mapname);	
 
 	Cbuf_AddText(fname);
 }
@@ -379,7 +379,7 @@ void CL_Demo_List_f ( void )
 	Com_Printf( "Directory of %s\n", findname );
 	Com_Printf( "----\n" );
 
-	if( ( dirnames = FS_ListFiles( findname, &ndirs, 0, 0 ) ) != 0 )
+	if( ( dirnames = FS_ListFiles( findname, &ndirs, 0, SFF_SUBDIR | SFF_HIDDEN | SFF_SYSTEM ) ) != 0 )
 	{
 		int i;
 
@@ -438,7 +438,7 @@ void CL_Demo_Play_f ( void )
 	Com_Printf( "Directory of %s\n", findname );
 	Com_Printf( "----\n" );
 
-	if( ( dirnames = FS_ListFiles( findname, &ndirs, 0, 0 ) ) != 0 )
+	if( ( dirnames = FS_ListFiles( findname, &ndirs, 0, SFF_SUBDIR | SFF_HIDDEN | SFF_SYSTEM ) ) != 0 )
 	{
 		int i;
 
@@ -490,5 +490,3 @@ void CL_InitDemos( void )
 	cl_custommatchstart = Cvar_Get("cl_custommatchstart", "has started the match", 0);
 	cl_recordatmatchstart = Cvar_Get( "cl_recordatmatchstart", "0", 0);
 }
-
-

@@ -41,7 +41,7 @@ void SV_SetMaster_f (void)
 	int		i, slot;
 
 	// only dedicated servers send heartbeats
-	if (!dedicated->value)
+	if (!dedicated->integer)
 	{
 		Com_Printf ("Only dedicated servers use masters.\n");
 		return;
@@ -67,11 +67,11 @@ void SV_SetMaster_f (void)
 		if (master_adr[slot].port == 0)
 			master_adr[slot].port = BigShort (PORT_MASTER);
 
-		Com_Printf ("Master server at %s\n", NET_AdrToString (master_adr[slot]));
+		Com_Printf ("Master server at %s\n", NET_AdrToString (&master_adr[slot]));
 
 		Com_Printf ("Sending a ping.\n");
 
-		Netchan_OutOfBandPrint (NS_SERVER, master_adr[slot], "ping");
+		Netchan_OutOfBandPrint (NS_SERVER, &master_adr[slot], "ping");
 
 		slot++;
 	}
@@ -104,7 +104,7 @@ qboolean SV_SetPlayer (void)
 	if (s[0] >= '0' && s[0] <= '9')
 	{
 		idnum = atoi(Cmd_Argv(1));
-		if (idnum < 0 || idnum >= maxclients->value)
+		if (idnum < 0 || idnum >= maxclients->integer)
 		{
 			Com_Printf ("Bad client slot: %i\n", idnum);
 			return false;
@@ -121,7 +121,7 @@ qboolean SV_SetPlayer (void)
 	}
 
 	// check for a name match
-	for (i=0,cl=svs.clients ; i<maxclients->value; i++,cl++)
+	for (i=0,cl=svs.clients ; i<maxclients->integer; i++,cl++)
 	{
 		if (!cl->state)
 			continue;
@@ -464,6 +464,12 @@ Puts the server in demo mode on a specific map/cinematic
 */
 void SV_DemoMap_f (void)
 {
+	if (Cmd_Argc() != 2)
+	{
+		Com_Printf ("USAGE: demomap <demoname.dm2>\n");
+		return;
+	}
+
 	SV_Map (true, Cmd_Argv(1), false );
 }
 
@@ -516,8 +522,8 @@ void SV_GameMap_f (void)
 			// clear all the client inuse flags before saving so that
 			// when the level is re-entered, the clients will spawn
 			// at spawn points instead of occupying body shells
-			savedInuse = malloc(maxclients->value * sizeof(qboolean));
-			for (i=0,cl=svs.clients ; i<maxclients->value; i++,cl++)
+			savedInuse = malloc(maxclients->integer * sizeof(qboolean));
+			for (i=0,cl=svs.clients ; i<maxclients->integer; i++,cl++)
 			{
 				savedInuse[i] = cl->edict->inuse;
 				cl->edict->inuse = false;
@@ -526,7 +532,7 @@ void SV_GameMap_f (void)
 			SV_WriteLevelFile ();
 
 			// we must restore these for clients to transfer over correctly
-			for (i=0,cl=svs.clients ; i<maxclients->value; i++,cl++)
+			for (i=0,cl=svs.clients ; i<maxclients->integer; i++,cl++)
 				cl->edict->inuse = savedInuse[i];
 			free (savedInuse);
 		}
@@ -539,7 +545,7 @@ void SV_GameMap_f (void)
 	strncpy (svs.mapcmd, Cmd_Argv(1), sizeof(svs.mapcmd)-1);
 
 	// copy off the level to the autosave slot
-	if (!dedicated->value)
+	if (!dedicated->integer)
 	{
 		SV_WriteServerFile (true);
 		SV_CopySaveGame ("current", "save0");
@@ -559,6 +565,10 @@ void SV_Map_f (void)
 	char	*map;
 	char	expanded[MAX_QPATH];
 
+	if (Cmd_Argc() != 2) {
+		Com_Printf ("USAGE: map <mapname>\n");
+		return;
+	}
 	// if not a pcx, demo, or cinematic, check to make sure the level exists
 	map = Cmd_Argv(1);
 	if (!strstr (map, "."))
@@ -603,8 +613,6 @@ void SV_Loadgame_f (void)
 		return;
 	}
 
-	Com_Printf ("Loading game...\n");
-
 	dir = Cmd_Argv(1);
 	if (strstr (dir, "..") || strstr (dir, "/") || strstr (dir, "\\") )
 	{
@@ -622,6 +630,8 @@ void SV_Loadgame_f (void)
 	fclose (f);
 
 	SV_CopySaveGame (Cmd_Argv(1), "current");
+
+	Com_Printf ("Loading game...\n");
 
 	SV_ReadServerFile ();
 
@@ -666,7 +676,7 @@ void SV_Savegame_f (void)
 		return;
 	}
 
-	if (maxclients->value == 1 && svs.clients[0].edict->client->ps.stats[STAT_HEALTH] <= 0)
+	if (maxclients->integer == 1 && svs.clients[0].edict->client->ps.stats[STAT_HEALTH] <= 0)
 	{
 		Com_Printf ("\nCan't savegame while dead!\n");
 		return;
@@ -720,7 +730,9 @@ void SV_Kick_f (void)
 	if (!SV_SetPlayer ())
 		return;
 
-	SV_BroadcastPrintf (PRINT_HIGH, "%s was kicked\n", sv_client->name);
+	//r1: ignore kick message on connecting players (and those with no name)
+	if (sv_client->state == cs_spawned && *sv_client->name)
+		SV_BroadcastPrintf (PRINT_HIGH, "%s was kicked\n", sv_client->name);
 	// print directly, because the dropped client won't get the
 	// SV_BroadcastPrintf message
 	SV_ClientPrintf (sv_client, PRINT_HIGH, "You were kicked from the game\n");
@@ -749,7 +761,7 @@ void SV_Status_f (void)
 
 	Com_Printf ("num score ping name            lastmsg address               qport \n");
 	Com_Printf ("--- ----- ---- --------------- ------- --------------------- ------\n");
-	for (i=0,cl=svs.clients ; i<maxclients->value; i++,cl++)
+	for (i=0,cl=svs.clients ; i<maxclients->integer; i++,cl++)
 	{
 		if (!cl->state)
 			continue;
@@ -773,7 +785,7 @@ void SV_Status_f (void)
 
 		Com_Printf ("%7i ", svs.realtime - cl->lastmessage );
 
-		s = NET_AdrToString ( cl->netchan.remote_address);
+		s = NET_AdrToString ( &cl->netchan.remote_address);
 		Com_Printf ("%s", s);
 		l = 22 - strlen(s);
 		for (j=0 ; j<l ; j++)
@@ -810,9 +822,9 @@ void SV_ConSay_f(void)
 		p[strlen(p)-1] = 0;
 	}
 
-	strcat(text, p);
+	strncat(text, p, 1014);
 
-	for (j = 0, client = svs.clients; j < maxclients->value; j++, client++)
+	for (j = 0, client = svs.clients; j < maxclients->integer; j++, client++)
 	{
 		if (client->state != cs_spawned)
 			continue;
@@ -910,7 +922,6 @@ void SV_ServerRecord_f (void)
 	//
 	Com_sprintf (name, sizeof(name), "%s/demos/%s.dm2", FS_Gamedir(), Cmd_Argv(1));
 
-	Com_Printf ("recording to %s.\n", name);
 	FS_CreatePath (name);
 	svs.demofile = fopen (name, "wb");
 	if (!svs.demofile)
@@ -918,6 +929,8 @@ void SV_ServerRecord_f (void)
 		Com_Printf ("ERROR: couldn't open.\n");
 		return;
 	}
+
+	Com_Printf ("recording to %s.\n", name);
 
 	// setup a buffer to catch all multicasts
 	SZ_Init (&svs.demo_multicast, svs.demo_multicast_buf, sizeof(svs.demo_multicast_buf));
@@ -1034,7 +1047,7 @@ void SV_InitOperatorCommands (void)
 	Cmd_AddCommand ("gamemap", SV_GameMap_f);
 	Cmd_AddCommand ("setmaster", SV_SetMaster_f);
 
-	if ( dedicated->value )
+	if ( dedicated->integer )
 		Cmd_AddCommand ("say", SV_ConSay_f);
 
 	Cmd_AddCommand ("serverrecord", SV_ServerRecord_f);
@@ -1047,4 +1060,3 @@ void SV_InitOperatorCommands (void)
 
 	Cmd_AddCommand ("sv", SV_ServerCommand_f);
 }
-

@@ -40,7 +40,7 @@ void PF_Unicast (edict_t *ent, qboolean reliable)
 		return;
 
 	p = NUM_FOR_EDICT(ent);
-	if (p < 1 || p > maxclients->value)
+	if (p < 1 || p > maxclients->integer)
 		return;
 
 	client = svs.clients + (p-1);
@@ -85,17 +85,21 @@ void PF_cprintf (edict_t *ent, int level, char *fmt, ...)
 {
 	char		msg[1024];
 	va_list		argptr;
-	int			n;
+	int			n = 0;
 
 	if (ent)
 	{
 		n = NUM_FOR_EDICT(ent);
-		if (n < 1 || n > maxclients->value)
-			Com_Error (ERR_DROP, "cprintf to a non-client");
+		if (n < 1 || n > maxclients->integer)
+		{
+			//Com_Error (ERR_DROP, "cprintf to a non-client");
+			Com_Printf ("WARNING: cprintf to a non-client (%d)\n", n);
+			return;
+		}
 	}
 
 	va_start (argptr,fmt);
-	vsprintf (msg, fmt, argptr);
+	vsnprintf(msg, 1024, fmt, argptr);
 	va_end (argptr);
 
 	if (ent)
@@ -118,12 +122,18 @@ void PF_centerprintf (edict_t *ent, char *fmt, ...)
 	va_list		argptr;
 	int			n;
 	
+	if (!ent)
+	{
+		Com_Printf ("WARNING: PF_centerprintf to NULL ent, ignored\n");
+		return;
+	}
+
 	n = NUM_FOR_EDICT(ent);
-	if (n < 1 || n > maxclients->value)
+	if (n < 1 || n > maxclients->integer)
 		return;	// Com_Error (ERR_DROP, "centerprintf to a non-client");
 
 	va_start (argptr,fmt);
-	vsprintf (msg, fmt, argptr);
+	vsnprintf(msg, 1024, fmt, argptr);
 	va_end (argptr);
 
 	MSG_WriteByte (&sv.multicast,svc_centerprint);
@@ -145,7 +155,7 @@ void PF_error (char *fmt, ...)
 	va_list		argptr;
 	
 	va_start (argptr,fmt);
-	vsprintf (msg, fmt, argptr);
+	vsnprintf(msg, 1024, fmt, argptr);
 	va_end (argptr);
 
 	Com_Error (ERR_DROP, "Game Error: %s", msg);
@@ -165,7 +175,10 @@ void PF_setmodel (edict_t *ent, char *name)
 	cmodel_t	*mod;
 
 	if (!name)
-		Com_Error (ERR_DROP, "PF_setmodel: NULL");
+		Com_Error (ERR_DROP, "PF_setmodel: NULL model name");
+
+	if (!ent)
+		Com_Error (ERR_DROP, "PF_setmodel: NULL entity");
 
 	i = SV_ModelIndex (name);
 		
@@ -192,7 +205,7 @@ PF_Configstring
 void PF_Configstring (int index, char *val)
 {
 	if (index < 0 || index >= MAX_CONFIGSTRINGS)
-		Com_Error (ERR_DROP, "configstring: bad index %i\n", index);
+		Com_Error (ERR_DROP, "configstring: bad index %i (data: %s)\n", index, val);
 
 	if (!val)
 		val = "";
@@ -289,7 +302,10 @@ void PF_StartSound (edict_t *entity, int channel, int sound_num, float volume,
     float attenuation, float timeofs)
 {
 	if (!entity)
+	{
+		Com_DPrintf ("PF_StartSound: NULL entity, ignored\n");
 		return;
+	}
 	SV_StartSound (NULL, entity, channel, sound_num, volume, attenuation, timeofs);
 }
 
@@ -394,4 +410,3 @@ void SV_InitGameProgs (void)
 
 	ge->Init ();
 }
-

@@ -296,7 +296,7 @@ void CL_BaseMove (usercmd_t *cmd)
 //
 // adjust for speed key / running
 //
-	if ( (in_speed.state & 1) ^ (int)(cl_run->value) )
+	if ( (in_speed.state & 1) ^ cl_run->integer )
 	{
 		cmd->forwardmove *= 2;
 		cmd->sidemove *= 2;
@@ -510,7 +510,7 @@ void CL_SendCmd (void)
 
 	// let the server know what the last frame we
 	// got was, so the next message can be delta compressed
-	if (cl_nodelta->value || !cl.frame.valid || cls.demowaiting)
+	if (cl_nodelta->integer || !cl.frame.valid || cls.demowaiting)
 		MSG_WriteLong (&buf, -1);	// no compression
 	else
 		MSG_WriteLong (&buf, cl.frame.serverframe);
@@ -537,7 +537,7 @@ void CL_SendCmd (void)
 		buf.data + checksumIndex + 1, buf.cursize - checksumIndex - 1,
 		cls.netchan.outgoing_sequence);
 
-	//
+	//cl_maxpackets code from q2pro
 	// Hack from fuzzquake2 - we simply drop outgoing packets
 	//
 	// Dropping two packets seems to be completely safe (see the code above)
@@ -545,11 +545,11 @@ void CL_SendCmd (void)
 	// If we drop more, server will reuse our last command multiple times,
 	// and this will probably result in prediction error (see sv_user.c)
 	//
-	if( cl_maxpackets->value ) {
-		if( cl_maxpackets->value < cl_maxfps->value/3 ) {
-			Cvar_SetValue( "cl_maxpackets", cl_maxfps->value/3 );
-		} else if( cl_maxpackets->value > 999 ) {
-			Cvar_SetValue( "cl_maxpackets", 999 );
+	if( cl_maxpackets->integer ) {
+		if( cl_maxpackets->integer < cl_maxfps->integer/3 ) {
+			Cvar_SetValue( "cl_maxpackets", cl_maxfps->integer/3 );
+		} else if( cl_maxpackets->value > cl_maxfps->integer ) {
+			Cvar_SetValue( "cl_maxpackets", cl_maxfps->integer );
 		}
 
 		time = cls.realtime;
@@ -557,7 +557,7 @@ void CL_SendCmd (void)
 			prevTime = time;
 		}
 
-		if( !cls.netchan.message.cursize && time - prevTime < 1000 / cl_maxpackets->value ) {
+		if( !cls.netchan.message.cursize && time - prevTime < 1000 / cl_maxpackets->integer ) {
 			// drop the packet, saving reliable contents
 			cls.netchan.outgoing_sequence++;
 
@@ -574,5 +574,3 @@ void CL_SendCmd (void)
 	//
 	Netchan_Transmit (&cls.netchan, buf.cursize, buf.data);	
 }
-
-

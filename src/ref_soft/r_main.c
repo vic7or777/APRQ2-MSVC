@@ -22,7 +22,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "r_local.h"
 
 viddef_t	vid;
-refimport_t	ri;
 
 unsigned	d_8to24table[256];
 
@@ -240,52 +239,52 @@ void R_ImageList_f( void );
 
 void R_Register (void)
 {
-	sw_aliasstats = ri.Cvar_Get ("sw_polymodelstats", "0", 0);
-	sw_allow_modex = ri.Cvar_Get( "sw_allow_modex", "1", CVAR_ARCHIVE );
-	sw_clearcolor = ri.Cvar_Get ("sw_clearcolor", "2", 0);
-	sw_drawflat = ri.Cvar_Get ("sw_drawflat", "0", 0);
-	sw_draworder = ri.Cvar_Get ("sw_draworder", "0", 0);
-	sw_maxedges = ri.Cvar_Get ("sw_maxedges", STRINGER(MAXSTACKSURFACES), 0);
-	sw_maxsurfs = ri.Cvar_Get ("sw_maxsurfs", "0", 0);
-	sw_mipcap = ri.Cvar_Get ("sw_mipcap", "0", 0);
-	sw_mipscale = ri.Cvar_Get ("sw_mipscale", "1", 0);
-	sw_reportedgeout = ri.Cvar_Get ("sw_reportedgeout", "0", 0);
-	sw_reportsurfout = ri.Cvar_Get ("sw_reportsurfout", "0", 0);
-	sw_stipplealpha = ri.Cvar_Get( "sw_stipplealpha", "0", CVAR_ARCHIVE );
-	sw_surfcacheoverride = ri.Cvar_Get ("sw_surfcacheoverride", "0", 0);
-	sw_waterwarp = ri.Cvar_Get ("sw_waterwarp", "1", 0);
-	sw_mode = ri.Cvar_Get( "sw_mode", "0", CVAR_ARCHIVE );
+	sw_aliasstats = Cvar_Get ("sw_polymodelstats", "0", 0);
+	sw_allow_modex = Cvar_Get( "sw_allow_modex", "1", CVAR_ARCHIVE );
+	sw_clearcolor = Cvar_Get ("sw_clearcolor", "2", 0);
+	sw_drawflat = Cvar_Get ("sw_drawflat", "0", 0);
+	sw_draworder = Cvar_Get ("sw_draworder", "0", 0);
+	sw_maxedges = Cvar_Get ("sw_maxedges", STRINGER(MAXSTACKSURFACES), 0);
+	sw_maxsurfs = Cvar_Get ("sw_maxsurfs", "0", 0);
+	sw_mipcap = Cvar_Get ("sw_mipcap", "0", 0);
+	sw_mipscale = Cvar_Get ("sw_mipscale", "1", 0);
+	sw_reportedgeout = Cvar_Get ("sw_reportedgeout", "0", 0);
+	sw_reportsurfout = Cvar_Get ("sw_reportsurfout", "0", 0);
+	sw_stipplealpha = Cvar_Get( "sw_stipplealpha", "0", CVAR_ARCHIVE );
+	sw_surfcacheoverride = Cvar_Get ("sw_surfcacheoverride", "0", 0);
+	sw_waterwarp = Cvar_Get ("sw_waterwarp", "1", 0);
+	sw_mode = Cvar_Get( "sw_mode", "0", CVAR_ARCHIVE );
 
-	r_lefthand = ri.Cvar_Get( "hand", "0", CVAR_USERINFO | CVAR_ARCHIVE );
-	r_speeds = ri.Cvar_Get ("r_speeds", "0", 0);
-	r_fullbright = ri.Cvar_Get ("r_fullbright", "0", 0);
-	r_drawentities = ri.Cvar_Get ("r_drawentities", "1", 0);
-	r_drawworld = ri.Cvar_Get ("r_drawworld", "1", 0);
-	r_dspeeds = ri.Cvar_Get ("r_dspeeds", "0", 0);
-	r_lightlevel = ri.Cvar_Get ("r_lightlevel", "0", 0);
-	r_lerpmodels = ri.Cvar_Get( "r_lerpmodels", "1", 0 );
-	r_novis = ri.Cvar_Get( "r_novis", "0", 0 );
+	r_lefthand = Cvar_Get( "hand", "0", CVAR_USERINFO | CVAR_ARCHIVE );
+	r_speeds = Cvar_Get ("r_speeds", "0", 0);
+	r_fullbright = Cvar_Get ("r_fullbright", "0", 0);
+	r_drawentities = Cvar_Get ("r_drawentities", "1", 0);
+	r_drawworld = Cvar_Get ("r_drawworld", "1", 0);
+	r_dspeeds = Cvar_Get ("r_dspeeds", "0", 0);
+	r_lightlevel = Cvar_Get ("r_lightlevel", "0", 0);
+	r_lerpmodels = Cvar_Get( "r_lerpmodels", "1", 0 );
+	r_novis = Cvar_Get( "r_novis", "0", 0 );
 
-	vid_fullscreen = ri.Cvar_Get( "vid_fullscreen", "0", CVAR_ARCHIVE );
-	vid_gamma = ri.Cvar_Get( "vid_gamma", "1.0", CVAR_ARCHIVE );
+	vid_fullscreen = Cvar_Get( "vid_fullscreen", "0", CVAR_ARCHIVE );
+	vid_gamma = Cvar_Get( "vid_gamma", "1.0", CVAR_ARCHIVE );
 
-	ri.Cmd_AddCommand ("modellist", Mod_Modellist_f);
-	ri.Cmd_AddCommand( "screenshot", R_ScreenShot_f );
-	ri.Cmd_AddCommand( "imagelist", R_ImageList_f );
+	Cmd_AddCommand ("modellist", Mod_Modellist_f);
+	Cmd_AddCommand( "screenshot", R_ScreenShot_f );
+	Cmd_AddCommand( "imagelist", R_ImageList_f );
 
 	sw_mode->modified = true; // force us to do mode specific stuff later
 	vid_gamma->modified = true; // force us to rebuild the gamma table later
 
 //PGM
-	sw_lockpvs = ri.Cvar_Get ("sw_lockpvs", "0", 0);
+	sw_lockpvs = Cvar_Get ("sw_lockpvs", "0", 0);
 //PGM
 }
 
 void R_UnRegister (void)
 {
-	ri.Cmd_RemoveCommand( "screenshot" );
-	ri.Cmd_RemoveCommand ("modellist");
-	ri.Cmd_RemoveCommand( "imagelist" );
+	Cmd_RemoveCommand( "screenshot" );
+	Cmd_RemoveCommand ("modellist");
+	Cmd_RemoveCommand( "imagelist" );
 }
 
 /*
@@ -293,7 +292,7 @@ void R_UnRegister (void)
 R_Init
 ===============
 */
-qboolean R_Init( void *hInstance, void *wndProc )
+int R_Init( void *hInstance, void *wndProc )
 {
 	R_InitImages ();
 	Mod_Init ();
@@ -328,9 +327,9 @@ qboolean R_Init( void *hInstance, void *wndProc )
 	// create the window
 	R_BeginFrame( 0 );
 
-	ri.Con_Printf (PRINT_ALL, "ref_soft version: "REF_VERSION"\n");
+	Com_Printf ("ref_soft version: "REF_VERSION"\n");
 
-	return true;
+	return 0;
 }
 
 /*
@@ -376,7 +375,7 @@ void R_NewMap (void)
 {
 	r_viewcluster = -1;
 
-	r_cnumsurfs = sw_maxsurfs->value;
+	r_cnumsurfs = sw_maxsurfs->integer;
 
 	if (r_cnumsurfs <= MINSURFACES)
 		r_cnumsurfs = MINSURFACES;
@@ -400,7 +399,7 @@ void R_NewMap (void)
 	r_maxedgesseen = 0;
 	r_maxsurfsseen = 0;
 
-	r_numallocatededges = sw_maxedges->value;
+	r_numallocatededges = sw_maxedges->integer;
 
 	if (r_numallocatededges < MINEDGES)
 		r_numallocatededges = MINEDGES;
@@ -432,18 +431,18 @@ void R_MarkLeaves (void)
 	mleaf_t	*leaf;
 	int		cluster;
 
-	if (r_oldviewcluster == r_viewcluster && !r_novis->value && r_viewcluster != -1)
+	if (r_oldviewcluster == r_viewcluster && !r_novis->integer && r_viewcluster != -1)
 		return;
 	
 	// development aid to let you run around and see exactly where
 	// the pvs ends
-	if (sw_lockpvs->value)
+	if (sw_lockpvs->integer)
 		return;
 
 	r_visframecount++;
 	r_oldviewcluster = r_viewcluster;
 
-	if (r_novis->value || r_viewcluster == -1 || !r_worldmodel->vis)
+	if (r_novis->integer || r_viewcluster == -1 || !r_worldmodel->vis)
 	{
 		// mark everything
 		for (i=0 ; i<r_worldmodel->numleafs ; i++)
@@ -510,7 +509,7 @@ void R_DrawEntitiesOnList (void)
 	int			i;
 	qboolean	translucent_entities = false;
 
-	if (!r_drawentities->value)
+	if (!r_drawentities->integer)
 		return;
 
 	// all bmodels have already been drawn by the edge list
@@ -768,7 +767,7 @@ void R_DrawBEntitiesOnList (void)
 	float		minmaxs[6];
 	mnode_t		*topnode;
 
-	if (!r_drawentities->value)
+	if (!r_drawentities->integer)
 		return;
 
 	VectorCopy (modelorg, oldorigin);
@@ -878,14 +877,14 @@ void R_EdgeDrawing (void)
 
 	R_BeginEdgeFrame ();
 
-	if (r_dspeeds->value)
+	if (r_dspeeds->integer)
 	{
 		rw_time1 = Sys_Milliseconds ();
 	}
 
 	R_RenderWorld ();
 
-	if (r_dspeeds->value)
+	if (r_dspeeds->integer)
 	{
 		rw_time2 = Sys_Milliseconds ();
 		db_time1 = rw_time2;
@@ -893,7 +892,7 @@ void R_EdgeDrawing (void)
 
 	R_DrawBEntitiesOnList ();
 
-	if (r_dspeeds->value)
+	if (r_dspeeds->integer)
 	{
 		db_time2 = Sys_Milliseconds ();
 		se_time1 = db_time2;
@@ -966,15 +965,15 @@ void R_SetLightLevel (void)
 {
 	vec3_t		light;
 
-	if ((r_newrefdef.rdflags & RDF_NOWORLDMODEL) || (!r_drawentities->value) || (!currententity))
+	if ((r_newrefdef.rdflags & RDF_NOWORLDMODEL) || (!r_drawentities->integer) || (!currententity))
 	{
-		r_lightlevel->value = 150.0;
+		r_lightlevel->integer = 150;
 		return;
 	}
 
 	// save off light value for server to look at (BIG HACK!)
 	R_LightPoint (r_newrefdef.vieworg, light);
-	r_lightlevel->value = 150.0 * light[0];
+	r_lightlevel->integer = 150.0 * light[0];
 }
 
 
@@ -989,12 +988,12 @@ void R_RenderFrame (refdef_t *fd)
 	r_newrefdef = *fd;
 
 	if (!r_worldmodel && !( r_newrefdef.rdflags & RDF_NOWORLDMODEL ) )
-		ri.Sys_Error (ERR_FATAL,"R_RenderView: NULL worldmodel");
+		Com_Error (ERR_FATAL,"R_RenderView: NULL worldmodel");
 
 	VectorCopy (fd->vieworg, r_refdef.vieworg);
 	VectorCopy (fd->viewangles, r_refdef.viewangles);
 
-	if (r_speeds->value || r_dspeeds->value)
+	if (r_speeds->integer || r_dspeeds->integer)
 		r_time1 = Sys_Milliseconds ();
 
 	R_SetupFrame ();
@@ -1005,7 +1004,7 @@ void R_RenderFrame (refdef_t *fd)
 
 	R_EdgeDrawing ();
 
-	if (r_dspeeds->value)
+	if (r_dspeeds->integer)
 	{
 		se_time2 = Sys_Milliseconds ();
 		de_time1 = se_time2;
@@ -1013,7 +1012,7 @@ void R_RenderFrame (refdef_t *fd)
 
 	R_DrawEntitiesOnList ();
 
-	if (r_dspeeds->value)
+	if (r_dspeeds->integer)
 	{
 		de_time2 = Sys_Milliseconds ();
 		dp_time1 = Sys_Milliseconds ();
@@ -1021,7 +1020,7 @@ void R_RenderFrame (refdef_t *fd)
 
 	R_DrawParticles ();
 
-	if (r_dspeeds->value)
+	if (r_dspeeds->integer)
 		dp_time2 = Sys_Milliseconds ();
 
 	R_DrawAlphaSurfaces();
@@ -1031,28 +1030,28 @@ void R_RenderFrame (refdef_t *fd)
 	if (r_dowarp)
 		D_WarpScreen ();
 
-	if (r_dspeeds->value)
+	if (r_dspeeds->integer)
 		da_time1 = Sys_Milliseconds ();
 
-	if (r_dspeeds->value)
+	if (r_dspeeds->integer)
 		da_time2 = Sys_Milliseconds ();
 
 	R_CalcPalette ();
 
-	if (sw_aliasstats->value)
+	if (sw_aliasstats->integer)
 		R_PrintAliasStats ();
 		
-	if (r_speeds->value)
+	if (r_speeds->integer)
 		R_PrintTimes ();
 
-	if (r_dspeeds->value)
+	if (r_dspeeds->integer)
 		R_PrintDSpeeds ();
 
-	if (sw_reportsurfout->value && r_outofsurfaces)
-		ri.Con_Printf (PRINT_ALL,"Short %d surfaces\n", r_outofsurfaces);
+	if (sw_reportsurfout->integer && r_outofsurfaces)
+		Com_Printf ("Short %d surfaces\n", r_outofsurfaces);
 
-	if (sw_reportedgeout->value && r_outofedges)
-		ri.Con_Printf (PRINT_ALL,"Short roughly %d edges\n", r_outofedges * 2 / 3);
+	if (sw_reportedgeout->integer && r_outofedges)
+		Com_Printf ("Short roughly %d edges\n", r_outofedges * 2 / 3);
 }
 
 /*
@@ -1111,11 +1110,11 @@ void R_BeginFrame( float camera_separation )
 		** if this returns rserr_invalid_fullscreen then it set the mode but not as a
 		** fullscreen mode, e.g. 320x200 on a system that doesn't support that res
 		*/
-		if ( ( err = SWimp_SetMode( &vid.width, &vid.height, sw_mode->value, vid_fullscreen->value ) ) == rserr_ok )
+		if ( ( err = SWimp_SetMode( &vid.width, &vid.height, sw_mode->integer, vid_fullscreen->integer ) ) == rserr_ok )
 		{
 			R_InitGraphics( vid.width, vid.height );
 
-			sw_state.prev_mode = sw_mode->value;
+			sw_state.prev_mode = sw_mode->integer;
 			vid_fullscreen->modified = false;
 			sw_mode->modified = false;
 		}
@@ -1123,22 +1122,22 @@ void R_BeginFrame( float camera_separation )
 		{
 			if ( err == rserr_invalid_mode )
 			{
-				ri.Cvar_SetValue( "sw_mode", sw_state.prev_mode );
-				ri.Con_Printf( PRINT_ALL, "ref_soft::R_BeginFrame() - could not set mode\n" );
+				Cvar_SetValue( "sw_mode", sw_state.prev_mode );
+				Com_Printf ( "ref_soft::R_BeginFrame() - could not set mode\n" );
 			}
 			else if ( err == rserr_invalid_fullscreen )
 			{
 				R_InitGraphics( vid.width, vid.height );
 
-				ri.Cvar_SetValue( "vid_fullscreen", 0);
-				ri.Con_Printf( PRINT_ALL, "ref_soft::R_BeginFrame() - fullscreen unavailable in this mode\n" );
-				sw_state.prev_mode = sw_mode->value;
+				Cvar_SetValue( "vid_fullscreen", 0);
+				Com_Printf ( "ref_soft::R_BeginFrame() - fullscreen unavailable in this mode\n" );
+				sw_state.prev_mode = sw_mode->integer;
 //				vid_fullscreen->modified = false;
 //				sw_mode->modified = false;
 			}
 			else
 			{
-				ri.Sys_Error( ERR_FATAL, "ref_soft::R_BeginFrame() - catastrophic mode change failure\n" );
+				Com_Error( ERR_FATAL, "ref_soft::R_BeginFrame() - catastrophic mode change failure\n" );
 			}
 		}
 	}
@@ -1291,12 +1290,12 @@ R_SetSky
 char	*suf[6] = {"rt", "bk", "lf", "ft", "up", "dn"};
 int	r_skysideimage[6] = {5, 2, 4, 1, 0, 3};
 extern	mtexinfo_t		r_skytexinfo[6];
-void R_SetSky (char *name, float rotate, vec3_t axis)
+void R_SetSky (const char *name, float rotate, vec3_t axis)
 {
 	int		i;
 	char	pathname[MAX_QPATH];
 
-	strncpy (skyname, name, sizeof(skyname)-1);
+	Q_strncpyz (skyname, name, sizeof(skyname));
 	skyrotate = rotate;
 	VectorCopy (axis, skyaxis);
 
@@ -1322,7 +1321,7 @@ void Draw_GetPalette (void)
 	// get the palette and colormap
 	LoadPCX ("pics/colormap.pcx", &vid.colormap, &pal, NULL, NULL);
 	if (!vid.colormap)
-		ri.Sys_Error (ERR_FATAL, "Couldn't load pics/colormap.pcx");
+		Com_Error (ERR_FATAL, "Couldn't load pics/colormap.pcx");
 	vid.alphamap = vid.colormap + 64*256;
 
 	out = (byte *)d_8to24table;
@@ -1340,87 +1339,4 @@ void Draw_GetPalette (void)
 	free (pal);
 }
 
-struct image_s *R_RegisterSkin (char *name);
 
-void R_AddDecal	(vec3_t origin, vec3_t dir, float red, float green, float blue, float alpha,
-				 float size, int type, int flags, float angle)
-{
-	//Hackish way to enable decals only in gl mode :/
-}
-/*
-@@@@@@@@@@@@@@@@@@@@@
-GetRefAPI
-
-@@@@@@@@@@@@@@@@@@@@@
-*/
-refexport_t GetRefAPI (refimport_t rimp)
-{
-	refexport_t	re;
-
-	ri = rimp;
-
-	re.api_version = API_VERSION;
-
-	re.BeginRegistration = R_BeginRegistration;
-    re.RegisterModel = R_RegisterModel;
-    re.RegisterSkin = R_RegisterSkin;
-	re.RegisterPic = Draw_FindPic;
-	re.SetSky = R_SetSky;
-	re.EndRegistration = R_EndRegistration;
-
-	re.RenderFrame = R_RenderFrame;
-
-	re.DrawGetPicSize = Draw_GetPicSize;
-	re.DrawPic = Draw_Pic;
-	re.DrawScaledPic = Draw_ScaledPic; //For crosshair -Maniac
-	re.DrawStretchPic = Draw_StretchPic;
-	re.DrawChar = Draw_Char;
-	re.DrawTileClear = Draw_TileClear;
-	re.DrawFill = Draw_Fill;
-	re.DrawFadeScreen= Draw_FadeScreen;
-
-	re.DrawStretchRaw = Draw_StretchRaw;
-
-	re.Init = R_Init;
-	re.Shutdown = R_Shutdown;
-
-	re.CinematicSetPalette = R_CinematicSetPalette;
-	re.BeginFrame = R_BeginFrame;
-	re.EndFrame = SWimp_EndFrame;
-
-	re.AppActivate = SWimp_AppActivate;
-
-	re.AddDecal = R_AddDecal;
-
-	Swap_Init ();
-
-	return re;
-}
-
-#ifndef REF_HARD_LINKED
-// this is only here so the functions in q_shared.c and q_shwin.c can link
-void Sys_Error (char *error, ...)
-{
-	va_list		argptr;
-	char		text[1024];
-
-	va_start (argptr, error);
-	vsprintf (text, error, argptr);
-	va_end (argptr);
-
-	ri.Sys_Error (ERR_FATAL, "%s", text);
-}
-
-void Com_Printf (char *fmt, ...)
-{
-	va_list		argptr;
-	char		text[1024];
-
-	va_start (argptr, fmt);
-	vsprintf (text, fmt, argptr);
-	va_end (argptr);
-
-	ri.Con_Printf (PRINT_ALL, "%s", text);
-}
-
-#endif

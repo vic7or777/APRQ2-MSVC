@@ -28,8 +28,6 @@ QUAKE FILESYSTEM
 =============================================================================
 */
 
-#define FS_HASH_SIZE	32
-
 //
 // in memory
 //
@@ -38,7 +36,8 @@ typedef struct packfile_s
 {
 	char		name[MAX_QPATH];
 	int			filepos, filelen;
-	struct packfile_s *next;
+
+	struct packfile_s *hashNext;
 } packfile_t;
 
 typedef struct pack_s
@@ -46,14 +45,16 @@ typedef struct pack_s
 	char		filename[MAX_OSPATH];
 	FILE		*handle;
 	int			numfiles;
-	packfile_t	*files[FS_HASH_SIZE];
+	packfile_t	*files;
+	packfile_t	**fileHash;
+	int			hashSize;
 } pack_t;
 
 char	fs_gamedir[MAX_OSPATH];
 cvar_t	*fs_basedir;
-cvar_t	*fs_cddir;
+//cvar_t	*fs_cddir;
 cvar_t	*fs_gamedirvar;
-cvar_t	*fs_allpakloading; //Allow *.pak loading -Maniac
+cvar_t	*fs_allpakloading;
 
 typedef struct searchpath_s
 {
@@ -65,6 +66,7 @@ typedef struct searchpath_s
 searchpath_t	*fs_searchpaths;
 searchpath_t	*fs_base_searchpaths;	// without gamedirs
 
+#define FS_MAX_HASH_SIZE 1024
 
 /*
 
@@ -77,6 +79,23 @@ The "game directory" is the first tree on the search path and directory that all
 
 */
 
+/*
+===========
+FS_PackHashKey
+===========
+*/
+static unsigned int FS_PackHashKey( const char *str, int hashSize )
+{
+	int c;
+	unsigned int hashval = 0;
+
+	while ( (c = *str++) != 0 ) {
+		if( c == '\\' )
+			c = '/';
+		hashval = hashval*37 + tolower( c );
+	}
+	return hashval & (hashSize - 1);
+}
 
 /*
 ================
@@ -117,21 +136,6 @@ void FS_CreatePath (char *path)
 			*ofs = '/';
 		}
 	}
-}
-
-/*
-==============
-FS_HashKey
-==============
-*/
-int FS_HashKey (char *str)
-{
-	int hash;
-
-	for (hash = 0; *str; )
-		hash += *str++;
-
-	return hash & (FS_HASH_SIZE - 1);
 }
 
 /*
@@ -199,16 +203,15 @@ a seperate file.
 */
 int file_from_pak = 0;
 
-int FS_FOpenFile (char *filename, FILE **file)
+int FS_FOpenFile (const char *filename, FILE **file)
 {
-	int				hash;
+	unsigned int	hash;
 	searchpath_t	*search;
 	char			netpath[MAX_OSPATH];
 	pack_t			*pak;
 	packfile_t		*pakfile;
 
 	file_from_pak = 0;
-	hash = FS_HashKey (filename);
 
 //
 // search through the path, one element at a time
@@ -220,13 +223,12 @@ int FS_FOpenFile (char *filename, FILE **file)
 		{
 		// look through all the pak file elements
 			pak = search->pack;
-			pakfile = pak->files[hash];
-			for ( ; pakfile ; pakfile = pakfile->next)
-				if (!Q_strcasecmp (pakfile->name, filename))
-				{	// found it!
+			hash = FS_PackHashKey (filename, pak->hashSize);
+			for ( pakfile = pak->fileHash[hash]; pakfile; pakfile = pakfile->hashNext)
+				if (!Q_stricmp( pakfile->name, filename ) )	{	// found it!
 					file_from_pak = 1;
 					Com_DPrintf ("PackFile: %s : %s\n",pak->filename, filename);
-				// open a new file on the pakfile
+					// open a new file on the pakfile
 					*file = fopen (pak->filename, "rb");
 					if (!*file)
 						Com_Error (ERR_FATAL, "Couldn't reopen %s", pak->filename);	
@@ -241,6 +243,13 @@ int FS_FOpenFile (char *filename, FILE **file)
 			Com_sprintf (netpath, sizeof(netpath), "%s/%s",search->filename, filename);
 			
 			*file = fopen (netpath, "rb");
+#ifndef _WIN32
+			if (!*file)
+			{
+				Q_strlwr(netpath);
+				*file = fopen (netpath, "rb");
+			}
+#endif
 			if (!*file)
 				continue;
 			
@@ -253,7 +262,7 @@ int FS_FOpenFile (char *filename, FILE **file)
 	
 	Com_DPrintf ("FindFile: can't find %s\n", filename);
 	
-	*file = NULL;
+	file = NULL;
 	return -1;
 }
 
@@ -264,20 +273,24 @@ FS_ReadFile
 Properly handles partial reads
 =================
 */
+#ifdef CD_AUDIO
 void CDAudio_Stop(void);
+#endif
 #define	MAX_READ	0x10000		// read in blocks of 64k
 void FS_Read (void *buffer, int len, FILE *f)
 {
 	int		block, remaining;
 	int		read;
 	byte	*buf;
-	int		tries;
+#ifdef CD_AUDIO
+	int		tries = 0;
+#endif
 
 	buf = (byte *)buffer;
 
 	// read in chunks for progress bar
 	remaining = len;
-	tries = 0;
+
 	while (remaining)
 	{
 		block = remaining;
@@ -287,12 +300,14 @@ void FS_Read (void *buffer, int len, FILE *f)
 		if (read == 0)
 		{
 			// we might have been trying to read from a CD
+#ifdef CD_AUDIO
 			if (!tries)
 			{
 				tries = 1;
 				CDAudio_Stop();
 			}
 			else
+#endif
 				Com_Error (ERR_FATAL, "FS_Read: 0 bytes read");
 		}
 
@@ -314,7 +329,7 @@ Filename are relative to the quake search path
 a null buffer will just return the file length without loading
 ============
 */
-int FS_LoadFile (char *path, void **buffer)
+int FS_LoadFile (const char *path, void **buffer)
 {
 	FILE	*h;
 	byte	*buf;
@@ -369,57 +384,64 @@ Loads the header and directory, adding the files at the beginning
 of the list so they override previous pack files.
 =================
 */
-pack_t *FS_LoadPackFile (char *packfile)
+pack_t *FS_LoadPackFile (const char *packfile)
 {
 	dpackheader_t	header;
-	int				i, hash;
+	int				i;
 	packfile_t		*file;
 	int				numpackfiles;
 	pack_t			*pack;
 	FILE			*packhandle;
 	dpackfile_t		info;
+	int				hashSize;
+	unsigned int	hash;
 
 	packhandle = fopen(packfile, "rb");
 	if (!packhandle)
 		return NULL;
 
 	fread (&header, 1, sizeof(header), packhandle);
-	if (LittleLong(header.ident) != IDPAKHEADER)
+	if (LittleLong(header.ident) != IDPAKHEADER) {
 		Com_Error (ERR_FATAL, "FS_LoadPackFile: %s is not a packfile", packfile);
+		return NULL;
+	}
 
 	header.dirofs = LittleLong (header.dirofs);
 	header.dirlen = LittleLong (header.dirlen);
 
 	numpackfiles = header.dirlen / sizeof(dpackfile_t);
-	if (numpackfiles <= 0)
-		Com_Error(ERR_FATAL, "FS_LoadPackFile: '%s' has %i files", packfile, numpackfiles);
+	if (numpackfiles <= 0) {
+		Com_Printf("FS_LoadPackFile: '%s' has %i files", packfile, numpackfiles);
+		return NULL;
+	}
 
-	pack = Z_Malloc (sizeof(pack_t));
+	for(hashSize = 1; (hashSize < numpackfiles) && (hashSize < FS_MAX_HASH_SIZE); hashSize <<= 1);
+
+	pack = Z_Malloc (sizeof(pack_t) + numpackfiles * sizeof(packfile_t) + hashSize * sizeof(packfile_t *));
 	strcpy (pack->filename, packfile);
+	pack->files = ( packfile_t * )((byte *)pack + sizeof(pack_t));
+	pack->fileHash = ( packfile_t **)((byte *)pack->files + numpackfiles * sizeof( packfile_t ));
 	pack->handle = packhandle;
 	pack->numfiles = numpackfiles;
+	pack->hashSize = hashSize;
 
 	fseek (packhandle, header.dirofs, SEEK_SET);
 
 // parse the directory
-	for (i=0 ; i<numpackfiles ; i++)
+	for (i=0, file=pack->files; i<numpackfiles; i++, file++)
 	{
 		fread (&info, 1, sizeof(dpackfile_t), packhandle);
-		if (!info.name[0])
-			continue;
 
-		hash = FS_HashKey (info.name);
-
-		file = Z_Malloc (sizeof(*file));
 		strcpy (file->name, info.name);
 		file->filepos = LittleLong(info.filepos);
 		file->filelen = LittleLong(info.filelen);
-		file->next = pack->files[hash];
-		pack->files[hash] = file;
+
+		hash = FS_PackHashKey(file->name, hashSize);
+		file->hashNext = pack->fileHash[hash];
+		pack->fileHash[hash] = file;
 	}
 	
 	Com_Printf ("Added packfile %s (%i files)\n", packfile, numpackfiles);
-
 	return pack;
 }
 
@@ -432,7 +454,7 @@ Sets fs_gamedir, adds the directory to the head of the path,
 then loads and adds pak1.pak pak2.pak ... 
 ================
 */
-void FS_AddGameDirectory (char *dir)
+void FS_AddGameDirectory (const char *dir)
 {
 	int				i, numfiles;
 	searchpath_t	*search;
@@ -443,13 +465,14 @@ void FS_AddGameDirectory (char *dir)
 	char buf[16];
 	qboolean numberedpak;
 
-	strcpy (fs_gamedir, dir);
+	Q_strncpyz(fs_gamedir,dir,sizeof(fs_gamedir));
 
 	//
 	// add the directory to the search path
 	//
 	search = Z_Malloc (sizeof(searchpath_t));
-	strcpy (search->filename, dir);
+	Q_strncpyz (search->filename, dir, sizeof(search->filename));
+
 	search->next = fs_searchpaths;
 	fs_searchpaths = search;
 
@@ -468,7 +491,7 @@ void FS_AddGameDirectory (char *dir)
 		fs_searchpaths = search;		
 	}
 
-	if(!fs_allpakloading->value)
+	if(!fs_allpakloading->integer)
 		return;
 
 	Com_sprintf (pakfile, sizeof(pakfile), "%s/*.pak", dir);
@@ -509,6 +532,31 @@ void FS_AddGameDirectory (char *dir)
 }
 
 /*
+================
+FS_AddHomeAsGameDirectory
+
+Use ~/.quake2/dir as fs_gamedir
+================
+*/
+void FS_AddHomeAsGameDirectory (const char *dir)
+{
+#ifndef _WIN32
+	char gdir[MAX_OSPATH];
+	char *homedir=getenv("HOME");
+
+	if(homedir) {
+		int len = snprintf(gdir,sizeof(gdir),"%s/.quake2/%s/", homedir, dir);
+		Com_Printf("using %s for writing\n",gdir);
+		FS_CreatePath (gdir);
+
+		if ((len > 0) && (len < sizeof(gdir)) && (gdir[len-1] == '/'))
+			gdir[len-1] = 0;
+
+		FS_AddGameDirectory (gdir);
+	}
+#endif
+}
+/*
 ============
 FS_Gamedir
 
@@ -521,17 +569,6 @@ char *FS_Gamedir (void)
 		return fs_gamedir;
 	else
 		return BASEDIRNAME;
-}
-
-//Added FS_Mapname for screenshot naming -Maniac
-extern char		map_name[MAX_QPATH];
-char mappiname[MAX_QPATH];
-char *FS_Mapname (void)
-{
-	strcpy(mappiname, map_name+5);
-	mappiname[strlen(mappiname)-4] = 0;
-
-	return mappiname;
 }
 
 /*
@@ -562,14 +599,11 @@ FS_SetGamedir
 Sets the gamedir and path to a different directory.
 ================
 */
-void FS_SetGamedir (char *dir)
+void FS_SetGamedir (const char *dir)
 {
-	int				i;
 	searchpath_t	*next;
-	packfile_t		*pakfile, *nextfile;
 
-	if (strstr(dir, "..") || strstr(dir, "/")
-		|| strstr(dir, "\\") || strstr(dir, ":") )
+	if (strstr(dir, "..") || strstr(dir, "/") || strstr(dir, "\\") || strstr(dir, ":") )
 	{
 		Com_Printf ("Gamedir should be a single filename, not a path\n");
 		return;
@@ -583,15 +617,8 @@ void FS_SetGamedir (char *dir)
 		if (fs_searchpaths->pack)
 		{
 			fclose (fs_searchpaths->pack->handle);
-
-			for (i = 0; i < FS_HASH_SIZE; i++)
-				pakfile = fs_searchpaths->pack->files[i];
-				for ( ; pakfile; pakfile = nextfile)
-				{
-					nextfile = pakfile->next;
-					Z_Free (pakfile);
-				}
-
+			//Z_Free (fs_searchpaths->pack->files);
+			//Z_Free (fs_searchpaths->pack->fileHash);
 			Z_Free (fs_searchpaths->pack);
 		}
 		next = fs_searchpaths->next;
@@ -602,7 +629,7 @@ void FS_SetGamedir (char *dir)
 	//
 	// flush all data, so it will be forced to reload
 	//
-	if (dedicated && !dedicated->value)
+	if (dedicated && !dedicated->integer)
 		Cbuf_AddText ("vid_restart\nsnd_restart\n");
 
 	Com_sprintf (fs_gamedir, sizeof(fs_gamedir), "%s/%s", fs_basedir->string, dir);
@@ -615,9 +642,10 @@ void FS_SetGamedir (char *dir)
 	else
 	{
 		Cvar_FullSet ("gamedir", dir, CVAR_SERVERINFO|CVAR_NOSET);
-		if (fs_cddir->string[0])
-			FS_AddGameDirectory (va("%s/%s", fs_cddir->string, dir) );
+		//if (fs_cddir->string[0])
+		//	FS_AddGameDirectory (va("%s/%s", fs_cddir->string, dir) );
 		FS_AddGameDirectory (va("%s/%s", fs_basedir->string, dir) );
+		FS_AddHomeAsGameDirectory(dir);
 	}
 }
 
@@ -625,7 +653,7 @@ void FS_SetGamedir (char *dir)
 /*
 ** FS_ListFiles
 */
-char **FS_ListFiles( char *findname, int *numfiles, unsigned musthave, unsigned canthave )
+char **FS_ListFiles( const char *findname, int *numfiles, unsigned musthave, unsigned canthave )
 {
 	char *s;
 	int nfiles = 0;
@@ -657,7 +685,7 @@ char **FS_ListFiles( char *findname, int *numfiles, unsigned musthave, unsigned 
 		{
 			list[nfiles] = strdup( s );
 #ifdef _WIN32
-			strlwr( list[nfiles] );
+			Q_strlwr( list[nfiles] );
 #endif
 			nfiles++;
 		}
@@ -767,70 +795,6 @@ char *FS_NextPath(char *prevpath)
 }
 
 
-/*
-void FS_MapList_f( void )
-{
-	char	findname[1024];
-	char	**dirnames;
-	int		ndirs, i;
-	searchpath_t *s;
-	pack_t			*pak;
-	qboolean	printed;
-
-	sprintf (findname, "maps/*.bsp");
-
-	for (s = fs_searchpaths; s; s = s->next)
-	{
-		if (!s->pack)
-			continue;
-
-		if(strncmp(fs_gamedir, s->pack, strlen(fs_gamedir)))
-			continue;
-
-		printed = false;
-		pak = s->pack;
-
-		for (i=0 ; i<pak->numfiles ; i++)
-		{
-			if(!Com_WildCmp(findname, pak->files[i].name, 1))
-				continue;
-
-			if(!printed)
-			{
-				Com_Printf("Maps in pak %s\n", pak->filename);
-				Com_Printf( "----\n" );
-				printed = true;
-			}
-			Com_Printf ("%s\n", pak->files[i].name+5);
-		}
-		if(printed)
-			Com_Printf("\n");
-	}
-
-	sprintf (findname, "%s/maps/*.bsp", fs_gamedir);
-
-	if ( ( dirnames = FS_ListFiles( findname, &ndirs, 0, 0 ) ) != 0 )
-	{
-		int i;
-
-		Com_Printf( "Maps in directory %s/maps\n", fs_gamedir);
-		Com_Printf( "----\n" );
-
-		for ( i = 0; i < ndirs-1; i++ )
-		{
-			if ( strrchr( dirnames[i], '/' ) )
-				Com_Printf( "%s\n", strrchr( dirnames[i], '/' ) + 1 );
-			else
-				Com_Printf( "%s\n", dirnames[i] );
-
-			free( dirnames[i] );
-		}
-		free( dirnames );
-
-		Com_Printf( "\n" );
-	}
-}*/
-
 void FS_PakList_f( void )
 {
 	searchpath_t *s;
@@ -852,7 +816,6 @@ void FS_InitFilesystem (void)
 	Cmd_AddCommand ("path", FS_Path_f);
 	Cmd_AddCommand ("dir", FS_Dir_f );
 
-//	Cmd_AddCommand ("map_list", FS_MapList_f );
 	Cmd_AddCommand ("paklist", FS_PakList_f );
 
 	//
@@ -867,14 +830,19 @@ void FS_InitFilesystem (void)
 	// Logically concatenates the cddir after the basedir for 
 	// allows the game to run from outside the data tree
 	//
-	fs_cddir = Cvar_Get ("cddir", "", CVAR_NOSET);
-	if (fs_cddir->string[0])
-		FS_AddGameDirectory (va("%s/"BASEDIRNAME, fs_cddir->string) );
+	//fs_cddir = Cvar_Get ("cddir", "", CVAR_NOSET);
+	//if (fs_cddir->string[0])
+	//	FS_AddGameDirectory (va("%s/"BASEDIRNAME, fs_cddir->string) );
 
 	//
-	// start up with baseq2 by default
+	// add baseq2 to search path
 	//
-	FS_AddGameDirectory (va("%s/"BASEDIRNAME, fs_basedir->string) );
+	FS_AddGameDirectory (va("%s/"BASEDIRNAME, fs_basedir->string));
+
+	//
+	// then add a '.quake2/baseq2' directory in home directory by default
+	//
+	FS_AddHomeAsGameDirectory(BASEDIRNAME);
 
 	// any set gamedirs will be freed up to here
 	fs_base_searchpaths = fs_searchpaths;

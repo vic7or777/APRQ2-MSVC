@@ -21,21 +21,16 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 //define	PARANOID			// speed sapping error checking
 
-#include <math.h>
-#include <string.h>
-#include <stdarg.h>
-#include <stdio.h>
-#include <stdlib.h>
-
 #include "ref.h"
-
 #include "vid.h"
 #include "screen.h"
 #include "sound.h"
 #include "input.h"
 #include "keys.h"
 #include "console.h"
+#ifdef CD_AUDIO
 #include "cdaudio.h"
+#endif
 
 //=============================================================================
 
@@ -64,9 +59,6 @@ typedef struct
 
 	int			fly_stoptime;
 } centity_t;
-
-//AVI EXPORT -Maniac
-typedef void (*GLAVI_ReadFrameData_t) (byte *buffer);
 
 #define MAX_CLIENTWEAPONMODELS		20		// PGM -- upped from 16 to fit the chainfist vwep
 
@@ -171,16 +163,6 @@ typedef struct
 	clientinfo_t	clientinfo[MAX_CLIENTS];
 	clientinfo_t	baseclientinfo;
 
-	char loc_here[40];  // Locs -Maniac
-	char loc_there[40];
-
-	int doscreenshot;  // doscreenshot -Maniac
-
-	char mapname[MAX_OSPATH];
-
-	int	time_since_nocheatsay; //!nocheatsay anti-exploit wait-delay
-	int roundtime; //Hack to show roundtime in aq2 mod -Maniac
-
 } client_state_t;
 
 extern	client_state_t	cl;
@@ -217,7 +199,7 @@ typedef struct
 	connstate_t	state;
 	keydest_t	key_dest;
 
-	int			framecount;
+	//int			framecount;
 	int			realtime;			// always increasing, no clamping, etc
 	float		frametime;			// seconds since last frame
 
@@ -251,6 +233,13 @@ typedef struct
 	qboolean	demowaiting;	// don't record until a non-delta message is received
 	FILE		*demofile;
 
+	int doscreenshot;  // doscreenshot -Maniac
+
+	char mapname[MAX_OSPATH];
+
+	int	lastSpamTime; //last client reply time
+	int roundtime; //Hack to show roundtime in aq2 mod
+
 } client_static_t;
 
 extern client_static_t	cls;
@@ -271,7 +260,7 @@ extern	cvar_t	*cl_add_entities;
 extern	cvar_t	*cl_predict;
 extern	cvar_t	*cl_footsteps;
 extern	cvar_t	*cl_noskins;
-extern	cvar_t	*cl_autoskins;
+//extern	cvar_t	*cl_autoskins;
 
 extern	cvar_t	*cl_upspeed;
 extern	cvar_t	*cl_forwardspeed;
@@ -307,7 +296,9 @@ extern	cvar_t	*cl_timedemo;
 extern	cvar_t	*cl_vwep;
 
 //AVI EXPORT -Maniac
+#ifdef AVI_EXPORT
 extern	cvar_t	*avi_fps;
+#endif
 extern	cvar_t	*ch_alpha;
 extern	cvar_t	*ch_pulse;
 extern	cvar_t	*ch_scale;
@@ -355,10 +346,10 @@ extern	entity_state_t	cl_parse_entities[MAX_PARSE_ENTITIES];
 extern	netadr_t	net_from;
 extern	sizebuf_t	net_message;
 
-void DrawString (int x, int y, char *s);
-void DrawAltString (int x, int y, char *s);	// toggle high bit
-void DrawString2 (int x, int y, char *s, float alpha);
-void DrawColorString (int x, int y, char *s, int color, float alpha);
+void DrawString (int x, int y, const char *s);
+void DrawAltString (int x, int y, const char *s);	// toggle high bit
+void DrawString2 (int x, int y, const char *s, float alpha);
+void DrawColorString (int x, int y, const char *s, int color, float alpha);
 qboolean	CL_CheckOrDownloadFile (char *filename);
 
 void CL_AddNetgraph (void);
@@ -436,7 +427,7 @@ void CL_DebugTrail (vec3_t start, vec3_t end);
 void CL_SmokeTrail (vec3_t start, vec3_t end, int colorStart, int colorRun, int spacing);
 void CL_Flashlight (int ent, vec3_t pos);
 void CL_ForceWall (vec3_t start, vec3_t end, int color);
-void CL_FlameEffects (centity_t *ent, vec3_t origin);
+//void CL_FlameEffects (centity_t *ent, vec3_t origin);
 void CL_GenericParticleEffect (vec3_t org, vec3_t dir, int color, int count, int numcolors, int dirspread, float alphavel);
 void CL_BubbleTrail2 (vec3_t start, vec3_t end, int dist);
 void CL_Heatbeam (vec3_t start, vec3_t end);
@@ -485,13 +476,12 @@ void CL_Quit_f (void);
 
 void IN_Accumulate (void);
 
-void CL_ParseLayout (void);
+//void CL_ParseLayout (void);
 
 
 //
 // cl_main
 //
-extern	refexport_t	re;		// interface to refresh .dll
 
 void CL_Init (void);
 
@@ -588,9 +578,12 @@ void CL_EntityEvent (entity_state_t *ent);
 // RAFAEL
 void CL_TrapParticles (entity_t *ent);
 
+#define MAX_LOCAL_SERVERS 9
 // menus
 void M_Init (void);
-void M_Keydown (int key);
+//void M_Keydown (int key);
+void M_Keydown (int key, qboolean down);
+void M_MouseMove( int mx, int my );
 void M_Draw (void);
 void M_Menu_Main_f (void);
 void M_ForceMenuOff (void);
@@ -612,6 +605,6 @@ unsigned long *x86_TimerGetHistogram( void );
 
 // cl_locs.c
 void CL_LoadLoc(void);
-void CL_LocPlace(void);
 void CL_AddViewLocs(void);
 void CL_InitLocs(void);
+

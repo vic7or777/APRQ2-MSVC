@@ -27,6 +27,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define MAX_DECAL_VERTS			64
 #define MAX_DECAL_FRAGMENTS		64
 
+#define DECAL_BHOLE	1
+#define	DECAL_BLOOD	2
+
 typedef struct cdecal_t
 {
 	struct cdecal_t	*prev, *next;
@@ -145,7 +148,7 @@ void R_AddDecal	(vec3_t origin, vec3_t dir, float red, float green, float blue, 
 
 	cdecal_t	*d;
 
-	if (!gl_decals->value)
+	if (!gl_decals->integer)
 		return;
 
 	// invalid decal
@@ -241,7 +244,7 @@ void R_AddDecals (void)
 	vec3_t		v;
 	vec4_t		color;
 
-	if (!gl_decals->value)
+	if (!gl_decals->integer)
 		return;
 
 	active = &active_decals;
@@ -338,7 +341,7 @@ void R_ClipPoly (int nump, vec4_t vecs, int stage, fragment_t *fr)
 	int		newc, i, j, sides[MAX_DECAL_VERTS];
 
 	if (nump > MAX_DECAL_VERTS-2)
-		ri.Con_Printf (PRINT_ALL, "R_ClipPoly: MAX_DECAL_VERTS");
+		Com_Printf ("R_ClipPoly: MAX_DECAL_VERTS");
 
 	if (stage == 6)
 	{	// fully clipped

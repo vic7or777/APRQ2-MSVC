@@ -29,9 +29,14 @@ void Cmd_ForwardToServer (void);
 typedef struct cmdalias_s
 {
 	struct cmdalias_s	*next;
+	struct cmdalias_s	*hashNext;
+
 	char	name[MAX_ALIAS_NAME];
 	char	*value;
 } cmdalias_t;
+
+#define ALIAS_HASH_SIZE	64
+static cmdalias_t	*cmd_aliasHash[ALIAS_HASH_SIZE];
 
 cmdalias_t	*cmd_alias;
 
@@ -66,10 +71,6 @@ void Cmd_Wait_f (void)
 */
 
 sizebuf_t	cmd_text;
-
-//Changed, bigger config loading -Maniac
-//byte		cmd_text_buf[8192];
-//byte		defer_text_buf[8192];
 
 byte		cmd_text_buf[32768];
 byte		defer_text_buf[32768];
@@ -118,15 +119,7 @@ FIXME: actually change the command buffer to do less copying
 void Cbuf_InsertText (char *text)
 {
 	char	*temp;
-	int		templen, l;
-
-	//changed -Maniac
-	l = strlen(text);
-
-	if (cmd_text.cursize + l >= cmd_text.maxsize){
-		Com_Printf("Cbuf_InsertText: overflow\n");
-		return;
-	}
+	int		templen;
 
 	// copy off any commands still remaining in the exec buffer
 	templen = cmd_text.cursize;
@@ -142,6 +135,9 @@ void Cbuf_InsertText (char *text)
 	// add the entire text of the file
 	Cbuf_AddText (text);
 	
+	if( text[strlen( text ) - 1] != '\n' )
+		Cbuf_AddText( "\n" );
+
 	// add the copied off data
 	if (templen)
 	{
@@ -158,6 +154,9 @@ Cbuf_CopyToDefer
 */
 void Cbuf_CopyToDefer (void)
 {
+	if (!cmd_text.cursize)
+		return;
+
 	memcpy (defer_text_buf, cmd_text_buf, cmd_text.cursize);
 	defer_text_buf[cmd_text.cursize] = 0;
 	cmd_text.cursize = 0;
@@ -170,7 +169,7 @@ Cbuf_InsertFromDefer
 */
 void Cbuf_InsertFromDefer (void)
 {
-	Cbuf_InsertText (defer_text_buf);
+	Cbuf_InsertText ((char *)defer_text_buf);
 	defer_text_buf[0] = 0;
 }
 
@@ -228,8 +227,12 @@ void Cbuf_Execute (void)
 				break;
 		}
 			
-				
-		memcpy (line, text, i);
+		if (i >= sizeof(line)-1) {
+			Com_Printf ("Cbuf_Execute: overflow of %d truncated\n", i);
+			memcpy (line, text, sizeof(line)-1);
+		} else {				
+			memcpy (line, text, i);
+		}
 		line[i] = 0;
 		
 		// delete the text from the command buffer and move remaining commands down
@@ -242,7 +245,8 @@ void Cbuf_Execute (void)
 		{
 			i++;
 			cmd_text.cursize -= i;
-			memmove (text, text+i, cmd_text.cursize);
+			if (cmd_text.cursize)
+				memmove (text, text+i, cmd_text.cursize);
 		}
 
 		// execute the command line
@@ -379,7 +383,7 @@ Cmd_Exec_f
 */
 void Cmd_Exec_f (void)
 {
-	char	*f;
+	char	*f, *f2;
 	int		len;
 
 	if (Cmd_Argc () != 2)
@@ -389,15 +393,22 @@ void Cmd_Exec_f (void)
 	}
 
 	len = FS_LoadFile (Cmd_Argv(1), (void **)&f);
-	if (!f)
+	if (!f || !len)
 	{
 		Com_Printf ("couldn't exec %s\n",Cmd_Argv(1));
 		return;
 	}
 	Com_Printf ("execing %s\n",Cmd_Argv(1));
 	
-	Cbuf_InsertText (f);
+	// the file doesn't have a trailing 0, so we need to copy it off
+	f2 = Z_Malloc(len+2);
+	memcpy (f2, f, len);
+	f2[len] = '\n';
+	f2[len+1] = '\0';
 
+	Cbuf_InsertText (f2);
+
+	Z_Free (f2);
 	FS_FreeFile (f);
 }
 
@@ -417,6 +428,79 @@ void Cmd_Echo_f (void)
 	Com_Printf ("\n");
 }
 
+static int aliassort( const void *_a, const void *_b )
+{
+	const cmdalias_t	*a = (const cmdalias_t *)_a;
+	const cmdalias_t	*b = (const cmdalias_t *)_b;
+
+	return strcmp (a->name, b->name);
+}
+
+void Cmd_Aliaslist_f (void)
+{
+	cmdalias_t	*a;
+    int		i, j, c;
+    char    *filter = "*";
+	int		len, count = 0;
+	cmdalias_t *sortedList;
+
+	c = Cmd_Argc();
+
+    if (c == 2)
+		filter = Cmd_Argv(1);
+
+	for (a = cmd_alias, i = 0; a ; a = a->next, i++);
+
+	len = i * sizeof(cmdalias_t);
+	sortedList = Z_Malloc (len);
+	
+	for (a = cmd_alias, i = 0; a ; a = a->next, i++)
+	{
+		sortedList[i] = *a;
+	}
+
+	qsort (sortedList, i, sizeof(sortedList[0]), (int (*)(const void *, const void *))aliassort);
+
+	//for (a = cmd_alias ; a ; a=a->next)
+	for (j = 0; j < i; j++)
+	{
+		a = &sortedList[j];
+		if (c == 2 && !Com_WildCmp(filter, a->name, 1) && !strstr(a->name, filter))
+			continue;
+
+
+		Com_Printf ("%s : \"%s\"\n", a->name, a->value);
+		count++;
+	}
+
+	if (c == 2)
+		Com_Printf("%i alias found (%i total alias)\n", count, i);
+	else
+		Com_Printf("%i alias\n", i);
+
+	Z_Free (sortedList);
+}
+
+/*
+===============
+Cmd_AliasFind
+===============
+*/
+static cmdalias_t *Cmd_AliasFind( const char *name )
+{
+	unsigned int hash;
+	cmdalias_t *alias;
+
+	hash = Com_HashKey (name, ALIAS_HASH_SIZE);
+	for( alias=cmd_aliasHash[hash]; alias ; alias=alias->hashNext ) {
+		if( !Q_stricmp( name, alias->name ) ) {
+			return alias;
+		}
+	}
+
+	return NULL;
+}
+
 /*
 ===============
 Cmd_Alias_f
@@ -428,53 +512,51 @@ void Cmd_Alias_f (void)
 {
 	cmdalias_t	*a;
 	char		cmd[1024], *s;
-	int			i, c;		
+	int			i, c;
+	unsigned int hash;
 
 	if (Cmd_Argc() == 1)
 	{
-		Com_Printf ("Current alias commands:\n");
-		for (a = cmd_alias ; a ; a=a->next)
-			Com_Printf ("%s \"%s\"\n", a->name, a->value);
+		Com_Printf ("usage: alias <name> <command>\n");
 		return;
 	}
-/*	else if (Cmd_Argc() == 2) //Added to show aliases -Maniac
-	{
-		s = Cmd_Argv(1);
-		for (a = cmd_alias ; a ; a=a->next)
-		{
-			if (!strcmp(s, a->name))
-			{
-				Com_Printf ("%s \"%s\"", a->name, cmd);
-				break;
-			}
-		}
-		return;		
-	} */
 
 	s = Cmd_Argv(1);
+
 	if (strlen(s) >= MAX_ALIAS_NAME)
 	{
 		Com_Printf ("Alias name is too long\n");
 		return;
 	}
 
-	// if the alias already exists, reuse it
-	for (a = cmd_alias ; a ; a=a->next)
+	if (Cmd_Argc() == 2)
 	{
-		if (!strcmp(s, a->name))
-		{
-			Z_Free (a->value);
-			break;
-		}
+		a = Cmd_AliasFind( s );
+		if( a )
+			Com_Printf( "\"%s\" = \"%s\"\n", a->name, a->value );
+		else
+			Com_Printf( "\"%s\" is undefined\n", s );
+
+		return;		
 	}
 
-	if (!a)
+	// if the alias already exists, reuse it
+	a = Cmd_AliasFind (s);
+	if( a )
+	{
+		Z_Free (a->value);
+	}
+	else
 	{
 		a = Z_Malloc (sizeof(cmdalias_t));
+		strcpy (a->name, s);
 		a->next = cmd_alias;
 		cmd_alias = a;
+
+		hash = Com_HashKey( s, ALIAS_HASH_SIZE );
+		a->hashNext = cmd_aliasHash[hash];
+		cmd_aliasHash[hash] = a;
 	}
-	strcpy (a->name, s);	
 
 // copy the rest of the command line
 	cmd[0] = 0;		// start out with a null string
@@ -485,12 +567,64 @@ void Cmd_Alias_f (void)
 		if (i != (c - 1))
 			strcat (cmd, " ");
 	}
-//	strcat (cmd, "\n");
-	
 	a->value = CopyString (cmd);
 }
 
+void Cmd_UnAlias_f (void)
+{
+	char		*s;
+	unsigned int hash;
+	cmdalias_t	*a, **back;
 
+	if (Cmd_Argc() == 1)
+	{
+		Com_Printf ("usage: unalias <name>\n");
+		return;
+	}
+
+	s = Cmd_Argv(1);
+	if (strlen(s) >= MAX_ALIAS_NAME)
+	{
+		Com_Printf ("Alias name is too long\n");
+		return;
+	}
+
+	hash = Com_HashKey( s, ALIAS_HASH_SIZE );
+	back = &cmd_aliasHash[hash];
+	while( 1 ) {
+		a = *back;
+		if( !a ) {
+			Com_Printf ("Cmd_Unalias_f: %s not added\n", s);
+			return;
+		}
+		if( !Q_stricmp( s, a->name ) ){
+			*back = a->hashNext;
+			break;
+		}
+		back = &a->hashNext;
+	}
+
+	back = &cmd_alias;
+	while (1)
+	{
+		a = *back;
+		if (!a)
+		{
+			Com_Printf ("Cmd_Unalias_f: %s not added\n", s);
+			return;
+		}
+		if (!Q_stricmp (s, a->name))
+		{
+			*back = a->next;
+			Z_Free (a->value);
+			Z_Free (a);
+			Com_Printf ("Alias \"%s\" removed\n", s);
+			return;
+		}
+		back = &a->next;
+	}
+
+}
 /*
 ===================
 WriteAliases
@@ -499,14 +633,9 @@ WriteAliases
 void Cmd_WriteAliases (FILE *f)
 {
 	cmdalias_t	*a;
-	char		buffer[512];
 
 	for (a = cmd_alias; a; a = a->next)
-	{
-		sprintf (buffer, "alias %s \"%s\"\n", a->name, a->value);
-
-		fprintf (f, buffer);
-	}
+		fprintf (f, "alias %s \"%s\"\n", a->name, a->value);
 }
 
 /*
@@ -520,6 +649,8 @@ void Cmd_WriteAliases (FILE *f)
 typedef struct cmd_function_s
 {
 	struct cmd_function_s	*next;
+	struct cmd_function_s	*hashNext;
+
 	char					*name;
 	xcommand_t				function;
 } cmd_function_t;
@@ -531,6 +662,9 @@ static	char		*cmd_null_string = "";
 static	char		cmd_args[MAX_STRING_CHARS];
 
 static	cmd_function_t	*cmd_functions;		// possible commands to execute
+
+#define CMD_HASH_SIZE	64
+static cmd_function_t	*cmd_hash[CMD_HASH_SIZE];
 
 /*
 ============
@@ -603,11 +737,29 @@ char *Cmd_MacroExpandString (char *text)
 			continue;
 		// scan out the complete macro
 		start = scan+i+1;
-		token = COM_Parse (&start);
-		if (!start)
+//		token = COM_Parse (&start);
+		if (!*start)
+			break;
+
+		while( *start == 32 ) {
+			start++;
+		}
+
+		// allow $var1$$var2 scripting
+		token = temporary;
+		while( *start > 32 ) {
+			*token++ = *start++;
+			if( *start == '$' ) {
+				start++;
+				break;
+			}
+		}
+		*token = 0;
+
+		if( token == temporary )
 			continue;
-	
-		token = Cvar_VariableString (token);
+
+		token = Cvar_VariableString ( temporary );
 
 		j = strlen(token);
 		len += j;
@@ -663,7 +815,7 @@ void Cmd_TokenizeString (char *text, qboolean macroExpand)
 	cmd_args[0] = 0;
 	
 	// macro expand the text
-	if (macroExpand)
+	if (macroExpand && strstr(text, "$"))
 		text = Cmd_MacroExpandString (text);
 	if (!text)
 		return;
@@ -690,9 +842,7 @@ void Cmd_TokenizeString (char *text, qboolean macroExpand)
 		{
 			int		l;
 
-			//strcpy (cmd_args, text);
-			strncpy (cmd_args, text, sizeof(cmd_args)-1);
-			cmd_args[sizeof(cmd_args)-1] = 0;
+			Q_strncpyz (cmd_args, text, sizeof(cmd_args));
 
 			// strip off any trailing whitespace
 			l = strlen(cmd_args) - 1;
@@ -709,46 +859,67 @@ void Cmd_TokenizeString (char *text, qboolean macroExpand)
 
 		if (cmd_argc < MAX_STRING_TOKENS)
 		{
-			cmd_argv[cmd_argc] = Z_Malloc (strlen(com_token)+1);
-			strcpy (cmd_argv[cmd_argc], com_token);
-			cmd_argc++;
+			cmd_argv[cmd_argc++] = CopyString( com_token );
 		}
 	}
 	
 }
 
+/*
+============
+Cmd_Find
+============
+*/
+static cmd_function_t *Cmd_Find( const char *name ) {
+	cmd_function_t *cmd;
+	unsigned int hash;
+
+	hash = Com_HashKey( name, CMD_HASH_SIZE );
+	for( cmd=cmd_hash[hash]; cmd; cmd=cmd->hashNext ) {
+		if( !Q_stricmp( cmd->name, name ) ) {
+			return cmd;
+		}
+	}
+
+	return NULL;
+}
 
 /*
 ============
 Cmd_AddCommand
 ============
 */
+cvar_t *Cvar_FindVar (const char *var_name);
+
 void Cmd_AddCommand (char *cmd_name, xcommand_t function)
 {
 	cmd_function_t	*cmd;
+	unsigned int hash;
 	
 // fail if the command is a variable name
-	if (Cvar_VariableString(cmd_name)[0])
+	if (Cvar_FindVar( cmd_name ))
 	{
 		Com_Printf ("Cmd_AddCommand: %s already defined as a var\n", cmd_name);
-		return;
+		//return; //Cmd's are priority 1
 	}
 	
 // fail if the command already exists
-	for (cmd=cmd_functions ; cmd ; cmd=cmd->next)
+	if (Cmd_Find( cmd_name ))
 	{
-		if (!strcmp (cmd_name, cmd->name))
-		{
-			Com_Printf ("Cmd_AddCommand: %s already defined\n", cmd_name);
-			return;
-		}
+		Com_Printf ("Cmd_AddCommand: %s already defined\n", cmd_name);
+		return;
 	}
 
-	cmd = Z_Malloc (sizeof(cmd_function_t));
-	cmd->name = cmd_name;
+	cmd = Z_Malloc (sizeof(cmd_function_t) + strlen(cmd_name) + 1);
+	cmd->name = (char *)((byte *)cmd + sizeof(cmd_function_t));
+	strcpy (cmd->name, cmd_name);
 	cmd->function = function;
 	cmd->next = cmd_functions;
 	cmd_functions = cmd;
+
+	hash = Com_HashKey( cmd_name, CMD_HASH_SIZE );
+	cmd->hashNext = cmd_hash[hash];
+	cmd_hash[hash] = cmd;
 }
 
 /*
@@ -756,9 +927,25 @@ void Cmd_AddCommand (char *cmd_name, xcommand_t function)
 Cmd_RemoveCommand
 ============
 */
-void	Cmd_RemoveCommand (char *cmd_name)
+void Cmd_RemoveCommand (const char *cmd_name)
 {
 	cmd_function_t	*cmd, **back;
+	unsigned int hash;
+
+	hash = Com_HashKey( cmd_name, CMD_HASH_SIZE );
+	back = &cmd_hash[hash];
+	while( 1 ) {
+		cmd = *back;
+		if( !cmd ) {
+			Com_Printf ("Cmd_RemoveCommand: %s not added\n", cmd_name);
+			return;
+		}
+		if( !Q_stricmp( cmd_name, cmd->name ) ){
+			*back = cmd->hashNext;
+			break;
+		}
+		back = &cmd->hashNext;
+	}
 
 	back = &cmd_functions;
 	while (1)
@@ -769,7 +956,7 @@ void	Cmd_RemoveCommand (char *cmd_name)
 			Com_Printf ("Cmd_RemoveCommand: %s not added\n", cmd_name);
 			return;
 		}
-		if (!strcmp (cmd_name, cmd->name))
+		if (!Q_stricmp (cmd_name, cmd->name))
 		{
 			*back = cmd->next;
 			Z_Free (cmd);
@@ -779,33 +966,13 @@ void	Cmd_RemoveCommand (char *cmd_name)
 	}
 }
 
-/*
-============
-Cmd_Exists
-============
-*/
-qboolean	Cmd_Exists (char *cmd_name)
-{
-	cmd_function_t	*cmd;
-
-	for (cmd=cmd_functions ; cmd ; cmd=cmd->next)
-	{
-		if (!strcmp (cmd_name,cmd->name))
-			return true;
-	}
-
-	return false;
-}
-
 
 /*
 ============
 Cmd_CompleteCommand
 ============
 */
-char			retval[256];
-
-char *Cmd_CompleteCommand (char *partial)
+char *Cmd_CompleteCommand (const char *partial)
 {
 	cmd_function_t	*cmd;
 	int				len,i,o,p;
@@ -813,6 +980,7 @@ char *Cmd_CompleteCommand (char *partial)
 	cvar_t			*cvar;
 	char			*pmatch[1024];
 	qboolean		diff = false;
+	static char		retval[256];
 
 	
 	len = strlen(partial);
@@ -821,32 +989,32 @@ char *Cmd_CompleteCommand (char *partial)
 		return NULL;
 		
 	// check for exact match
-	for (cmd=cmd_functions ; cmd ; cmd=cmd->next)
-		if (!Q_strcasecmp (partial,cmd->name))
-			return cmd->name;
-	for (a=cmd_alias ; a ; a=a->next)
-		if (!Q_strcasecmp (partial, a->name))
-			return a->name;
-	for (cvar=cvar_vars ; cvar ; cvar=cvar->next)
-		if (!Q_strcasecmp (partial,cvar->name))
-			return cvar->name;
+	cmd = Cmd_Find(partial);
+	if(cmd)
+		return cmd->name;
+	a = Cmd_AliasFind(partial);
+	if(a)
+		return a->name;
+	cvar = Cvar_FindVar(partial);
+	if(cvar)
+		return cvar->name;
 
 	memset(pmatch, 0, 1024);
 	i=0;
 
 	// check for partial match
 	for (cmd=cmd_functions ; cmd ; cmd=cmd->next)
-		if (!Q_strncasecmp (partial,cmd->name, len)) {
+		if (!Q_strnicmp (partial,cmd->name, len)) {
 			pmatch[i]=cmd->name;
 			i++;
 		}
 	for (a=cmd_alias ; a ; a=a->next)
-		if (!Q_strncasecmp (partial, a->name, len)) {
+		if (!Q_strnicmp (partial, a->name, len)) {
 			pmatch[i]=a->name;
 			i++;
 		}
 	for (cvar=cvar_vars ; cvar ; cvar=cvar->next)
-		if (!Q_strncasecmp (partial,cvar->name, len)) {
+		if (!Q_strnicmp (partial,cvar->name, len)) {
 			pmatch[i]=cvar->name;
 			i++;
 		}
@@ -863,7 +1031,7 @@ char *Cmd_CompleteCommand (char *partial)
 		memset(retval, 0, sizeof(retval));
 		p=0;
 
-		while (!diff && p < 256)
+		while (!diff && p < 255)
 		{
 			retval[p]=pmatch[0][p];
 			for (o=0; o<i; o++) {
@@ -882,22 +1050,18 @@ char *Cmd_CompleteCommand (char *partial)
 	return NULL;
 }
 
-qboolean Cmd_IsComplete (char *command)
+qboolean Cmd_IsComplete (const char *command)
 {
-	cmd_function_t	*cmd;
-	cmdalias_t		*a;
-	cvar_t			*cvar;
-			
+
 	// check for exact match
-	for (cmd = cmd_functions; cmd; cmd = cmd->next)
-		if (!Q_strcasecmp (command, cmd->name))
-			return true;
-	for (a = cmd_alias; a; a = a->next)
-		if (!Q_strcasecmp (command, a->name))
-			return true;
-	for (cvar = cvar_vars; cvar; cvar = cvar->next)
-		if (!Q_strcasecmp (command, cvar->name))
-			return true;
+	if(Cmd_Find(command) != NULL)
+		return true;
+
+	if(Cmd_AliasFind(command) != NULL)
+		return true;
+
+	if(Cvar_FindVar(command) != NULL)
+		return true;
 
 	return false;
 }
@@ -923,33 +1087,29 @@ void	Cmd_ExecuteString (char *text)
 		return;		// no tokens
 
 	// check functions
-	for (cmd=cmd_functions ; cmd ; cmd=cmd->next)
+	cmd = Cmd_Find(cmd_argv[0]);
+	if (cmd)
 	{
-		if (!Q_strcasecmp (cmd_argv[0],cmd->name))
-		{
-			if (!cmd->function)
-			{	// forward to server command
-				Cmd_ExecuteString (va("cmd %s", text));
-			}
-			else
-				cmd->function ();
-			return;
+		if (!cmd->function)
+		{	// forward to server command
+			Cmd_ExecuteString (va("cmd %s", text));
 		}
+		else
+			cmd->function ();
+		return;
 	}
 
 	// check alias
-	for (a=cmd_alias ; a ; a=a->next)
+	a = Cmd_AliasFind(cmd_argv[0]);
+	if (a)
 	{
-		if (!Q_strcasecmp (cmd_argv[0], a->name))
+		if (++alias_count == ALIAS_LOOP_COUNT)
 		{
-			if (++alias_count == ALIAS_LOOP_COUNT)
-			{
-				Com_Printf ("ALIAS_LOOP_COUNT\n");
-				return;
-			}
-			Cbuf_InsertText (va("%s\n", a->value));
+			Com_Printf ("ALIAS_LOOP_COUNT\n");
 			return;
 		}
+		Cbuf_InsertText (va("%s\n", a->value));
+		return;
 	}
 	
 	// check cvars
@@ -960,42 +1120,60 @@ void	Cmd_ExecuteString (char *text)
 	Cmd_ForwardToServer ();
 }
 
-//	Wildcard support Cmd_List_f -Maniac
 /*
 ============
 Cmd_List_f
 ============
 */
+static int cmdsort( const void *_a, const void *_b )
+{
+	const cmd_function_t	*a = (const cmd_function_t *)_a;
+	const cmd_function_t	*b = (const cmd_function_t *)_b;
+
+	return strcmp (a->name, b->name);
+}
+
 void Cmd_List_f (void)
 {
+    cmd_function_t  *cmd;
+    int		i, j, c;
+    char	*filter = "*";
+	int		len, count = 0;
+	cmd_function_t	*sortedList;
 
-        cmd_function_t  *cmd;
-        int                             i = 0, count = 0, c;
-        char                    *filter;
+    c = Cmd_Argc();
 
-        c = Cmd_Argc();
-        if (c != 1 && c != 2){
-                Com_Printf("Usage: cmdlist [filter]\n");
-                return;
-        }
+    if (c == 2)
+	    filter = Cmd_Argv(1);
 
-        if (c == 2)
-                filter = Cmd_Argv(1);
-        else
-                filter = "*";
+	for (cmd = cmd_functions, i = 0; cmd ; cmd = cmd->next, i++);
 
-        for (cmd = cmd_functions; cmd; cmd = cmd->next, i++){
-                if (c == 2 && !Com_WildCmp(filter, cmd->name, 1) && !strstr(cmd->name, filter))
-                        continue;
+	len = i * sizeof(cmd_function_t);
+	sortedList = Z_Malloc (len);
+	
+	for (cmd = cmd_functions, i = 0; cmd ; cmd = cmd->next, i++)
+	{
+		sortedList[i] = *cmd;
+	}
 
-                count++;
-                Com_Printf("%s\n", cmd->name);
-        }
+	qsort (sortedList, i, sizeof(sortedList[0]), (int (*)(const void *, const void *))cmdsort);
 
-        if (c == 2)
-                Com_Printf("%i cmds found (%i total cmds)\n", count, i);
-        else
-                Com_Printf("%i cmds\n", i);
+	for (j = 0; j < i; j++)
+	{
+		cmd = &sortedList[j];
+        if (c == 2 && !Com_WildCmp(filter, cmd->name, 1) && !strstr(cmd->name, filter))
+			continue;
+
+        Com_Printf("%s\n", cmd->name);
+		count++;
+    }
+
+    if (c == 2)
+		Com_Printf("%i cmds found (%i total cmds)\n", count, i);
+    else
+		Com_Printf("%i cmds\n", i);
+
+	Z_Free (sortedList);
 }
 
 /*
@@ -1010,6 +1188,7 @@ void Cmd_Init (void)
 	Cmd_AddCommand ("exec",Cmd_Exec_f);
 	Cmd_AddCommand ("echo",Cmd_Echo_f);
 	Cmd_AddCommand ("alias",Cmd_Alias_f);
+	Cmd_AddCommand ("unalias", Cmd_UnAlias_f);
+	Cmd_AddCommand ("aliaslist",Cmd_Aliaslist_f);
 	Cmd_AddCommand ("wait", Cmd_Wait_f);
 }
-

@@ -382,9 +382,9 @@ void R_InitCaches (void)
 	int		pix;
 
 	// calculate size to allocate
-	if (sw_surfcacheoverride->value)
+	if (sw_surfcacheoverride->integer)
 	{
-		size = sw_surfcacheoverride->value;
+		size = sw_surfcacheoverride->integer;
 	}
 	else
 	{
@@ -398,7 +398,7 @@ void R_InitCaches (void)
 	// round up to page size
 	size = (size + 8191) & ~8191;
 
-	ri.Con_Printf (PRINT_ALL,"%ik surface cache\n", size/1024);
+	Com_Printf ("%ik surface cache\n", size/1024);
 
 	sc_size = size;
 	sc_base = (surfcache_t *)malloc(size);
@@ -445,15 +445,15 @@ surfcache_t     *D_SCAlloc (int width, int size)
 	qboolean                wrapped_this_time;
 
 	if ((width < 0) || (width > 256))
-		ri.Sys_Error (ERR_FATAL,"D_SCAlloc: bad cache width %d\n", width);
+		Com_Error (ERR_FATAL,"D_SCAlloc: bad cache width %d\n", width);
 
 	if ((size <= 0) || (size > 0x10000))
-		ri.Sys_Error (ERR_FATAL,"D_SCAlloc: bad cache size %d\n", size);
+		Com_Error (ERR_FATAL,"D_SCAlloc: bad cache size %d\n", size);
 	
 	size = (int)&((surfcache_t *)0)->data[size];
 	size = (size + 3) & ~3;
 	if (size > sc_size)
-		ri.Sys_Error (ERR_FATAL,"D_SCAlloc: %i > cache size of %i",size, sc_size);
+		Com_Error (ERR_FATAL,"D_SCAlloc: %i > cache size of %i",size, sc_size);
 
 // if there is not size bytes after the rover, reset to the start
 	wrapped_this_time = false;
@@ -477,7 +477,7 @@ surfcache_t     *D_SCAlloc (int width, int size)
 	// free another
 		sc_rover = sc_rover->next;
 		if (!sc_rover)
-			ri.Sys_Error (ERR_FATAL,"D_SCAlloc: hit the end of memory");
+			Com_Error (ERR_FATAL,"D_SCAlloc: hit the end of memory");
 		if (sc_rover->owner)
 			*sc_rover->owner = NULL;
 			
@@ -532,8 +532,8 @@ void D_SCDump (void)
 	for (test = sc_base ; test ; test = test->next)
 	{
 		if (test == sc_rover)
-			ri.Con_Printf (PRINT_ALL,"ROVER:\n");
-		ri.Con_Printf (PRINT_ALL,"%p : %i bytes     %i width\n",test, test->size, test->width);
+			Com_Printf ("ROVER:\n");
+		Com_Printf ("%p : %i bytes     %i width\n",test, test->size, test->width);
 	}
 }
 

@@ -113,7 +113,7 @@ void D_ViewChanged (void)
 	if ( r_newrefdef.rdflags & RDF_NOWORLDMODEL )
 	{
 		memset( d_pzbuffer, 0xff, vid.width * vid.height * sizeof( d_pzbuffer[0] ) );
-		Draw_Fill( r_newrefdef.x, r_newrefdef.y, r_newrefdef.width, r_newrefdef.height,( int ) sw_clearcolor->value & 0xff );
+		Draw_Fill( r_newrefdef.x, r_newrefdef.y, r_newrefdef.width, r_newrefdef.height, sw_clearcolor->integer & 0xff );
 	}
 
 	alias_colormap = vid.colormap;
@@ -137,7 +137,7 @@ void R_PrintTimes (void)
 
 	ms = r_time2 - r_time1;
 	
-	ri.Con_Printf (PRINT_ALL,"%5i ms %3i/%3i/%3i poly %3i surf\n",
+	Com_Printf ("%5i ms %3i/%3i/%3i poly %3i surf\n",
 				ms, c_faceclip, r_polycount, r_drawnpolycount, c_surf);
 	c_surf = 0;
 }
@@ -162,7 +162,7 @@ void R_PrintDSpeeds (void)
 	de_time = (de_time2 - de_time1);
 	ms = (r_time2 - r_time1);
 
-	ri.Con_Printf (PRINT_ALL,"%3i %2ip %2iw %2ib %2is %2ie %2ia\n",
+	Com_Printf ("%3i %2ip %2iw %2ib %2is %2ie %2ia\n",
 				ms, dp_time, rw_time, db_time, se_time, de_time, da_time);
 }
 
@@ -174,7 +174,7 @@ R_PrintAliasStats
 */
 void R_PrintAliasStats (void)
 {
-	ri.Con_Printf (PRINT_ALL,"%3i polygon model drawn\n", r_amodels_drawn);
+	Com_Printf ("%3i polygon model drawn\n", r_amodels_drawn);
 }
 
 
@@ -206,7 +206,7 @@ void R_TransformFrustum (void)
 }
 
 
-#if !(defined __linux__ && defined __i386__)
+//#if !(defined __linux__ && defined __i386__)
 #if !id386
 
 /*
@@ -222,7 +222,7 @@ void TransformVector (vec3_t in, vec3_t out)
 }
 
 #else
-
+#ifdef _WIN32 /* non-windows version is elsewhere */
 __declspec( naked ) void TransformVector( vec3_t vin, vec3_t vout )
 {
 	__asm mov eax, dword ptr [esp+4]
@@ -455,7 +455,7 @@ void R_SetupFrame (void)
 		r_viewcluster = r_viewleaf->cluster;
 	}
 
-	if (sw_waterwarp->value && (r_newrefdef.rdflags & RDF_UNDERWATER) )
+	if (sw_waterwarp->integer && (r_newrefdef.rdflags & RDF_UNDERWATER) )
 		r_dowarp = true;
 	else
 		r_dowarp = false;
@@ -504,7 +504,7 @@ void R_SetupFrame (void)
 	d_roverwrapped = false;
 	d_initial_rover = sc_rover;
 
-	d_minmip = sw_mipcap->value;
+	d_minmip = sw_mipcap->integer;
 	if (d_minmip > 3)
 		d_minmip = 3;
 	else if (d_minmip < 0)
@@ -531,7 +531,7 @@ void R_SetupFrame (void)
 WritePCXfile 
 ============== 
 */ 
-void WritePCXfile (char *filename, byte *data, int width, int height,
+qboolean WritePCX (char *filename, byte *data, int width, int height,
 	int rowbytes, byte *palette) 
 {
 	int			i, j, length;
@@ -539,9 +539,14 @@ void WritePCXfile (char *filename, byte *data, int width, int height,
 	byte		*pack;
 	FILE		*f;
 
+	if ( !(f = fopen( filename, "wb" )) ) {
+		Com_Printf ("WritePCX: Couldn't create a file: %s\n", filename);
+		return false;
+	}
+
 	pcx = (pcx_t *)malloc (width*height*2+1000);
 	if (!pcx)
-		return;
+		return false;
 
 	pcx->manufacturer = 0x0a;	// PCX id
 	pcx->version = 5;			// 256 color
@@ -585,16 +590,13 @@ void WritePCXfile (char *filename, byte *data, int width, int height,
 		
 // write output file 
 	length = pack - (byte *)pcx;
-	f = fopen (filename, "wb");
-	if (!f)
-		ri.Con_Printf (PRINT_ALL, "Failed to open to %s\n", filename);
-	else
-	{
-		fwrite ((void *)pcx, 1, length, f);
-		fclose (f);
-	}
+
+	fwrite ((void *)pcx, 1, length, f);
+	fclose (f);
 
 	free (pcx);
+
+	return true;
 } 
  
 
@@ -607,36 +609,47 @@ R_ScreenShot_f
 void R_ScreenShot_f (void) 
 { 
 	int			i; 
-	char		pcxname[80]; 
-	char		checkname[MAX_OSPATH];
+	char		picname[80], checkname[MAX_OSPATH];
 	FILE		*f;
 	byte		palette[768];
+	struct	tm *ntime;
+	char	date[32], map[32] = "\0";
+	time_t	l_time;
+
+	if(CL_Mapname()[0])
+		Com_sprintf(map, sizeof(map), "_%s", CL_Mapname());
 
 	// create the scrnshots directory if it doesn't exist
-	Com_sprintf (checkname, sizeof(checkname), "%s/scrnshot", ri.FS_Gamedir());
+	Com_sprintf (checkname, sizeof(checkname), "%s/scrnshot", FS_Gamedir());
 	Sys_Mkdir (checkname);
 
-// 
-// find a file name to save it to 
-// 
-	strcpy(pcxname,"quake00.pcx");
-		
-	for (i=0 ; i<=99 ; i++) 
-	{ 
-		pcxname[5] = i/10 + '0'; 
-		pcxname[6] = i%10 + '0'; 
-		Com_sprintf (checkname, sizeof(checkname), "%s/scrnshot/%s", ri.FS_Gamedir(), pcxname);
-		f = fopen (checkname, "r");
-		if (!f)
-			break;	// file doesn't exist
-		fclose (f);
-	} 
-	if (i==100) 
+	if(Cmd_Argc() == 1)
 	{
-		ri.Con_Printf (PRINT_ALL, "R_ScreenShot_f: Couldn't create a PCX"); 
-		return;
-	}
+		time( &l_time );
+		ntime = localtime( &l_time );
+		strftime( date, sizeof(date), "%Y-%m-%d_%H-%M", ntime );
 
+		// Find a file name to save it to
+		for (i=0 ; i<=100 ; i++)
+		{
+			Com_sprintf (picname, sizeof(picname), "%s%s-%02i.pcx", date, map, i);
+			Com_sprintf (checkname, sizeof(checkname), "%s/scrnshot/%s", FS_Gamedir(), picname);
+			f = fopen (checkname, "rb");
+			if (!f)
+				break;	// file doesn't exist
+			fclose (f);
+		}
+		if (i==100) 
+		{
+			Com_Printf ("R_ScreenShot_f: Couldn't create a PCX"); 
+			return;
+		}
+	}
+	else
+	{
+		Com_sprintf (picname, sizeof(picname), "%s.pcx", Cmd_Argv( 1 ));
+		Com_sprintf( checkname, sizeof(checkname), "%s/scrnshot/%s", FS_Gamedir(), picname );
+	}
 	// turn the current 32 bit palette into a 24 bit palette
 	for (i=0 ; i<256 ; i++)
 	{
@@ -649,9 +662,7 @@ void R_ScreenShot_f (void)
 // save the pcx file 
 // 
 
-	WritePCXfile (checkname, vid.buffer, vid.width, vid.height, vid.rowbytes,
-				  palette);
-
-	ri.Con_Printf (PRINT_ALL, "Wrote %s\n", checkname);
+	if(WritePCX(checkname, vid.buffer, vid.width, vid.height, vid.rowbytes, palette))
+		Com_Printf ("Wrote %s\n", picname);
 } 
 

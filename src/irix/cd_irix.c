@@ -17,6 +17,7 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 */
+#ifdef CD_AUDIO
 #include <sys/types.h>
 #include <cdaudio.h>
 
@@ -57,3 +58,4 @@ void CDAudio_Shutdown(void)
 {
         Com_Printf("XXX - CDAudio_Shutdown\n");
 }
+#endif

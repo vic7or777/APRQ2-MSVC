@@ -61,7 +61,7 @@ PCX LOADING
 SCR_LoadPCX
 ==============
 */
-void SCR_LoadPCX (char *filename, byte **pic, byte **palette, int *width, int *height)
+void SCR_LoadPCX (const char *filename, byte **pic, byte **palette, int *width, int *height)
 {
 	byte	*raw;
 	pcx_t	*pcx;
@@ -166,7 +166,7 @@ void SCR_StopCinematic (void)
 	}
 	if (cl.cinematicpalette_active)
 	{
-		re.CinematicSetPalette(NULL);
+		R_CinematicSetPalette(NULL);
 		cl.cinematicpalette_active = false;
 	}
 	if (cl.cinematic_file)
@@ -548,21 +548,21 @@ qboolean SCR_DrawCinematic (void)
 
 	if (cls.key_dest == key_menu)
 	{	// blank screen and pause if menu is up
-		re.CinematicSetPalette(NULL);
+		R_CinematicSetPalette(NULL);
 		cl.cinematicpalette_active = false;
 		return true;
 	}
 
 	if (!cl.cinematicpalette_active)
 	{
-		re.CinematicSetPalette(cl.cinematicpalette);
+		R_CinematicSetPalette(cl.cinematicpalette);
 		cl.cinematicpalette_active = true;
 	}
 
 	if (!cin.pic)
 		return true;
 
-	re.DrawStretchRaw (0, 0, viddef.width, viddef.height,
+	Draw_StretchRaw (0, 0, viddef.width, viddef.height,
 		cin.width, cin.height, cin.pic);
 
 	return true;
@@ -582,7 +582,9 @@ void SCR_PlayCinematic (char *arg)
 	int		old_khz;
 
 	// make sure CD isn't playing music
+#ifdef CD_AUDIO
 	CDAudio_Stop();
+#endif
 
 	cl.cinematicframe = 0;
 	dot = strstr (arg, ".");

@@ -40,7 +40,7 @@ cvar_t	*rcon_client_password;
 cvar_t	*rcon_address;
 
 cvar_t	*cl_noskins;
-cvar_t	*cl_autoskins;
+//cvar_t	*cl_autoskins;
 cvar_t	*cl_footsteps;
 cvar_t	*cl_timeout;
 cvar_t	*cl_predict;
@@ -81,44 +81,24 @@ cvar_t	*msg;
 cvar_t	*hand;
 cvar_t	*gender;
 cvar_t	*gender_auto;
-cvar_t	*cl_gunalpha;
 
 cvar_t	*cl_vwep;
 
-#define MAX_I_NLENGHT	16
-#define MAX_I_NICKS		32
-char ignorelist[MAX_I_NICKS][MAX_I_NLENGHT];
-void CL_Ignore_f(void);
-void CL_Unignore_f(void);
 void CL_WriteConfig_f (void);
-
+void CL_InitParse( void );
 //Added cvars  -Maniac
-cvar_t	*cl_timestamps;
-cvar_t	*cl_timestampsformat;
-
-cvar_t	*cl_autoscreenshot;
 cvar_t	*cl_hudalpha;
+cvar_t	*cl_gunalpha;
 
-//cl_parse.c
-cvar_t	*cl_highlight;
-cvar_t	*cl_highlightmsg;
-cvar_t	*cl_highlightcolor;
-cvar_t	*cl_highlightnames;
-cvar_t	*ignorewaves;
-cvar_t	*cl_textcolors;
-cvar_t	*cl_mychatcolor;
+#ifdef AVI_EXPORT
+void CL_InitAVIExport( void ); //AVI EXPORT
+#endif
 
-//AVI EXPORT -Maniac
-cvar_t	*avi_gamma_r;
-cvar_t	*avi_gamma_g;
-cvar_t	*avi_gamma_b;
-cvar_t	*avi_monochrome;
-cvar_t	*avi_border_size;
-cvar_t	*avi_border_r;
-cvar_t	*avi_border_g;
-cvar_t	*avi_border_b;
-void AVI_Export_f (void);
- //END
+#ifdef _WIN32
+void WA_Init (void); 
+void WA_Shutdown (void); 
+void WA_Frame (void); 
+#endif
 
 client_static_t	cls;
 client_state_t	cl;
@@ -162,7 +142,7 @@ void Cmd_ForwardToServer (void)
 	}
 }
 
-void CL_Setenv_f( void )
+/*void CL_Setenv_f( void )
 {
 	int argc = Cmd_Argc();
 
@@ -195,7 +175,7 @@ void CL_Setenv_f( void )
 			Com_Printf( "%s undefined\n", Cmd_Argv(1));
 		}
 	}
-}
+}*/
 
 
 /*
@@ -205,7 +185,8 @@ CL_ForwardToServer_f
 */
 void CL_ForwardToServer_f (void)
 {
-	if (cls.state != ca_connected && cls.state != ca_active)
+	//if (cls.state != ca_connected && cls.state != ca_active)
+	if (cls.state < ca_connected)
 	{
 		Com_Printf ("Can't \"%s\", not connected\n", Cmd_Argv(0));
 		return;
@@ -234,7 +215,7 @@ void CL_Pause_f (void)
 		return;
 	}
 
-	Cvar_SetValue ("paused", !cl_paused->value);
+	Cvar_SetValue ("paused", !cl_paused->integer);
 }
 
 /*
@@ -283,9 +264,11 @@ void CL_SendConnectPacket (void)
 	netadr_t	adr;
 	int		port;
 
+	memset(&adr, 0, sizeof(adr));
+
 	if (!NET_StringToAdr (cls.servername, &adr))
 	{
-		Com_Printf ("Bad server address\n");
+		Com_Printf ("Bad server address: %s\n", cls.servername);
 		cls.connect_time = 0;
 		return;
 	}
@@ -295,7 +278,7 @@ void CL_SendConnectPacket (void)
 	port = Cvar_VariableValue ("qport");
 	userinfo_modified = false;
 
-	Netchan_OutOfBandPrint (NS_CLIENT, adr, "connect %i %i %i \"%s\"\n",
+	Netchan_OutOfBandPrint (NS_CLIENT, &adr, "connect %i %i %i \"%s\"\n",
 		PROTOCOL_VERSION, port, cls.challenge, Cvar_Userinfo() );
 }
 
@@ -342,7 +325,7 @@ void CL_CheckForResend (void)
 
 	Com_Printf ("Connecting to %s...\n", cls.servername);
 
-	Netchan_OutOfBandPrint (NS_CLIENT, adr, "getchallenge\n");
+	Netchan_OutOfBandPrint (NS_CLIENT, &adr, "getchallenge\n");
 }
 
 
@@ -364,7 +347,7 @@ void CL_Connect_f (void)
 	
 	if (Com_ServerState ())
 	{	// if running a local server, kill it and reissue
-		SV_Shutdown (va("Server quit\n", msg), false);
+		SV_Shutdown ("Server has shut down\n", false);
 	}
 	else
 	{
@@ -404,6 +387,7 @@ void CL_Rcon_f (void)
 		return;
 	}
 
+	memset(&to, 0, sizeof(to));
 	message[0] = (char)255;
 	message[1] = (char)255;
 	message[2] = (char)255;
@@ -440,7 +424,7 @@ void CL_Rcon_f (void)
 			to.port = BigShort (PORT_SERVER);
 	}
 	
-	NET_SendPacket (NS_CLIENT, strlen(message)+1, message, to);
+	NET_SendPacket (NS_CLIENT, strlen(message)+1, message, &to);
 }
 
 
@@ -480,7 +464,7 @@ void CL_Disconnect (void)
 	if (cls.state == ca_disconnected)
 		return;
 
-	if (cl_timedemo && cl_timedemo->value)
+	if (cl_timedemo && cl_timedemo->integer)
 	{
 		int	time;
 		
@@ -491,7 +475,7 @@ void CL_Disconnect (void)
 	}
 
 	VectorClear (cl.refdef.blend);
-	re.CinematicSetPalette(NULL);
+	R_CinematicSetPalette(NULL);
 
 	M_ForceMenuOff ();
 
@@ -505,9 +489,9 @@ void CL_Disconnect (void)
 	// send a disconnect message to the server
 	final[0] = clc_stringcmd;
 	strcpy ((char *)final+1, "disconnect");
-	Netchan_Transmit (&cls.netchan, strlen(final), final);
-	Netchan_Transmit (&cls.netchan, strlen(final), final);
-	Netchan_Transmit (&cls.netchan, strlen(final), final);
+	Netchan_Transmit (&cls.netchan, 11, final);
+	Netchan_Transmit (&cls.netchan, 11, final);
+	Netchan_Transmit (&cls.netchan, 11, final);
 
 	CL_ClearState ();
 
@@ -534,7 +518,6 @@ static void CL_ServerStatus_f( void ) {
 	char	*server;
 	netadr_t	adr;
 	cvar_t		*noudp;
-	cvar_t		*noipx;
 
 	if( Cmd_Argc() != 2 ) {
 		Com_Printf( "Usage: %s <server>\n", Cmd_Argv( 0 ) );
@@ -544,22 +527,13 @@ static void CL_ServerStatus_f( void ) {
 	NET_Config (true);		// allow remote
 
 	noudp = Cvar_Get ("noudp", "0", CVAR_NOSET);
-	if (!noudp->value)
+	if (!noudp->integer)
 	{
 		adr.type = NA_BROADCAST;
 		adr.port = BigShort(PORT_SERVER);
-		Netchan_OutOfBandPrint (NS_CLIENT, adr, va("info %i", PROTOCOL_VERSION));
+		Netchan_OutOfBandPrint (NS_CLIENT, &adr, va("info %i", PROTOCOL_VERSION));
 	}
 
-	noipx = Cvar_Get ("noipx", "0", CVAR_NOSET);
-	if (!noipx->value)
-	{
-		adr.type = NA_BROADCAST_IPX;
-		adr.port = BigShort(PORT_SERVER);
-		Netchan_OutOfBandPrint (NS_CLIENT, adr, va("info %i", PROTOCOL_VERSION));
-	}
-
-	
 	server = Cmd_Argv( 1 );
 
 	if( !NET_StringToAdr( server, &adr ) )
@@ -571,7 +545,7 @@ static void CL_ServerStatus_f( void ) {
 	if( !adr.port )
 		adr.port = BigShort( PORT_SERVER );
 
-	Netchan_OutOfBandPrint( NS_CLIENT, adr, "status" );
+	Netchan_OutOfBandPrint( NS_CLIENT, &adr, "status" );
 }
 
 /*
@@ -633,6 +607,9 @@ void CL_Changing_f (void)
 	//if we are downloading, we don't change!  This so we don't suddenly stop downloading a map
 	if (cls.download)
 		return;
+
+	if(cl_autorecord->integer && cls.demorecording)
+		CL_Stop_f();
 
 	SCR_BeginLoadingPlaque ();
 	cls.state = ca_connected;	// not active anymore, but not disconnected
@@ -709,7 +686,6 @@ void CL_PingServers_f (void)
 	char		name[32];
 	char		*adrstring;
 	cvar_t		*noudp;
-	cvar_t		*noipx;
 
 	NET_Config (true);		// allow remote
 
@@ -717,23 +693,15 @@ void CL_PingServers_f (void)
 	Com_Printf ("pinging broadcast...\n");
 
 	noudp = Cvar_Get ("noudp", "0", CVAR_NOSET);
-	if (!noudp->value)
+	if (!noudp->integer)
 	{
 		adr.type = NA_BROADCAST;
 		adr.port = BigShort(PORT_SERVER);
-		Netchan_OutOfBandPrint (NS_CLIENT, adr, va("info %i", PROTOCOL_VERSION));
-	}
-
-	noipx = Cvar_Get ("noipx", "0", CVAR_NOSET);
-	if (!noipx->value)
-	{
-		adr.type = NA_BROADCAST_IPX;
-		adr.port = BigShort(PORT_SERVER);
-		Netchan_OutOfBandPrint (NS_CLIENT, adr, va("info %i", PROTOCOL_VERSION));
+		Netchan_OutOfBandPrint (NS_CLIENT, &adr, va("info %i", PROTOCOL_VERSION));
 	}
 
 	// send a packet to each address book entry
-	for (i=0 ; i<9 ; i++)
+	for (i=0 ; i<MAX_LOCAL_SERVERS ; i++)
 	{
 		Com_sprintf (name, sizeof(name), "adr%i", i);
 		adrstring = Cvar_VariableString (name);
@@ -748,7 +716,7 @@ void CL_PingServers_f (void)
 		}
 		if (!adr.port)
 			adr.port = BigShort(PORT_SERVER);
-		Netchan_OutOfBandPrint (NS_CLIENT, adr, va("info %i", PROTOCOL_VERSION));
+		Netchan_OutOfBandPrint (NS_CLIENT, &adr, va("info %i", PROTOCOL_VERSION));
 	}
 }
 
@@ -797,7 +765,7 @@ void CL_ConnectionlessPacket (void)
 
 	c = Cmd_Argv(0);
 
-	Com_Printf ("%s: %s\n", NET_AdrToString (net_from), c);
+	Com_Printf ("%s: %s\n", NET_AdrToString (&net_from), c);
 
 	// server connection
 	if (!strcmp(c, "client_connect"))
@@ -807,7 +775,7 @@ void CL_ConnectionlessPacket (void)
 			Com_Printf ("Dup connect received.  Ignored.\n");
 			return;
 		}
-		Netchan_Setup (NS_CLIENT, &cls.netchan, net_from, cls.quakePort);
+		Netchan_Setup (NS_CLIENT, &cls.netchan, &net_from, cls.quakePort);
 		MSG_WriteChar (&cls.netchan.message, clc_stringcmd);
 		MSG_WriteString (&cls.netchan.message, "new");	
 		cls.state = ca_connected;
@@ -824,9 +792,9 @@ void CL_ConnectionlessPacket (void)
 	// remote command from gui front end
 	if (!strcmp(c, "cmd"))
 	{
-		if (!NET_IsLocalAddress(net_from))
+		if (!NET_IsLocalAddress(&net_from))
 		{
-			Com_Printf ("Command packet from remote host.  Ignored.\n");
+			Com_DPrintf ("Command packet from remote host.  Ignored.\n");
 			return;
 		}
 		Sys_AppActivate ();
@@ -848,7 +816,7 @@ void CL_ConnectionlessPacket (void)
 	// ping from somewhere
 	if (!strcmp(c, "ping"))
 	{
-		Netchan_OutOfBandPrint (NS_CLIENT, net_from, "ack");
+		//Netchan_OutOfBandPrint (NS_CLIENT, net_from, "ack");
 		return;
 	}
 
@@ -863,11 +831,11 @@ void CL_ConnectionlessPacket (void)
 	// echo request from server
 	if (!strcmp(c, "echo"))
 	{
-		Netchan_OutOfBandPrint (NS_CLIENT, net_from, "%s", Cmd_Argv(1) );
+		Netchan_OutOfBandPrint (NS_CLIENT, &net_from, "%s", Cmd_Argv(1) );
 		return;
 	}
 
-	Com_Printf ("Unknown command.\n");
+	Com_Printf ("Unknown connectionless packet command: %s\n", c);
 }
 
 
@@ -879,13 +847,13 @@ A vain attempt to help bad TCP stacks that cause problems
 when they overflow
 =================
 */
-void CL_DumpPackets (void)
+/*void CL_DumpPackets (void)
 {
 	while (NET_GetPacket (NS_CLIENT, &net_from, &net_message))
 	{
 		Com_Printf ("dumnping a packet\n");
 	}
-}
+}*/
 
 /*
 =================
@@ -908,20 +876,29 @@ void CL_ReadPackets (void)
 
 		if (net_message.cursize < 8)
 		{
-			Com_Printf ("%s: Runt packet\n",NET_AdrToString(net_from));
+			Com_DPrintf ("%s: Runt packet\n",NET_AdrToString(&net_from));
 			continue;
 		}
 
 		// packet from server
-		if (!NET_CompareAdr (net_from, cls.netchan.remote_address))
+		if (!NET_CompareAdr (&net_from, &cls.netchan.remote_address))
 		{
-			Com_DPrintf ("%s:sequenced packet without connection\n",NET_AdrToString(net_from));
+			Com_DPrintf ("%s:sequenced packet without connection\n",NET_AdrToString(&net_from));
 			continue;
 		}
 		if (!Netchan_Process(&cls.netchan, &net_message))
 			continue;		// wasn't accepted for some reason
 
 		CL_ParseServerMessage ();
+
+		CL_AddNetgraph ();
+
+		//
+		// we don't know if it is ok to save a demo message until
+		// after we have parsed the frame
+		//
+		if (cls.demorecording && !cls.demowaiting)
+			CL_WriteDemoMessage ();
 
 		SCR_AddLagometerPacketInfo();
 	}
@@ -998,6 +975,7 @@ void CL_Snd_Restart_f (void)
 {
 	S_Shutdown ();
 	S_Init ();
+	memset (cl.sound_precache, 0, sizeof(cl.sound_precache));
 	CL_RegisterSounds ();
 }
 
@@ -1025,20 +1003,20 @@ void CL_RequestNextDownload (void)
 	if (cls.state != ca_connected)
 		return;
 
-	if (!allow_download->value && precache_check < ENV_CNT)
+	if (!allow_download->integer && precache_check < ENV_CNT)
 		precache_check = ENV_CNT;
 
 //ZOID
 	if (precache_check == CS_MODELS)
 	{ // confirm map
 		precache_check = CS_MODELS+2; // 0 isn't used
-		if (allow_download_maps->value)
+		if (allow_download_maps->integer)
 			if (!CL_CheckOrDownloadFile(cl.configstrings[CS_MODELS+1]))
 				return; // started a download
 	}
 	if (precache_check >= CS_MODELS && precache_check < CS_MODELS+MAX_MODELS)
 	{
-		if (allow_download_models->value)
+		if (allow_download_models->integer)
 		{
 			while (precache_check < CS_MODELS+MAX_MODELS &&	cl.configstrings[precache_check][0])
 			{
@@ -1111,7 +1089,7 @@ void CL_RequestNextDownload (void)
 	}
 	if (precache_check >= CS_SOUNDS && precache_check < CS_SOUNDS+MAX_SOUNDS)
 	{ 
-		if (allow_download_sounds->value)
+		if (allow_download_sounds->integer)
 		{
 			if (precache_check == CS_SOUNDS)
 				precache_check++; // zero is blank
@@ -1146,7 +1124,7 @@ void CL_RequestNextDownload (void)
 	// so precache_check is now *3
 	if (precache_check >= CS_PLAYERSKINS && precache_check < CS_PLAYERSKINS + MAX_CLIENTS * PLAYER_MULT)
 	{
-		if (allow_download_players->value){
+		if (allow_download_players->integer){
 			while (precache_check < CS_PLAYERSKINS + MAX_CLIENTS * PLAYER_MULT)
 			{
 				int i, n;
@@ -1236,6 +1214,8 @@ void CL_RequestNextDownload (void)
 	if (precache_check == ENV_CNT)
 	{
 		precache_check = ENV_CNT + 1;
+		
+		CL_LoadLoc();
 
 		CM_LoadMap (cl.configstrings[CS_MODELS+1], true, &map_checksum);
 
@@ -1249,7 +1229,7 @@ void CL_RequestNextDownload (void)
 
 	if (precache_check > ENV_CNT && precache_check < TEXTURE_CNT)
 	{
-		if (allow_download->value && allow_download_maps->value)
+		if (allow_download->integer && allow_download_maps->integer)
 		{
 			while (precache_check < TEXTURE_CNT)
 			{
@@ -1279,7 +1259,7 @@ void CL_RequestNextDownload (void)
 		extern int			numtexinfo;
 		extern mapsurface_t	map_surfaces[];
 
-		if (allow_download->value && allow_download_maps->value) {
+		if (allow_download->integer && allow_download_maps->integer) {
 			while (precache_tex < numtexinfo) {
 				char fn[MAX_OSPATH];
 
@@ -1362,7 +1342,7 @@ void CL_InitLocal (void)
 	cl_gun = Cvar_Get ("cl_gun", "1", 0);
 	cl_footsteps = Cvar_Get ("cl_footsteps", "1", 0);
 	cl_noskins = Cvar_Get ("cl_noskins", "0", 0);
-	cl_autoskins = Cvar_Get ("cl_autoskins", "0", 0);
+//	cl_autoskins = Cvar_Get ("cl_autoskins", "0", 0);
 	cl_predict = Cvar_Get ("cl_predict", "1", 0);
 	cl_maxfps = Cvar_Get ("cl_maxfps", "90", 0);
 
@@ -1371,11 +1351,11 @@ void CL_InitLocal (void)
 	cl_forwardspeed = Cvar_Get ("cl_forwardspeed", "200", 0);
 	cl_sidespeed = Cvar_Get ("cl_sidespeed", "200", 0);
 	cl_yawspeed = Cvar_Get ("cl_yawspeed", "140", 0);
-	cl_pitchspeed = Cvar_Get ("cl_pitchspeed", "150", 0);
-	cl_anglespeedkey = Cvar_Get ("cl_anglespeedkey", "1.5", 0);
+	cl_pitchspeed = Cvar_Get ("cl_pitchspeed", "150", CVAR_NOSET);
+	cl_anglespeedkey = Cvar_Get ("cl_anglespeedkey", "1.5", CVAR_NOSET);
 
-	cl_run = Cvar_Get ("cl_run", "0", CVAR_ARCHIVE);
-	freelook = Cvar_Get( "freelook", "0", CVAR_ARCHIVE );
+	cl_run = Cvar_Get ("cl_run", "1", CVAR_ARCHIVE);
+	freelook = Cvar_Get( "freelook", "1", CVAR_ARCHIVE );
 	lookspring = Cvar_Get ("lookspring", "0", CVAR_ARCHIVE);
 	lookstrafe = Cvar_Get ("lookstrafe", "0", CVAR_ARCHIVE);
 	sensitivity = Cvar_Get ("sensitivity", "3", CVAR_ARCHIVE);
@@ -1400,37 +1380,12 @@ void CL_InitLocal (void)
 	//new cvars -Maniac
 	CL_InitDemos();
 	CL_InitLocs();
-
-	cl_timestamps = Cvar_Get("cl_timestamps","0", CVAR_ARCHIVE);
-	cl_timestampsformat = Cvar_Get("cl_timestampsformat", "[%H:%M:%S]", 0);
-
-	cl_autoscreenshot = Cvar_Get ("cl_autoscreenshot", "0", 0);
-
+	CL_InitParse();
+#ifdef AVI_EXPORT
+	CL_InitAVIExport(); //AVI EXPORT
+#endif
 	cl_hudalpha = Cvar_Get ("cl_hudalpha",  "1", CVAR_ARCHIVE);
-	cl_highlight = Cvar_Get ("cl_highlight",  "0", CVAR_ARCHIVE);
-	cl_highlightmsg = Cvar_Get ("cl_highlightmsg",  "", CVAR_ARCHIVE);
-	cl_highlightcolor = Cvar_Get ("cl_highlightcolor", "0", CVAR_ARCHIVE);
-	cl_highlightnames = Cvar_Get ("cl_highlightnames",  "0", CVAR_ARCHIVE);
 	cl_gunalpha = Cvar_Get("cl_gunalpha", "1", 0);
-	ignorewaves = Cvar_Get ("ignorewaves", "0", 0);
-
-	cl_textcolors = Cvar_Get ("cl_textcolors", "0", CVAR_ARCHIVE);
-	cl_mychatcolor = Cvar_Get ("cl_mychatcolor", "0", CVAR_ARCHIVE);
-
-	//AVI EXPORT -Maniac
-	avi_fps = Cvar_Get("avi_fps", "0", 0);
-	avi_gamma_r = Cvar_Get("avi_gamma_r", "1", 0);
-	avi_gamma_g = Cvar_Get("avi_gamma_g", "1", 0);
-	avi_gamma_b = Cvar_Get("avi_gamma_b", "1", 0);
-	avi_monochrome = Cvar_Get("avi_monochrome", "0", 0);
-	avi_border_size = Cvar_Get("avi_border_size", "0", 0);
-	avi_border_r = Cvar_Get("avi_border_r", "1", 0);
-	avi_border_g = Cvar_Get("avi_border_g", "1", 0);
-	avi_border_b = Cvar_Get("avi_border_b", "1", 0);
-	Cmd_AddCommand ("aviexport", AVI_Export_f);
-
-	Cmd_AddCommand ("ignorenick", CL_Ignore_f);
-	Cmd_AddCommand ("unignorenick", CL_Unignore_f);
 	Cmd_AddCommand ("serverstatus", CL_ServerStatus_f);
 	Cmd_AddCommand ("cfg_save", CL_WriteConfig_f);
 	//End
@@ -1471,7 +1426,7 @@ void CL_InitLocal (void)
 
 	Cmd_AddCommand ("rcon", CL_Rcon_f);
 
-	Cmd_AddCommand ("setenv", CL_Setenv_f );
+//	Cmd_AddCommand ("setenv", CL_Setenv_f );
 
 	Cmd_AddCommand ("precache", CL_Precache_f);
 
@@ -1585,39 +1540,19 @@ typedef struct
 } cheatvar_t;
 
 cheatvar_t	cheatvars[] = {
-	{"timescale", "1"},
-	{"timedemo", "0"},
-	{"r_drawworld", "1"},
-	{"cl_testlights", "0"},
-	{"r_fullbright", "0"},
-	{"paused", "0"},
-	{"fixedtime", "0"},
-	{"sw_draworder", "0"},
-	{"gl_lockpvs", "0"},
-	{"gl_lightmap", "0"},
-	{"gl_saturatelighting", "0"},
-	{NULL, NULL}
+	{"timescale", "1", NULL},
+	{"timedemo", "0", NULL},
+	{"r_drawworld", "1", NULL},
+	{"cl_testlights", "0", NULL},
+	{"r_fullbright", "0", NULL},
+	{"paused", "0", NULL},
+	{"fixedtime", "0", NULL},
+	{"sw_draworder", "0", NULL},
+	{"gl_lockpvs", "0", NULL},
+	{"gl_lightmap", "0", NULL},
+	{"gl_saturatelighting", "0", NULL},
+	{NULL, NULL, NULL}
 };
-
-/*
-==================
-CL_CheatsOK
-==================
-*/
-qboolean CL_CheatsOK( void )
-{
-	if( cls.state < ca_connected )
-		return true;
-
-	if(cl.attractloop)
-		return true;
-
-	// single player can cheat
-	if( atoi( cl.configstrings[CS_MAXCLIENTS] ) < 2 )
-		return true;
-
-	return false;
-}
 
 int		numcheatvars;
 
@@ -1626,7 +1561,14 @@ void CL_FixCvarCheats (void)
 	int			i;
 	cheatvar_t	*var;
 
-	if (CL_CheatsOK())
+	if( cls.state < ca_connected )
+		return;
+
+	if(cl.attractloop)
+		return;
+
+	// single player can cheat
+	if( atoi( cl.configstrings[CS_MAXCLIENTS] ) < 2 )
 		return;
 
 	// find all the cvars if we haven't done it yet
@@ -1689,8 +1631,9 @@ void CL_Frame (int msec)
 {
 	static int	extratime;
 	static int  lasttimecalled;
+//	int temptime;
 
-	if (dedicated->value)
+	if (dedicated->integer)
 		return;
 
 	extratime += msec;
@@ -1698,13 +1641,15 @@ void CL_Frame (int msec)
 	if (cl_maxfps->value < 1)
 		Cvar_SetValue("cl_maxfps", 50);
 
-	if (!cl_timedemo->value)
+	if (!cl_timedemo->integer)
 	{
 		if (cls.state == ca_connected && extratime < 100)
 			return;			// don't flood packets out while connecting
 
-		if (extratime < 1000/cl_maxfps->value)
+		if (extratime < 1000/cl_maxfps->integer)
+		{
 			return;			// framerate is too high
+		}
 	}
 
 	// let the mouse activate or deactivate
@@ -1739,16 +1684,22 @@ void CL_Frame (int msec)
 		CL_PrepRefresh ();
 
 	// update the screen
-	if (host_speeds->value)
+	if (host_speeds->integer)
 		time_before_ref = Sys_Milliseconds ();
 	SCR_UpdateScreen ();
-	if (host_speeds->value)
+	if (host_speeds->integer)
 		time_after_ref = Sys_Milliseconds ();
 
 	// update audio
 	S_Update (cl.refdef.vieworg, cl.v_forward, cl.v_right, cl.v_up);
 	
+#ifdef CD_AUDIO
 	CDAudio_Update();
+#endif
+
+#ifdef _WIN32
+	WA_Frame();
+#endif
 
 	// advance local effects for next frame
 	CL_RunDLights ();
@@ -1756,9 +1707,9 @@ void CL_Frame (int msec)
 	SCR_RunCinematic ();
 	SCR_RunConsole ();
 
-	cls.framecount++;
+	//cls.framecount++;
 
-	if ( log_stats->value )
+	if ( log_stats->integer )
 	{
 		if ( cls.state == ca_active )
 		{
@@ -1790,13 +1741,14 @@ CL_Init
 */
 void CL_Init (void)
 {
-	if (dedicated->value)
+	if (dedicated->integer)
 		return;		// nothing running on the client
 
 	// all archived variables will now be loaded
 
-	Con_Init ();	
-#if defined __linux__ || defined __sgi
+	Con_Init ();
+
+#ifndef VID_INITFIRST
 	S_Init ();	
 	VID_Init ();
 #else
@@ -1814,13 +1766,19 @@ void CL_Init (void)
 	SCR_Init ();
 	cls.disable_screen = true;	// don't draw yet
 
+#ifdef CD_AUDIO
 	CDAudio_Init ();
+#endif
 	CL_InitLocal ();
 	IN_Init ();
 
-//	Cbuf_AddText ("exec autoexec.cfg\n");
+#ifdef _WIN32
+	WA_Init();
+#endif
+
 	FS_ExecAutoexec ();
 	Cbuf_Execute ();
+
 }
 
 
@@ -1845,177 +1803,20 @@ void CL_Shutdown(void)
 
 	CL_WriteConfiguration (); 
 
+#ifdef CD_AUDIO
 	CDAudio_Shutdown ();
+#endif
 	S_Shutdown();
+#ifdef _WIN32
+	WA_Shutdown();
+#endif
+
 	IN_Shutdown ();
 	VID_Shutdown();
 }
 
-//Ignore and Unignore by Maniac
-void CL_Ignore_f(void) 
+//Added CL_Mapname for screenshot naming
+char *CL_Mapname (void)
 {
-	int i, c, len;
-	char tmpname[MAX_I_NLENGHT];
-
-	if (Cmd_Argc() != 2)
-	{
-		//Without parameters print player list with id's
-		Com_Printf("Usage: \"%s <id>\" to ignore player name.\n",Cmd_Argv(0));
-		Com_Printf("Current list of players in server:\n");
-		Com_Printf("ID  Name             Ignored\n");
-		Com_Printf("--  ---------------  -------\n");
-		for (i=0;i<MAX_CLIENTS;i++) 
-		{ 
-			if (cl.clientinfo[i].name[0] && strcmp(cl.clientinfo[i].name, name->string)) 
-			{ 
-				// print all current players with id number
-
-				Com_Printf("%2i  %s", i, cl.clientinfo[i].name);
-
-				for(c=0; c<MAX_I_NICKS; c++)
-				{
-					//Show if player is already in ignorelist
-					if(!strcmp(cl.clientinfo[i].name, ignorelist[c]))
-					{
-						len = 15 - strlen(cl.clientinfo[i].name);
-						for(c=0; c<len; c++)
-							Com_Printf(" ");
-
-						Com_Printf("    yes");
-						break;
-					}
-				}
-				Com_Printf("\n");
-			} 
-		}
-		return; 
-	}
-
-	c = atof(Cmd_Argv(1));
-
-	if (!cl.clientinfo[c].name[0]) 
-	{ 
-		// player not found
-		Com_Printf("Cant find player with id number [%i]\n", c);
-		return;
-	}
-
-	if(strlen(cl.clientinfo[c].name) >= MAX_I_NLENGHT)
-	{
-		Com_Printf("Ignore: Name is too long to add\n");
-		return;
-	}
-
-	if(!strcmp(cl.clientinfo[c].name, name->string))
-	{
-		//Cant ignore own nick
-		Com_Printf("You cant ignore yourself!\n");
-		return;
-	}
-
-	strcpy(tmpname, cl.clientinfo[c].name);
-	// see if player is already in ignore list
-	for(i=0; i<MAX_I_NICKS; i++)
-	{
-		if(!strcmp(tmpname, ignorelist[i]))
-		{
-			Com_Printf("Player [%s] is already in ignorelist. Type \"unignorenick %i\" to remove it.\n", tmpname, i);
-			return;
-		}
-	}
-
-	for(i=0; i<MAX_I_NICKS; i++)		// find a free slot
-	{
-		if(!ignorelist[i][0])
-		{
-			strcpy(ignorelist[i], tmpname);
-			Com_Printf("Player [%s] is now ignored!\n", tmpname);
-			return;
-		}
-	}
-
-	Com_Printf("All ignore slots is full.\n");
-}
-
-void CL_Unignore_f(void)
-{
-	int i = 0, c = 0;
-	char tmpname[MAX_I_NLENGHT];
-
-	if (Cmd_Argc() != 2)
-	{
-		Com_Printf("Usage: \"%s <id>\" to unignore player name that match with id.\n",Cmd_Argv(0));
-		Com_Printf("Current ignores:\n");
-
-		for(i=0;i<MAX_I_NICKS;i++)
-		{
-			//Check if we even got 1 nick in ignorelist
-			if(ignorelist[i][0])
-			{
-				c = 1;
-				break;
-			}
-			
-		}
-
-		if(c)
-		{
-			Com_Printf("ID  Name\n");
-			Com_Printf("--  ---------------\n");
-			for(i=0; i < MAX_I_NICKS; i++)
-				if(*ignorelist[i])
-					Com_Printf("%2i  %s\n", i, ignorelist[i]);
-		}
-		else
-			Com_Printf("Ignorelist is empty.\n");
-
-		return; 
-	}
-
-	if(!strcmp(Cmd_Argv(1), "all")) //Allow to remove all nicks from ignorelist
-	{
-		for(i=0; i < MAX_I_NICKS; i++)
-		{
-			if(ignorelist[i][0])
-			{
-				memset(ignorelist[i], 0, sizeof(ignorelist[i]));
-				c++;
-			}
-		}
-		if(c > 0)
-			Com_Printf("Removed %i nicks from ignorelist.\n", c);
-		else
-			Com_Printf("Ignorelist is already empty.\n");
-
-	}
-	else
-	{
-		i=atof(Cmd_Argv(1));
-
-		if(ignorelist[i][0])
-		{
-			// yes name already in, so remove it from list
-			strcpy(tmpname, ignorelist[i]);
-			memset(ignorelist[i], 0, sizeof(ignorelist[i]));
-			Com_Printf("Player [%s] removed from ignorelist\n", tmpname);
-			return;
-		}
-		else
-			Com_Printf("Cant find player with id number [%i] in ignore list\n", i);
-	}
-}
-
-int CL_Ignore(char *s)
-{
-	int i;
-
-	for(i=0; i<MAX_I_NICKS; i++)
-	{
-		if(ignorelist[i][0])
-		{
-			if(!strcmp(s, ignorelist[i]))
-				return 1;
-		}
-	}
-	return 0;
+	return cls.mapname;
 }

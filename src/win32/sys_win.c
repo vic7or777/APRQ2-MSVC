@@ -64,7 +64,7 @@ SYSTEM IO
 */
 
 
-void Sys_Error (char *error, ...)
+void Sys_Error (const char *error, ...)
 {
 	va_list		argptr;
 	char		text[1024];
@@ -94,7 +94,7 @@ void Sys_Quit (void)
 	CL_Shutdown();
 	Qcommon_Shutdown ();
 	CloseHandle (qwclsemaphore);
-	if (dedicated && dedicated->value)
+	if (dedicated && dedicated->integer)
 		FreeConsole ();
 
 // shut down QHOST hooks if necessary
@@ -241,7 +241,7 @@ void Sys_Init (void)
 	else if ( vinfo.dwPlatformId == VER_PLATFORM_WIN32_WINDOWS )
 		s_win95 = true;
 
-	if (dedicated->value)
+	if (dedicated->integer)
 	{
 		if (!AllocConsole ())
 			Sys_Error ("Couldn't create dedicated server console");
@@ -268,7 +268,7 @@ char *Sys_ConsoleInput (void)
 	int		dummy;
 	int		ch, numread, numevents;
 
-	if (!dedicated || !dedicated->value)
+	if (!dedicated || !dedicated->integer)
 		return NULL;
 
 
@@ -342,12 +342,12 @@ Sys_ConsoleOutput
 Print text to the dedicated console
 ================
 */
-void Sys_ConsoleOutput (char *string)
+void Sys_ConsoleOutput (const char *string)
 {
 	int		dummy;
 	char	text[256];
 
-	if (!dedicated || !dedicated->value)
+	if (!dedicated || !dedicated->integer)
 		return;
 
 	if (console_textlen)
@@ -592,7 +592,10 @@ WinMain
 ==================
 */
 HINSTANCE	global_hInstance;
+
+#ifdef AVI_EXPORT
 extern cvar_t *avi_fps; // -Maniac
+#endif
 
 int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
@@ -633,7 +636,7 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 	while (1)
 	{
 		// if at a full screen console, don't update unless needed
-		if (Minimized || (dedicated && dedicated->value) )
+		if (Minimized || (dedicated && dedicated->integer) )
 		{
 			Sleep (1);
 		}
@@ -657,13 +660,14 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 		//	_controlfp( ~( _EM_ZERODIVIDE /*| _EM_INVALID*/ ), _MCW_EM );
 		_controlfp( _PC_24, _MCW_PC );
 
-		//AVI Export -Maniac
-		if(avi_fps && avi_fps->value)
+#ifdef AVI_EXPORT
+		if(avi_fps && avi_fps->integer)
 		{
-			curtime += (1000/avi_fps->value);
-			Qcommon_Frame(1000/avi_fps->value);
+			curtime += (1000/avi_fps->integer);
+			Qcommon_Frame(1000/avi_fps->integer);
 		}
 		else
+#endif
 		{
 			Qcommon_Frame (time);
 		}

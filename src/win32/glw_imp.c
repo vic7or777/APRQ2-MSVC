@@ -36,13 +36,14 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "glw_win.h"
 #include "winquake.h"
 
-static qboolean GLimp_SwitchFullscreen( int width, int height );
+//static qboolean GLimp_SwitchFullscreen( int width, int height );
 qboolean GLimp_InitGL (void);
 
 glwstate_t glw_state;
 
 extern cvar_t *vid_fullscreen;
 extern cvar_t *vid_ref;
+extern cvar_t *vid_displayfrequency;
 
 qboolean	have_stencil = false;
 
@@ -51,7 +52,7 @@ static qboolean VerifyDriver( void )
 	char buffer[1024];
 
 	strcpy( buffer, qglGetString( GL_RENDERER ) );
-	strlwr( buffer );
+	Q_strlwr( buffer );
 	if ( strcmp( buffer, "gdi generic" ) == 0 )
 		if ( !glw_state.mcd_accelerated )
 			return false;
@@ -85,7 +86,7 @@ qboolean VID_CreateWindow( int width, int height, qboolean fullscreen )
     wc.lpszClassName = WINDOW_CLASS_NAME;
 
     if (!RegisterClass (&wc) )
-		ri.Sys_Error (ERR_FATAL, "Couldn't register window class");
+		Com_Error (ERR_FATAL, "Couldn't register window class");
 
 	if (fullscreen)
 	{
@@ -115,16 +116,16 @@ qboolean VID_CreateWindow( int width, int height, qboolean fullscreen )
 	}
 	else
 	{
-		vid_xpos = ri.Cvar_Get ("vid_xpos", "0", 0);
-		vid_ypos = ri.Cvar_Get ("vid_ypos", "0", 0);
-		x = vid_xpos->value;
-		y = vid_ypos->value;
+		vid_xpos = Cvar_Get ("vid_xpos", "0", 0);
+		vid_ypos = Cvar_Get ("vid_ypos", "0", 0);
+		x = vid_xpos->integer;
+		y = vid_ypos->integer;
 	}
 
 	glw_state.hWnd = CreateWindowEx (
 		 exstyle, 
 		 WINDOW_CLASS_NAME,
-		 "Quake 2",
+		 WINDOW_CLASS_NAME,
 		 stylebits,
 		 x, y, w, h,
 		 NULL,
@@ -133,7 +134,7 @@ qboolean VID_CreateWindow( int width, int height, qboolean fullscreen )
 		 NULL);
 
 	if (!glw_state.hWnd)
-		ri.Sys_Error (ERR_FATAL, "Couldn't create window");
+		Com_Error (ERR_FATAL, "Couldn't create window");
 	
 	ShowWindow( glw_state.hWnd, SW_SHOW );
 	UpdateWindow( glw_state.hWnd );
@@ -141,7 +142,7 @@ qboolean VID_CreateWindow( int width, int height, qboolean fullscreen )
 	// init all the gl stuff for the window
 	if (!GLimp_InitGL ())
 	{
-		ri.Con_Printf( PRINT_ALL, "VID_CreateWindow() - GLimp_InitGL failed\n");
+		Com_Printf ( "VID_CreateWindow() - GLimp_InitGL failed\n");
 		return false;
 	}
 
@@ -149,13 +150,16 @@ qboolean VID_CreateWindow( int width, int height, qboolean fullscreen )
 	SetFocus( glw_state.hWnd );
 
 	// let the sound and input subsystems know about the new window
-	//ri.Vid_NewWindow (width, height);
-	ri.Vid_NewWindow( width / gl_scale->value, height / gl_scale->value); //gl_scale -Maniac
+	//VID_NewWindow (width, height);
+	VID_NewWindow( width / gl_scale->value, height / gl_scale->value); //gl_scale -Maniac
 
 	return true;
 }
 
 
+/*DEVMODE current; //win resolution
+qboolean getcurrent = false;
+qboolean win_difres = false;*/
 /*
 ** GLimp_SetMode
 */
@@ -164,17 +168,19 @@ rserr_t GLimp_SetMode( int *pwidth, int *pheight, int mode, qboolean fullscreen 
 	int width, height;
 	const char *win_fs[] = { "W", "FS" };
 
-	ri.Con_Printf( PRINT_ALL, "Initializing OpenGL display\n");
+	//win_difres = false;
 
-	ri.Con_Printf (PRINT_ALL, "...setting mode %d:", mode );
+	Com_Printf ( "Initializing OpenGL display\n");
 
-	if ( !ri.Vid_GetModeInfo( &width, &height, mode ) )
+	Com_Printf ("...setting mode %d:", mode );
+
+	if ( !VID_GetModeInfo( &width, &height, mode ) )
 	{
-		ri.Con_Printf( PRINT_ALL, " invalid mode\n" );
+		Com_Printf ( " invalid mode\n" );
 		return rserr_invalid_mode;
 	}
 
-	ri.Con_Printf( PRINT_ALL, " %d %d %s\n", width, height, win_fs[fullscreen] );
+	Com_Printf ( " %d %d %s\n", width, height, win_fs[fullscreen] );
 
 	// destroy the existing window
 	if (glw_state.hWnd)
@@ -187,7 +193,7 @@ rserr_t GLimp_SetMode( int *pwidth, int *pheight, int mode, qboolean fullscreen 
 	{
 		DEVMODE dm;
 
-		ri.Con_Printf( PRINT_ALL, "...attempting fullscreen\n" );
+		Com_Printf ( "...attempting fullscreen\n" );
 
 		memset( &dm, 0, sizeof( dm ) );
 
@@ -197,34 +203,46 @@ rserr_t GLimp_SetMode( int *pwidth, int *pheight, int mode, qboolean fullscreen 
 		dm.dmPelsHeight = height;
 		dm.dmFields     = DM_PELSWIDTH | DM_PELSHEIGHT;
 
-		if ( gl_bitdepth->value != 0 )
+		if ( vid_displayfrequency->integer > 30 )
 		{
-			dm.dmBitsPerPel = gl_bitdepth->value;
+			dm.dmFields |= DM_DISPLAYFREQUENCY;
+			dm.dmDisplayFrequency = vid_displayfrequency->integer;
+			Com_Printf ( "...using display frequency %i\n", dm.dmDisplayFrequency );
+		}
+
+		if ( gl_bitdepth->integer > 0 )
+		{
+			dm.dmBitsPerPel = gl_bitdepth->integer;
 			dm.dmFields |= DM_BITSPERPEL;
-			ri.Con_Printf( PRINT_ALL, "...using gl_bitdepth of %d\n", ( int ) gl_bitdepth->value );
+			Com_Printf ( "...using gl_bitdepth of %d\n", gl_bitdepth->integer );
 		}
 		else
 		{
 			HDC hdc = GetDC( NULL );
 			int bitspixel = GetDeviceCaps( hdc, BITSPIXEL );
 
-			ri.Con_Printf( PRINT_ALL, "...using desktop display depth of %d\n", bitspixel );
+			Com_Printf ( "...using desktop display depth of %d\n", bitspixel );
 
 			ReleaseDC( 0, hdc );
 		}
 
-		ri.Con_Printf( PRINT_ALL, "...calling CDS: " );
+		Com_Printf ( "...calling CDS: " );
 		if ( ChangeDisplaySettings( &dm, CDS_FULLSCREEN ) == DISP_CHANGE_SUCCESSFUL )
 		{
 			*pwidth = width;
 			*pheight = height;
 
-			gl_state.fullscreen = true;
-
-			ri.Con_Printf( PRINT_ALL, "ok\n" );
+			Com_Printf ( "ok\n" );
 
 			if ( !VID_CreateWindow (width, height, true) )
 				return rserr_invalid_mode;
+
+			gl_state.fullscreen = true;
+
+
+			/*if( getcurrent && (width != current.dmPelsWidth || height != current.dmPelsHeight) )  {
+				win_difres = true;
+			}*/
 
 			return rserr_ok;
 		}
@@ -233,53 +251,62 @@ rserr_t GLimp_SetMode( int *pwidth, int *pheight, int mode, qboolean fullscreen 
 			*pwidth = width;
 			*pheight = height;
 
-			ri.Con_Printf( PRINT_ALL, "failed\n" );
+			Com_Printf ( "failed\n" );
 
-			ri.Con_Printf( PRINT_ALL, "...calling CDS assuming dual monitors:" );
+			Com_Printf ( "...calling CDS assuming dual monitors:" );
 
 			dm.dmPelsWidth = width * 2;
 			dm.dmPelsHeight = height;
-			dm.dmFields = DM_PELSWIDTH | DM_PELSHEIGHT;
+			dm.dmFields     = DM_PELSWIDTH | DM_PELSHEIGHT;
 
-			if ( gl_bitdepth->value != 0 )
+			if ( vid_displayfrequency->integer > 30 )
 			{
-				dm.dmBitsPerPel = gl_bitdepth->value;
-				dm.dmFields |= DM_BITSPERPEL;
+				dm.dmFields |= DM_DISPLAYFREQUENCY;
+				dm.dmDisplayFrequency = vid_displayfrequency->integer;
 			}
 
+			if ( gl_bitdepth->integer > 0 )
+			{
+				dm.dmBitsPerPel = gl_bitdepth->integer;
+				dm.dmFields |= DM_BITSPERPEL;
+			}
 			/*
 			** our first CDS failed, so maybe we're running on some weird dual monitor
 			** system 
 			*/
 			if ( ChangeDisplaySettings( &dm, CDS_FULLSCREEN ) != DISP_CHANGE_SUCCESSFUL )
 			{
-				ri.Con_Printf( PRINT_ALL, " failed\n" );
+				Com_Printf ( " failed\n" );
 
-				ri.Con_Printf( PRINT_ALL, "...setting windowed mode\n" );
+				Com_Printf ( "...setting windowed mode\n" );
 
 				ChangeDisplaySettings( 0, 0 );
 
-				*pwidth = width;
-				*pheight = height;
 				gl_state.fullscreen = false;
+
 				if ( !VID_CreateWindow (width, height, false) )
 					return rserr_invalid_mode;
 				return rserr_invalid_fullscreen;
 			}
 			else
 			{
-				ri.Con_Printf( PRINT_ALL, " ok\n" );
+				Com_Printf ( " ok\n" );
+
 				if ( !VID_CreateWindow (width, height, true) )
 					return rserr_invalid_mode;
 
 				gl_state.fullscreen = true;
+
+				/*if( getcurrent && (width != current.dmPelsWidth || height != current.dmPelsHeight) ) {
+					win_difres = true;
+				}*/
 				return rserr_ok;
 			}
 		}
 	}
 	else
 	{
-		ri.Con_Printf( PRINT_ALL, "...setting windowed mode\n" );
+		Com_Printf ( "...setting windowed mode\n" );
 
 		ChangeDisplaySettings( 0, 0 );
 
@@ -305,32 +332,24 @@ rserr_t GLimp_SetMode( int *pwidth, int *pheight, int mode, qboolean fullscreen 
 void GLimp_Shutdown( void )
 {
 	if ( qwglMakeCurrent && !qwglMakeCurrent( NULL, NULL ) )
-		ri.Con_Printf( PRINT_ALL, "ref_gl::R_Shutdown() - wglMakeCurrent failed\n");
+		Com_Printf ( "ref_gl::R_Shutdown() - wglMakeCurrent failed\n");
 	if ( glw_state.hGLRC )
 	{
 		if (  qwglDeleteContext && !qwglDeleteContext( glw_state.hGLRC ) )
-			ri.Con_Printf( PRINT_ALL, "ref_gl::R_Shutdown() - wglDeleteContext failed\n");
+			Com_Printf ( "ref_gl::R_Shutdown() - wglDeleteContext failed\n");
 		glw_state.hGLRC = NULL;
 	}
 	if (glw_state.hDC)
 	{
 		if ( !ReleaseDC( glw_state.hWnd, glw_state.hDC ) )
-			ri.Con_Printf( PRINT_ALL, "ref_gl::R_Shutdown() - ReleaseDC failed\n" );
+			Com_Printf ( "ref_gl::R_Shutdown() - ReleaseDC failed\n" );
 		glw_state.hDC   = NULL;
 	}
 	if (glw_state.hWnd)
 	{
-		//Added Fix for left over icons on windows taskbar -Maniac
 		ShowWindow (glw_state.hWnd, SW_HIDE);
-		//End
 		DestroyWindow (	glw_state.hWnd );
 		glw_state.hWnd = NULL;
-	}
-
-	if ( glw_state.log_fp )
-	{
-		fclose( glw_state.log_fp );
-		glw_state.log_fp = 0;
 	}
 
 	UnregisterClass (WINDOW_CLASS_NAME, glw_state.hInstance);
@@ -383,12 +402,19 @@ qboolean GLimp_Init( void *hinstance, void *wndproc )
 	}
 	else
 	{
-		ri.Con_Printf( PRINT_ALL, "GLimp_Init() - GetVersionEx failed\n" );
+		Com_Printf ( "GLimp_Init() - GetVersionEx failed\n" );
 		return false;
 	}
 
 	glw_state.hInstance = ( HINSTANCE ) hinstance;
 	glw_state.wndproc = wndproc;
+
+	/*memset( &current, 0, sizeof( current ) );
+	getcurrent = false;
+	if(EnumDisplaySettings( NULL, ENUM_CURRENT_SETTINGS, &current )) //Get windows current settings
+	{
+		getcurrent = true;
+	}*/
 
 	return true;
 }
@@ -419,14 +445,14 @@ qboolean GLimp_InitGL (void)
     int  pixelformat;
 	cvar_t *stereo;
 	
-	stereo = ri.Cvar_Get( "cl_stereo", "0", 0 );
+	stereo = Cvar_Get( "cl_stereo", "0", 0 );
 
 	/*
 	** set PFD_STEREO if necessary
 	*/
 	if ( stereo->value != 0 )
 	{
-		ri.Con_Printf( PRINT_ALL, "...attempting to use stereo\n" );
+		Com_Printf ( "...attempting to use stereo\n" );
 		pfd.dwFlags |= PFD_STEREO;
 		gl_state.stereo_enabled = true;
 	}
@@ -447,11 +473,11 @@ qboolean GLimp_InitGL (void)
 	** Get a DC for the specified window
 	*/
 	if ( glw_state.hDC != NULL )
-		ri.Con_Printf( PRINT_ALL, "GLimp_Init() - non-NULL DC exists\n" );
+		Com_Printf ( "GLimp_Init() - non-NULL DC exists\n" );
 
     if ( ( glw_state.hDC = GetDC( glw_state.hWnd ) ) == NULL )
 	{
-		ri.Con_Printf( PRINT_ALL, "GLimp_Init() - GetDC failed\n" );
+		Com_Printf ( "GLimp_Init() - GetDC failed\n" );
 		return false;
 	}
 
@@ -459,12 +485,12 @@ qboolean GLimp_InitGL (void)
 	{
 		if ( (pixelformat = qwglChoosePixelFormat( glw_state.hDC, &pfd)) == 0 )
 		{
-			ri.Con_Printf (PRINT_ALL, "GLimp_Init() - qwglChoosePixelFormat failed\n");
+			Com_Printf ("GLimp_Init() - qwglChoosePixelFormat failed\n");
 			return false;
 		}
 		if ( qwglSetPixelFormat( glw_state.hDC, pixelformat, &pfd) == FALSE )
 		{
-			ri.Con_Printf (PRINT_ALL, "GLimp_Init() - qwglSetPixelFormat failed\n");
+			Com_Printf ("GLimp_Init() - qwglSetPixelFormat failed\n");
 			return false;
 		}
 		qwglDescribePixelFormat( glw_state.hDC, pixelformat, sizeof( pfd ), &pfd );
@@ -473,12 +499,12 @@ qboolean GLimp_InitGL (void)
 	{
 		if ( ( pixelformat = ChoosePixelFormat( glw_state.hDC, &pfd)) == 0 )
 		{
-			ri.Con_Printf (PRINT_ALL, "GLimp_Init() - ChoosePixelFormat failed\n");
+			Com_Printf ("GLimp_Init() - ChoosePixelFormat failed\n");
 			return false;
 		}
 		if ( SetPixelFormat( glw_state.hDC, pixelformat, &pfd) == FALSE )
 		{
-			ri.Con_Printf (PRINT_ALL, "GLimp_Init() - SetPixelFormat failed\n");
+			Com_Printf ("GLimp_Init() - SetPixelFormat failed\n");
 			return false;
 		}
 		DescribePixelFormat( glw_state.hDC, pixelformat, sizeof( pfd ), &pfd );
@@ -503,8 +529,8 @@ qboolean GLimp_InitGL (void)
 	*/
 	if ( !( pfd.dwFlags & PFD_STEREO ) && ( stereo->value != 0 ) ) 
 	{
-		ri.Con_Printf( PRINT_ALL, "...failed to select stereo pixel format\n" );
-		ri.Cvar_SetValue( "cl_stereo", 0 );
+		Com_Printf ( "...failed to select stereo pixel format\n" );
+		Cvar_SetValue( "cl_stereo", 0 );
 		gl_state.stereo_enabled = false;
 	}
 
@@ -514,45 +540,44 @@ qboolean GLimp_InitGL (void)
 	*/
 	if ( ( glw_state.hGLRC = qwglCreateContext( glw_state.hDC ) ) == 0 )
 	{
-		ri.Con_Printf (PRINT_ALL, "GLimp_Init() - qwglCreateContext failed\n");
+		Com_Printf ("GLimp_Init() - qwglCreateContext failed\n");
 
 		goto fail;
 	}
 
     if ( !qwglMakeCurrent( glw_state.hDC, glw_state.hGLRC ) )
 	{
-		ri.Con_Printf (PRINT_ALL, "GLimp_Init() - qwglMakeCurrent failed\n");
+		Com_Printf ("GLimp_Init() - qwglMakeCurrent failed\n");
 
 		goto fail;
 	}
 
 	if ( !VerifyDriver() )
 	{
-		ri.Con_Printf( PRINT_ALL, "GLimp_Init() - no hardware acceleration detected\n" );
+		Com_Printf ( "GLimp_Init() - no hardware acceleration detected\n" );
 		goto fail;
 	}
 
 	/*
 	** print out PFD specifics 
 	*/
-	//Changed for stencil shadows & get max texture size -Maniac
-//	ri.Con_Printf( PRINT_ALL, "GL PFD: color(%d-bits) Z(%d-bit)\n", ( int ) pfd.cColorBits, ( int ) pfd.cDepthBits );
-	ri.Con_Printf( PRINT_ALL, "GL PFD: Color(%dbits) Depth(%dbits) Stencil(%dbits)\n", ( int ) pfd.cColorBits, ( int ) pfd.cDepthBits, (int) pfd.cStencilBits );
+//	Com_Printf ( "GL PFD: color(%d-bits) Z(%d-bit)\n", ( int ) pfd.cColorBits, ( int ) pfd.cDepthBits );
+	Com_Printf ( "GL PFD: Color(%dbits) Depth(%dbits) Stencil(%dbits)\n", ( int ) pfd.cColorBits, ( int ) pfd.cDepthBits, (int) pfd.cStencilBits );
 	{
 		char	buffer[1024];
 
 		strcpy( buffer, qglGetString( GL_RENDERER ) );
-		strlwr( buffer );
+		Q_strlwr( buffer );
 		if (strstr(buffer, "Voodoo3"))
 		{
-			ri.Con_Printf( PRINT_ALL, "... Voodoo3 has no stencil buffer\n" );
+			Com_Printf ( "... Voodoo3 has no stencil buffer\n" );
 			have_stencil = false;
 		}
 		else
 		{
 			if (pfd.cStencilBits)
 			{
-				ri.Con_Printf( PRINT_ALL, "... Using stencil buffer\n" );
+				Com_Printf ( "... Using stencil buffer\n" );
 				have_stencil = true;	// Stencil shadows -MrG
 			}
 		}
@@ -582,10 +607,10 @@ void GLimp_BeginFrame( float camera_separation )
 {
 	if ( gl_bitdepth->modified )
 	{
-		if ( gl_bitdepth->value != 0 && !glw_state.allowdisplaydepthchange )
+		if ( gl_bitdepth->integer != 0 && !glw_state.allowdisplaydepthchange )
 		{
-			ri.Cvar_SetValue( "gl_bitdepth", 0 );
-			ri.Con_Printf( PRINT_ALL, "gl_bitdepth requires Win95 OSR2.x or WinNT 4.x\n" );
+			Cvar_SetValue( "gl_bitdepth", 0 );
+			Com_Printf ( "gl_bitdepth requires Win95 OSR2.x or WinNT 4.x\n" );
 		}
 		gl_bitdepth->modified = false;
 	}
@@ -621,7 +646,7 @@ void GLimp_EndFrame (void)
 	if ( stricmp( gl_drawbuffer->string, "GL_BACK" ) == 0 )
 	{
 		if ( !qwglSwapBuffers( glw_state.hDC ) )
-			ri.Sys_Error( ERR_FATAL, "GLimp_EndFrame() - SwapBuffers() failed!\n" );
+			Com_Error( ERR_FATAL, "GLimp_EndFrame() - SwapBuffers() failed!\n" );
 	}
 }
 
@@ -632,12 +657,20 @@ void GLimp_AppActivate( qboolean active )
 {
 	if ( active )
 	{
+		//if (vid_fullscreen->value && win_difres)
+			//ChangeDisplaySettings( &dm, CDS_FULLSCREEN );
+
 		SetForegroundWindow( glw_state.hWnd );
-		ShowWindow( glw_state.hWnd, SW_RESTORE );
+		ShowWindow( glw_state.hWnd, SW_SHOW );
 	}
 	else
 	{
-		if ( vid_fullscreen->value )
+		if ( vid_fullscreen->integer )
+		{
+			//if(win_difres)
+				//ChangeDisplaySettings( 0, 0 );
+
 			ShowWindow( glw_state.hWnd, SW_MINIMIZE );
+		}
 	}
 }

@@ -89,4 +89,3 @@ unsigned short CRC_Block (byte *start, int count)
 
 	return crc;
 }
-

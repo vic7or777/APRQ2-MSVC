@@ -28,6 +28,10 @@ int		snd_scaletable[32][256];
 int 	*snd_p, snd_linear_count, snd_vol;
 short	*snd_out;
 
+void S_WriteLinearBlastStereo16 (void);
+
+
+#if	!id386
 void S_WriteLinearBlastStereo16 (void)
 {
 	int		i;
@@ -36,22 +40,57 @@ void S_WriteLinearBlastStereo16 (void)
 	for (i=0 ; i<snd_linear_count ; i+=2)
 	{
 		val = snd_p[i]>>8;
-		if (val > 0x7fff)
-			snd_out[i] = 0x7fff;
-		else if (val < (short)0x8000)
-			snd_out[i] = (short)0x8000;
-		else
-			snd_out[i] = val;
+		snd_out[i] = bound ((short)0x8000, val, 0x7fff);
 
 		val = snd_p[i+1]>>8;
-		if (val > 0x7fff)
-			snd_out[i+1] = 0x7fff;
-		else if (val < (short)0x8000)
-			snd_out[i+1] = (short)0x8000;
-		else
-			snd_out[i+1] = val;
+		snd_out[i+1] = bound ((short)0x8000, val, 0x7fff);
 	}
 }
+#elif defined(_WIN32)
+__declspec( naked ) void S_WriteLinearBlastStereo16 (void)
+{
+	__asm {
+
+ push edi
+ push ebx
+ mov ecx,ds:dword ptr[snd_linear_count]
+ mov ebx,ds:dword ptr[snd_p]
+ mov edi,ds:dword ptr[snd_out]
+LWLBLoopTop:
+ mov eax,ds:dword ptr[-8+ebx+ecx*4]
+ sar eax,8
+ cmp eax,07FFFh
+ jg LClampHigh
+ cmp eax,0FFFF8000h
+ jnl LClampDone
+ mov eax,0FFFF8000h
+ jmp LClampDone
+LClampHigh:
+ mov eax,07FFFh
+LClampDone:
+ mov edx,ds:dword ptr[-4+ebx+ecx*4]
+ sar edx,8
+ cmp edx,07FFFh
+ jg LClampHigh2
+ cmp edx,0FFFF8000h
+ jnl LClampDone2
+ mov edx,0FFFF8000h
+ jmp LClampDone2
+LClampHigh2:
+ mov edx,07FFFh
+LClampDone2:
+ shl edx,16
+ and eax,0FFFFh
+ or edx,eax
+ mov ds:dword ptr[-4+edi+ecx*2],edx
+ sub ecx,2
+ jnz LWLBLoopTop
+ pop ebx
+ pop edi
+ ret
+	}
+}
+#endif
 
 void S_TransferStereo16 (unsigned long *pbuf, int endtime)
 {
@@ -100,7 +139,7 @@ void S_TransferPaintBuffer(int endtime)
 
 	pbuf = (unsigned long *)dma.buffer;
 
-	if (s_testsound->value)
+	if (s_testsound->integer)
 	{
 		int		i;
 		int		count;
@@ -130,11 +169,7 @@ void S_TransferPaintBuffer(int endtime)
 			{
 				val = *p >> 8;
 				p+= step;
-				if (val > 0x7fff)
-					val = 0x7fff;
-				else if (val < (short)0x8000)
-					val = (short)0x8000;
-				out[out_idx] = val;
+				out[out_idx] = bound ((short)0x8000, val, 0x7fff);
 				out_idx = (out_idx + 1) & out_mask;
 			}
 		}
@@ -145,11 +180,7 @@ void S_TransferPaintBuffer(int endtime)
 			{
 				val = *p >> 8;
 				p+= step;
-				if (val > 0x7fff)
-					val = 0x7fff;
-				else if (val < (short)0x8000)
-					val = (short)0x8000;
-				out[out_idx] = (val>>8) + 128;
+				out[out_idx] = (bound ((short)0x8000, val, 0x7fff)>>8) + 128;
 				out_idx = (out_idx + 1) & out_mask;
 			}
 		}
@@ -223,7 +254,7 @@ void S_PaintChannels(int endtime)
 
 			for ( ; i<end ; i++)
 			{
-				paintbuffer[i-paintedtime].left =
+				paintbuffer[i-paintedtime].left = 0;
 				paintbuffer[i-paintedtime].right = 0;
 			}
 		}
@@ -313,32 +344,21 @@ void S_PaintChannelFrom8 (channel_t *ch, sfxcache_t *sc, int count, int offset)
 		ch->leftvol = 255;
 	if (ch->rightvol > 255)
 		ch->rightvol = 255;
-
+		
+	//ZOID-- >>11 has been changed to >>3, >>11 didn't make much sense
+	//as it would always be zero.
 	lscale = snd_scaletable[ch->leftvol >> 3];
 	rscale = snd_scaletable[ch->rightvol >> 3];
+	sfx = (unsigned char *)sc->data + ch->pos;
+
 	samp = &paintbuffer[offset];
 
-	if (sc->stereo)
+	for (i=0 ; i<count ; i++, samp++)
 	{
-		sfx = (unsigned char *)sc->data + ch->pos * 2;
-
-		for (i=0 ; i<count ; i++, samp++)
-		{
-			samp->left += lscale[*sfx++];
-			samp->right += rscale[*sfx++];
-		}
+		samp->left += lscale[*sfx];
+		samp->right += rscale[*sfx++];
 	}
-	else
-	{
-		sfx = (unsigned char *)sc->data + ch->pos;
-
-		for (i=0 ; i<count ; i++, samp++)
-		{
-			samp->left += lscale[*sfx];
-			samp->right += rscale[*sfx++];
-		}
-	}
-
+	
 	ch->pos += count;
 }
 
@@ -351,27 +371,13 @@ void S_PaintChannelFrom16 (channel_t *ch, sfxcache_t *sc, int count, int offset)
 
 	leftvol = ch->leftvol*snd_vol;
 	rightvol = ch->rightvol*snd_vol;
+	sfx = (signed short *)sc->data + ch->pos;
+
 	samp = &paintbuffer[offset];
-
-	if (sc->stereo)
+	for (i=0 ; i<count ; i++, samp++)
 	{
-		sfx = (signed short *)sc->data + ch->pos * 2;
-
-		for (i=0 ; i<count ; i++, samp++)
-		{
-			samp->left += (*sfx++ * leftvol) >> 8;
-			samp->right += (*sfx++ * rightvol) >> 8;
-		}
-	}
-	else
-	{
-		sfx = (signed short *)sc->data + ch->pos;
-
-		for (i=0 ; i<count ; i++, samp++)
-		{
-			samp->left += (*sfx * leftvol) >> 8;
-			samp->right += (*sfx++ * rightvol) >> 8;
-		}
+		samp->left += (*sfx * leftvol) >> 8;
+		samp->right += (*sfx++ * rightvol) >> 8;
 	}
 
 	ch->pos += count;

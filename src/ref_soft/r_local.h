@@ -62,12 +62,13 @@ typedef enum
 
 typedef struct image_s
 {
-	char    name[MAX_QPATH];        // game path, including extension
+	char			name[MAX_QPATH]; // game path, including extension
 	imagetype_t     type;
 	int             width, height;
 	qboolean        transparent;    // true if any 255 pixels in image
 	int             registration_sequence;  // 0 = free
 	byte		*pixels[4];				// mip levels
+	struct image_s	*hashNext;
 } image_t;
 
 
@@ -751,27 +752,27 @@ void R_NewMap (void);
 void R_Register (void);
 void R_UnRegister (void);
 void Draw_InitLocal (void);
-qboolean R_Init( void *hInstance, void *wndProc );
+int R_Init( void *hInstance, void *wndProc );
 void R_Shutdown (void);
 void R_InitCaches (void);
 void D_FlushCaches (void);
 
 void	R_ScreenShot_f( void );
-void    R_BeginRegistration (char *map);
-struct model_s  *R_RegisterModel (char *name);
+void    R_BeginRegistration (const char *map);
+struct model_s  *R_RegisterModel (const char *name);
 void    R_EndRegistration (void);
 
 void    R_RenderFrame (refdef_t *fd);
 
-struct image_s  *Draw_FindPic (char *name);
+struct image_s  *Draw_FindPic (const char *name);
 
-void    Draw_GetPicSize (int *w, int *h, char *name);
-void    Draw_Pic (int x, int y, char *name, float alpha);
-void	Draw_ScaledPic (int x, int y, float scale, char *name, float red, float green, float blue, float alpha);
-void    Draw_StretchPic (int x, int y, int w, int h, char *name, float alpha);
+void    Draw_GetPicSize (int *w, int *h, const char *name);
+void    Draw_Pic (int x, int y, const char *name, float alpha);
+void	Draw_ScaledPic (int x, int y, float scale, const char *name, float red, float green, float blue, float alpha);
+void    Draw_StretchPic (int x, int y, int w, int h, const char *name, float alpha);
 void    Draw_StretchRaw (int x, int y, int w, int h, int cols, int rows, byte *data);
 void    Draw_Char (int x, int y, int c, int color, float alpha);
-void    Draw_TileClear (int x, int y, int w, int h, char *name);
+void    Draw_TileClear (int x, int y, int w, int h, const char *name);
 void    Draw_Fill (int x, int y, int w, int h, int c);
 void    Draw_FadeScreen (void);
 
@@ -786,11 +787,11 @@ extern unsigned d_8to24table[256]; // base
 void    Sys_MakeCodeWriteable (unsigned long startaddr, unsigned long length);
 void    Sys_SetFPCW (void);
 
-void LoadPCX (char *filename, byte **pic, byte **palette, int *width, int *height);
+void LoadPCX (const char *filename, byte **pic, byte **palette, int *width, int *height);
 
 void    R_InitImages (void);
 void	R_ShutdownImages (void);
-image_t *R_FindImage (char *name, imagetype_t type);
+image_t *R_FindImage (const char *name, imagetype_t type);
 void    R_FreeUnusedImages (void);
 
 void	R_GammaCorrectAndSetPalette( const unsigned char *pal );
@@ -813,15 +814,6 @@ void R_IMFlatShadedQuad( vec3_t a, vec3_t b, vec3_t c, vec3_t d, int color, floa
 
 extern swstate_t sw_state;
 
-/*
-====================================================================
-
-IMPORTED FUNCTIONS
-
-====================================================================
-*/
-
-extern  refimport_t     ri;
 
 /*
 ====================================================================

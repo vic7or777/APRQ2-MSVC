@@ -44,7 +44,3 @@ struct sfx_s *S_FindName (char *name, qboolean create);
 // information, so entities can be dynamically re-spatialized
 void CL_GetEntitySoundOrigin (int ent, vec3_t org);
 
-/* NeVo - WinAmp Integration */ // -Maniac
-void S_WinAmp_Init (void); 
-void S_WinAmp_Shutdown (void); 
-void S_WinAmp_Frame (void); 

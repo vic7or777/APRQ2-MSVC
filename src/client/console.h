@@ -25,7 +25,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #define	MAX_CON_TIMES 8
 
-#define		CON_TEXTSIZE	32768
+//#define		CON_TEXTSIZE	32768
+#define	CON_TEXTSIZE	65536
+
 typedef struct
 {
 	qboolean	initialized;
@@ -56,8 +58,8 @@ void Con_CheckResize (void);
 void Con_Init (void);
 //Changed -Maniac
 void Con_DrawConsole (float frac, qboolean ingame);
-void Con_Print (char *txt);
-void Con_CenteredPrint (char *text);
+void Con_Print (const char *txt);
+void Con_CenteredPrint (const char *text);
 void Con_Clear_f (void);
 void Con_DrawNotify (void);
 void Con_ClearNotify (void);

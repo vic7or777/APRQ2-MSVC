@@ -656,4 +656,3 @@ trace_t SV_Trace (vec3_t start, vec3_t mins, vec3_t maxs, vec3_t end, edict_t *p
 
 	return clip.trace;
 }
-

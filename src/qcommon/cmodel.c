@@ -90,8 +90,8 @@ int			numvisibility;
 byte		map_visibility[MAX_MAP_VISIBILITY];
 dvis_t		*map_vis = (dvis_t *)map_visibility;
 
-int			numentitychars;
-char		map_entitystring[MAX_MAP_ENTSTRING];
+static int	numentitychars;
+static char	map_entitystring[MAX_MAP_ENTSTRING];
 
 int			numareas = 1;
 carea_t		map_areas[MAX_MAP_AREAS];
@@ -532,7 +532,7 @@ CM_LoadMap
 Loads in the map and all submodels
 ==================
 */
-cmodel_t *CM_LoadMap (char *name, qboolean clientload, unsigned *checksum)
+cmodel_t *CM_LoadMap (const char *name, qboolean clientload, unsigned *checksum)
 {
 	unsigned		*buf;
 	int				i;
@@ -560,8 +560,12 @@ cmodel_t *CM_LoadMap (char *name, qboolean clientload, unsigned *checksum)
 	numcmodels = 0;
 	numvisibility = 0;
 	numentitychars = 0;
-	map_entitystring[0] = 0;
-	map_name[0] = 0;
+	//map_entitystring[0] = 0;
+	//map_name[0] = 0;
+
+	//r1: fix for missing terminators on some badly compiled maps
+	memset (map_entitystring, 0, MAX_MAP_ENTSTRING);
+	memset (map_name, 0, MAX_QPATH);
 
 	if (!name || !name[0])
 	{
@@ -599,8 +603,8 @@ cmodel_t *CM_LoadMap (char *name, qboolean clientload, unsigned *checksum)
 	CMod_LoadPlanes (&header.lumps[LUMP_PLANES]);
 	CMod_LoadBrushes (&header.lumps[LUMP_BRUSHES]);
 	CMod_LoadBrushSides (&header.lumps[LUMP_BRUSHSIDES]);
-	CMod_LoadSubmodels (&header.lumps[LUMP_MODELS]);
 	CMod_LoadNodes (&header.lumps[LUMP_NODES]);
+	CMod_LoadSubmodels (&header.lumps[LUMP_MODELS]);
 	CMod_LoadAreas (&header.lumps[LUMP_AREAS]);
 	CMod_LoadAreaPortals (&header.lumps[LUMP_AREAPORTALS]);
 	CMod_LoadVisibility (&header.lumps[LUMP_VISIBILITY]);
@@ -613,7 +617,7 @@ cmodel_t *CM_LoadMap (char *name, qboolean clientload, unsigned *checksum)
 	memset (portalopen, 0, sizeof(portalopen));
 	FloodAreaConnections ();
 
-	strcpy (map_name, name);
+	Q_strncpyz (map_name, name, sizeof(map_name));
 
 	return &map_cmodels[0];
 }
@@ -623,7 +627,7 @@ cmodel_t *CM_LoadMap (char *name, qboolean clientload, unsigned *checksum)
 CM_InlineModel
 ==================
 */
-cmodel_t	*CM_InlineModel (char *name)
+cmodel_t *CM_InlineModel (const char *name)
 {
 	int		num;
 
@@ -850,8 +854,9 @@ void CM_BoxLeafnums_r (int nodenum)
 	
 		node = &map_nodes[nodenum];
 		plane = node->plane;
-		s = BoxOnPlaneSide (leaf_mins, leaf_maxs, plane);
+		//s = BoxOnPlaneSide (leaf_mins, leaf_maxs, plane);
 
+		s = BOX_ON_PLANE_SIDE(leaf_mins, leaf_maxs, plane);
 		if (s == 1)
 			nodenum = node->children[0];
 		else if (s == 2)
@@ -1647,7 +1652,7 @@ void	CM_SetAreaPortalState (int portalnum, qboolean open)
 
 qboolean	CM_AreasConnected (int area1, int area2)
 {
-	if (map_noareas->value)
+	if (map_noareas->integer)
 		return true;
 
 	if (area1 > numareas || area2 > numareas)
@@ -1677,7 +1682,7 @@ int CM_WriteAreaBits (byte *buffer, int area)
 
 	bytes = (numareas+7)>>3;
 
-	if (map_noareas->value)
+	if (map_noareas->integer)
 	{	// for debugging, send everything
 		memset (buffer, 255, bytes);
 	}
@@ -1753,4 +1758,3 @@ qboolean CM_HeadnodeVisible (int nodenum, byte *visbits)
 		return true;
 	return CM_HeadnodeVisible(node->children[1], visbits);
 }
-

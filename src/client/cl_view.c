@@ -20,9 +20,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // cl_view.c -- player rendering positioning
 
 #include "client.h"
-#include <windows.h>
-#include <vfw.h>
-#include "avi.h"
 
 cvar_t		*cl_testparticles;
 cvar_t		*cl_testentities;
@@ -97,7 +94,6 @@ void V_AddParticle (vec3_t org, int color, float alpha)
 }
 
 /*
-//Added addstain -Maniac
 =====================
 V_AddStain
 
@@ -105,6 +101,7 @@ V_AddStain
 */
 void V_AddStain (vec3_t org, vec3_t color, float size)
 {
+#ifdef GL_QUAKE
 	stain_t	*s;
 
 	if (r_numstains >= MAX_STAINS)
@@ -113,6 +110,7 @@ void V_AddStain (vec3_t org, vec3_t color, float size)
 	VectorCopy (org, s->origin);
 	VectorCopy (color, s->color);
 	s->size = size;
+#endif
 }
 
 
@@ -282,7 +280,7 @@ void CL_PrepRefresh (void)
 	// register models, pics, and skins
 	Com_Printf ("Map: %s\r", mapname); 
 	SCR_UpdateScreen ();
-	re.BeginRegistration (mapname);
+	R_BeginRegistration (mapname);
 	Com_Printf ("                                     \r");
 
 	// precache status bar pics
@@ -316,7 +314,7 @@ void CL_PrepRefresh (void)
 		} 
 		else
 		{
-			cl.model_draw[i] = re.RegisterModel (cl.configstrings[CS_MODELS+i]);
+			cl.model_draw[i] = R_RegisterModel (cl.configstrings[CS_MODELS+i]);
 			if (name[0] == '*')
 				cl.model_clip[i] = CM_InlineModel (cl.configstrings[CS_MODELS+i]);
 			else
@@ -330,7 +328,7 @@ void CL_PrepRefresh (void)
 	SCR_UpdateScreen ();
 	for (i=1 ; i<MAX_IMAGES && cl.configstrings[CS_IMAGES+i][0] ; i++)
 	{
-		cl.image_precache[i] = re.RegisterPic (cl.configstrings[CS_IMAGES+i]);
+		cl.image_precache[i] = Draw_FindPic (cl.configstrings[CS_IMAGES+i]);
 		Sys_SendKeyEvents ();	// pump message loop
 	}
 	
@@ -354,11 +352,11 @@ void CL_PrepRefresh (void)
 	rotate = atof (cl.configstrings[CS_SKYROTATE]);
 	sscanf (cl.configstrings[CS_SKYAXIS], "%f %f %f", 
 		&axis[0], &axis[1], &axis[2]);
-	re.SetSky (cl.configstrings[CS_SKY], rotate, axis);
+	R_SetSky (cl.configstrings[CS_SKY], rotate, axis);
 	Com_Printf ("                                     \r");
 
 	// the renderer can now free unneeded stuff
-	re.EndRegistration ();
+	R_EndRegistration ();
 
 	// clear any lines of console text
 	Con_ClearNotify ();
@@ -368,15 +366,12 @@ void CL_PrepRefresh (void)
 	cl.force_refdef = true;	// make sure we have a valid refdef
 
 	// start the cd track
+#ifdef CD_AUDIO
 	CDAudio_Play (atoi(cl.configstrings[CS_CDTRACK]), true);
+#endif
 
-	//Added locs and stuff -Maniac
-	if(cl_autorecord->value)
-		CL_Stop_f();
-
-	CL_LoadLoc();
-	cl.time_since_nocheatsay = 0;
-	cl.roundtime = 0;
+	cls.lastSpamTime = 0;
+	cls.roundtime = 0;
 }
 
 /*
@@ -414,13 +409,13 @@ void V_RenderView( float stereo_separation )
 {
 	extern int entitycmpfnc( const entity_t *, const entity_t * );
 
-	if (cls.state != ca_active)
-		return;
+	//if (cls.state != ca_active)
+	//	return;
 
 	if (!cl.refresh_prepped)
 		return;			// still loading
 
-	if (cl_timedemo->value)
+	if (cl_timedemo->integer)
 	{
 		if (!cl.timedemo_start)
 			cl.timedemo_start = Sys_Milliseconds ();
@@ -429,7 +424,7 @@ void V_RenderView( float stereo_separation )
 
 	// an invalid frame will just use the exact previous refdef
 	// we can't use the old frame if the video mode has changed, though...
-	if ( cl.frame.valid && (cl.force_refdef || !cl_paused->value) )
+	if ( cl.frame.valid && (cl.force_refdef || !cl_paused->integer) )
 	{
 		cl.force_refdef = false;
 
@@ -440,13 +435,13 @@ void V_RenderView( float stereo_separation )
 		// v_forward, etc.
 		CL_AddEntities ();
 
-		if (cl_testparticles->value)
+		if (cl_testparticles->integer)
 			V_TestParticles ();
-		if (cl_testentities->value)
+		if (cl_testentities->integer)
 			V_TestEntities ();
-		if (cl_testlights->value)
+		if (cl_testlights->integer)
 			V_TestLights ();
-		if (cl_testblend->value)
+		if (cl_testblend->integer)
 		{
 			cl.refdef.blend[0] = 1;
 			cl.refdef.blend[1] = 0.5;
@@ -466,9 +461,9 @@ void V_RenderView( float stereo_separation )
 		// never let it sit exactly on a node line, because a water plane can
 		// dissapear when viewed with the eye exactly on it.
 		// the server protocol only specifies to 1/8 pixel, so add 1/16 in each axis
-		cl.refdef.vieworg[0] += 1.0/16;
-		cl.refdef.vieworg[1] += 1.0/16;
-		cl.refdef.vieworg[2] += 1.0/16;
+		cl.refdef.vieworg[0] += 0.0625;
+		cl.refdef.vieworg[1] += 0.0625;
+		cl.refdef.vieworg[2] += 0.0625;
 
 		cl.refdef.x = scr_vrect.x;
 		cl.refdef.y = scr_vrect.y;
@@ -479,22 +474,20 @@ void V_RenderView( float stereo_separation )
 
 		cl.refdef.areabits = cl.frame.areabits;
 
-		if (!cl_add_entities->value)
+		if (!cl_add_entities->integer)
 			r_numentities = 0;
-		if (!cl_add_particles->value)
+		if (!cl_add_particles->integer)
 			r_numparticles = 0;
-		if (!cl_add_lights->value)
+		if (!cl_add_lights->integer)
 			r_numdlights = 0;
-		if (!cl_add_blend->value)
+		if (!cl_add_blend->integer)
 		{
 			VectorClear (cl.refdef.blend);
 		}
 
-		// Stainmaps: Begin -Maniac
 		cl.refdef.num_newstains = r_numstains;
 		cl.refdef.newstains = r_stains;
 		r_numstains = 0;
-		// Stainmaps: End
 
 		cl.refdef.num_entities = r_numentities;
 		cl.refdef.entities = r_entities;
@@ -510,10 +503,10 @@ void V_RenderView( float stereo_separation )
         qsort( cl.refdef.entities, cl.refdef.num_entities, sizeof( cl.refdef.entities[0] ), (int (*)(const void *, const void *))entitycmpfnc );
 	}
 
-	re.RenderFrame (&cl.refdef);
-	if (cl_stats->value)
+	R_RenderFrame (&cl.refdef);
+	if (cl_stats->integer)
 		Com_Printf ("ent:%i  lt:%i  part:%i\n", r_numentities, r_numdlights, r_numparticles);
-	if ( log_stats->value && ( log_stats_file != 0 ) )
+	if ( log_stats->integer && ( log_stats_file != 0 ) )
 		fprintf( log_stats_file, "%i,%i,%i,",r_numentities, r_numdlights, r_numparticles);
 
 

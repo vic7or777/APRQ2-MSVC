@@ -66,21 +66,21 @@ void EmitWaterPolys (msurface_t *fa)
 			st[1] = (v[4] + TURBSIN(v[3], 0.125)) * (1.0/64);
 			qglTexCoord2fv (st);
 
-			//=============== Water waves ============ //Added -Maniac
+			//=============== Water waves ============
 			if (!(fa->texinfo->flags & SURF_FLOWING) && gl_waterwaves->value)
 			{
 				if (gl_waterwaves->value < 0)
-					ri.Cvar_Set( "gl_waterwaves", "0");
+					Cvar_Set( "gl_waterwaves", "0");
 				else if (gl_waterwaves->value > 4)
-					ri.Cvar_Set( "gl_waterwaves", "4");
+					Cvar_Set( "gl_waterwaves", "4");
 
 				wv[0] =v[0];
 				wv[1] =v[1];
 				#if !id386
-				wv[2] =v[2] + gl_waterwaves->value *sin(v[0]*0.025+r_newrefdef.time)*sin(v[2]*0.05+r_newrefdef.time)
+				wv[2] = v[2] + gl_waterwaves->value *sin(v[0]*0.025+r_newrefdef.time)*sin(v[2]*0.05+r_newrefdef.time)
 						+ gl_waterwaves->value *sin(v[1]*0.025+r_newrefdef.time*2)*sin(v[2]*0.05+r_newrefdef.time);
 				#else
-				wv[2] =v[2] + gl_waterwaves->value *sin(v[0]*0.025+rdt)*sin(v[2]*0.05+r_newrefdef.time)
+				wv[2] = v[2] + gl_waterwaves->value *sin(v[0]*0.025+rdt)*sin(v[2]*0.05+rdt)
 						+ gl_waterwaves->value *sin(v[1]*0.025+rdt*2)*sin(v[2]*0.05+rdt);
 				#endif
 
@@ -228,7 +228,7 @@ void ClipSkyPolygon (int nump, vec3_t vecs, int stage)
 	int		i, j;
 
 	if (nump > MAX_CLIP_VERTS-2)
-		ri.Sys_Error (ERR_DROP, "ClipSkyPolygon: MAX_CLIP_VERTS");
+		Com_Error (ERR_DROP, "ClipSkyPolygon: MAX_CLIP_VERTS");
 
 	if (stage == 6)
 	{	// fully clipped, so draw it
@@ -350,12 +350,9 @@ void MakeSkyVec (float s, float t, int axis)
 	vec3_t		v, b;
 	int			j, k;
 
-
-	//Changed, skydistance -Maniac
-	b[0] = s * skydistance->value;
-	b[1] = t * skydistance->value;
-	b[2] = skydistance->value;
-	//End
+	b[0] = s * skydistance->integer;
+	b[1] = t * skydistance->integer;
+	b[2] = skydistance->integer;
 
 	for (j=0 ; j<3 ; j++)
 	{
@@ -405,9 +402,6 @@ void R_DrawSkyBox (void)
 
 	qglPushMatrix ();
 
-//	if (gl_fog->value)
-//		qglDisable(GL_FOG);
-
 	qglTranslatef (r_origin[0], r_origin[1], r_origin[2]);
 	qglRotatef (r_newrefdef.time * skyrotate, skyaxis[0], skyaxis[1], skyaxis[2]);
 
@@ -434,9 +428,6 @@ void R_DrawSkyBox (void)
 		qglEnd ();
 	}
 
-//	if (gl_fog->value)
-//		qglEnable(GL_FOG);
-
 	qglPopMatrix ();
 }
 
@@ -448,22 +439,22 @@ R_SetSky
 */
 // 3dstudio environment map names
 char	*suf[6] = {"rt", "bk", "lf", "ft", "up", "dn"};
-void R_SetSky (char *name, float rotate, vec3_t axis)
+void R_SetSky (const char *name, float rotate, vec3_t axis)
 {
 	int		i;
 	char	pathname[MAX_QPATH];
 
-	strncpy (skyname, name, sizeof(skyname)-1);
+	Q_strncpyz (skyname, name, sizeof(skyname));
 	skyrotate = rotate;
 	VectorCopy (axis, skyaxis);
 
 	for (i=0 ; i<6 ; i++)
 	{
 		// chop down rotating skies for less memory
-		if (gl_skymip->value || skyrotate)
-			gl_picmip->value++;
+		if (gl_skymip->integer || skyrotate)
+			gl_picmip->integer++;
 
-		if ( qglColorTableEXT && gl_ext_palettedtexture->value )
+		if ( qglColorTableEXT && gl_ext_palettedtexture->integer )
 			Com_sprintf (pathname, sizeof(pathname), "env/%s%s.pcx", skyname, suf[i]);
 		else
 			Com_sprintf (pathname, sizeof(pathname), "env/%s%s.tga", skyname, suf[i]);
@@ -472,9 +463,9 @@ void R_SetSky (char *name, float rotate, vec3_t axis)
 		if (!sky_images[i])
 			sky_images[i] = r_notexture;
 
-		if (gl_skymip->value || skyrotate)
+		if (gl_skymip->integer || skyrotate)
 		{	// take less memory
-			gl_picmip->value--;
+			gl_picmip->integer--;
 			sky_min = 0.00390625f;
 			sky_max = 0.99609375f;
 		}
@@ -500,9 +491,9 @@ void EmitCausticPolys (msurface_t *fa)
 	v = fa->polys->verts[0];	
 	nv = fa->polys->numverts;
 
-	GL_SelectTexture(GL_TEXTURE1);
+	GL_SelectTexture(QGL_TEXTURE1);
 	qglDisable(GL_TEXTURE_2D);
-	GL_SelectTexture(GL_TEXTURE0);
+	GL_SelectTexture(QGL_TEXTURE0);
 	qglEnable(GL_BLEND);
 
     qglBlendFunc(GL_ZERO, GL_SRC_COLOR);
@@ -525,7 +516,7 @@ void EmitCausticPolys (msurface_t *fa)
 
 	qglColor4f (1,1,1,1);
 	qglDisable(GL_BLEND);
-	GL_SelectTexture(GL_TEXTURE1);
+	GL_SelectTexture(QGL_TEXTURE1);
 	qglEnable(GL_TEXTURE_2D);
-	GL_SelectTexture(GL_TEXTURE0);
+	GL_SelectTexture(QGL_TEXTURE0);
 }

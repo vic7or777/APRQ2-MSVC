@@ -19,10 +19,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 // sv_main.c -- server main program
 
-#include <windows.h>
 #include "server.h"
-#include <vfw.h>
-#include "../client/avi.h"
+
+#ifdef AVI_EXPORT
+void AVI_StopExport(void);
+#endif
 
 /*
 =============================================================================
@@ -38,7 +39,7 @@ void SV_FlushRedirect (int sv_redirected, char *outputbuf)
 {
 	if (sv_redirected == RD_PACKET)
 	{
-		Netchan_OutOfBandPrint (NS_SERVER, net_from, "print\n%s", outputbuf);
+		Netchan_OutOfBandPrint (NS_SERVER, &net_from, "print\n%s", outputbuf);
 	}
 	else if (sv_redirected == RD_CLIENT)
 	{
@@ -101,7 +102,7 @@ void SV_BroadcastPrintf (int level, char *fmt, ...)
 	va_end (argptr);
 	
 	// echo to console
-	if (dedicated->value)
+	if (dedicated->integer)
 	{
 		char	copy[1024];
 		int		i;
@@ -113,7 +114,7 @@ void SV_BroadcastPrintf (int level, char *fmt, ...)
 		Com_Printf ("%s", copy);
 	}
 
-	for (i=0, cl = svs.clients ; i<maxclients->value; i++, cl++)
+	for (i=0, cl = svs.clients ; i<maxclients->integer; i++, cl++)
 	{
 		if (level < cl->messagelevel)
 			continue;
@@ -218,7 +219,7 @@ void SV_Multicast (vec3_t origin, multicast_t to)
 	}
 
 	// send the data to all relevent clients
-	for (j = 0, client = svs.clients; j < maxclients->value; j++, client++)
+	for (j = 0, client = svs.clients; j < maxclients->integer; j++, client++)
 	{
 		if (client->state == cs_free || client->state == cs_zombie)
 			continue;
@@ -442,13 +443,9 @@ SV_DemoCompleted
 */
 void SV_DemoCompleted (void)
 {
-	//AVI EXPORT -Maniac
-	if(avi_fps && avi_fps->value)
-	{
-		AVI_ReleaseExporter(avidm2);
-		Cvar_Set("avi_fps", "0");
-	}
-
+#ifdef AVI_EXPORT
+	AVI_StopExport();
+#endif
 	if (sv.demofile)
 	{
 		fclose (sv.demofile);
@@ -510,7 +507,7 @@ void SV_SendClientMessages (void)
 	// read the next demo message if needed
 	if (sv.state == ss_demo && sv.demofile)
 	{
-		if (sv_paused->value)
+		if (sv_paused->integer)
 			msglen = 0;
 		else
 		{
@@ -539,7 +536,7 @@ void SV_SendClientMessages (void)
 	}
 
 	// send a message to each connected client
-	for (i=0, c = svs.clients ; i<maxclients->value; i++, c++)
+	for (i=0, c = svs.clients ; i<maxclients->integer; i++, c++)
 	{
 		if (!c->state)
 			continue;
@@ -574,4 +571,3 @@ void SV_SendClientMessages (void)
 		}
 	}
 }
-

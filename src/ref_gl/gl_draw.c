@@ -24,8 +24,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 image_t		*draw_chars;
 
-extern	qboolean	scrap_dirty;
-void Scrap_Upload (void);
+//extern	qboolean	scrap_dirty;
+//void Scrap_Upload (void);
 
 // vertex arrays
 float	tex_array[MAX_ARRAY][2];
@@ -48,7 +48,7 @@ void Draw_InitLocal (void)
 	qglTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 }
 
-vec3_t	color_table[8] = {
+const vec3_t color_table[8] = {
 	{0, 0, 0},	// Black
 	{1, 0, 0},	// Red
 	{0, 1, 0},	// Green
@@ -76,7 +76,7 @@ void Draw_Char (int x, int y, int num, int color, float alpha)
 	int				fsize;
 	vec4_t			colors = {1, 1, 1, 1};
 
-	if (color != FC_WHITE && num > 127)
+	if (color != COLOR_WHITE && num > 127)
 		num &= 127;
 
 	num &= 255;
@@ -101,13 +101,13 @@ void Draw_Char (int x, int y, int num, int color, float alpha)
 	fsize = 8;
 
 
-	qglEnable(GL_BLEND);
 	qglDisable(GL_ALPHA_TEST);
+	qglEnable(GL_BLEND);
 	GL_TexEnv (GL_MODULATE);
 
 	GL_Bind (draw_chars->texnum);
 
-	if(gl_fontshadow->value)
+	if(gl_fontshadow->integer)
 	{
 		qglColor4f (0, 0, 0, alpha);
 		qglBegin (GL_QUADS);
@@ -141,8 +141,8 @@ void Draw_Char (int x, int y, int num, int color, float alpha)
 	qglColor4f (1,1,1,1);
 
 	GL_TexEnv(GL_REPLACE);
-	qglDisable(GL_BLEND);
 	qglEnable(GL_ALPHA_TEST);
+	qglDisable(GL_BLEND);
 }
 
 /*
@@ -150,14 +150,18 @@ void Draw_Char (int x, int y, int num, int color, float alpha)
 Draw_FindPic
 =============
 */
-image_t	*Draw_FindPic (char *name)
+image_t	*Draw_FindPic (const char *name)
 {
 	image_t *gl;
 	char	fullname[MAX_QPATH];
 
 	if (name[0] != '/' && name[0] != '\\')
 	{
-		Com_sprintf (fullname, sizeof(fullname), "pics/%s.pcx", name);
+		if(!strncmp("../", name, 3)) //gentoo doesnt seems to handle .. path?
+			Com_sprintf (fullname, sizeof(fullname), "%s.pcx", name+3);
+		else
+			Com_sprintf (fullname, sizeof(fullname), "pics/%s.pcx", name);
+
 		gl = GL_FindImage (fullname, it_pic);
 	}
 	else
@@ -171,7 +175,7 @@ image_t	*Draw_FindPic (char *name)
 Draw_GetPicSize
 =============
 */
-void Draw_GetPicSize (int *w, int *h, char *pic)
+void Draw_GetPicSize (int *w, int *h, const char *pic)
 {
 	image_t *gl;
 
@@ -190,29 +194,32 @@ void Draw_GetPicSize (int *w, int *h, char *pic)
 Draw_ScaledPic
 =============
 */
-void Draw_ScaledPic (int x, int y, float scale, char *pic, float red, float green, float blue, float alpha)
+void Draw_ScaledPic (int x, int y, float scale, const char *pic, float red, float green, float blue, float alpha)
 {
 	image_t *gl;
 	int yoff, xoff;
+	int enabled = 0;
 
 	gl = Draw_FindPic (pic);
 	if (!gl)
 	{
-		ri.Con_Printf (PRINT_DEVELOPER, "Can't find pic: %s\n", pic);
+		Com_DPrintf ( "Can't find pic: %s\n", pic);
 		return;
 	}
 
-	if (scrap_dirty)
-		Scrap_Upload ();
 
-	if (alpha < 1 || scale != 1 || (gl->bits == 32 && gl->has_alpha))
+	if (alpha < 1 || (gl->bits == 32 && gl->has_alpha))
 	{
+		enabled = 1;
 		qglEnable(GL_BLEND);
 		qglDisable(GL_ALPHA_TEST);
 		GL_TexEnv(GL_MODULATE);
 	}
 	else if ( ( ( gl_config.renderer == GL_RENDERER_MCD ) || ( gl_config.renderer & GL_RENDERER_RENDITION ) ) && !gl->has_alpha)
+	{
+		enabled = 2;
 		qglDisable(GL_ALPHA_TEST);
+	}
 
 	qglColor4f(red, green, blue, alpha);
 
@@ -234,14 +241,14 @@ void Draw_ScaledPic (int x, int y, float scale, char *pic, float red, float gree
 
 	qglEnd ();
 
-	if (alpha < 1 || scale != 1 || (gl->bits == 32 && gl->has_alpha))
+	if (enabled == 1)
 	{
 		GL_TexEnv(GL_REPLACE);
 		qglEnable(GL_ALPHA_TEST);
 		qglDisable(GL_BLEND);
 
 	}
-	else if ( ( ( gl_config.renderer == GL_RENDERER_MCD ) || ( gl_config.renderer & GL_RENDERER_RENDITION ) )  && !gl->has_alpha)
+	else if (enabled == 2)
 		qglEnable(GL_ALPHA_TEST);
 
 	qglColor4f(1,1,1,1);
@@ -252,29 +259,31 @@ void Draw_ScaledPic (int x, int y, float scale, char *pic, float red, float gree
 Draw_StretchPic
 =============
 */
-void Draw_StretchPic (int x, int y, int w, int h, char *pic, float alpha)
+void Draw_StretchPic (int x, int y, int w, int h, const char *pic, float alpha)
 {
 	image_t *gl;
+	int enabled = 0;
 
 	gl = Draw_FindPic (pic);
 	if (!gl)
 	{
-		ri.Con_Printf (PRINT_DEVELOPER, "Can't find pic: %s\n", pic);
+		Com_DPrintf ( "Can't find pic: %s\n", pic);
 		return;
 	}
 
-	if (scrap_dirty)
-		Scrap_Upload ();
-
 	if (alpha < 1 || (gl->bits == 32 && gl->has_alpha))
 	{
+		enabled = 1;
 		qglDisable(GL_ALPHA_TEST);
 		qglEnable(GL_BLEND);
 		GL_TexEnv(GL_MODULATE);
 		qglColor4f(1,1,1,alpha);
 	}
 	else if ( ( ( gl_config.renderer == GL_RENDERER_MCD ) || ( gl_config.renderer & GL_RENDERER_RENDITION ) ) && !gl->has_alpha)
+	{
+		enabled = 2;
 		qglDisable(GL_ALPHA_TEST);
+	}
 
 	GL_Bind (gl->texnum);
 
@@ -289,14 +298,14 @@ void Draw_StretchPic (int x, int y, int w, int h, char *pic, float alpha)
 	qglVertex2f (x, y+h);
 	qglEnd ();
 
-	if (alpha < 1 || (gl->bits == 32 && gl->has_alpha))
+	if (enabled == 1)
 	{
 		GL_TexEnv (GL_REPLACE);
 		qglEnable(GL_ALPHA_TEST);
 		qglDisable(GL_BLEND);
 		qglColor4f(1,1,1,1);
 	}
-	else if ( ( ( gl_config.renderer == GL_RENDERER_MCD ) || ( gl_config.renderer & GL_RENDERER_RENDITION ) ) && !gl->has_alpha)
+	else if (enabled == 2)
 		qglEnable(GL_ALPHA_TEST);
 
 }
@@ -307,29 +316,32 @@ void Draw_StretchPic (int x, int y, int w, int h, char *pic, float alpha)
 Draw_Pic
 =============
 */
-void Draw_Pic (int x, int y, char *pic, float alpha)
+void Draw_Pic (int x, int y, const char *pic, float alpha)
 {
 	image_t *gl;
+	int enabled = 0;
 
 
 	gl = Draw_FindPic (pic);
 	if (!gl)
 	{
-		ri.Con_Printf (PRINT_DEVELOPER, "Can't find pic: %s\n", pic);
+		Com_DPrintf ( "Can't find pic: %s\n", pic);
 		return;
 	}
-	if (scrap_dirty)
-		Scrap_Upload ();
 
 	if (alpha < 1 || (gl->bits == 32 && gl->has_alpha))
 	{
+		enabled = 1;
 		qglDisable(GL_ALPHA_TEST);
 		qglEnable(GL_BLEND);
 		GL_TexEnv(GL_MODULATE);
 		qglColor4f(1,1,1,alpha);
 	}
 	else if ( ( ( gl_config.renderer == GL_RENDERER_MCD ) || ( gl_config.renderer & GL_RENDERER_RENDITION ) ) && !gl->has_alpha)
+	{
+		enabled = 2;
 		qglDisable(GL_ALPHA_TEST);
+	}
 
 	GL_Bind (gl->texnum);
 
@@ -344,14 +356,14 @@ void Draw_Pic (int x, int y, char *pic, float alpha)
 	qglVertex2f (x, y+gl->height);
 	qglEnd ();
 	
-	if (alpha < 1 || (gl->bits == 32 && gl->has_alpha))
+	if (enabled == 1)
 	{
 		GL_TexEnv (GL_REPLACE);
 		qglEnable(GL_ALPHA_TEST);
 		qglDisable(GL_BLEND);
 		qglColor4f(1,1,1,1);
 	}
-	else if ( ( ( gl_config.renderer == GL_RENDERER_MCD ) || ( gl_config.renderer & GL_RENDERER_RENDITION ) )  && !gl->has_alpha)
+	else if (enabled == 2)
 		qglEnable(GL_ALPHA_TEST);
 
 }
@@ -364,14 +376,14 @@ This repeats a 64*64 tile graphic to fill the screen around a sized down
 refresh window.
 =============
 */
-void Draw_TileClear (int x, int y, int w, int h, char *pic)
+void Draw_TileClear (int x, int y, int w, int h, const char *pic)
 {
 	image_t	*image;
 
 	image = Draw_FindPic (pic);
 	if (!image)
 	{
-		ri.Con_Printf (PRINT_DEVELOPER, "Can't find pic: %s\n", pic);
+		Com_DPrintf ( "Can't find pic: %s\n", pic);
 		return;
 	}
 
@@ -411,7 +423,7 @@ void Draw_Fill (int x, int y, int w, int h, int c)
 	} color;
 
 	if ( (unsigned)c > 255)
-		ri.Sys_Error (ERR_FATAL, "Draw_Fill: bad color");
+		Com_Error (ERR_FATAL, "Draw_Fill: bad color");
 
 	qglDisable (GL_TEXTURE_2D);
 
@@ -442,7 +454,7 @@ void Draw_FadeScreen (void)
 {
 	qglEnable(GL_BLEND);
 	qglDisable (GL_TEXTURE_2D);
-	qglColor4f (0, 0, 0, 0.75); //Changed from 0.8
+	qglColor4f (0, 0, 0, 0.75);
 	qglBegin (GL_QUADS);
 
 	qglVertex2f (0,0);

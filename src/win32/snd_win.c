@@ -23,6 +23,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../client/snd_loc.h"
 #include "winquake.h"
 
+#include <dsound.h>
+
 #define iDirectSoundCreate(a,b,c)	pDirectSoundCreate(a,b,c)
 
 HRESULT (WINAPI *pDirectSoundCreate)(GUID FAR *lpGUID, LPDIRECTSOUND FAR *lplpDS, IUnknown FAR *pUnkOuter);
@@ -43,7 +45,7 @@ static qboolean	snd_firsttime = true, snd_isdirect, snd_iswave;
 static qboolean	primary_format_set;
 
 // starts at 0 for disabled
-static int	snd_buffer_count = 0;
+//static int	snd_buffer_count = 0;
 static int	sample16;
 static int	snd_sent, snd_completed;
 
@@ -81,17 +83,33 @@ static const char *DSoundError( int error )
 {
 	switch ( error )
 	{
-	case DSERR_BUFFERLOST:
-		return "DSERR_BUFFERLOST";
-	case DSERR_INVALIDCALL:
-		return "DSERR_INVALIDCALLS";
-	case DSERR_INVALIDPARAM:
-		return "DSERR_INVALIDPARAM";
-	case DSERR_PRIOLEVELNEEDED:
-		return "DSERR_PRIOLEVELNEEDED";
+		case DSERR_BUFFERLOST:
+			return "DSERR_BUFFERLOST";
+		case DSERR_INVALIDCALL:
+			return "DSERR_INVALIDCALL";
+		case DSERR_INVALIDPARAM:
+			return "DSERR_INVALIDPARAM";
+		case DSERR_PRIOLEVELNEEDED:
+			return "DSERR_PRIOLEVELNEEDED";
+		case DSERR_OTHERAPPHASPRIO:
+			return "DSERR_OTHERAPPHASPRIO";
+		case DSERR_BADFORMAT:
+			return "DSERR_BADFORMAT";
+		case DSERR_OUTOFMEMORY:
+			return "DSERR_OUTOFMEMORY";
+		case DSERR_UNSUPPORTED:
+			return "DSERR_UNSUPPORTED";
+		case DSERR_GENERIC:
+			return "DSERR_GENERIC";
+		case DSERR_ALLOCATED:
+			return "DSERR_ALLOCATED";
+		case DSERR_FXUNAVAILABLE:
+			return "DSERR_FXUNAVAILABLE";
+		case DSERR_ACCESSDENIED:
+			return "DSERR_ACCESSDENIED";
 	}
 
-	return "unknown";
+	return va("dx errno %d", error);
 }
 
 /*
@@ -99,6 +117,7 @@ static const char *DSoundError( int error )
 */
 static qboolean DS_CreateBuffers( void )
 {
+	int ret;
 	DSBUFFERDESC	dsbuf;
 	DSBCAPS			dsbcaps;
 	WAVEFORMATEX	pformat, format;
@@ -110,15 +129,17 @@ static qboolean DS_CreateBuffers( void )
     format.wBitsPerSample = dma.samplebits;
     format.nSamplesPerSec = dma.speed;
     format.nBlockAlign = format.nChannels * format.wBitsPerSample / 8;
-    format.cbSize = 0;
+    format.cbSize = sizeof(WAVEFORMATEX);
     format.nAvgBytesPerSec = format.nSamplesPerSec*format.nBlockAlign; 
 
-	Com_Printf( "Creating DS buffers\n" );
+	Com_DPrintf( "Creating DS buffers\n" );
 
 	Com_DPrintf("...setting EXCLUSIVE coop level: " );
-	if ( DS_OK != pDS->lpVtbl->SetCooperativeLevel( pDS, cl_hwnd, DSSCL_EXCLUSIVE ) )
+
+	ret = pDS->lpVtbl->SetCooperativeLevel(pDS, cl_hwnd, DSSCL_EXCLUSIVE);
+	if ( ret != DS_OK  )
 	{
-		Com_Printf ("failed\n");
+		Com_Printf ("failed (%s)\n", DSoundError(ret));
 		FreeSound ();
 		return false;
 	}
@@ -137,15 +158,18 @@ static qboolean DS_CreateBuffers( void )
 	primary_format_set = false;
 
 	Com_DPrintf( "...creating primary buffer: " );
-	if (DS_OK == pDS->lpVtbl->CreateSoundBuffer(pDS, &dsbuf, &pDSPBuf, NULL))
+	ret = pDS->lpVtbl->CreateSoundBuffer (pDS, &dsbuf, &pDSPBuf, NULL);
+	if (DS_OK == ret)
 	{
 		pformat = format;
 
 		Com_DPrintf( "ok\n" );
-		if (DS_OK != pDSPBuf->lpVtbl->SetFormat (pDSPBuf, &pformat))
+
+		ret = pDSPBuf->lpVtbl->SetFormat (pDSPBuf, &pformat);
+		if (DS_OK != ret)
 		{
 			if (snd_firsttime)
-				Com_DPrintf ("...setting primary sound format: failed\n");
+				Com_DPrintf ("...setting primary sound format: failed (%s)\n", DSoundError(ret));
 		}
 		else
 		{
@@ -156,9 +180,11 @@ static qboolean DS_CreateBuffers( void )
 		}
 	}
 	else
-		Com_Printf( "failed\n" );
+	{
+		Com_Printf ("failed (%s)\n", DSoundError(ret));
+	}
 
-	if ( !primary_format_set || !s_primary->value)
+	if ( !primary_format_set || !s_primary->integer)
 	{
 	// create the secondary buffer we'll actually work with
 		memset (&dsbuf, 0, sizeof(dsbuf));
@@ -171,9 +197,10 @@ static qboolean DS_CreateBuffers( void )
 		dsbcaps.dwSize = sizeof(dsbcaps);
 
 		Com_DPrintf( "...creating secondary buffer: " );
-		if (DS_OK != pDS->lpVtbl->CreateSoundBuffer(pDS, &dsbuf, &pDSBuf, NULL))
+		ret = pDS->lpVtbl->CreateSoundBuffer(pDS, &dsbuf, &pDSBuf, NULL);
+		if (DS_OK != ret)
 		{
-			Com_Printf( "failed\n" );
+			Com_Printf ("failed (%s)\n", DSoundError(ret));
 			FreeSound ();
 			return false;
 		}
@@ -190,16 +217,17 @@ static qboolean DS_CreateBuffers( void )
 			return false;
 		}
 
-		Com_Printf ("...using secondary sound buffer\n");
+		Com_DPrintf ("...using secondary sound buffer\n");
 	}
 	else
 	{
-		Com_Printf( "...using primary buffer\n" );
+		Com_DPrintf( "...using primary buffer\n" );
 
 		Com_DPrintf( "...setting WRITEPRIMARY coop level: " );
-		if (DS_OK != pDS->lpVtbl->SetCooperativeLevel (pDS, cl_hwnd, DSSCL_WRITEPRIMARY))
+		ret = pDS->lpVtbl->SetCooperativeLevel (pDS, cl_hwnd, DSSCL_WRITEPRIMARY);
+		if (DS_OK != ret)
 		{
-			Com_Printf( "failed\n" );
+			Com_Printf ("failed (%s)\n", DSoundError(ret));
 			FreeSound ();
 			return false;
 		}
@@ -357,8 +385,7 @@ sndinitstat SNDDMA_InitDirect (void)
 	dma.channels = 2;
 	dma.samplebits = 16;
 
-	//Added 48khz -Maniac
-	switch ((int)s_khz->value) {
+	switch (s_khz->integer) {
 		case 48: dma.speed = 48000; break;
 		case 44: dma.speed = 44100; break;
 		case 22: dma.speed = 22050; break;
@@ -394,7 +421,7 @@ sndinitstat SNDDMA_InitDirect (void)
 	{
 		if (hresult != DSERR_ALLOCATED)
 		{
-			Com_Printf( "failed\n" );
+			Com_Printf( "failed (%d)\n", hresult );
 			return SIS_FAILURE;
 		}
 
@@ -456,8 +483,7 @@ qboolean SNDDMA_InitWav (void)
 	dma.channels = 2;
 	dma.samplebits = 16;
 
-	//Added 48 khz, -Maniac
-	switch ((int)s_khz->value) {
+	switch (s_khz->integer) {
 		case 48: dma.speed = 48000; break;
 		case 44: dma.speed = 44100; break;
 		case 22: dma.speed = 22050; break;
@@ -605,7 +631,7 @@ int SNDDMA_Init(void)
 	stat = SIS_FAILURE;	// assume DirectSound won't initialize
 
 	/* Init DirectSound */
-	if (!s_wavonly->value)
+	if (!s_wavonly->integer)
 	{
 		if (snd_firsttime || snd_isdirect)
 		{
@@ -649,12 +675,9 @@ int SNDDMA_Init(void)
 		}
 	}
 
-	// NeVo - initialize Winamp Integration -Maniac
-	S_WinAmp_Init();
-
 	snd_firsttime = false;
 
-	snd_buffer_count = 1;
+	//snd_buffer_count = 1;
 
 	if (!dsound_init && !wav_init)
 	{
@@ -834,10 +857,6 @@ Reset the sound device for exiting
 void SNDDMA_Shutdown(void)
 {
 	FreeSound ();
-
-	// NeVo - shutdown Winamp Integration -Maniac
-	S_WinAmp_Shutdown(); 
-
 }
 
 
@@ -867,4 +886,3 @@ void S_Activate (qboolean active)
 		}
 	}
 }
-

@@ -53,6 +53,8 @@ void SV_EmitPacketEntities (client_frame_t *from, client_frame_t *to, sizebuf_t 
 
 	newindex = 0;
 	oldindex = 0;
+	newent = NULL;
+	oldent = NULL;
 	while (newindex < to->num_entities || oldindex < from_num_entities)
 	{
 		if (newindex >= to->num_entities)
@@ -77,7 +79,7 @@ void SV_EmitPacketEntities (client_frame_t *from, client_frame_t *to, sizebuf_t 
 			// in any bytes being emited if the entity has not changed at all
 			// note that players are always 'newentities', this updates their oldorigin always
 			// and prevents warping
-			MSG_WriteDeltaEntity (oldent, newent, msg, false, newent->number <= maxclients->value);
+			MSG_WriteDeltaEntity (oldent, newent, msg, false, newent->number <= maxclients->integer);
 			oldindex++;
 			newindex++;
 			continue;
@@ -629,4 +631,3 @@ void SV_RecordDemoMessage (void)
 	fwrite (&len, 4, 1, svs.demofile);
 	fwrite (buf.data, buf.cursize, 1, svs.demofile);
 }
-

@@ -158,7 +158,7 @@ qboolean DIB_Init( unsigned char **ppbuffer, int *ppitch )
 
 	if ( sww_state.hDIBSection == NULL )
 	{
-		ri.Con_Printf( PRINT_ALL, "DIB_Init() - CreateDIBSection failed\n" );
+		Com_Printf ( "DIB_Init() - CreateDIBSection failed\n" );
 		goto fail;
 	}
 
@@ -182,12 +182,12 @@ qboolean DIB_Init( unsigned char **ppbuffer, int *ppitch )
 
 	if ( ( sww_state.hdcDIBSection = CreateCompatibleDC( sww_state.hDC ) ) == NULL )
 	{
-		ri.Con_Printf( PRINT_ALL, "DIB_Init() - CreateCompatibleDC failed\n" );
+		Com_Printf ( "DIB_Init() - CreateCompatibleDC failed\n" );
 		goto fail;
 	}
 	if ( ( previously_selected_GDI_obj = SelectObject( sww_state.hdcDIBSection, sww_state.hDIBSection ) ) == NULL )
 	{
-		ri.Con_Printf( PRINT_ALL, "DIB_Init() - SelectObject failed\n" );
+		Com_Printf ( "DIB_Init() - SelectObject failed\n" );
 		goto fail;
 	}
 
@@ -244,7 +244,7 @@ void DIB_SetPalette( const unsigned char *_pal )
 
 		if ( SetDIBColorTable( sww_state.hdcDIBSection, 0, 256, colors ) == 0 )
 		{
-			ri.Con_Printf( PRINT_ALL, "DIB_SetPalette() - SetDIBColorTable failed\n" );
+			Com_Printf ( "DIB_SetPalette() - SetDIBColorTable failed\n" );
 		}
 	}
 
@@ -259,7 +259,7 @@ void DIB_SetPalette( const unsigned char *_pal )
 
 		if ( SetSystemPaletteUse( hDC, SYSPAL_NOSTATIC ) == SYSPAL_ERROR )
 		{
-			ri.Sys_Error( ERR_FATAL, "DIB_SetPalette() - SetSystemPaletteUse() failed\n" );
+			Com_Error( ERR_FATAL, "DIB_SetPalette() - SetSystemPaletteUse() failed\n" );
 		}
 
 		/*
@@ -296,12 +296,12 @@ void DIB_SetPalette( const unsigned char *_pal )
 
 		if ( ( sww_state.hPal = CreatePalette( pLogPal ) ) == NULL )
 		{
-			ri.Sys_Error( ERR_FATAL, "DIB_SetPalette() - CreatePalette failed(%x)\n", GetLastError() );
+			Com_Error( ERR_FATAL, "DIB_SetPalette() - CreatePalette failed(%x)\n", GetLastError() );
 		}
 
 		if ( ( hpalOld = SelectPalette( hDC, sww_state.hPal, FALSE ) ) == NULL )
 		{
-			ri.Sys_Error( ERR_FATAL, "DIB_SetPalette() - SelectPalette failed(%x)\n",GetLastError() );
+			Com_Error( ERR_FATAL, "DIB_SetPalette() - SelectPalette failed(%x)\n",GetLastError() );
 		}
 
 		if ( sww_state.hpalOld == NULL )
@@ -309,7 +309,7 @@ void DIB_SetPalette( const unsigned char *_pal )
 
 		if ( ( ret = RealizePalette( hDC ) ) != pLogPal->palNumEntries ) 
 		{
-			ri.Sys_Error( ERR_FATAL, "DIB_SetPalette() - RealizePalette set %d entries\n", ret );
+			Com_Error( ERR_FATAL, "DIB_SetPalette() - RealizePalette set %d entries\n", ret );
 		}
 	}
 }

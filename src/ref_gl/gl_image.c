@@ -19,13 +19,19 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #include "gl_local.h"
-// Changed, include jpeglib for screenshotjpg, -Maniac
-#include "jpeglib.h"
+
+#ifdef _WIN32
+#include "..\lib\jpeglib.h" //jpg support
+#else
+#include <jpeglib.h>
+#endif
 
 #define WAL_SCALE 1
 #define PCX_SCALE 2
 
 image_t		gltextures[MAX_GLTEXTURES];
+#define IMAGES_HASH_SIZE	64
+static image_t	*images_hash[IMAGES_HASH_SIZE];
 int			numgltextures = 0;
 int			base_textureid;		// gltextures[i] = base_textureid+i
 
@@ -38,8 +44,10 @@ extern cvar_t *gl_sgis_mipmap;
 unsigned	d_8to24table[256];
 float		d_8to24tablef[256][3];
 
-qboolean GL_Upload8 (byte *data, int width, int height,  qboolean mipmap, qboolean is_sky );
-qboolean GL_Upload32 (unsigned *data, int width, int height,  qboolean mipmap, int bits);
+qboolean GL_Upload8 (byte *data, int width, int height,  qboolean mipmap, qboolean is_sky, qboolean is_pic );
+qboolean GL_Upload32 (unsigned *data, int width, int height,  qboolean mipmap, qboolean is_pic);
+
+void LoadPNG (const char *filename, byte **pic, int *width, int *height);
 
 int		gl_solid_format = 3;
 int		gl_alpha_format = 4;
@@ -49,13 +57,13 @@ int		gl_tex_alpha_format = 4;
 
 int		gl_filter_min = GL_LINEAR_MIPMAP_NEAREST;
 int		gl_filter_max = GL_LINEAR;
-
+extern cvar_t *gl_gammapics;
 void GL_SetTexturePalette( unsigned palette[256] )
 {
 	int i;
 	unsigned char temptable[768];
 
-	if ( qglColorTableEXT && gl_ext_palettedtexture->value )
+	if ( qglColorTableEXT && gl_ext_palettedtexture->integer )
 	{
 		for ( i = 0; i < 256; i++ )
 		{
@@ -75,17 +83,17 @@ void GL_EnableMultitexture( qboolean enable )
 
 	if ( enable )
 	{
-		GL_SelectTexture( GL_TEXTURE1 );
+		GL_SelectTexture( QGL_TEXTURE1 );
 		qglEnable( GL_TEXTURE_2D );
 		GL_TexEnv( GL_REPLACE );
 	}
 	else
 	{
-		GL_SelectTexture( GL_TEXTURE1 );
+		GL_SelectTexture( QGL_TEXTURE1 );
 		qglDisable( GL_TEXTURE_2D );
 		GL_TexEnv( GL_REPLACE );
 	}
-	GL_SelectTexture( GL_TEXTURE0 );
+	GL_SelectTexture( QGL_TEXTURE0 );
 	GL_TexEnv( GL_REPLACE );
 }
 
@@ -96,7 +104,7 @@ void GL_SelectTexture( GLenum texture )
 	if ( !qglSelectTextureSGIS && !qglActiveTextureARB )
 		return;
 
-	if ( texture == GL_TEXTURE0 )
+	if ( texture == QGL_TEXTURE0 )
 	{
 		tmu = 0;
 	}
@@ -138,7 +146,7 @@ void GL_Bind (int texnum)
 {
 	extern	image_t	*draw_chars;
 
-	if (gl_nobind->value && draw_chars)		// performance evaluation option
+	if (gl_nobind->integer && draw_chars)		// performance evaluation option
 		texnum = draw_chars->texnum;
 	if ( gl_state.currenttextures[gl_state.currenttmu] == texnum)
 		return;
@@ -149,7 +157,7 @@ void GL_Bind (int texnum)
 void GL_MBind( GLenum target, int texnum )
 {
 	GL_SelectTexture( target );
-	if ( target == GL_TEXTURE0 )
+	if ( target == QGL_TEXTURE0 )
 	{
 		if ( gl_state.currenttextures[0] == texnum )
 			return;
@@ -215,7 +223,7 @@ gltmode_t gl_solid_modes[] = {
 GL_TextureMode
 ===============
 */
-void GL_TextureMode( char *string )
+void GL_TextureMode( const char *string )
 {
 	int		i;
 	image_t	*glt;
@@ -228,7 +236,7 @@ void GL_TextureMode( char *string )
 
 	if (i == NUM_GL_MODES)
 	{
-		ri.Con_Printf (PRINT_ALL, "bad filter name\n");
+		Com_Printf ("bad filter name\n");
 		return;
 	}
 
@@ -252,7 +260,7 @@ void GL_TextureMode( char *string )
 GL_TextureAlphaMode
 ===============
 */
-void GL_TextureAlphaMode( char *string )
+void GL_TextureAlphaMode( const char *string )
 {
 	int		i;
 
@@ -264,7 +272,7 @@ void GL_TextureAlphaMode( char *string )
 
 	if (i == NUM_GL_ALPHA_MODES)
 	{
-		ri.Con_Printf (PRINT_ALL, "bad alpha texture mode name\n");
+		Com_Printf ("bad alpha texture mode name\n");
 		return;
 	}
 
@@ -276,7 +284,7 @@ void GL_TextureAlphaMode( char *string )
 GL_TextureSolidMode
 ===============
 */
-void GL_TextureSolidMode( char *string )
+void GL_TextureSolidMode( const char *string )
 {
 	int		i;
 
@@ -288,7 +296,7 @@ void GL_TextureSolidMode( char *string )
 
 	if (i == NUM_GL_SOLID_MODES)
 	{
-		ri.Con_Printf (PRINT_ALL, "bad solid texture mode name\n");
+		Com_Printf ("bad solid texture mode name\n");
 		return;
 	}
 
@@ -300,10 +308,21 @@ void GL_TextureSolidMode( char *string )
 GL_ImageList_f
 ===============
 */
+
+static int imagesort( const void *_a, const void *_b )
+{
+	const image_t	*a = (const image_t *)_a;
+	const image_t	*b = (const image_t *)_b;
+
+	return strcmp (a->name, b->name);
+}
+
+
 void	GL_ImageList_f (void)
 {
-	int		i;
+	int		i, count;
 	image_t	*image;
+	image_t *sortedList;
 	int		texels;
 	const char *palstrings[2] =
 	{
@@ -311,37 +330,61 @@ void	GL_ImageList_f (void)
 		"PAL"
 	};
 
-	ri.Con_Printf (PRINT_ALL, "------------------\n");
+	for (i=0, count = 0, image=gltextures; i<numgltextures ; i++, image++)
+	{
+		if(image->texnum <= 0)
+			continue;
+
+		count++;
+	}
+
+	sortedList = malloc(count * sizeof(image_t));
+
+	count = 0;
+	for (i=0, image=gltextures; i<numgltextures ; i++, image++)
+	{
+		if(image->texnum <= 0)
+			continue;
+
+		sortedList[count++] = *image;
+	}
+
+	qsort (sortedList, count, sizeof(sortedList[0]), (int (*)(const void *, const void *))imagesort);
+
+	Com_Printf ("------------------\n");
 	texels = 0;
 
-	for (i=0, image=gltextures ; i<numgltextures ; i++, image++)
+	for (i=0; i<count; i++)
 	{
-		if (image->texnum <= 0)
-			continue;
+		image = &sortedList[i];
+
 		texels += image->upload_width*image->upload_height;
 		switch (image->type)
 		{
 		case it_skin:
-			ri.Con_Printf (PRINT_ALL, "M");
+			Com_Printf ("M");
 			break;
 		case it_sprite:
-			ri.Con_Printf (PRINT_ALL, "S");
+			Com_Printf ("S");
 			break;
 		case it_wall:
-			ri.Con_Printf (PRINT_ALL, "W");
+			Com_Printf ("W");
 			break;
 		case it_pic:
-			ri.Con_Printf (PRINT_ALL, "P");
+			Com_Printf ("P");
 			break;
 		default:
-			ri.Con_Printf (PRINT_ALL, " ");
+			Com_Printf (" ");
 			break;
 		}
 
-		ri.Con_Printf (PRINT_ALL,  " %3i %3i %s: %s\n",
-			image->upload_width, image->upload_height, palstrings[image->paletted], image->name);
+		Com_Printf (" %3i %3i %s: %s%s\n",
+			image->upload_width, image->upload_height, palstrings[image->paletted], image->name, image->extension);
 	}
-	ri.Con_Printf (PRINT_ALL, "Total texel count (not counting mipmaps): %i\n", texels);
+	Com_Printf ("%i images\n", count);
+	Com_Printf ("Total texel count (not counting mipmaps): %i\n", texels);
+
+	free(sortedList);
 }
 
 
@@ -362,7 +405,7 @@ void	GL_ImageList_f (void)
 
 int			scrap_allocated[MAX_SCRAPS][BLOCK_WIDTH];
 byte		scrap_texels[MAX_SCRAPS][BLOCK_WIDTH*BLOCK_HEIGHT];
-qboolean	scrap_dirty;
+//qboolean	scrap_dirty;
 
 // returns a texture number and the position inside it
 int Scrap_AllocBlock (int w, int h, int *x, int *y)
@@ -405,16 +448,16 @@ int Scrap_AllocBlock (int w, int h, int *x, int *y)
 	return -1;
 //	Sys_Error ("Scrap_AllocBlock: full");
 }
-
-int	scrap_uploads;
+/*
+int	scrap_uploads = 0;
 
 void Scrap_Upload (void)
 {
 	scrap_uploads++;
 	GL_Bind(TEXNUM_SCRAPS);
-	GL_Upload8 (scrap_texels[0], BLOCK_WIDTH, BLOCK_HEIGHT, false, false );
-	scrap_dirty = false;
-}
+	GL_Upload8 (scrap_texels[0], BLOCK_WIDTH, BLOCK_HEIGHT, false, false, it_pic);
+//	scrap_dirty = false;
+}*/
 
 /*
 =================================================================
@@ -430,7 +473,7 @@ PCX LOADING
 LoadPCX
 ==============
 */
-void LoadPCX (char *filename, byte **pic, byte **palette, int *width, int *height)
+void LoadPCX (const char *filename, byte **pic, byte **palette, int *width, int *height)
 {
 	byte	*raw;
 	pcx_t	*pcx;
@@ -443,7 +486,7 @@ void LoadPCX (char *filename, byte **pic, byte **palette, int *width, int *heigh
 	*palette = NULL;
 
 	// load the file
-	len = ri.FS_LoadFile (filename, (void **)&raw);
+	len = FS_LoadFile (filename, (void **)&raw);
 	if (!raw)
 		return;
 
@@ -465,8 +508,8 @@ void LoadPCX (char *filename, byte **pic, byte **palette, int *width, int *heigh
 		(pcx->encoding != 1) | (pcx->bits_per_pixel != 8) |
 		(pcx->xmax >= 640) | (pcx->ymax >= 480))
 	{
-		ri.Con_Printf (PRINT_ALL, "LoadPCX: Bad pcx file (incorrect type): %s\n", filename);
-		ri.FS_FreeFile ((void *)pcx);
+		Com_Printf ("LoadPCX: Bad pcx file (incorrect type): %s\n", filename);
+		FS_FreeFile ((void *)pcx);
 		return;
 	}
 
@@ -507,16 +550,15 @@ void LoadPCX (char *filename, byte **pic, byte **palette, int *width, int *heigh
 
 	if ( raw - (byte *)pcx > len)
 	{
-		ri.Con_Printf (PRINT_DEVELOPER, "LoadPCX: file %s was malformed", filename);
+		Com_DPrintf ( "LoadPCX: file %s was malformed", filename);
 		free(*pic);
 		*pic = NULL;
 	}
 
-	ri.FS_FreeFile ((void *)pcx);
+	FS_FreeFile ((void *)pcx);
 }
 
 /*
-//Modified Targa loading from q2ice -Maniac
 =========================================================
 
 TARGA LOADING
@@ -524,12 +566,43 @@ TARGA LOADING
 =========================================================
 */
 
+typedef struct _TargaHeader {
+	unsigned char 	id_length, colormap_type, image_type;
+	unsigned short	colormap_index, colormap_length;
+	unsigned char	colormap_size;
+	unsigned short	x_origin, y_origin, width, height;
+	unsigned char	pixel_size, attributes;
+} TargaHeader;
+
+// Definitions for image types
+#define TGA_Null		0	// no image data
+#define TGA_Map			1	// Uncompressed, color-mapped images
+#define TGA_RGB			2	// Uncompressed, RGB images
+#define TGA_Mono		3	// Uncompressed, black and white images
+#define TGA_RLEMap		9	// Runlength encoded color-mapped images
+#define TGA_RLERGB		10	// Runlength encoded RGB images
+#define TGA_RLEMono		11	// Compressed, black and white images
+#define TGA_CompMap		32	// Compressed color-mapped data, using Huffman, Delta, and runlength encoding
+#define TGA_CompMap4	33	// Compressed color-mapped data, using Huffman, Delta, and runlength encoding. 4-pass quadtree-type process
+
+// Definitions for interleave flag
+#define TGA_IL_None		0	// non-interleaved
+#define TGA_IL_Two		1	// two-way (even/odd) interleaving
+#define TGA_IL_Four		2	// four way interleaving
+#define TGA_IL_Reserved	3	// reserved
+
+// Definitions for origin flag
+#define TGA_O_UPPER		0	// Origin in lower left-hand corner
+#define TGA_O_LOWER		1	// Origin in upper left-hand corner
+
+#define MAXCOLORS 16384
+
 /*
 =============
 LoadTGA
 =============
 */
-void LoadTGA( char *filename, byte **pic, int *width, int *height )
+void LoadTGA( const char *filename, byte **pic, int *width, int *height )
 {
 	int			w, h, x, y, i, temp1, temp2;
 	int			realrow, truerow, baserow, size, interleave, origin;
@@ -539,7 +612,7 @@ void LoadTGA( char *filename, byte **pic, int *width, int *height )
 	byte		*dst, *ColorMap, *data, *pdata;
 
 	// load file
-	ri.FS_LoadFile( filename, &data );
+	FS_LoadFile( filename, (void **)&data );
 
 	if( !data )
 		return;
@@ -583,8 +656,8 @@ void LoadTGA( char *filename, byte **pic, int *width, int *height )
 		case TGA_RLEMono:
 			break;
 		default:
-			ri.Con_Printf (PRINT_ALL, "LoadTGA: Only type 1, 2, 3, 9, 10 and 11 Targas are supported. Image:(%s).\n", filename );
-			ri.FS_FreeFile(data);
+			Com_Printf ("LoadTGA: Only type 1, 2, 3, 9, 10 and 11 Targas are supported. Image:(%s).\n", filename );
+			FS_FreeFile(data);
 			return;
 	}
 
@@ -597,8 +670,8 @@ void LoadTGA( char *filename, byte **pic, int *width, int *height )
 		case 32:
 			break;
 		default:
-			ri.Con_Printf (PRINT_ALL, "LoadTGA: Only 8, 15, 16, 24 and 32 bit Targas (with colormaps) supported. Image:(%s).\n", filename );
-			ri.FS_FreeFile(data);
+			Com_Printf ("LoadTGA: Only 8, 15, 16, 24 and 32 bit Targas (with colormaps) supported. Image:(%s).\n", filename );
+			FS_FreeFile(data);
 			return;
 	}
 
@@ -616,15 +689,15 @@ void LoadTGA( char *filename, byte **pic, int *width, int *height )
 			case 24:
 				break;
 			default:
-				ri.Con_Printf (PRINT_ALL, "LoadTGA: Only 8, 16, 24 and 32 bit colormaps supported. Image:(%s).\n", filename );
-				ri.FS_FreeFile( data );
+				Com_Printf ("LoadTGA: Only 8, 16, 24 and 32 bit colormaps supported. Image:(%s).\n", filename );
+				FS_FreeFile( data );
 				return;
 		}
 
 		temp1 = header.colormap_index;
 		temp2 = header.colormap_length;
 		if( (temp1 + temp2 + 1) >= MAXCOLORS ) {
-			ri.FS_FreeFile( data );
+			FS_FreeFile( data );
 			return;
 		}
 		ColorMap = (byte *)malloc( MAXCOLORS * 4 );
@@ -771,8 +844,8 @@ void LoadTGA( char *filename, byte **pic, int *width, int *height )
 					l = 0;
 					break;
 				default:
-					ri.Con_Printf (PRINT_ALL, "LoadTGA: Illegal pixel_size '%d' in file '%s'\n", filename );
-					ri.FS_FreeFile( data );
+					Com_Printf ("LoadTGA: Illegal pixel_size '%d' in file '%s'\n", filename );
+					FS_FreeFile( data );
 					return;
 			}
 
@@ -808,15 +881,43 @@ PixEncode:
 	if (mapped)
 		free( ColorMap );
 	
-	ri.FS_FreeFile( data );
+	FS_FreeFile( data );
 }
+
+qboolean WriteTGA( const char *name, byte *buffer, int width, int height )
+{
+	FILE		*f;
+	int			i, c, temp;
+
+	if( !(f = fopen( name, "wb" ) ) ) {
+		Com_Printf( "WriteTGA: Couldn't create a file: %s\n", name ); 
+		return false;
+	}
+
+	buffer[2] = 2;		// uncompressed type
+	buffer[12] = width&255;
+	buffer[13] = width>>8;
+	buffer[14] = height&255;
+	buffer[15] = height>>8;
+	buffer[16] = 24;	// pixel size
+
+	// swap rgb to bgr
+	c = 18+width*height*3;
+	for( i = 18; i < c; i += 3 ) {
+		temp = buffer[i];
+		buffer[i] = buffer[i+2];
+		buffer[i+2] = temp;
+	}
+	fwrite( buffer, 1, c, f );
+	fclose( f );
+
+	return true;
+} 
 
 /*
 =================================================================
 
 JPEG LOADING
-
-By Robert 'Heffo' Heffernan
 
 =================================================================
 */
@@ -827,18 +928,14 @@ void jpg_null(j_decompress_ptr cinfo)
 
 unsigned char jpg_fill_input_buffer(j_decompress_ptr cinfo)
 {
-    ri.Con_Printf(PRINT_DEVELOPER, "Premature end of JPEG data\n");
+    Com_DPrintf("Premature end of JPEG data\n");
     return 1;
 }
 
 void jpg_skip_input_data(j_decompress_ptr cinfo, long num_bytes)
 {
-        
     cinfo->src->next_input_byte += (size_t) num_bytes;
     cinfo->src->bytes_in_buffer -= (size_t) num_bytes;
-
-    if (cinfo->src->bytes_in_buffer < 0)
-		ri.Con_Printf(PRINT_DEVELOPER, "Premature end of JPEG data\n");
 }
 
 void jpeg_mem_src(j_decompress_ptr cinfo, byte *mem, int len)
@@ -858,7 +955,7 @@ void jpeg_mem_src(j_decompress_ptr cinfo, byte *mem, int len)
 LoadJPG
 ==============
 */
-void LoadJPG (char *filename, byte **pic, int *width, int *height)
+void LoadJPG (const char *filename, byte **pic, int *width, int *height)
 {
 	struct jpeg_decompress_struct	cinfo;
 	struct jpeg_error_mgr			jerr;
@@ -868,15 +965,15 @@ void LoadJPG (char *filename, byte **pic, int *width, int *height)
 	*pic = NULL;
 
 	// Load JPEG file into memory
-	rawsize = ri.FS_LoadFile(filename, (void **)&rawdata);
+	rawsize = FS_LoadFile(filename, (void **)&rawdata);
 
 	if(!rawdata)
 		return;	
 
 	if ( rawdata[6] != 'J' || rawdata[7] != 'F' || rawdata[8] != 'I' || rawdata[9] != 'F')
 	{ 
-		ri.Con_Printf (PRINT_ALL, "LoadJPG: Invalid JPEG header: %s\n", filename); 
-		ri.FS_FreeFile(rawdata); 
+		Com_Printf ("LoadJPG: Invalid JPEG header: %s\n", filename); 
+		FS_FreeFile(rawdata); 
 		return; 
 	} 
 
@@ -896,9 +993,9 @@ void LoadJPG (char *filename, byte **pic, int *width, int *height)
 	// Check Colour Components
 	if(cinfo.output_components != 3 && cinfo.output_components != 4)
 	{
-		ri.Con_Printf(PRINT_ALL, "LoadJPG: Invalid JPEG colour components (%s)\n", filename);
+		Com_Printf ( "LoadJPG: Invalid JPEG colour components (%s)\n", filename);
 		jpeg_destroy_decompress(&cinfo);
-		ri.FS_FreeFile(rawdata);
+		FS_FreeFile(rawdata);
 		return;
 	}
 
@@ -906,9 +1003,9 @@ void LoadJPG (char *filename, byte **pic, int *width, int *height)
 	rgbadata = malloc(cinfo.output_width * cinfo.output_height * 4);
 	if(!rgbadata)
 	{
-		ri.Con_Printf(PRINT_ALL, "LoadJPG: Insufficient memory for JPEG buffer\n");
+		Com_Printf ( "LoadJPG: Insufficient memory for JPEG buffer\n");
 		jpeg_destroy_decompress(&cinfo);
-		ri.FS_FreeFile(rawdata);
+		FS_FreeFile(rawdata);
 		return;
 	}
 
@@ -922,10 +1019,10 @@ void LoadJPG (char *filename, byte **pic, int *width, int *height)
 	scanline = malloc (cinfo.output_width * 3);
 	if (!scanline)
 	{
-		ri.Con_Printf (PRINT_ALL, "LoadJPG: Insufficient memory for JPEG scanline buffer\n");
+		Com_Printf ("LoadJPG: Insufficient memory for JPEG scanline buffer\n");
 		free (rgbadata);
 		jpeg_destroy_decompress (&cinfo);
-		ri.FS_FreeFile (rawdata);
+		FS_FreeFile (rawdata);
 		return;
 	}
 
@@ -958,9 +1055,59 @@ void LoadJPG (char *filename, byte **pic, int *width, int *height)
 
 	// Return the 'rgbadata'
 	*pic = rgbadata;
-	ri.FS_FreeFile (rawdata);
+	FS_FreeFile (rawdata);
 }
 
+qboolean WriteJPG( const char *name, byte *buffer, int width, int height, int quality )
+{
+	struct jpeg_compress_struct		cinfo;
+	struct jpeg_error_mgr			jerr;
+	FILE							*f;
+	JSAMPROW						s[1];
+	int								offset, w3;
+
+	if( !(f = fopen( name, "wb" )) ) {
+		Com_Printf( "WriteJPG: Couldn't create a file: %s\n", name ); 
+		return false;
+	}
+
+	// initialize the JPEG compression object
+	cinfo.err = jpeg_std_error( &jerr );
+	jpeg_create_compress( &cinfo );
+	jpeg_stdio_dest( &cinfo, f );
+
+	// setup JPEG parameters
+	cinfo.image_width = width;
+	cinfo.image_height = height;
+	cinfo.in_color_space = JCS_RGB;
+	cinfo.input_components = 3;
+
+	jpeg_set_defaults( &cinfo );
+
+	if( (quality > 100) || (quality <= 0) )
+		quality = 85;
+
+	jpeg_set_quality( &cinfo, quality, TRUE );
+
+	// start compression
+	jpeg_start_compress( &cinfo, true );
+
+	// feed scanline data
+	w3 = cinfo.image_width * 3;
+	offset = w3 * cinfo.image_height - w3;
+	while( cinfo.next_scanline < cinfo.image_height ) {
+		s[0] = &buffer[offset - cinfo.next_scanline * w3];
+		jpeg_write_scanlines( &cinfo, s, 1 );
+	}
+
+	// finish compression
+	jpeg_finish_compress( &cinfo );
+	jpeg_destroy_compress( &cinfo );
+
+	fclose ( f );
+
+	return true;
+}
 
 /*
 ====================================================================
@@ -1045,7 +1192,6 @@ void R_FloodFillSkin( byte *skin, int skinwidth, int skinheight )
 
 //=======================================================
 
-
 /*
 ================
 GL_ResampleTexture
@@ -1054,8 +1200,15 @@ GL_ResampleTexture
 void GL_ResampleTexture (unsigned *in, int inwidth, int inheight, unsigned *out,  int outwidth, int outheight)
 {
 	int		i, j;
-	unsigned	*inrow, *inrow2, frac, fracstep, p1[2048], p2[2048];
+	unsigned	*inrow, *inrow2, frac, fracstep;
+	unsigned	*p1, *p2;
+	unsigned *resampleBuffer;
 	byte		*pix1, *pix2, *pix3, *pix4;
+
+	resampleBuffer = malloc( outwidth * sizeof( unsigned ) * 2 );
+
+	p1 = resampleBuffer;
+	p2 = resampleBuffer + outwidth;
 
 	fracstep = inwidth*0x10000/outwidth;
 
@@ -1089,6 +1242,8 @@ void GL_ResampleTexture (unsigned *in, int inwidth, int inheight, unsigned *out,
 			((byte *)(out+j))[3] = (pix1[3] + pix2[3] + pix3[3] + pix4[3])>>2;
 		}
 	}
+
+	free(resampleBuffer);
 }
 
 /*
@@ -1143,11 +1298,11 @@ Operates in place, quartering the size of the texture
 void GL_MipMap (byte *in, int width, int height)
 {
 	int		i, j;
-	byte	*out;
+	byte	*out = in;
 
 	width <<=2;
 	height >>= 1;
-	out = in;
+
 	for (i=0 ; i<height ; i++, in+=width)
 	{
 		for (j=0 ; j<width ; j+=8, out+=4, in+=8)
@@ -1191,7 +1346,7 @@ void GL_BuildPalettedTexture( unsigned char *paletted_texture, unsigned char *sc
 int		upload_width, upload_height;
 qboolean uploaded_paletted;
 
-qboolean GL_Upload32 (unsigned *data, int width, int height,  qboolean mipmap, int bits)
+qboolean GL_Upload32 (unsigned *data, int width, int height,  qboolean mipmap, qboolean is_pic)
 {
 	int			samples;
 	unsigned	*scaled = NULL;
@@ -1210,21 +1365,24 @@ qboolean GL_Upload32 (unsigned *data, int width, int height,  qboolean mipmap, i
 
 	if (mipmap)
 	{
-		if (gl_round_down->value && scaled_width > width)
-			scaled_width >>= 1;
-		if (gl_round_down->value && scaled_height > height)
-			scaled_height >>= 1;
+		if (gl_round_down->integer)
+		{
+			if (scaled_width > width)
+				scaled_width >>= 1;
+			if (scaled_height > height)
+				scaled_height >>= 1;
+		}
 
 		// let people sample down the world textures for speed
-		if (gl_picmip->value > 0)
+		if (gl_picmip->integer > 0)
 		{
-			scaled_width >>= (int)gl_picmip->value;
-			scaled_height >>= (int)gl_picmip->value;
+			scaled_width >>= gl_picmip->integer;
+			scaled_height >>= gl_picmip->integer;
 		}
 	}
 
 	// don't ever bother with maxtexsize textures
-	if ( qglColorTableEXT && gl_ext_palettedtexture->value ) //palettedtexture users is limited to 256
+	if ( qglColorTableEXT && gl_ext_palettedtexture->integer ) //palettedtexture is limited to 256
 	{
 		clamp ( scaled_width, 1, 256 );
 		clamp ( scaled_height, 1, 256 );
@@ -1250,23 +1408,17 @@ qboolean GL_Upload32 (unsigned *data, int width, int height,  qboolean mipmap, i
 		}
 	}
 
-	qglHint(GL_TEXTURE_COMPRESSION_HINT_ARB, GL_NICEST);
 	if (samples == gl_solid_format)
 		comp = (gl_state.texture_compression) ? GL_COMPRESSED_RGB_ARB : gl_tex_solid_format;
-	else if (samples == gl_alpha_format)
+	else
 		comp = (gl_state.texture_compression) ? GL_COMPRESSED_RGBA_ARB : gl_tex_alpha_format;
-	else {
-	    ri.Con_Printf (PRINT_ALL,
-			   "Unknown number of texture components %i\n",
-			   samples);
-	    comp = samples;
-	}
+
 
 	if (scaled_width == width && scaled_height == height)
 	{
 		if (!mipmap)
 		{
-			if ( qglColorTableEXT && gl_ext_palettedtexture->value && samples == gl_solid_format )
+			if ( qglColorTableEXT && gl_ext_palettedtexture->integer && samples == gl_solid_format )
 			{
 				uploaded_paletted = true;
 				GL_BuildPalettedTexture( paletted_texture, ( unsigned char * ) data, scaled_width, scaled_height );
@@ -1286,9 +1438,10 @@ qboolean GL_Upload32 (unsigned *data, int width, int height,  qboolean mipmap, i
 		GL_ResampleTexture (data, width, height, scaled, scaled_width, scaled_height);
 	}
 
+	if(!is_pic || gl_gammapics->integer)
 	GL_LightScaleTexture (scaled, scaled_width, scaled_height, !mipmap );
 
-	if ( qglColorTableEXT && gl_ext_palettedtexture->value && samples == gl_solid_format )
+	if ( qglColorTableEXT && gl_ext_palettedtexture->integer && samples == gl_solid_format )
 	{
 		uploaded_paletted = true;
 		GL_BuildPalettedTexture( paletted_texture, ( unsigned char * ) scaled, scaled_width, scaled_height );
@@ -1296,7 +1449,7 @@ qboolean GL_Upload32 (unsigned *data, int width, int height,  qboolean mipmap, i
 	}
 	else
 	{
-		if(mipmap && gl_sgis_mipmap->value && gl_state.sgis_mipmap)
+		if(mipmap && gl_sgis_mipmap->integer && gl_state.sgis_mipmap)
 		{
 			//qglTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_NEAREST);
 			qglTexParameteri (GL_TEXTURE_2D, GL_GENERATE_MIPMAP_SGIS, GL_TRUE);
@@ -1305,7 +1458,7 @@ qboolean GL_Upload32 (unsigned *data, int width, int height,  qboolean mipmap, i
 		qglTexImage2D( GL_TEXTURE_2D, 0, comp, scaled_width, scaled_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, scaled );
 	}
 
-	if (mipmap && !gl_state.sgis_mipmap && !gl_sgis_mipmap->value)
+	if (mipmap && !gl_state.sgis_mipmap && !gl_sgis_mipmap->integer)
 	{
 		int		miplevel;
 
@@ -1321,9 +1474,8 @@ qboolean GL_Upload32 (unsigned *data, int width, int height,  qboolean mipmap, i
 				scaled_height = 1;
 			miplevel++;
 
-			if ( qglColorTableEXT && gl_ext_palettedtexture->value && samples == gl_solid_format )
+			if ( uploaded_paletted )
 			{
-				uploaded_paletted = true;
 				GL_BuildPalettedTexture( paletted_texture, ( unsigned char * ) scaled, scaled_width, scaled_height );
 				qglTexImage2D( GL_TEXTURE_2D, miplevel, GL_COLOR_INDEX8_EXT, scaled_width, scaled_height, 0, GL_COLOR_INDEX, GL_UNSIGNED_BYTE, paletted_texture );
 			}
@@ -1341,7 +1493,7 @@ done: ;
 	qglTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, (mipmap) ? gl_filter_min : gl_filter_max);
 	qglTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, gl_filter_max);
 
-	return (samples == gl_alpha_format || samples == GL_COMPRESSED_RGBA_ARB);
+	return (samples == gl_alpha_format);
 }
 
 /*
@@ -1352,7 +1504,7 @@ Returns has_alpha
 ===============
 */
 
-qboolean GL_Upload8 (byte *data, int width, int height,  qboolean mipmap, qboolean is_sky )
+qboolean GL_Upload8 (byte *data, int width, int height,  qboolean mipmap, qboolean is_sky, qboolean is_pic )
 {
 	unsigned	trans[512*256];
 	int			i, s, p;
@@ -1360,9 +1512,9 @@ qboolean GL_Upload8 (byte *data, int width, int height,  qboolean mipmap, qboole
 	s = width*height;
 
 	if (s > sizeof(trans) * 0.25)
-		ri.Sys_Error (ERR_DROP, "GL_Upload8: too large");
+		Com_Error (ERR_DROP, "GL_Upload8: too large");
 
-	if ( qglColorTableEXT && gl_ext_palettedtexture->value && is_sky )
+	if ( qglColorTableEXT && gl_ext_palettedtexture->integer && is_sky )
 	{
 		qglTexImage2D( GL_TEXTURE_2D, 0, GL_COLOR_INDEX8_EXT, width, height, 0, GL_COLOR_INDEX, GL_UNSIGNED_BYTE, data );
 		qglTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, gl_filter_max);
@@ -1399,7 +1551,7 @@ qboolean GL_Upload8 (byte *data, int width, int height,  qboolean mipmap, qboole
 			}
 		}
 
-		return GL_Upload32 (trans, width, height, mipmap, 8);
+		return GL_Upload32 (trans, width, height, mipmap, is_pic);
 	}
 
 }
@@ -1412,15 +1564,12 @@ GL_LoadPic
 This is also used as an entry point for the generated r_notexture
 ================
 */
-image_t *GL_LoadPic (char *name, byte *pic, int width, int height, imagetype_t type, int bits, int scale)
+image_t *GL_LoadPic (const char *name, byte *pic, int width, int height, imagetype_t type, int bits, int scale)
 {
 	image_t		*image;
 	int			i;
+	char		s[MAX_QPATH];
 
-	//Added -Maniac
-	int len;
-	char s[128];
-	//end
 
 	// find a free image_t
 	for (i=0, image=gltextures ; i<numgltextures ; i++,image++)
@@ -1431,55 +1580,46 @@ image_t *GL_LoadPic (char *name, byte *pic, int width, int height, imagetype_t t
 	if (i == numgltextures)
 	{
 		if (numgltextures == MAX_GLTEXTURES)
-			ri.Sys_Error (ERR_DROP, "MAX_GLTEXTURES");
+			Com_Error (ERR_DROP, "MAX_GLTEXTURES");
 		numgltextures++;
 	}
 	image = &gltextures[i];
-
-	if (strlen(name) >= sizeof(image->name))
-		ri.Sys_Error (ERR_DROP, "Draw_LoadPic: \"%s\" is too long", name);
-	strcpy (image->name, name);
+	Q_strncpyz( image->name, name, sizeof(image->name) );
 	image->registration_sequence = registration_sequence;
 
 	image->width = width;
 	image->height = height;
 	image->type = type;
 
-	 // Changed, high resolution texture scaling, -Maniac
 	image->bits = bits;
-
 	if (scale == WAL_SCALE)
 	{
 		miptex_t *mt;
 
-		len = strlen(name);
-		strcpy(s,name);
-
-		s[len-3] = 'w';	s[len-2] = 'a';	s[len-1] = 'l';
-		ri.FS_LoadFile (s, (void **)&mt);	//load .wal file
+		strcpy(s, name);
+		strcat(s, ".wal");
+		FS_LoadFile (s, (void **)&mt);
 		if (mt)
 		{
 			image->width = LittleLong (mt->width);
 			image->height = LittleLong (mt->height);
-			ri.FS_FreeFile ((void *)mt);
+			FS_FreeFile ((void *)mt);
 		}
 	}
-	else if (scale == PCX_SCALE)// if it's replacing a PCX image
+	else if (scale == PCX_SCALE)
 	{
 		byte	*raw;
 		pcx_t	*pcx;
 
-		len = strlen(name);
-		strcpy(s,name);
-
-		s[len-3]='p'; s[len-2]='c'; s[len-1]='x'; // replace extension 
-		ri.FS_LoadFile (s, (void **)&raw); //load .pcx file 
+		strcpy(s, name);
+		strcat(s, ".pcx");
+		FS_LoadFile (s, (void **)&raw);
 		if (raw)
 		{
 			pcx = (pcx_t *)raw;
 			image->width = LittleShort(pcx->xmax) + 1;
 			image->height = LittleShort(pcx->ymax) + 1;
-			ri.FS_FreeFile (pcx); //free the picture
+			FS_FreeFile ((void *)pcx);
 		}
 	}
 
@@ -1496,7 +1636,7 @@ image_t *GL_LoadPic (char *name, byte *pic, int width, int height, imagetype_t t
 		texnum = Scrap_AllocBlock (image->width, image->height, &x, &y);
 		if (texnum == -1)
 			goto nonscrap;
-		scrap_dirty = true;
+		//scrap_dirty = true;
 
 		// copy the texels into the scrap block
 		k = 0;
@@ -1510,6 +1650,11 @@ image_t *GL_LoadPic (char *name, byte *pic, int width, int height, imagetype_t t
 		image->sh = (x+image->width-0.01)/(float)BLOCK_WIDTH;
 		image->tl = (y+0.01)/(float)BLOCK_WIDTH;
 		image->th = (y+image->height-0.01)/(float)BLOCK_WIDTH;
+
+		//GL_Bind(image->texnum);
+		GL_Bind(TEXNUM_SCRAPS);
+		GL_Upload8 (scrap_texels[0], BLOCK_WIDTH, BLOCK_HEIGHT, false, false, true);
+		//Scrap_Upload ();
 	}
 	else
 	{
@@ -1518,9 +1663,9 @@ nonscrap:
 		image->texnum = TEXNUM_IMAGES + (image - gltextures);
 		GL_Bind(image->texnum);
 		if (bits == 8)
-			image->has_alpha = GL_Upload8 (pic, width, height, (image->type != it_pic && image->type != it_sky), image->type == it_sky );
+			image->has_alpha = GL_Upload8 (pic, width, height, (image->type != it_pic && image->type != it_sky), image->type == it_sky, image->type == it_pic );
 		else
-			image->has_alpha = GL_Upload32 ((unsigned *)pic, width, height, (image->type != it_pic && image->type != it_sky), bits );
+			image->has_alpha = GL_Upload32 ((unsigned *)pic, width, height, (image->type != it_pic && image->type != it_sky), image->type == it_pic );
 
 		image->upload_width = upload_width;		// after power of 2 and scales
 		image->upload_height = upload_height;
@@ -1540,28 +1685,45 @@ nonscrap:
 GL_LoadWal
 ================
 */
-image_t *GL_LoadWal (char *name)
+image_t *GL_LoadWal (const char *name, char *uploadName)
 {
 	miptex_t	*mt;
 	int			width, height, ofs;
 	image_t		*image;
 
-	ri.FS_LoadFile (name, (void **)&mt);
+	FS_LoadFile (name, (void **)&mt);
 	if (!mt)
 	{
-		ri.Con_Printf (PRINT_ALL, "GL_FindImage: can't load %s\n", name);
-		return r_notexture;
+		Com_Printf ("GL_FindImage: can't load %s\n", name);
+		return NULL;
 	}
 
 	width = LittleLong (mt->width);
 	height = LittleLong (mt->height);
 	ofs = LittleLong (mt->offsets[0]);
 
-	image = GL_LoadPic (name, (byte *)mt + ofs, width, height, it_wall, 8, 0);
+	image = GL_LoadPic (uploadName, (byte *)mt + ofs, width, height, it_wall, 8, 0);
 
-	ri.FS_FreeFile ((void *)mt);
+	FS_FreeFile ((void *)mt);
 
 	return image;
+}
+
+unsigned int IMG_HashKey (char *name, int hashsize)
+{
+	int i;
+	unsigned int v;
+	unsigned int c;
+
+	v = 0;
+	for( i = 0; name[i]; i++ ) {
+		c = name[i];
+		if( c == '\\' )
+			c = '/';
+		v = (v + i) * 37 + c;
+	}
+
+	return v % hashsize;
 }
 
 /*
@@ -1572,25 +1734,43 @@ Finds or loads the given image
 ===============
 */
 
-image_t	*GL_FindImage (char *name, imagetype_t type)
+image_t	*GL_FindImage (const char *name, imagetype_t type)
 {
 	image_t	*image;
+	int		i, len = 0, lastDot = -1;
 	byte	*pic, *palette;
-	int		i, len, width, height;
-	char	name2[MAX_QPATH];
+	int		width, height;
+	char	uploadName[MAX_QPATH], pathname[MAX_QPATH];
 	int		scale = 0;
+	unsigned int hash;
 
-	if (!name)
-		return NULL;	//	ri.Sys_Error (ERR_DROP, "GL_FindImage: NULL name");
-	len = strlen(name);
+
+	if (!name || !name[0])
+		return NULL;
+
+	for( i = ( name[0] == '/' || name[0] == '\\' ); name[i] && (len < sizeof(pathname)-5); i++ ) {
+		if( name[i] == '.' ) {
+			lastDot = len;
+			pathname[len++] = name[i];
+		}
+		else if( name[i] == '\\' ) 
+			pathname[len++] = '/';
+		else
+			pathname[len++] = tolower( name[i] );
+	}
+
 	if (len < 5)
-		return NULL;	//	ri.Sys_Error (ERR_DROP, "GL_FindImage: bad name: %s", name);
+		return NULL;
+	else if( lastDot != -1 )
+		len = lastDot;
 
+	pathname[len] = 0;
+
+	hash = IMG_HashKey(pathname, IMAGES_HASH_SIZE);
 	// look for it
-	for (i = 0, image = gltextures; i < numgltextures; i++, image++)
+	for (image = images_hash[hash]; image; image = image->hashNext)
 	{
-		//if (!strcmp(name, image->name))
-		if (!strncmp(name, image->name, len-3))
+		if (!strcmp(pathname, image->name))
 		{
 			image->registration_sequence = registration_sequence;
 			return image;
@@ -1600,89 +1780,101 @@ image_t	*GL_FindImage (char *name, imagetype_t type)
 	// load the pic from disk
 	pic = NULL;
 	palette = NULL;
-	image = NULL;
 
-	//Added replace for pcx or wal -Maniac
-	if((!strcmp(name+len-4, ".pcx") && gl_replacepcx->value) || (!strcmp(name+len-4, ".wal") && gl_replacewal->value))
+	strcpy (uploadName, pathname);
+	pathname[len] = '.';
+	pathname[len+4] = 0;
+
+	if((!strcmp(pathname+len, ".pcx") && gl_replacepcx->integer) || (!strcmp(pathname+len, ".wal") && gl_replacewal->integer))
 	{
-		if(!strcmp(name+len-4, ".wal"))
+		if(!strcmp(pathname+len, ".wal"))
 			scale = WAL_SCALE;
 		else
 			scale = PCX_SCALE;
 
-		strcpy(name2,name);
-		name2[len-3]='p'; name2[len-2]='n'; name2[len-1]='g';
-		LoadPNG (name2, &pic, &width, &height);
+		pathname[len+1]='p'; pathname[len+2]='n'; pathname[len+3]='g';
+		LoadPNG (pathname, &pic, &width, &height);
 		if (!pic)
 		{
-			name2[len-3]='t'; name2[len-2]='g'; name2[len-1]='a';
-			LoadTGA (name2, &pic, &width, &height);
+			pathname[len+1]='t'; pathname[len+2]='g'; pathname[len+3]='a';
+			LoadTGA (pathname, &pic, &width, &height);
 			if (!pic)
 			{
-				name2[len-3]='j'; name2[len-2]='p'; name2[len-1]='g';
-				LoadJPG (name2, &pic, &width, &height);
+				pathname[len+1]='j'; pathname[len+2]='p'; pathname[len+3]='g';
+				LoadJPG (pathname, &pic, &width, &height);
 				if (!pic)
 				{
 					if (scale == WAL_SCALE)
 					{
-						image = GL_LoadWal (name);
+						pathname[len+1]='w'; pathname[len+2]='a'; pathname[len+3]='l';
+						image = GL_LoadWal (pathname, uploadName);
+						if(!image)
+							return r_notexture;
 					}
 					else
 					{
-						LoadPCX (name, &pic, &palette, &width, &height);
+						pathname[len+1]='p'; pathname[len+2]='c'; pathname[len+3]='x';
+						LoadPCX (pathname, &pic, &palette, &width, &height);
 						if (!pic)
 							return NULL;
-						image = GL_LoadPic (name, pic, width, height, type, 8, 0);
+						image = GL_LoadPic (uploadName, pic, width, height, type, 8, 0);
 					}
 				}
 				else
-					image = GL_LoadPic (name2, pic, width, height, type, 32, scale);
+					image = GL_LoadPic (uploadName, pic, width, height, type, 32, scale);
 			}
 			else
-				image = GL_LoadPic (name2, pic, width, height, type, 32, scale);
+				image = GL_LoadPic (uploadName, pic, width, height, type, 32, scale);
 		}
 		else
-			image = GL_LoadPic (name2, pic, width, height, type, 32, scale);
+			image = GL_LoadPic (uploadName, pic, width, height, type, 32, scale);
 	}
-	else if (!strcmp(name+len-4, ".pcx"))
+	else if (!strcmp(pathname+len, ".pcx"))
 	{
-		LoadPCX (name, &pic, &palette, &width, &height);
+		LoadPCX (pathname, &pic, &palette, &width, &height);
 		if (!pic)
 			return NULL;
-		image = GL_LoadPic (name, pic, width, height, type, 8, 0);
+		image = GL_LoadPic (uploadName, pic, width, height, type, 8, 0);
 	}
-	else if (!strcmp(name+len-4, ".wal"))
+	else if (!strcmp(pathname+len, ".wal"))
 	{
-		image = GL_LoadWal (name);
+		image = GL_LoadWal (pathname, uploadName);
+		if(!image)
+			return r_notexture;
 	}
-	else if (!strcmp(name+len-4, ".tga"))
+	else if (!strcmp(pathname+len, ".tga"))
 	{
-		LoadTGA (name, &pic, &width, &height);
+		LoadTGA (pathname, &pic, &width, &height);
 		if (!pic)
 			return NULL;
-		image = GL_LoadPic (name, pic, width, height, type, 32, 0);
+		image = GL_LoadPic (uploadName, pic, width, height, type, 32, 0);
 	}
-	else if (!strcmp(name+len-4, ".png"))
+	else if (!strcmp(pathname+len, ".png"))
 	{
-		LoadPNG (name, &pic, &width, &height);
+		LoadPNG (pathname, &pic, &width, &height);
 		if (!pic)
 			return NULL;
-		image = GL_LoadPic (name, pic, width, height, type, 32, 0);
+		image = GL_LoadPic (uploadName, pic, width, height, type, 32, 0);
 	}
-	else if (!strcmp(name+len-4, ".jpg"))
+	else if (!strcmp(pathname+len, ".jpg"))
 	{
-		LoadJPG (name, &pic, &width, &height);
+		LoadJPG (pathname, &pic, &width, &height);
 		if (!pic)
 			return NULL;
-		image = GL_LoadPic (name, pic, width, height, type, 32, 0);
+		image = GL_LoadPic (uploadName, pic, width, height, type, 32, 0);
 	}
 	else
-		return NULL;	//	ri.Sys_Error (ERR_DROP, "GL_FindImage: bad extension on: %s", name);
+		return NULL;
 
 	if (pic)
 		free(pic);
 	if (palette)
 		free(palette);
+
+	image->extension[0] = '.';
+	strcpy( &image->extension[1], &pathname[len+1] );
+	image->hashNext = images_hash[hash];
+	images_hash[hash] = image;
 
 	return image;
 }
@@ -1692,7 +1884,7 @@ image_t	*GL_FindImage (char *name, imagetype_t type)
 R_RegisterSkin
 ===============
 */
-struct image_s *R_RegisterSkin (char *name)
+struct image_s *R_RegisterSkin (const char *name)
 {
 	return GL_FindImage (name, it_skin);
 }
@@ -1709,7 +1901,8 @@ will be freed.
 void GL_FreeUnusedImages (void)
 {
 	int		i;
-	image_t	*image;
+	image_t	*image, *entry, **back;
+	unsigned int hash;
 
 	// never free r_notexture or particle texture
 	r_notexture->registration_sequence = registration_sequence;
@@ -1725,8 +1918,20 @@ void GL_FreeUnusedImages (void)
 			continue;		// free image_t slot
 		if (image->type == it_pic)
 			continue;		// don't free pics
+
+		hash = IMG_HashKey (image->name, IMAGES_HASH_SIZE);
+		// delete it from hash table
+		for( back=&images_hash[hash], entry=images_hash[hash]; entry; back=&entry->hashNext, entry=entry->hashNext ) {
+			if( entry == image ) {
+				*back = entry->hashNext;
+				break;
+			}
+		}
+		if( !entry ) {
+			Com_Error( ERR_FATAL, "GL_FreeUnusedImages: %s not found in hash table", image->name );
+		}
 		// free it
-		qglDeleteTextures (1, &image->texnum);
+		qglDeleteTextures (1, (GLuint *)&image->texnum);
 		memset (image, 0, sizeof(*image));
 	}
 }
@@ -1751,8 +1956,7 @@ int Draw_GetPalette (void)
 
 	LoadPCX ("pics/colormap.pcx", &pic, &pal, &width, &height);
 	if (!pal)
-		//ri.Sys_Error (ERR_FATAL, "Couldn't load pics/colormap.pcx");
-		pal = default_pal; //Default pal -Maniac
+		pal = default_pal;
 
 	for (i = 0; i < 256; i++)
 	{
@@ -1770,8 +1974,11 @@ int Draw_GetPalette (void)
 
 	d_8to24table[255] &= LittleLong(0xffffff);	// 255 is transparent
 
-	free (pic);
-	free (pal);
+	if (pic)
+		free (pic);
+
+	if (pal != default_pal)
+		free (pal);
 
 	return 0;
 }
@@ -1790,10 +1997,10 @@ void	GL_InitImages (void)
 	registration_sequence = 1;
 
 	// init intensity conversions
-	intensity = ri.Cvar_Get ("intensity", "2", 0);
+	intensity = Cvar_Get ("intensity", "2", 0);
 
 	if ( intensity->value < 1 )
-		ri.Cvar_Set( "intensity", "1" );
+		Cvar_Set( "intensity", "1" );
 
 	gl_state.inverse_intensity = 1 / intensity->value;
 
@@ -1801,9 +2008,9 @@ void	GL_InitImages (void)
 
 	if ( qglColorTableEXT )
 	{
-		ri.FS_LoadFile( "pics/16to8.dat", &gl_state.d_16to8table );
+		FS_LoadFile( "pics/16to8.dat", (void **)&gl_state.d_16to8table );
 		if ( !gl_state.d_16to8table )
-			ri.Sys_Error( ERR_FATAL, "Couldn't load pics/16to8.dat" );
+			Com_Error( ERR_FATAL, "Couldn't load pics/16to8.dat" );
 	}
 
 	if ( gl_config.renderer & ( GL_RENDERER_VOODOO | GL_RENDERER_VOODOO2 ) )
@@ -1821,7 +2028,7 @@ void	GL_InitImages (void)
 		{
 			float inf;
 
-			inf = 255 * pow ( (i+0.5)/255 , g ) + 0.5;
+			inf = 255 * pow ( (i+0.5)/255.5 , g ) + 0.5;
 			if (inf < 0)
 				inf = 0;
 			if (inf > 255)
@@ -1851,8 +2058,11 @@ void	GL_ShutdownImages (void)
 		if (!image->registration_sequence)
 			continue;		// free image_t slot
 		// free it
-		qglDeleteTextures (1, &image->texnum);
+		qglDeleteTextures (1, (GLuint *)&image->texnum);
 		memset (image, 0, sizeof(*image));
 	}
+	numgltextures = 0;
+	memset( images_hash, 0, sizeof(images_hash) );
+	memset (scrap_allocated, 0, sizeof(scrap_allocated));
 }
 

@@ -111,14 +111,6 @@ void Sys_Mkdir (char *path)
     mkdir (path, 0777);
 }
 
-char *strlwr (char *s)
-{
-	while (*s) {
-		*s = tolower(*s);
-		s++;
-	}
-}
-
 //============================================
 
 static	char	findbase[MAX_OSPATH];
@@ -126,7 +118,7 @@ static	char	findpath[MAX_OSPATH];
 static	char	findpattern[MAX_OSPATH];
 static	DIR		*fdir;
 
-static qboolean CompareAttributes(char *path, char *name,
+static qboolean CompareAttributes(const char *path, const char *name,
 	unsigned musthave, unsigned canthave )
 {
 	struct stat st;
@@ -149,7 +141,7 @@ static qboolean CompareAttributes(char *path, char *name,
 	return true;
 }
 
-char *Sys_FindFirst (char *path, unsigned musthave, unsigned canhave)
+char *Sys_FindFirst (const char *path, unsigned musthave, unsigned canhave)
 {
 	struct dirent *d;
 	char *p;

@@ -25,7 +25,7 @@ void	SCR_UpdateScreen (void);
 
 void	SCR_SizeUp (void);
 void	SCR_SizeDown (void);
-void	SCR_CenterPrint (char *str);
+void	SCR_CenterPrint (const char *str);
 void	SCR_BeginLoadingPlaque (void);
 void	SCR_EndLoadingPlaque (void);
 
@@ -65,7 +65,7 @@ void SCR_FinishCinematic (void);
 //
 void SCR_InitDraw( void );
 void SCR_Draw2D( void );
-void SCR_AddToChatHUD( char *string );
+void SCR_AddToChatHUD( const char *string, qboolean mm2 );
 void SCR_ClearChatHUD_f( void );
 void SCR_AddLagometerOutPacketInfo( int size );
 void SCR_AddLagometerPacketInfo( void );

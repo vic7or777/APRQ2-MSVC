@@ -464,7 +464,7 @@ void R_BuildLightMap (void)
 	tmax = (surf->extents[1]>>4)+1;
 	size = smax*tmax;
 
-	if (r_fullbright->value || !r_worldmodel->lightdata)
+	if (r_fullbright->integer || !r_worldmodel->lightdata)
 	{
 		for (i=0 ; i<size ; i++)
 			blocklights[i] = 0;

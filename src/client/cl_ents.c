@@ -23,10 +23,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 extern	struct model_s	*cl_mod_powerscreen;
 
-//PGM
-int	vidref_val;
-//PGM
-
 /*
 =========================================================================
 
@@ -42,11 +38,11 @@ CL_ParseEntityBits
 Returns the entity number and the header bits
 =================
 */
-int	bitcounts[32];	/// just for protocol profiling
+//int	bitcounts[32];	/// just for protocol profiling
 int CL_ParseEntityBits (unsigned *bits)
 {
 	unsigned	b, total;
-	int			i;
+	//int			i;
 	int			number;
 
 	total = MSG_ReadByte (&net_message);
@@ -67,9 +63,9 @@ int CL_ParseEntityBits (unsigned *bits)
 	}
 
 	// count the bits for net profiling
-	for (i=0 ; i<32 ; i++)
+	/*for (i=0 ; i<32 ; i++)
 		if (total&(1<<i))
-			bitcounts[i]++;
+			bitcounts[i]++;*/
 
 	if (total & U_NUMBER16)
 		number = MSG_ReadShort (&net_message);
@@ -232,7 +228,7 @@ rest of the data stream.
 void CL_ParsePacketEntities (frame_t *oldframe, frame_t *newframe)
 {
 	int			newnum;
-	unsigned int		bits; //Changed -Maniac
+	unsigned		bits;
 	entity_state_t	*oldstate  = NULL;
 	int			oldindex, oldnum;
 
@@ -268,7 +264,7 @@ void CL_ParsePacketEntities (frame_t *oldframe, frame_t *newframe)
 
 		while (oldnum < newnum)
 		{	// one or more entities from the old packet are unchanged
-			if (cl_shownet->value == 3)
+			if (cl_shownet->integer == 3)
 				Com_Printf ("   unchanged: %i\n", oldnum);
 			CL_DeltaEntity (newframe, oldnum, oldstate, 0);
 			
@@ -285,10 +281,10 @@ void CL_ParsePacketEntities (frame_t *oldframe, frame_t *newframe)
 
 		if (bits & U_REMOVE)
 		{	// the entity present in oldframe is not in the current frame
-			if (cl_shownet->value == 3)
+			if (cl_shownet->integer == 3)
 				Com_Printf ("   remove: %i\n", newnum);
 			if (oldnum != newnum)
-				Com_Printf ("U_REMOVE: oldnum != newnum\n");
+				Com_DPrintf ("U_REMOVE: oldnum != newnum\n");
 
 			oldindex++;
 
@@ -304,7 +300,7 @@ void CL_ParsePacketEntities (frame_t *oldframe, frame_t *newframe)
 
 		if (oldnum == newnum)
 		{	// delta from previous state
-			if (cl_shownet->value == 3)
+			if (cl_shownet->integer == 3)
 				Com_Printf ("   delta: %i\n", newnum);
 			CL_DeltaEntity (newframe, newnum, oldstate, bits);
 
@@ -322,7 +318,7 @@ void CL_ParsePacketEntities (frame_t *oldframe, frame_t *newframe)
 
 		if (oldnum > newnum)
 		{	// delta from baseline
-			if (cl_shownet->value == 3)
+			if (cl_shownet->integer == 3)
 				Com_Printf ("   baseline: %i\n", newnum);
 			CL_DeltaEntity (newframe, newnum, &cl_entities[newnum].baseline, bits);
 			continue;
@@ -333,7 +329,7 @@ void CL_ParsePacketEntities (frame_t *oldframe, frame_t *newframe)
 	// any remaining entities in the old frame are copied over
 	while (oldnum != 99999)
 	{	// one or more entities from the old packet are unchanged
-		if (cl_shownet->value == 3)
+		if (cl_shownet->integer == 3)
 			Com_Printf ("   unchanged: %i\n", oldnum);
 		CL_DeltaEntity (newframe, oldnum, oldstate, 0);
 		
@@ -520,7 +516,7 @@ void CL_ParseFrame (void)
 	if (cls.serverProtocol != 26)
 		cl.surpressCount = MSG_ReadByte (&net_message);
 
-	if (cl_shownet->value == 3)
+	if (cl_shownet->integer == 3)
 		Com_Printf ("   frame:%i  delta:%i\n", cl.frame.serverframe,
 		cl.frame.deltaframe);
 
@@ -544,11 +540,11 @@ void CL_ParseFrame (void)
 		if (old->serverframe != cl.frame.deltaframe)
 		{	// The frame that the server did the delta from
 			// is too old, so we can't reconstruct it properly.
-			Com_Printf ("Delta frame too old.\n");
+			Com_DPrintf ("Delta frame too old.\n");
 		}
 		else if (cl.parse_entities - old->parse_entities > MAX_PARSE_ENTITIES-128)
 		{
-			Com_Printf ("Delta parse_entities too old.\n");
+			Com_DPrintf ("Delta parse_entities too old.\n");
 		}
 		else
 			cl.frame.valid = true;	// valid delta parse
@@ -638,7 +634,7 @@ void CL_AddPacketEntities (frame_t *frame)
 	unsigned int		effects, renderfx;
 
 	// bonus items rotate at a fixed rate
-	autorotate = anglemod(cl.time/10);
+	autorotate = anglemod(cl.time*0.1f);
 
 	// brush models can auto animate their frames
 	autoanim = 2*cl.time/1000;
@@ -745,18 +741,18 @@ void CL_AddPacketEntities (frame_t *frame)
 				{
 					if(!strncmp((char *)ent.skin, "players/male", 12))
 					{
-						ent.skin = re.RegisterSkin ("players/male/disguise.pcx");
-						ent.model = re.RegisterModel ("players/male/tris.md2");
+						ent.skin = R_RegisterSkin ("players/male/disguise.pcx");
+						ent.model = R_RegisterModel ("players/male/tris.md2");
 					}
 					else if(!strncmp((char *)ent.skin, "players/female", 14))
 					{
-						ent.skin = re.RegisterSkin ("players/female/disguise.pcx");
-						ent.model = re.RegisterModel ("players/female/tris.md2");
+						ent.skin = R_RegisterSkin ("players/female/disguise.pcx");
+						ent.model = R_RegisterModel ("players/female/tris.md2");
 					}
 					else if(!strncmp((char *)ent.skin, "players/cyborg", 14))
 					{
-						ent.skin = re.RegisterSkin ("players/cyborg/disguise.pcx");
-						ent.model = re.RegisterModel ("players/cyborg/tris.md2");
+						ent.skin = R_RegisterSkin ("players/cyborg/disguise.pcx");
+						ent.model = R_RegisterModel ("players/cyborg/tris.md2");
 					}
 				}
 //PGM
@@ -771,7 +767,7 @@ void CL_AddPacketEntities (frame_t *frame)
 		}
 
 		// only used for black hole model right now, FIXME: do better
-		if (renderfx == RF_TRANSLUCENT)
+		if (renderfx & RF_TRANSLUCENT)
 			ent.alpha = 0.70;
 
 		// render effects (fullbright, translucent, etc)
@@ -937,7 +933,7 @@ void CL_AddPacketEntities (frame_t *frame)
 
 			// PMM - check for the defender sphere shell .. make it translucent
 			// replaces the previous version which used the high bit on modelindex2 to determine transparency
-			if (!Q_strcasecmp (cl.configstrings[CS_MODELS+(s1->modelindex2)], "models/items/shell/tris.md2"))
+			if (!Q_stricmp (cl.configstrings[CS_MODELS+(s1->modelindex2)], "models/items/shell/tris.md2"))
 			{
 				ent.alpha = 0.32;
 				ent.flags = RF_TRANSLUCENT;
@@ -1065,11 +1061,12 @@ void CL_AddPacketEntities (frame_t *frame)
 
 					intensity = 50 + (500 * (sin(cl.time/500.0) + 1.0));
 					// FIXME - check out this effect in rendition
-					if(vidref_val == VIDREF_GL)
+#ifdef GL_QUAKE
 						V_AddLight (ent.origin, intensity, -1.0, -1.0, -1.0);
-					else
+#else
 						V_AddLight (ent.origin, -1.0 * intensity, 1.0, 1.0, 1.0);
-					}
+#endif
+				}
 				else
 				{
 					CL_Tracker_Shell (cent->lerp_origin);
@@ -1080,10 +1077,11 @@ void CL_AddPacketEntities (frame_t *frame)
 			{
 				CL_TrackerTrail (cent->lerp_origin, ent.origin, 0);
 				// FIXME - check out this effect in rendition
-				if(vidref_val == VIDREF_GL)
+#ifdef GL_QUAKE
 					V_AddLight (ent.origin, 200, -1, -1, -1);
-				else
+#else
 					V_AddLight (ent.origin, -200, 1, 1, 1);
+#endif
 			}
 //ROGUE
 //======
@@ -1133,7 +1131,7 @@ void CL_AddViewWeapon (player_state_t *ps, player_state_t *ops)
 	int			i;
 
 	// allow the gun to be completely removed
-	if (!cl_gun->value)
+	if (!cl_gun->integer)
 		return;
 
 	// don't draw gun if in wide angle view
@@ -1160,12 +1158,12 @@ void CL_AddViewWeapon (player_state_t *ps, player_state_t *ops)
 	else
 		gun.oldframe = ops->gunframe;
 
+	gun.flags = RF_MINLIGHT | RF_DEPTHHACK | RF_WEAPONMODEL;
+
 	if(cl_gunalpha->value < 1)
 	{
-		gun.flags = RF_MINLIGHT | RF_DEPTHHACK | RF_WEAPONMODEL | RF_TRANSLUCENT;
+		gun.flags |= RF_TRANSLUCENT;
 		gun.alpha = cl_gunalpha->value;
-	} else {
-		gun.flags = RF_MINLIGHT | RF_DEPTHHACK | RF_WEAPONMODEL;
 	}
 	gun.backlerp = 1.0 - cl.lerpfrac;
 	VectorCopy (gun.origin, gun.oldorigin);	// don't lerp at all
@@ -1184,7 +1182,7 @@ void CL_CalcViewValues (void)
 {
 	int			i;
 	float		lerp, backlerp;
-	centity_t	*ent;
+	//centity_t	*ent;
 	frame_t		*oldframe;
 	player_state_t	*ps, *ops;
 
@@ -1202,7 +1200,7 @@ void CL_CalcViewValues (void)
 		|| abs(ops->pmove.origin[2] - ps->pmove.origin[2]) > 256*8)
 		ops = ps;		// don't interpolate
 
-	ent = &cl_entities[cl.playernum+1];
+	//ent = &cl_entities[cl.playernum+1];
 	lerp = cl.lerpfrac;
 
 	// calculate the origin
@@ -1273,14 +1271,14 @@ void CL_AddEntities (void)
 
 	if (cl.time > cl.frame.servertime)
 	{
-		if (cl_showclamp->value)
+		if (cl_showclamp->integer)
 			Com_Printf ("high clamp %i\n", cl.time - cl.frame.servertime);
 		cl.time = cl.frame.servertime;
 		cl.lerpfrac = 1.0;
 	}
 	else if (cl.time < cl.frame.servertime - 100)
 	{
-		if (cl_showclamp->value)
+		if (cl_showclamp->integer)
 			Com_Printf ("low clamp %i\n", cl.frame.servertime-100 - cl.time);
 		cl.time = cl.frame.servertime - 100;
 		cl.lerpfrac = 0;
@@ -1288,7 +1286,7 @@ void CL_AddEntities (void)
 	else
 		cl.lerpfrac = 1.0 - (cl.frame.servertime - cl.time) * 0.01;
 
-	if (cl_timedemo->value)
+	if (cl_timedemo->integer)
 		cl.lerpfrac = 1.0;
 
 	CL_CalcViewValues ();

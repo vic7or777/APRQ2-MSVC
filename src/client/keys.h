@@ -83,12 +83,13 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define	K_MOUSE3		202
 #define	K_MOUSE4		203
 #define	K_MOUSE5		204
-
-//increased all by 2 because of mouse 4 & 5 -Maniac
+#define	K_MOUSE6		205
+#define	K_MOUSE7		206
 
 //
 // joystick buttons
 //
+#ifdef JOYSTICK
 #define	K_JOY1			205
 #define	K_JOY2			206
 #define	K_JOY3			207
@@ -130,6 +131,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define	K_AUX30			238
 #define	K_AUX31			239
 #define	K_AUX32			240
+#endif
 
 #define K_MWHEELDOWN	241
 #define K_MWHEELUP		242

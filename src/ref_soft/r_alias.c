@@ -83,6 +83,7 @@ void R_AliasLerpFrames( dmdl_t *paliashdr, float backlerp );
 R_AliasCheckBBox
 ================
 */
+/*
 typedef struct {
 	int	index0;
 	int	index1;
@@ -93,7 +94,7 @@ static aedge_t	aedges[12] = {
 {4, 5}, {5, 6}, {6, 7}, {7, 4},
 {0, 5}, {1, 4}, {2, 7}, {3, 6}
 };
-
+*/
 #define BBOX_TRIVIAL_ACCEPT 0
 #define BBOX_MUST_CLIP_XY   1
 #define BBOX_MUST_CLIP_Z    2
@@ -112,7 +113,7 @@ unsigned long R_AliasCheckFrameBBox( daliasframe_t *frame, float worldxf[3][4] )
 	vec3_t        mins, maxs;
 	vec3_t        transformed_min, transformed_max;
 	qboolean      zclipped = false, zfullyclipped = true;
-	float         minz = 9999.0F;
+	//float         minz = 9999.0F;
 
 	/*
 	** get the exact frame bounding box
@@ -289,7 +290,7 @@ void R_AliasPreparePoints (void)
 	pstverts = (dstvert_t *)((byte *)s_pmdl + s_pmdl->ofs_st);
 	ptri = (dtriangle_t *)((byte *)s_pmdl + s_pmdl->ofs_tris);
 
-	if ( ( currententity->flags & RF_WEAPONMODEL ) && ( r_lefthand->value == 1.0F ) )
+	if ( ( currententity->flags & RF_WEAPONMODEL ) && ( r_lefthand->integer == 1 ) )
 	{
 		for (i=0 ; i<s_pmdl->num_tris ; i++, ptri++)
 		{
@@ -462,13 +463,12 @@ void R_AliasTransformFinalVerts( int numpoints, finalvert_t *fv, dtrivertx_t *ol
 }
 
 
-#if id386 && !defined __linux__
-
 /*
 ================
 R_AliasTransformFinalVert
 ================
 */
+#if id386 && !defined __linux__&& !defined __FreeBSD__
 __declspec( naked ) void R_AliasTransformFinalVert( vec3_t vin, vec3_t vout )
 {
 	__asm mov eax, dword ptr [esp+4]
@@ -579,7 +579,7 @@ static qboolean R_AliasSetupSkin (void)
 		skinnum = currententity->skinnum;
 		if ((skinnum >= s_pmdl->num_skins) || (skinnum < 0))
 		{
-			ri.Con_Printf (PRINT_DEVELOPER, "R_AliasSetupSkin %s: no such skin # %d\n", 
+			Com_DPrintf ( "R_AliasSetupSkin %s: no such skin # %d\n", 
 				currentmodel->name, skinnum);
 			skinnum = 0;
 		}
@@ -624,7 +624,7 @@ void R_AliasSetupLighting (void)
 
 	// save off light value for server to look at (BIG HACK!)
 	if ( currententity->flags & RF_WEAPONMODEL )
-		r_lightlevel->value = 150.0 * light[0];
+		r_lightlevel->integer = 150.0 * light[0];
 
 
 	if ( currententity->flags & RF_MINLIGHT )
@@ -692,13 +692,13 @@ void R_AliasSetupFrames( dmdl_t *pmdl )
 
 	if ( ( thisframe >= pmdl->num_frames ) || ( thisframe < 0 ) )
 	{
-		ri.Con_Printf (PRINT_ALL, "R_AliasSetupFrames %s: no such thisframe %d\n", 
+		Com_Printf ("R_AliasSetupFrames %s: no such thisframe %d\n", 
 			currentmodel->name, thisframe);
 		thisframe = 0;
 	}
 	if ( ( lastframe >= pmdl->num_frames ) || ( lastframe < 0 ) )
 	{
-		ri.Con_Printf (PRINT_ALL, "R_AliasSetupFrames %s: no such lastframe %d\n", 
+		Com_Printf ("R_AliasSetupFrames %s: no such lastframe %d\n", 
 			currentmodel->name, lastframe);
 		lastframe = 0;
 	}
@@ -770,14 +770,14 @@ void R_AliasDrawModel (void)
 
 	s_pmdl = (dmdl_t *)currentmodel->extradata;
 
-	if ( r_lerpmodels->value == 0 )
+	if ( r_lerpmodels->integer == 0 )
 		currententity->backlerp = 0;
 
 	if ( currententity->flags & RF_WEAPONMODEL )
 	{
-		if ( r_lefthand->value == 1.0F )
+		if ( r_lefthand->integer == 1 )
 			aliasxscale = -aliasxscale;
-		else if ( r_lefthand->value == 2.0F )
+		else if ( r_lefthand->integer == 2 )
 			return;
 	}
 
@@ -792,7 +792,7 @@ void R_AliasDrawModel (void)
 	// trivial accept status
 	if ( R_AliasCheckBBox() == BBOX_TRIVIAL_REJECT )
 	{
-		if ( ( currententity->flags & RF_WEAPONMODEL ) && ( r_lefthand->value == 1.0F ) )
+		if ( ( currententity->flags & RF_WEAPONMODEL ) && ( r_lefthand->integer == 1 ) )
 		{
 			aliasxscale = -aliasxscale;
 		}
@@ -802,7 +802,7 @@ void R_AliasDrawModel (void)
 	// set up the skin and verify it exists
 	if ( !R_AliasSetupSkin () )
 	{
-		ri.Con_Printf( PRINT_ALL, "R_AliasDrawModel %s: NULL skin found\n",
+		Com_Printf ( "R_AliasDrawModel %s: NULL skin found\n",
 			currentmodel->name);
 		return;
 	}
@@ -900,7 +900,7 @@ void R_AliasDrawModel (void)
 
 	R_AliasPreparePoints ();
 
-	if ( ( currententity->flags & RF_WEAPONMODEL ) && ( r_lefthand->value == 1.0F ) )
+	if ( ( currententity->flags & RF_WEAPONMODEL ) && ( r_lefthand->integer == 1 ) )
 	{
 		aliasxscale = -aliasxscale;
 	}

@@ -228,13 +228,15 @@ typedef struct model_s
 	image_t		*skins[MAX_MD2SKINS];
 	void		*extradata;
 	int			extradatasize;
+	struct model_s *hashNext;
+
 } model_t;
 
 //============================================================================
 
 void	Mod_Init (void);
 void	Mod_ClearAll (void);
-model_t *Mod_ForName (char *name, qboolean crash);
+model_t *Mod_ForName (const char *name, qboolean crash);
 void	*Mod_Extradata (model_t *mod);	// handles caching
 void	Mod_TouchModel (char *name);
 

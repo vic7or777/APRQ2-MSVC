@@ -85,7 +85,10 @@ keyname_t keynames[] =
 	{"MOUSE3", K_MOUSE3},
 	{"MOUSE4", K_MOUSE4},
 	{"MOUSE5", K_MOUSE5},
+	{"MOUSE6", K_MOUSE6},
+	{"MOUSE7", K_MOUSE7},
 
+#ifdef JOYSTICK
 	{"JOY1", K_JOY1},
 	{"JOY2", K_JOY2},
 	{"JOY3", K_JOY3},
@@ -123,6 +126,7 @@ keyname_t keynames[] =
 	{"AUX30", K_AUX30},
 	{"AUX31", K_AUX31},
 	{"AUX32", K_AUX32},
+#endif
 
 	{"KP_HOME",			K_KP_HOME },
 	{"KP_UPARROW",		K_KP_UPARROW },
@@ -183,7 +187,7 @@ int Key_StringToKeynum (char *str)
 
 	for (kn=keynames ; kn->name ; kn++)
 	{
-		if (!Q_strcasecmp(str,kn->name))
+		if (!Q_stricmp(str,kn->name))
 			return kn->keynum;
 	}
 	return -1;
@@ -483,7 +487,7 @@ void Key_Event (int key, qboolean down, unsigned time)
 				&& key != K_DEL
 				&& key != K_LEFTARROW && key != K_RIGHTARROW
 				&& key != K_UPARROW && key != K_DOWNARROW
-				&& (key < 32 || key > 126 || key == '`'))
+				&& (key < 32 || key > 126))
 				return;	// ignore most autorepeats
 		}
 	//	if (key >= 200 && !keybindings[key])
@@ -502,12 +506,12 @@ void Key_Event (int key, qboolean down, unsigned time)
 	{
 		if (!down)
 			return;
+
 		Con_ToggleConsole_f ();
 		return;
 	}
 
 	// any key during the attract mode will bring up the menu
-	//Changed, usable console during demoplay, -Maniac
 	/*
 	if (cl.attractloop && cls.key_dest != key_menu &&
 		!(key >= K_F1 && key <= K_F12))
@@ -531,7 +535,7 @@ void Key_Event (int key, qboolean down, unsigned time)
 			Key_Message (key);
 			break;
 		case key_menu:
-			M_Keydown (key);
+			M_Keydown (key, true);
 			break;
 		case key_game:
 		case key_console:
@@ -566,6 +570,9 @@ void Key_Event (int key, qboolean down, unsigned time)
 //
 	if (!down)
 	{
+		if(key == K_MOUSE1 && cls.key_dest == key_menu)
+			M_Keydown (key, down);
+
 		kb = keybindings[key];
 		if (kb && kb[0] == '+')
 		{
@@ -581,7 +588,8 @@ void Key_Event (int key, qboolean down, unsigned time)
 				Cbuf_AddText (cmd);
 			}
 		}
-		return;
+
+		return; // other systems only care about key down events
 	}
 
 //
@@ -608,9 +616,6 @@ void Key_Event (int key, qboolean down, unsigned time)
 		return;
 	}
 
-	if (!down)
-		return;		// other systems only care about key down events
-
 	if (shift_down)
 		key = keyshift[key];
 
@@ -620,7 +625,7 @@ void Key_Event (int key, qboolean down, unsigned time)
 		Key_Message (key);
 		break;
 	case key_menu:
-		M_Keydown (key);
+		M_Keydown (key, true);
 		break;
 
 	case key_game:
@@ -667,4 +672,3 @@ int Key_GetKey (void)
 
 	return key_waiting;
 }
-

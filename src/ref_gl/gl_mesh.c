@@ -35,7 +35,7 @@ float	r_avertexnormals[NUMVERTEXNORMALS][3] = {
 #include "anorms.h"
 };
 
-typedef float vec4_t[4];
+//typedef float vec4_t[4];
 
 static	vec4_t	s_lerped[MAX_VERTS];
 
@@ -89,9 +89,16 @@ void GL_DrawOutLine (dmdl_t *paliashdr, int posenum, float width)
 {
 	dtrivertx_t	*verts;
 	int		*order;
+	vec3_t	dist;
+	float	scale;
 	int		count;
-	float	strength, len;
 	daliasframe_t	*frame;
+
+	VectorSubtract( r_newrefdef.vieworg, currententity->origin, dist );
+	scale = 1.0f - VectorLength( dist ) / 700.0f;
+	if( scale < 0.1f ) {
+		return;
+	}
 
 	frame = (daliasframe_t *)((byte *)paliashdr + paliashdr->ofs_frames 
 		+ currententity->frame * paliashdr->framesize);
@@ -99,31 +106,14 @@ void GL_DrawOutLine (dmdl_t *paliashdr, int posenum, float width)
 
 	order = (int *)((byte *)paliashdr + paliashdr->ofs_glcmds);
 
-	if (currententity->flags & RF_TRANSLUCENT)
-		return;
-
-	//this makes long distance make line smaller, but never gone...
-	{	
-		vec3_t length;
-		VectorSubtract(r_newrefdef.vieworg, currententity->origin, length);
-		len = VectorNormalize(length);
-
-		strength = (OUTLINEDROPOFF-len)/OUTLINEDROPOFF;
-		if (strength>1)	strength=1;
-		if (strength<0) strength=0;
-	}
-
-	if( !strength )
-		return;
-
 	qglPolygonMode (GL_FRONT_AND_BACK, GL_LINE);
 	qglCullFace (GL_BACK);
 	qglEnable(GL_BLEND);
-	qglColor4f (0,0,0,strength);
-	qglLineWidth(width*strength);
+	qglColor4f (0,0,0,scale);
+	qglLineWidth(width*scale);
 
 	//Now Draw...
-	while (count = *order++)
+	while ( (count = *order++) )
 	{
 		// get the vertex count and primitive type
 		if (count < 0)
@@ -134,19 +124,18 @@ void GL_DrawOutLine (dmdl_t *paliashdr, int posenum, float width)
 		else
 			qglBegin (GL_TRIANGLE_STRIP);
 
+		do
 		{
-			do
-			{
-				qglVertex3fv (s_lerped[order[2]]);
-				order += 3;
-			} while (--count);
-		}
+			qglVertex3fv (s_lerped[order[2]]);
+			order += 3;
+		} while (--count);
+
 		qglEnd ();
 	}
 
+	qglLineWidth(1.0F);
+	qglColor4f (1,1,1,1);
 	qglDisable(GL_BLEND);
-	qglColor4f (0,0,0,1);
-	qglLineWidth(1);
 	qglCullFace(GL_FRONT);
 	qglPolygonMode (GL_FRONT_AND_BACK, GL_FILL);
 }
@@ -223,7 +212,7 @@ void GL_DrawAliasFrameLerp (dmdl_t *paliashdr, float backlerp)
 
 	GL_LerpVerts( paliashdr->num_xyz, v, ov, verts, lerp, move, frontv, backv );
 
-	if ( gl_vertex_arrays->value )
+	if ( gl_vertex_arrays->integer )
 	{
 		float colorArray[MAX_VERTS*4];
 
@@ -255,7 +244,7 @@ void GL_DrawAliasFrameLerp (dmdl_t *paliashdr, float backlerp)
 		if ( qglLockArraysEXT != 0 )
 			qglLockArraysEXT( 0, paliashdr->num_xyz );
 
-		while (count = *order++)
+		while ( (count = *order++) )
 		{
 			// get the vertex count and primitive type
 			if (count < 0)
@@ -303,7 +292,7 @@ void GL_DrawAliasFrameLerp (dmdl_t *paliashdr, float backlerp)
 	}
 	else
 	{
-		while (count = *order++)
+		while ( (count = *order++) )
 		{
 			// get the vertex count and primitive type
 			if (count < 0)
@@ -350,8 +339,10 @@ void GL_DrawAliasFrameLerp (dmdl_t *paliashdr, float backlerp)
 	}
 
 	// NiceAss: Quake2Max Cel Shading
-	if (gl_celshading->value && alpha == 1.0 )
-		GL_DrawOutLine (paliashdr, currententity->frame, gl_celshading_width->value);//, mirrormodel);
+	if (gl_celshading->integer) {
+		if( !( currententity->flags & RF_TRANSLUCENT ) && !( r_newrefdef.rdflags & RDF_NOWORLDMODEL ) )
+			GL_DrawOutLine (paliashdr, currententity->frame, gl_celshading_width->value);
+	}
 
 //	if ( currententity->flags & ( RF_SHELL_RED | RF_SHELL_GREEN | RF_SHELL_BLUE ) )
 	// PMM - added double damage shell
@@ -383,14 +374,14 @@ void GL_DrawAliasShadow (dmdl_t *paliashdr, int posenum)
 	order = (int *)((byte *)paliashdr + paliashdr->ofs_glcmds);
 	height = -lheight + 1.0;
 	//Added stencil shadows -Maniac
-	if (have_stencil && gl_shadows->value == 2) {
+	if (have_stencil && gl_shadows->integer == 2) {
 		height = -lheight + 0.1f;
 		qglEnable( GL_STENCIL_TEST );
 		qglStencilFunc( GL_EQUAL, 1, 2 );
 		qglStencilOp( GL_KEEP, GL_KEEP, GL_INCR );
 	}
 
-	while (count = *order++)
+	while ( (count = *order++) )
 	{
 		// get the vertex count and primitive type
 		if (count < 0)
@@ -419,7 +410,7 @@ void GL_DrawAliasShadow (dmdl_t *paliashdr, int posenum)
 		qglEnd ();
 	}
 
-	if (have_stencil && gl_shadows->value == 2)
+	if (have_stencil && gl_shadows->integer == 2)
 		qglDisable(GL_STENCIL_TEST);
 }
 
@@ -441,13 +432,13 @@ static qboolean R_CullAliasModel( vec3_t bbox[8] )
 
 	if ( ( currententity->frame >= paliashdr->num_frames ) || ( currententity->frame < 0 ) )
 	{
-		ri.Con_Printf (PRINT_ALL, "R_CullAliasModel %s: no such frame %d\n", 
+		Com_DPrintf ( "R_CullAliasModel %s: no such frame %d\n", 
 			currentmodel->name, currententity->frame);
 		currententity->frame = 0;
 	}
 	if ( ( currententity->oldframe >= paliashdr->num_frames ) || ( currententity->oldframe < 0 ) )
 	{
-		ri.Con_Printf (PRINT_ALL, "R_CullAliasModel %s: no such oldframe %d\n", 
+		Com_DPrintf ( "R_CullAliasModel %s: no such oldframe %d\n", 
 			currentmodel->name, currententity->oldframe);
 		currententity->oldframe = 0;
 	}
@@ -582,7 +573,7 @@ void R_DrawAliasModel (void)
 
 	if ( currententity->flags & RF_WEAPONMODEL )
 	{
-		if ( r_lefthand->value == 2 )
+		if ( r_lefthand->integer == 2 )
 			return;
 	}
 
@@ -631,16 +622,16 @@ void R_DrawAliasModel (void)
 			if (shadelight[0] > shadelight[1])
 			{
 				if (shadelight[0] > shadelight[2])
-					r_lightlevel->value = 150*shadelight[0];
+					r_lightlevel->integer = 150*shadelight[0];
 				else
-					r_lightlevel->value = 150*shadelight[2];
+					r_lightlevel->integer = 150*shadelight[2];
 			}
 			else
 			{
 				if (shadelight[1] > shadelight[2])
-					r_lightlevel->value = 150*shadelight[1];
+					r_lightlevel->integer = 150*shadelight[1];
 				else
-					r_lightlevel->value = 150*shadelight[2];
+					r_lightlevel->integer = 150*shadelight[2];
 			}
 
 		}
@@ -715,7 +706,7 @@ void R_DrawAliasModel (void)
 	if (currententity->flags & RF_DEPTHHACK) // hack the depth range to prevent view model from poking into walls
 		qglDepthRange (gldepthmin, gldepthmin + 0.3*(gldepthmax-gldepthmin));
 
-	if ( ( currententity->flags & RF_WEAPONMODEL ) && ( r_lefthand->value == 1.0F ) )
+	if ( ( currententity->flags & RF_WEAPONMODEL ) && ( r_lefthand->integer == 1 ) )
 	{
 		extern void MYgluPerspective( GLdouble fovy, GLdouble aspect, GLdouble zNear, GLdouble zFar );
 
@@ -754,7 +745,7 @@ void R_DrawAliasModel (void)
 	// draw it
 	GL_Bind(skin->texnum);
 
-	qglShadeModel (GL_SMOOTH);
+	//qglShadeModel (GL_SMOOTH);
 
 	GL_TexEnv( GL_MODULATE );
 	if ( currententity->flags & RF_TRANSLUCENT )
@@ -765,7 +756,7 @@ void R_DrawAliasModel (void)
 
 	if ( (currententity->frame >= paliashdr->num_frames) || (currententity->frame < 0) )
 	{
-		ri.Con_Printf (PRINT_ALL, "R_DrawAliasModel %s: no such frame %d\n",
+		Com_DPrintf ( "R_DrawAliasModel %s: no such frame %d\n",
 			currentmodel->name, currententity->frame);
 		currententity->frame = 0;
 		currententity->oldframe = 0;
@@ -773,18 +764,18 @@ void R_DrawAliasModel (void)
 
 	if ( (currententity->oldframe >= paliashdr->num_frames)	|| (currententity->oldframe < 0))
 	{
-		ri.Con_Printf (PRINT_ALL, "R_DrawAliasModel %s: no such oldframe %d\n",
+		Com_DPrintf ( "R_DrawAliasModel %s: no such oldframe %d\n",
 			currentmodel->name, currententity->oldframe);
 		currententity->frame = 0;
 		currententity->oldframe = 0;
 	}
 
-	if ( !r_lerpmodels->value )
+	if ( !r_lerpmodels->integer )
 		currententity->backlerp = 0;
 	GL_DrawAliasFrameLerp (paliashdr, currententity->backlerp);
 
 	GL_TexEnv( GL_REPLACE );
-	qglShadeModel (GL_FLAT);
+	//qglShadeModel (GL_FLAT);
 
 	qglPopMatrix ();
 
@@ -803,7 +794,7 @@ void R_DrawAliasModel (void)
 	qglEnable( GL_CULL_FACE );
 #endif
 
-	if ( ( currententity->flags & RF_WEAPONMODEL ) && ( r_lefthand->value == 1.0F ) )
+	if ( ( currententity->flags & RF_WEAPONMODEL ) && ( r_lefthand->integer == 1 ) )
 	{
 		qglMatrixMode( GL_PROJECTION );
 		qglPopMatrix();
@@ -819,7 +810,7 @@ void R_DrawAliasModel (void)
 	if (currententity->flags & RF_DEPTHHACK)
 		qglDepthRange (gldepthmin, gldepthmax);
 
-	if (gl_shadows->value && !(currententity->flags & (RF_TRANSLUCENT | RF_WEAPONMODEL)))
+	if (gl_shadows->integer && !(currententity->flags & (RF_TRANSLUCENT | RF_WEAPONMODEL)))
 	{
 		float an = currententity->angles[1]/180*M_PI;
 		shadevector[0] = cos(-an);
@@ -829,7 +820,7 @@ void R_DrawAliasModel (void)
 		VectorNormalize (shadevector);
 		qglPushMatrix ();
 
-		if (gl_shadows->value == 2) {
+		if (gl_shadows->integer == 2) {
 			// Dont rotate shadows on ungodly axis
 			qglTranslatef (currententity->origin[0],  currententity->origin[1],  currententity->origin[2]);
 			qglRotatef (currententity->angles[1],  0, 0, 1);

@@ -124,7 +124,7 @@ void R_DrawTriangleOutlines (void)
 	int			i, j;
 	glpoly_t	*p;
 
-	if (!gl_showtris->value)
+	if (!gl_showtris->integer)
 		return;
 
 	qglDisable (GL_TEXTURE_2D);
@@ -188,7 +188,7 @@ void R_BlendLightmaps (void)
 	msurface_t	*surf, *newdrawsurf = 0;
 
 	// don't bother if we're set to fullbright
-	if (r_fullbright->value)
+	if (r_fullbright->integer)
 		return;
 	if (!r_worldmodel->lightdata)
 		return;
@@ -197,11 +197,11 @@ void R_BlendLightmaps (void)
 	qglDepthMask( 0 );
 
 	// set the appropriate blending mode unless we're only looking at the lightmaps.
-	if (!gl_lightmap->value)
+	if (!gl_lightmap->integer)
 	{
 		qglEnable(GL_BLEND);
 
-		if ( gl_saturatelighting->value )
+		if ( gl_saturatelighting->integer )
 		{
 			qglBlendFunc( GL_ONE, GL_ONE );
 		}
@@ -251,7 +251,7 @@ void R_BlendLightmaps (void)
 	}
 
 	// render dynamic lightmaps
-	if ( gl_dynamic->value )
+	if ( gl_dynamic->integer )
 	{
 		LM_InitBlock();
 
@@ -301,7 +301,7 @@ void R_BlendLightmaps (void)
 				// try uploading the block now
 				if ( !LM_AllocBlock( smax, tmax, &surf->dlight_s, &surf->dlight_t ) )
 				{
-					ri.Sys_Error( ERR_FATAL, "Consecutive calls to LM_AllocBlock(%d,%d) failed (dynamic)\n", smax, tmax );
+					Com_Error( ERR_FATAL, "Consecutive calls to LM_AllocBlock(%d,%d) failed (dynamic)\n", smax, tmax );
 				}
 
 				base = gl_lms.lightmap_buffer;
@@ -389,7 +389,7 @@ void R_RenderBrushPoly (msurface_t *fa)
 	if ( ( fa->dlightframe == r_framecount ) )
 	{
 dynamic:
-		if ( gl_dynamic->value )
+		if ( gl_dynamic->integer )
 		{
 			if (!( fa->texinfo->flags & (SURF_SKY|SURF_TRANS33|SURF_TRANS66|SURF_WARP ) ) )
 			{
@@ -579,7 +579,7 @@ static void GL_RenderLightmappedPoly( msurface_t *surf )
 	if ( ( surf->dlightframe == r_framecount ) )
 	{
 dynamic:
-		if ( gl_dynamic->value )
+		if ( gl_dynamic->integer )
 		{
 			if ( !(surf->texinfo->flags & (SURF_SKY|SURF_TRANS33|SURF_TRANS66|SURF_WARP ) ) )
 			{
@@ -609,7 +609,7 @@ dynamic:
 			lmtex = 0;
 		}
 
-		GL_MBind( GL_TEXTURE1, gl_state.lightmap_textures + lmtex );
+		GL_MBind(QGL_TEXTURE1, gl_state.lightmap_textures + lmtex);
 
 		qglTexSubImage2D( GL_TEXTURE_2D, 0,
 						  surf->light_s, surf->light_t, 
@@ -621,8 +621,8 @@ dynamic:
 
 	c_brush_polys++;
 
-	GL_MBind( GL_TEXTURE0, image->texnum );
-	GL_MBind( GL_TEXTURE1, gl_state.lightmap_textures + lmtex );
+	GL_MBind(QGL_TEXTURE0, image->texnum);
+	GL_MBind(QGL_TEXTURE1, gl_state.lightmap_textures + lmtex);
 
 	scroll = 0;
 
@@ -638,13 +638,13 @@ dynamic:
 	qglBegin (GL_POLYGON);
 	for (i=0 ; i< nv; i++, v+= VERTEXSIZE)
 	{
-		qglMTexCoord2fSGIS( GL_TEXTURE0, v[3] + scroll, v[4]);
-		qglMTexCoord2fSGIS( GL_TEXTURE1, v[5], v[6]);
+		qglMTexCoord2fSGIS(QGL_TEXTURE0, v[3] + scroll, v[4]);
+		qglMTexCoord2fSGIS(QGL_TEXTURE1, v[5], v[6]);
 		qglVertex3fv (v);
 	}
 	qglEnd ();
 
-	if ((surf->flags & SURF_UNDERWATER) && !image->has_alpha && gl_watercaustics->value)
+	if ((surf->flags & SURF_UNDERWATER) && !image->has_alpha && gl_watercaustics->integer)
 		EmitCausticPolys(surf);
 }
 
@@ -662,7 +662,7 @@ void R_DrawInlineBModel (void)
 	dlight_t	*lt;
 
 	// calculate dynamic lighting for bmodel
-	if ( !gl_flashblend->value )
+	if ( !gl_flashblend->integer )
 	{
 		lt = r_newrefdef.dlights;
 		if (currententity->angles[0] || currententity->angles[1] || currententity->angles[2])
@@ -812,11 +812,11 @@ void R_DrawBrushModel (void)
 	currententity->angles[2] = -currententity->angles[2];	// stupid quake bug
 
 	GL_EnableMultitexture( true );
-//	GL_SelectTexture( GL_TEXTURE0);
-//	GL_TexEnv( GL_REPLACE );
+	//GL_SelectTexture( QGL_TEXTURE0);
+	//GL_TexEnv( GL_REPLACE );
+	GL_SelectTexture(QGL_TEXTURE1);
 
-	GL_SelectTexture( GL_TEXTURE1);
-	if ( gl_lightmap->value )
+	if ( gl_lightmap->integer )
 		GL_TexEnv( GL_REPLACE );
 	else
 		GL_TexEnv( GL_MODULATE );
@@ -855,7 +855,7 @@ void R_RecursiveWorldNode (mnode_t *node, int clipflags)
 	if (node->visframe != r_visframecount)
 		return;
 
-	if (!r_nocull->value)	
+	if (!r_nocull->integer)	
 	{
 		int i, clipped;
 		cplane_t *clipplane;
@@ -972,7 +972,7 @@ void R_DrawWorld (void)
 {
 	entity_t	ent;
 
-	if (!r_drawworld->value)
+	if (!r_drawworld->integer)
 		return;
 
 	if ( r_newrefdef.rdflags & RDF_NOWORLDMODEL )
@@ -991,17 +991,18 @@ void R_DrawWorld (void)
 
 	qglColor3f (1,1,1);
 	memset (gl_lms.lightmap_surfaces, 0, sizeof(gl_lms.lightmap_surfaces));
+
 	R_ClearSkyBox ();
 
 	if ( qglMTexCoord2fSGIS )
 	{
 		GL_EnableMultitexture( true );
 
-//		GL_SelectTexture( GL_TEXTURE0);
-//		GL_TexEnv( GL_REPLACE );
-		GL_SelectTexture( GL_TEXTURE1 );
+		//GL_SelectTexture( QGL_TEXTURE0);
+		//GL_TexEnv( GL_REPLACE );
+		GL_SelectTexture(QGL_TEXTURE1);
 
-		if ( gl_lightmap->value )
+		if ( gl_lightmap->integer )
 			GL_TexEnv( GL_REPLACE );
 		else 
 			GL_TexEnv( GL_MODULATE );
@@ -1041,18 +1042,18 @@ void R_MarkLeaves (void)
 	mleaf_t	*leaf;
 	int		cluster;
 
-	if (r_oldviewcluster == r_viewcluster && r_oldviewcluster2 == r_viewcluster2 && !r_novis->value && r_viewcluster != -1)
+	if (r_oldviewcluster == r_viewcluster && r_oldviewcluster2 == r_viewcluster2 && !r_novis->integer && r_viewcluster != -1)
 		return;
 
 	// development aid to let you run around and see exactly where the pvs ends
-	if (gl_lockpvs->value)
+	if (gl_lockpvs->integer)
 		return;
 
 	r_visframecount++;
 	r_oldviewcluster = r_viewcluster;
 	r_oldviewcluster2 = r_viewcluster2;
 
-	if (r_novis->value || r_viewcluster == -1 || !r_worldmodel->vis)
+	if (r_novis->integer || r_viewcluster == -1 || !r_worldmodel->vis)
 	{
 		// mark everything
 		for (i=0 ; i<r_worldmodel->numleafs ; i++)
@@ -1156,7 +1157,7 @@ static void LM_UploadBlock( qboolean dynamic )
 					   GL_UNSIGNED_BYTE, 
 					   gl_lms.lightmap_buffer );
 		if ( ++gl_lms.current_lightmap_texture == MAX_LIGHTMAPS )
-			ri.Sys_Error( ERR_DROP, "LM_UploadBlock() - MAX_LIGHTMAPS exceeded\n" );
+			Com_Error( ERR_DROP, "LM_UploadBlock() - MAX_LIGHTMAPS exceeded\n" );
 	}
 }
 
@@ -1290,7 +1291,7 @@ void GL_CreateSurfaceLightmap (msurface_t *surf)
 		LM_InitBlock();
 		if ( !LM_AllocBlock( smax, tmax, &surf->light_s, &surf->light_t ) )
 		{
-			ri.Sys_Error( ERR_FATAL, "Consecutive calls to LM_AllocBlock(%d,%d) failed\n", smax, tmax );
+			Com_Error( ERR_FATAL, "Consecutive calls to LM_AllocBlock(%d,%d) failed\n", smax, tmax );
 		}
 	}
 
@@ -1321,7 +1322,8 @@ void GL_BeginBuildingLightmaps (model_t *m)
 	r_framecount = 1;		// no dlightcache
 
 	GL_EnableMultitexture( true );
-	GL_SelectTexture( GL_TEXTURE1 );
+
+	GL_SelectTexture(QGL_TEXTURE1);
 
 	/*
 	** setup the base lightstyles so the lightmaps won't have to be regenerated

@@ -75,14 +75,14 @@ void R_RenderDlights (void)
 	int		i;
 	dlight_t	*l;
 
-	if (!gl_flashblend->value)
+	if (!gl_flashblend->integer)
 		return;
 
 	r_dlightframecount = r_framecount + 1;	// because the count hasn't advanced yet for this frame
 
 	qglDepthMask (0);
 	qglDisable (GL_TEXTURE_2D);
-	qglShadeModel (GL_SMOOTH);
+	//qglShadeModel (GL_SMOOTH);
 	qglEnable(GL_BLEND);
 	qglBlendFunc (GL_ONE, GL_ONE);
 
@@ -170,7 +170,7 @@ void R_PushDlights (void)
 	int		i;
 	dlight_t	*l;
 
-	if (gl_flashblend->value)
+	if (gl_flashblend->integer)
 		return;
 
 	r_dlightframecount = r_framecount + 1;	// because the count hasn't advanced yet for this frame
@@ -560,16 +560,16 @@ void R_AddDynamicLights (msurface_t *surf)
 
 				if (fdist < fminlight)
 				{
-					if(gl_dynamic->value == 2) {
+					/*if(gl_dynamic->value == 2) {
 						pfBL[0] += ( fminlight - fdist ) * dl->color[0];
 						pfBL[1] += ( fminlight - fdist ) * dl->color[1];
 						pfBL[2] += ( fminlight - fdist ) * dl->color[2];
 					}
-					else {
+					else {*/
 						pfBL[0] += ( frad - fdist ) * dl->color[0];
 						pfBL[1] += ( frad - fdist ) * dl->color[1];
 						pfBL[2] += ( frad - fdist ) * dl->color[2];
-					}
+					//}
 
 				}
 
@@ -608,29 +608,29 @@ void R_BuildLightMap (msurface_t *surf, byte *dest, int stride)
 	float		scale[4];
 	int			nummaps;
 	float		*bl;
-	lightstyle_t	*style;
+	//lightstyle_t	*style;
 	int monolightmap;
 
 	if ( surf->texinfo->flags & (SURF_SKY|SURF_TRANS33|SURF_TRANS66|SURF_WARP) )
-		ri.Sys_Error (ERR_DROP, "R_BuildLightMap called for non-lit surface");
+		Com_Error (ERR_DROP, "R_BuildLightMap called for non-lit surface");
 
 	smax = (surf->extents[0]>>4)+1;
 	tmax = (surf->extents[1]>>4)+1;
 	size = smax*tmax;
 	if (size > (sizeof(s_blocklights)>>4) )
-		ri.Sys_Error (ERR_DROP, "Bad s_blocklights size");
+		Com_Error (ERR_DROP, "Bad s_blocklights size");
 
 	// set to full bright if no light data
 	if (!surf->samples)
 	{
-		int maps;
+		//int maps;
 
 		for (i=0; i<size*3; i++)
 			s_blocklights[i] = 255;
-		for (maps = 0; maps < MAXLIGHTMAPS && surf->styles[maps] != 255; maps++)
+		/*for (maps = 0; maps < MAXLIGHTMAPS && surf->styles[maps] != 255; maps++)
 		{
 			style = &r_newrefdef.lightstyles[surf->styles[maps]];
-		}
+		}*/
 		goto store;
 	}
 
@@ -643,35 +643,30 @@ void R_BuildLightMap (msurface_t *surf, byte *dest, int stride)
 	// add all the lightmaps
 	if ( nummaps == 1 )
 	{
-		int maps;
+		bl = s_blocklights;
 
-		for (maps = 0; maps < MAXLIGHTMAPS && surf->styles[maps] != 255; maps++)
+		for (i=0 ; i<3 ; i++)
+			scale[i] = gl_modulate->value*r_newrefdef.lightstyles[surf->styles[0]].rgb[i];
+
+		if ( scale[0] != 1.0F || scale[1] != 1.0F || scale[2] != 1.0F )
 		{
-			bl = s_blocklights;
-
-			for (i=0; i<3 ; i++)
-				scale[i] = gl_modulate->value*r_newrefdef.lightstyles[surf->styles[maps]].rgb[i];
-
-			if ( scale[0] == 1.0F && scale[1] == 1.0F && scale[2] == 1.0F )
+			for (i=0 ; i<size ; i++, bl+=3)
 			{
-				for (i=0; i<size; i++, bl+=3)
-				{
-					bl[0] = lightmap[i*3+0];
-					bl[1] = lightmap[i*3+1];
-					bl[2] = lightmap[i*3+2];
-				}
-			}
-			else
-			{
-				for (i=0; i<size; i++, bl+=3)
-				{
 					bl[0] = lightmap[i*3+0] * scale[0];
 					bl[1] = lightmap[i*3+1] * scale[1];
 					bl[2] = lightmap[i*3+2] * scale[2];
 				}
 			}
-			lightmap += size*3;		// skip to next lightmap
+		else
+		{
+			for (i=0 ; i<size ; i++, bl+=3 )
+			{
+				bl[0] = lightmap[i*3+0];
+				bl[1] = lightmap[i*3+1];
+				bl[2] = lightmap[i*3+2];
+			}
 		}
+		lightmap += size*3;		// skip to next lightmap
 	}
 	else
 	{
@@ -686,22 +681,22 @@ void R_BuildLightMap (msurface_t *surf, byte *dest, int stride)
 			for (i=0 ; i<3 ; i++)
 				scale[i] = gl_modulate->value*r_newrefdef.lightstyles[surf->styles[maps]].rgb[i];
 
-			if ( scale[0] == 1.0F && scale[1] == 1.0F && scale[2] == 1.0F )
-			{
-				for (i=0 ; i<size ; i++, bl+=3 )
-				{
-					bl[0] += lightmap[i*3+0];
-					bl[1] += lightmap[i*3+1];
-					bl[2] += lightmap[i*3+2];
-				}
-			}
-			else
+			if ( scale[0] != 1.0F || scale[1] != 1.0F || scale[2] != 1.0F )
 			{
 				for (i=0 ; i<size ; i++, bl+=3)
 				{
 					bl[0] += lightmap[i*3+0] * scale[0];
 					bl[1] += lightmap[i*3+1] * scale[1];
 					bl[2] += lightmap[i*3+2] * scale[2];
+				}
+			}
+			else
+			{
+				for (i=0 ; i<size ; i++, bl+=3 )
+				{
+					bl[0] += lightmap[i*3+0];
+					bl[1] += lightmap[i*3+1];
+					bl[2] += lightmap[i*3+2];
 				}
 			}
 			lightmap += size*3;		// skip to next lightmap
@@ -767,10 +762,21 @@ store:
 					a = a*t;
 				}
 
-				dest[0] = r;
-				dest[1] = g;
-				dest[2] = b;
+				if( gl_coloredlightmaps->value < 1 && gl_coloredlightmaps->value >= 0 )
+				{
+					max = r + g + b;
+					max /= 3;
+
+					dest[0] = max + (r - max) * gl_coloredlightmaps->value;
+					dest[1] = max + (g - max) * gl_coloredlightmaps->value;
+					dest[2] = max + (b - max) * gl_coloredlightmaps->value;
+				} else {
+					dest[0] = r;
+					dest[1] = g;
+					dest[2] = b;
+				}
 				dest[3] = a;
+
 
 				bl += 3;
 				dest += 4;

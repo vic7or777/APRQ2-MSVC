@@ -921,7 +921,7 @@ void R_ClipAndDrawPoly ( float alpha, int isturbulent, qboolean textured )
 		}
 		else
 		{
-			if ( sw_stipplealpha->value )
+			if ( sw_stipplealpha->integer )
 			{
 				if ( isturbulent )
 				{
@@ -968,7 +968,7 @@ void R_ClipAndDrawPoly ( float alpha, int isturbulent, qboolean textured )
 		if (nump < 3)
 			return;
 		if (nump > MAXWORKINGVERTS)
-			ri.Sys_Error(ERR_DROP, "R_ClipAndDrawPoly: too many points: %d", nump );
+			Com_Error(ERR_DROP, "R_ClipAndDrawPoly: too many points: %d", nump );
 	}
 
 // transform vertices into viewspace and project
