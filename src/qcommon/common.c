@@ -382,9 +382,7 @@ void MSG_WriteDeltaUsercmd (sizebuf_t *buf, usercmd_t *from, usercmd_t *cmd)
 {
 	int		bits;
 
-//
-// send the movement message
-//
+	// send the movement message
 	bits = 0;
 	if (cmd->angles[0] != from->angles[0])
 		bits |= CM_ANGLE1;
@@ -563,9 +561,7 @@ void MSG_WriteDeltaEntity (entity_state_t *from, entity_state_t *to, sizebuf_t *
 	if (newentity || (to->renderfx & RF_BEAM))
 		bits |= U_OLDORIGIN;
 
-	//
 	// write the message
-	//
 	if (!bits && !force)
 		return;		// nothing to send!
 
@@ -671,9 +667,7 @@ void MSG_WriteDeltaEntity (entity_state_t *from, entity_state_t *to, sizebuf_t *
 
 //============================================================
 
-//
 // reading functions
-//
 
 void MSG_BeginReading (sizebuf_t *msg)
 {
@@ -806,19 +800,19 @@ char *MSG_ReadStringLine (sizebuf_t *msg_read)
 
 float MSG_ReadCoord (sizebuf_t *msg_read)
 {
-	return MSG_ReadShort(msg_read) * (1.0/8);
+	return MSG_ReadShort(msg_read) * 0.125;
 }
 
 void MSG_ReadPos (sizebuf_t *msg_read, vec3_t pos)
 {
-	pos[0] = MSG_ReadShort(msg_read) * (1.0/8);
-	pos[1] = MSG_ReadShort(msg_read) * (1.0/8);
-	pos[2] = MSG_ReadShort(msg_read) * (1.0/8);
+	pos[0] = MSG_ReadShort(msg_read) * 0.125;
+	pos[1] = MSG_ReadShort(msg_read) * 0.125;
+	pos[2] = MSG_ReadShort(msg_read) * 0.125;
 }
 
 float MSG_ReadAngle (sizebuf_t *msg_read)
 {
-	return MSG_ReadChar(msg_read) * (360.0/256);
+	return MSG_ReadChar(msg_read) * 1.40625;
 }
 
 float MSG_ReadAngle16 (sizebuf_t *msg_read)
@@ -1222,7 +1216,7 @@ byte	COM_BlockSequenceCheckByte (byte *base, int length, int sequence, int chall
 	float temp;
 	byte c;
 
-	temp = bytedirs[(sequence/3) % NUMVERTEXNORMALS][sequence % 3];
+	temp = bytedirs[(sequence*0.33333333) % NUMVERTEXNORMALS][sequence % 3];
 	temp = LittleFloat(temp);
 	p = ((byte *)&temp);
 
@@ -1235,7 +1229,7 @@ byte	COM_BlockSequenceCheckByte (byte *base, int length, int sequence, int chall
 	buf[length+2] = ((sequence>>8) & 0xff) ^ p[2];
 	buf[length+3] = p[3];
 
-	temp = bytedirs[((sequence+challenge)/3) % NUMVERTEXNORMALS][(sequence+challenge) % 3];
+	temp = bytedirs[((sequence+challenge)*0.33333333) % NUMVERTEXNORMALS][(sequence+challenge) % 3];
 	temp = LittleFloat(temp);
 	p = ((byte *)&temp);
 
@@ -1434,9 +1428,7 @@ void Qcommon_Init (int argc, char **argv)
 	Cbuf_AddEarlyCommands (true);
 	Cbuf_Execute ();
 
-	//
 	// init commands and vars
-	//
     Cmd_AddCommand ("z_stats", Z_Stats_f);
     Cmd_AddCommand ("error", Com_Error_f);
 

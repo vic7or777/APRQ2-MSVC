@@ -2203,7 +2203,7 @@ JOIN SERVER MENU
 
 =============================================================================
 */
-#define MAX_LOCAL_SERVERS 8
+#define MAX_LOCAL_SERVERS 9
 
 static menuframework_s	s_joinserver_menu;
 static menuseparator_s	s_joinserver_server_title;
@@ -2230,7 +2230,7 @@ void M_AddToServerList (netadr_t adr, char *info)
 		info++;
 
 	// ignore if duplicated
-	for (i=0 ; i<m_num_servers ; i++)
+	for (i = 0; i < m_num_servers; i++)
 		if (!strcmp(info, local_server_names[i]))
 			return;
 
@@ -2335,7 +2335,7 @@ void JoinServer_MenuInit( void )
 	Menu_AddItem( &s_joinserver_menu, &s_joinserver_server_title );
 	Menu_AddItem( &s_joinserver_menu, &s_joinserver_search_action );
 
-	for ( i = 0; i < 8; i++ )
+	for ( i = 0; i < MAX_LOCAL_SERVERS; i++ )
 		Menu_AddItem( &s_joinserver_menu, &s_joinserver_server_actions[i] );
 
 	Menu_Center( &s_joinserver_menu );
@@ -2593,9 +2593,7 @@ void StartServer_MenuInit( void )
 		FS_FreeFile( buffer );
 	}
 
-	/*
-	** initialize the menu stuff
-	*/
+	// initialize the menu stuff
 	s_startserver_menu.x = viddef.width * 0.50;
 	s_startserver_menu.nitems = 0;
 
@@ -3570,6 +3568,8 @@ static qboolean PlayerConfig_ScanDirectories( void )
 	}
 	if ( dirnames )
 		FreeFileList( dirnames, ndirs );
+
+	return true;
 }
 
 static int pmicmpfnc( const void *_a, const void *_b )

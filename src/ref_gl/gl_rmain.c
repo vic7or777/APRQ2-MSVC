@@ -52,9 +52,7 @@ float		v_blend[4];			// final blending color
 
 void GL_Strings_f( void );
 
-//
 // view origin
-//
 vec3_t	vup;
 vec3_t	vpn;
 vec3_t	vright;
@@ -63,9 +61,7 @@ vec3_t	r_origin;
 float	r_world_matrix[16];
 float	r_base_world_matrix[16];
 
-//
 // screen size info
-//
 refdef_t	r_newrefdef;
 
 int		r_viewcluster, r_viewcluster2, r_oldviewcluster, r_oldviewcluster2;
@@ -137,13 +133,12 @@ cvar_t	*vid_ref;
 
 //Added cvar's -Maniac
 cvar_t *skydistance; // DMP - skybox size change
-cvar_t *contransparent;
-cvar_t *contransparentvalue;
+cvar_t *gl_contrans;
 cvar_t *gl_screenshot_quality;
-cvar_t *gl_ignorecantfindpic;
+cvar_t *ignorecantfindpic;
 
 cvar_t 	*gl_loadtga;
-cvar_t 	*gl_tgahud;
+cvar_t 	*gl_hudformat;
 
 //End
 
@@ -161,7 +156,7 @@ qboolean R_CullBox (vec3_t mins, vec3_t maxs)
 	if (r_nocull->value)
 		return false;
 
-	for (i=0 ; i<4 ; i++)
+	for (i = 0; i < 4; i++)
 		if ( BOX_ON_PLANE_SIDE(mins, maxs, &frustum[i]) == 2)
 			return true;
 	return false;
@@ -307,14 +302,14 @@ void R_DrawNullModel (void)
 
 	qglBegin (GL_TRIANGLE_FAN);
 	qglVertex3f (0, 0, -16);
-	for (i=0 ; i<=4 ; i++)
-		qglVertex3f (16*cos(i*M_PI/2), 16*sin(i*M_PI/2), 0);
+	for (i = 0; i <= 4; i++)
+		qglVertex3f (16*cos(i*M_PI*0.5), 16*sin(i*M_PI*0.5), 0);
 	qglEnd ();
 
 	qglBegin (GL_TRIANGLE_FAN);
 	qglVertex3f (0, 0, 16);
-	for (i=4 ; i>=0 ; i--)
-		qglVertex3f (16*cos(i*M_PI/2), 16*sin(i*M_PI/2), 0);
+	for (i = 4; i >= 0; i--)
+		qglVertex3f (16*cos(i*M_PI*0.5), 16*sin(i*M_PI*0.5), 0);
 	qglEnd ();
 
 	qglColor3f (1,1,1);
@@ -371,8 +366,7 @@ void R_DrawEntitiesOnList (void)
 		}
 	}
 
-	// draw transparent entities
-	// we could sort these if it ever becomes a problem...
+	// draw transparent entities, we could sort these if it ever becomes a problem...
 	qglDepthMask (0);		// no z writes
 	for (i=0 ; i<r_newrefdef.num_entities ; i++)
 	{
@@ -415,8 +409,9 @@ void R_DrawEntitiesOnList (void)
 }
 
 /*
-** GL_DrawParticles
-**
+=====================
+GL_DrawParticles
+=====================
 */
 void GL_DrawParticles( int num_particles, const particle_t particles[], const unsigned colortable[768] )
 {
@@ -523,9 +518,7 @@ R_PolyBlend
 */
 void R_PolyBlend (void)
 {
-	if (!gl_polyblend->value)
-		return;
-	if (!v_blend[3])
+	if (!gl_polyblend->value || !v_blend[3])
 		return;
 
 	qglDisable (GL_ALPHA_TEST);
@@ -565,10 +558,10 @@ int SignbitsForPlane (cplane_t *out)
 	// for fast box on planeside test
 
 	bits = 0;
-	for (j=0 ; j<3 ; j++)
+	for (j=0; j < 3; j++)
 	{
 		if (out->normal[j] < 0)
-			bits |= 1<<j;
+			bits |= 1 << j;
 	}
 	return bits;
 }
@@ -578,35 +571,17 @@ void R_SetFrustum (void)
 {
 	int		i;
 
-#if 0
-	/*
-	** this code is wrong, since it presume a 90 degree FOV both in the
-	** horizontal and vertical plane
-	*/
-	// front side is visible
-	VectorAdd (vpn, vright, frustum[0].normal);
-	VectorSubtract (vpn, vright, frustum[1].normal);
-	VectorAdd (vpn, vup, frustum[2].normal);
-	VectorSubtract (vpn, vup, frustum[3].normal);
 
-	// we theoretically don't need to normalize these vectors, but I do it
-	// anyway so that debugging is a little easier
-	VectorNormalize( frustum[0].normal );
-	VectorNormalize( frustum[1].normal );
-	VectorNormalize( frustum[2].normal );
-	VectorNormalize( frustum[3].normal );
-#else
 	// rotate VPN right by FOV_X/2 degrees
-	RotatePointAroundVector( frustum[0].normal, vup, vpn, -(90-r_newrefdef.fov_x / 2 ) );
+	RotatePointAroundVector( frustum[0].normal, vup, vpn, -(90-r_newrefdef.fov_x * 0.5 ) );
 	// rotate VPN left by FOV_X/2 degrees
-	RotatePointAroundVector( frustum[1].normal, vup, vpn, 90-r_newrefdef.fov_x / 2 );
+	RotatePointAroundVector( frustum[1].normal, vup, vpn, 90-r_newrefdef.fov_x * 0.5 );
 	// rotate VPN up by FOV_X/2 degrees
-	RotatePointAroundVector( frustum[2].normal, vright, vpn, 90-r_newrefdef.fov_y / 2 );
+	RotatePointAroundVector( frustum[2].normal, vright, vpn, 90-r_newrefdef.fov_y * 0.5 );
 	// rotate VPN down by FOV_X/2 degrees
-	RotatePointAroundVector( frustum[3].normal, vright, vpn, -( 90 - r_newrefdef.fov_y / 2 ) );
-#endif
+	RotatePointAroundVector( frustum[3].normal, vright, vpn, -( 90 - r_newrefdef.fov_y * 0.5 ) );
 
-	for (i=0 ; i<4 ; i++)
+	for (i = 0; i < 4; i++)
 	{
 		frustum[i].type = PLANE_ANYZ;
 		frustum[i].dist = DotProduct (r_origin, frustum[i].normal);
@@ -623,17 +598,17 @@ R_SetupFrame
 */
 void R_SetupFrame (void)
 {
-	int i;
+	//int i;
 	mleaf_t	*leaf;
 
 	r_framecount++;
 
-// build the transformation matrix for the given view angles
+	// build the transformation matrix for the given view angles
 	VectorCopy (r_newrefdef.vieworg, r_origin);
 
 	AngleVectors (r_newrefdef.viewangles, vpn, vright, vup);
 
-// current viewcluster
+	// current viewcluster
 	if ( !( r_newrefdef.rdflags & RDF_NOWORLDMODEL ) )
 	{
 		r_oldviewcluster = r_viewcluster;
@@ -643,31 +618,33 @@ void R_SetupFrame (void)
 
 		// check above and below so crossing solid water doesn't draw wrong
 		if (!leaf->contents)
-		{	// look down a bit
+		{
+			// look down a bit
 			vec3_t	temp;
 
 			VectorCopy (r_origin, temp);
 			temp[2] -= 16;
 			leaf = Mod_PointInLeaf (temp, r_worldmodel);
-			if ( !(leaf->contents & CONTENTS_SOLID) &&
-				(leaf->cluster != r_viewcluster2) )
+			if ( !(leaf->contents & CONTENTS_SOLID) && (leaf->cluster != r_viewcluster2) )
 				r_viewcluster2 = leaf->cluster;
 		}
 		else
-		{	// look up a bit
+		{
+			// look up a bit
 			vec3_t	temp;
 
 			VectorCopy (r_origin, temp);
 			temp[2] += 16;
 			leaf = Mod_PointInLeaf (temp, r_worldmodel);
-			if ( !(leaf->contents & CONTENTS_SOLID) &&
-				(leaf->cluster != r_viewcluster2) )
+			if ( !(leaf->contents & CONTENTS_SOLID) && (leaf->cluster != r_viewcluster2) )
 				r_viewcluster2 = leaf->cluster;
 		}
 	}
 
-	for (i=0 ; i<4 ; i++)
-		v_blend[i] = r_newrefdef.blend[i];
+	v_blend[0] = r_newrefdef.blend[0];
+	v_blend[1] = r_newrefdef.blend[1];
+	v_blend[2] = r_newrefdef.blend[2];
+	v_blend[3] = r_newrefdef.blend[3];
 
 	c_brush_polys = 0;
 	c_alias_polys = 0;
@@ -685,12 +662,11 @@ void R_SetupFrame (void)
 }
 
 
-void MYgluPerspective( GLdouble fovy, GLdouble aspect,
-		     GLdouble zNear, GLdouble zFar )
+void MYgluPerspective( GLdouble fovy, GLdouble aspect, GLdouble zNear, GLdouble zFar )
 {
    GLdouble xmin, xmax, ymin, ymax;
 
-   ymax = zNear * tan( fovy * M_PI / 360.0 );
+   ymax = zNear * tan( fovy * M_PI * 0.0027777777777777777777777777777778f );
    ymin = -ymax;
 
    xmin = ymin * aspect;
@@ -711,7 +687,6 @@ R_SetupGL
 void R_SetupGL (void)
 {
 	float	screenaspect;
-//	float	yfov;
 	int		x, x2, y2, y, w, h;
 
 	//Added skydistance -Maniac
@@ -739,29 +714,24 @@ if (skydistance->modified)
 	boxsize = skydistance->value;
 	boxsize -= 252 * ceil(boxsize / 2300);
 	farz = 1.0;
-	while (farz < boxsize)  // DMP: make this value a power-of-2
+	while (farz < boxsize)  // make this value a power-of-2
 	{
 		farz *= 2.0;
-		if (farz >= 65536.0)  // DMP: don't make it larger than this
+		if (farz >= 65536.0)  // don't make it larger than this
 			break;
   	}
-	farz *= 2.0;	// DMP: double since boxsize is distance from camera to
-			// edge of skybox - not total size of skybox
+	farz *= 2.0;	// double since boxsize is distance from camera to edge of skybox
 	ri.Con_Printf(PRINT_DEVELOPER, "farz now set to %g\n", farz);
 }
 	//End
 
-	//
 	// set up projection matrix
-	//
     screenaspect = (float)r_newrefdef.width/r_newrefdef.height;
-//	yfov = 2*atan((float)r_newrefdef.height/r_newrefdef.width)*180/M_PI;
 	qglMatrixMode(GL_PROJECTION);
     qglLoadIdentity ();
 
 	//Changed skydistance -Maniac
-//  MYgluPerspective (r_newrefdef.fov_y,  screenaspect,  4,  4096);
-	MYgluPerspective (r_newrefdef.fov_y,  screenaspect, 4, farz); // DMP skybox
+	MYgluPerspective (r_newrefdef.fov_y,  screenaspect, 4, farz);
 	//End
 
 	qglCullFace(GL_FRONT);
@@ -781,9 +751,7 @@ if (skydistance->modified)
 
 	qglGetFloatv (GL_MODELVIEW_MATRIX, r_world_matrix);
 
-	//
 	// set drawing parms
-	//
 	if (gl_cull->value)
 		qglEnable(GL_CULL_FACE);
 	else
@@ -915,10 +883,10 @@ void	R_SetGL2D (void)
 
 	//Added transparent console -Maniac
 	
-	if(contransparent->value)
+	if(gl_contrans->value < 1)
 	{
 		qglEnable (GL_BLEND);
-		qglColor4f (1,1,1,contransparentvalue->value);
+		qglColor4f (1,1,1,gl_contrans->value);
 	}
 	else
 	{
@@ -1008,10 +976,9 @@ void R_SetLightLevel (void)
 }
 
 /*
-@@@@@@@@@@@@@@@@@@@@@
+=====================
 R_RenderFrame
-
-@@@@@@@@@@@@@@@@@@@@@
+=====================
 */
 void R_RenderFrame (refdef_t *fd)
 {
@@ -1092,12 +1059,11 @@ void R_Register( void )
 
 	//Added cvar's -Maniac
 	skydistance = ri.Cvar_Get("skydistance", "2300", 0 ); // DMP - skybox size change
-	contransparent = ri.Cvar_Get ("contransparent", "0", CVAR_ARCHIVE );
-	contransparentvalue = ri.Cvar_Get ("contransparentvalue", "0.3", CVAR_ARCHIVE );
-	gl_ignorecantfindpic = ri.Cvar_Get ("gl_ignorecantfindpic", "0", 0);
+	gl_contrans = ri.Cvar_Get ("gl_contrans", "1", CVAR_ARCHIVE );
+	ignorecantfindpic = ri.Cvar_Get ("ignorecantfindpic", "0", 0);
 
 	gl_loadtga = ri.Cvar_Get( "gl_loadtga", "0", 0);
-	gl_tgahud = ri.Cvar_Get( "gl_tgahud", "0", 0);
+	gl_hudformat = ri.Cvar_Get( "gl_hudformat", "0", 0);
 
     gl_screenshot_quality = ri.Cvar_Get( "gl_screenshot_quality", "85", 0 );
     ri.Cmd_AddCommand( "screenshotjpg", GL_ScreenShot_JPG );
@@ -1218,9 +1184,8 @@ int R_Init( void *hinstance, void *hWnd )
 
 	ri.Vid_MenuInit();
 
-	/*
-	** get our various GL strings
-	*/
+
+	// get our various GL strings
 	gl_config.vendor_string = qglGetString (GL_VENDOR);
 	ri.Con_Printf (PRINT_ALL, "GL_VENDOR: %s\n", gl_config.vendor_string );
 	gl_config.renderer_string = qglGetString (GL_RENDERER);
@@ -1315,9 +1280,7 @@ int R_Init( void *hinstance, void *hWnd )
 	else
 		ri.Con_Printf( PRINT_ALL, "...disabling CDS\n" );
 
-	/*
-	** grab extensions
-	*/
+	// grab extensions
 	if ( strstr( gl_config.extensions_string, "GL_EXT_compiled_vertex_array" ) || 
 		 strstr( gl_config.extensions_string, "GL_SGI_compiled_vertex_array" ) )
 	{
@@ -1483,34 +1446,29 @@ void R_Shutdown (void)
 
 	GL_ShutdownImages ();
 
-	/*
-	** shut down OS specific OpenGL stuff like contexts, etc.
-	*/
+	// shut down OS specific OpenGL stuff like contexts, etc.
 	GLimp_Shutdown();
 
-	/*
-	** shutdown our QGL subsystem
-	*/
+	// shutdown our QGL subsystem
 	QGL_Shutdown();
 }
 
 
 
 /*
-@@@@@@@@@@@@@@@@@@@@@
+===============
 R_BeginFrame
-@@@@@@@@@@@@@@@@@@@@@
+===============
 */
 void R_BeginFrame( float camera_separation )
 {
 
 	gl_state.camera_separation = camera_separation;
 
-	/*
-	** change modes if necessary
-	*/
+	// change modes if necessary
 	if ( gl_mode->modified || vid_fullscreen->modified )
-	{	// FIXME: only restart if CDS is required
+	{
+		// FIXME: only restart if CDS is required
 		cvar_t	*ref;
 
 		ref = ri.Cvar_Get ("vid_ref", "gl", 0);
@@ -1528,10 +1486,7 @@ void R_BeginFrame( float camera_separation )
 		GLimp_LogNewFrame();
 	}
 
-	/*
-	** update 3Dfx gamma -- it is expected that a user will do a vid_restart
-	** after tweaking this value
-	*/
+	// update 3Dfx gamma -- it is expected that a user will do a vid_restart after tweaking this value
 	if ( vid_gamma->modified )
 	{
 		vid_gamma->modified = false;
@@ -1551,9 +1506,7 @@ void R_BeginFrame( float camera_separation )
 
 	GLimp_BeginFrame( camera_separation );
 
-	/*
-	** go into 2D mode
-	*/
+	// go into 2D mode
 	qglViewport (0,0, vid.width, vid.height);
 	qglMatrixMode(GL_PROJECTION);
     qglLoadIdentity ();
@@ -1566,9 +1519,7 @@ void R_BeginFrame( float camera_separation )
 	qglEnable (GL_ALPHA_TEST);
 	qglColor4f (1,1,1,1);
 
-	/*
-	** draw buffer stuff
-	*/
+	// draw buffer stuff
 	if ( gl_drawbuffer->modified )
 	{
 		gl_drawbuffer->modified = false;
@@ -1582,9 +1533,7 @@ void R_BeginFrame( float camera_separation )
 		}
 	}
 
-	/*
-	** texturemode stuff
-	*/
+	// texturemode stuff
 	if ( gl_texturemode->modified )
 	{
 		GL_TextureMode( gl_texturemode->string );
@@ -1603,14 +1552,10 @@ void R_BeginFrame( float camera_separation )
 		gl_texturesolidmode->modified = false;
 	}
 
-	/*
-	** swapinterval stuff
-	*/
+	// swapinterval stuff
 	GL_UpdateSwapInterval();
 
-	//
 	// clear screen if desired
-	//
 	R_Clear ();
 }
 
@@ -1685,7 +1630,7 @@ void R_DrawBeam( entity_t *e )
 		return;
 
 	PerpendicularVector( perpvec, normalized_direction );
-	VectorScale( perpvec, e->frame / 2, perpvec );
+	VectorScale( perpvec, e->frame * 0.5, perpvec );
 
 	for ( i = 0; i < 6; i++ )
 	{
@@ -1702,9 +1647,9 @@ void R_DrawBeam( entity_t *e )
 	g = ( d_8to24table[e->skinnum & 0xFF] >> 8 ) & 0xFF;
 	b = ( d_8to24table[e->skinnum & 0xFF] >> 16 ) & 0xFF;
 
-	r *= 1/255.0F;
-	g *= 1/255.0F;
-	b *= 1/255.0F;
+	r /= 255.0F;
+	g /= 255.0F;
+	b /= 255.0F;
 
 	qglColor4f( r, g, b, e->alpha );
 

@@ -1077,6 +1077,10 @@ void S_Update(vec3_t origin, vec3_t forward, vec3_t right, vec3_t up)
 
 // mix some sound
 	S_Update_();
+
+	// NeVo - run the winamp per-frame code -Maniac
+	S_WinAmp_Frame(); 
+
 }
 
 void GetSoundtime(void)

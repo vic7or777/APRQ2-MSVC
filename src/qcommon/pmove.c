@@ -24,9 +24,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #define	STEPSIZE	18
 
-// all of the locals will be zeroed before each
-// pmove, just to make damn sure we don't have
-// any differences when running on client or server
+// all of the locals will be zeroed before each pmove, just to make
+// damn sure we don't have any differences when running on client or server
 
 typedef struct
 {
@@ -50,6 +49,7 @@ pml_t		pml;
 
 
 // movement parameters
+// walking up a step should kill some velocity
 float	pm_stopspeed = 100;
 float	pm_maxspeed = 300;
 float	pm_duckspeed = 100;
@@ -59,12 +59,6 @@ float	pm_wateraccelerate = 10;
 float	pm_friction = 6;
 float	pm_waterfriction = 1;
 float	pm_waterspeed = 400;
-
-/*
-
-  walking up a step should kill some velocity
-
-*/
 
 
 /*
@@ -85,7 +79,7 @@ void PM_ClipVelocity (vec3_t in, vec3_t normal, vec3_t out, float overbounce)
 	
 	backoff = DotProduct (in, normal) * overbounce;
 
-	for (i=0 ; i<3 ; i++)
+	for (i = 0; i < 3; i++)
 	{
 		change = normal[i]*backoff;
 		out[i] = in[i] - change;
@@ -130,9 +124,9 @@ void PM_StepSlideMove_ (void)
 	
 	time_left = pml.frametime;
 
-	for (bumpcount=0 ; bumpcount<numbumps ; bumpcount++)
+	for (bumpcount = 0; bumpcount < numbumps; bumpcount++)
 	{
-		for (i=0 ; i<3 ; i++)
+		for (i = 0; i < 3; i++)
 			end[i] = pml.origin[i] + time_left * pml.velocity[i];
 
 		trace = pm->trace (pml.origin, pm->mins, pm->maxs, end);
@@ -174,9 +168,7 @@ void PM_StepSlideMove_ (void)
 #if 0
 	float		rub;
 
-		//
 		// modify velocity so it parallels all of the clip planes
-		//
 		if (numplanes == 1)
 		{	// go along this plane
 			VectorCopy (pml.velocity, dir);
@@ -216,7 +208,7 @@ void PM_StepSlideMove_ (void)
 //
 // modify original_velocity so it parallels all of the clip planes
 //
-		for (i=0 ; i<numplanes ; i++)
+		for (i = 0; i < numplanes; i++)
 		{
 			PM_ClipVelocity (pml.velocity, planes[i], pml.velocity, 1.01);
 			for (j=0 ; j<numplanes ; j++)
@@ -245,7 +237,6 @@ void PM_StepSlideMove_ (void)
 			VectorScale (dir, d, pml.velocity);
 		}
 #endif
-		//
 		// if velocity is against the original velocity, stop dead
 		// to avoid tiny occilations in sloping corners
 		//
@@ -317,10 +308,8 @@ void PM_StepSlideMove (void)
 	VectorCopy(pml.origin, up);
 
 	// decide which one went farther
-    down_dist = (down_o[0] - start_o[0])*(down_o[0] - start_o[0])
-        + (down_o[1] - start_o[1])*(down_o[1] - start_o[1]);
-    up_dist = (up[0] - start_o[0])*(up[0] - start_o[0])
-        + (up[1] - start_o[1])*(up[1] - start_o[1]);
+    down_dist = (down_o[0] - start_o[0])*(down_o[0] - start_o[0]) + (down_o[1] - start_o[1])*(down_o[1] - start_o[1]);
+    up_dist = (up[0] - start_o[0])*(up[0] - start_o[0]) + (up[1] - start_o[1])*(up[1] - start_o[1]);
 #endif
 
 	if (down_dist > up_dist || trace.plane.normal[2] < MIN_STEP_NORMAL)
@@ -344,24 +333,20 @@ Handles both ground friction and water friction
 */
 void PM_Friction (void)
 {
-	float	*vel;
-	float	speed, newspeed, control;
-	float	friction;
-	float	drop;
+	float	speed, newspeed, control, friction, drop, *vel;
 	
 	vel = pml.velocity;
 	
 	speed = sqrt(vel[0]*vel[0] +vel[1]*vel[1] + vel[2]*vel[2]);
 	if (speed < 1)
 	{
-		vel[0] = 0;
-		vel[1] = 0;
+		vel[0] = vel[1] = 0;
 		return;
 	}
 
 	drop = 0;
 
-// apply ground friction
+	// apply ground friction
 	if ((pm->groundentity && pml.groundsurface && !(pml.groundsurface->flags & SURF_SLICK) ) || (pml.ladder) )
 	{
 		friction = pm_friction;
@@ -369,11 +354,11 @@ void PM_Friction (void)
 		drop += control*friction*pml.frametime;
 	}
 
-// apply water friction
+	// apply water friction
 	if (pm->waterlevel && !pml.ladder)
 		drop += speed*pm_waterfriction*pm->waterlevel*pml.frametime;
 
-// scale the velocity
+	// scale the velocity
 	newspeed = speed - drop;
 	if (newspeed < 0)
 	{
@@ -381,9 +366,9 @@ void PM_Friction (void)
 	}
 	newspeed /= speed;
 
-	vel[0] = vel[0] * newspeed;
-	vel[1] = vel[1] * newspeed;
-	vel[2] = vel[2] * newspeed;
+	vel[0] *= newspeed;
+	vel[1] *= newspeed;
+	vel[2] *= newspeed;
 }
 
 
@@ -403,11 +388,12 @@ void PM_Accelerate (vec3_t wishdir, float wishspeed, float accel)
 	addspeed = wishspeed - currentspeed;
 	if (addspeed <= 0)
 		return;
+
 	accelspeed = accel*pml.frametime*wishspeed;
 	if (accelspeed > addspeed)
 		accelspeed = addspeed;
 	
-	for (i=0 ; i<3 ; i++)
+	for (i = 0; i < 3; i++)
 		pml.velocity[i] += accelspeed*wishdir[i];	
 }
 
@@ -470,9 +456,7 @@ void PM_AddCurrents (vec3_t	wishvel)
 	}
 
 
-	//
 	// add water currents
-	//
 
 	if (pm->watertype & MASK_CURRENT)
 	{
@@ -498,9 +482,7 @@ void PM_AddCurrents (vec3_t	wishvel)
 		VectorMA (wishvel, s, v, wishvel);
 	}
 
-	//
 	// add conveyor belt velocities
-	//
 
 	if (pm->groundentity)
 	{
@@ -537,11 +519,9 @@ void PM_WaterMove (void)
 	float	wishspeed;
 	vec3_t	wishdir;
 
-//
-// user intentions
-//
-	for (i=0 ; i<3 ; i++)
-		wishvel[i] = pml.forward[i]*pm->cmd.forwardmove + pml.right[i]*pm->cmd.sidemove;
+	// user intentions
+	for (i = 0; i < 3; i++)
+		wishvel[i] = pml.forward[i] * pm->cmd.forwardmove + pml.right[i] * pm->cmd.sidemove;
 
 	if (!pm->cmd.forwardmove && !pm->cmd.sidemove && !pm->cmd.upmove)
 		wishvel[2] -= 60;		// drift towards bottom
@@ -575,11 +555,8 @@ PM_AirMove
 void PM_AirMove (void)
 {
 	int			i;
-	vec3_t		wishvel;
-	float		fmove, smove;
-	vec3_t		wishdir;
-	float		wishspeed;
-	float		maxspeed;
+	float		fmove, smove, wishspeed, maxspeed;
+	vec3_t		wishvel, wishdir;
 
 	fmove = pm->cmd.forwardmove;
 	smove = pm->cmd.sidemove;
@@ -592,7 +569,7 @@ void PM_AirMove (void)
 	VectorNormalize (pml.right);
 #endif
 
-	for (i=0 ; i<2 ; i++)
+	for (i = 0; i < 2; i++)
 		wishvel[i] = pml.forward[i]*fmove + pml.right[i]*smove;
 	wishvel[2] = 0;
 
@@ -601,9 +578,7 @@ void PM_AirMove (void)
 	VectorCopy (wishvel, wishdir);
 	wishspeed = VectorNormalize(wishdir);
 
-//
-// clamp to server defined max speed
-//
+	// clamp to server defined max speed
 	maxspeed = (pm->s.pm_flags & PMF_DUCKED) ? pm_duckspeed : pm_maxspeed;
 
 	if (wishspeed > maxspeed)
@@ -676,10 +651,9 @@ void PM_CatagorizePosition (void)
 	int			sample1;
 	int			sample2;
 
-// if the player hull point one unit down is solid, the player
-// is on ground
+	// if the player hull point one unit down is solid, the player is on ground
 
-// see if standing on something solid	
+	// see if standing on something solid	
 	point[0] = pml.origin[0];
 	point[1] = pml.origin[1];
 	point[2] = pml.origin[2] - 0.25;
@@ -739,9 +713,7 @@ void PM_CatagorizePosition (void)
 		}
 	}
 
-//
-// get waterlevel, accounting for ducking
-//
+	// get waterlevel, accounting for ducking
 	pm->waterlevel = 0;
 	pm->watertype = 0;
 
@@ -924,8 +896,11 @@ void PM_FlyMove (qboolean doclip)
 	VectorNormalize (pml.forward);
 	VectorNormalize (pml.right);
 
-	for (i=0 ; i<3 ; i++)
-		wishvel[i] = pml.forward[i]*fmove + pml.right[i]*smove;
+	wishvel[0] = pml.forward[0]*fmove + pml.right[0]*smove;
+	wishvel[1] = pml.forward[1]*fmove + pml.right[1]*smove;
+	wishvel[2] = pml.forward[2]*fmove + pml.right[2]*smove;
+	//for (i = 0; i < 3; i++)
+	//	wishvel[i] = pml.forward[i]*fmove + pml.right[i]*smove;
 	wishvel[2] += pm->cmd.upmove;
 
 	VectorCopy (wishvel, wishdir);
@@ -949,11 +924,14 @@ void PM_FlyMove (qboolean doclip)
 	if (accelspeed > addspeed)
 		accelspeed = addspeed;
 	
-	for (i=0 ; i<3 ; i++)
-		pml.velocity[i] += accelspeed*wishdir[i];	
+	pml.velocity[0] += accelspeed*wishdir[0];
+	pml.velocity[1] += accelspeed*wishdir[1];
+	pml.velocity[2] += accelspeed*wishdir[2];
+	//for (i = 0; i < 3; i++)
+	//	pml.velocity[i] += accelspeed*wishdir[i];	
 
 	if (doclip) {
-		for (i=0 ; i<3 ; i++)
+		for (i = 0; i < 3; i++)
 			end[i] = pml.origin[i] + pml.frametime * pml.velocity[i];
 
 		trace = pm->trace (pml.origin, pm->mins, pm->maxs, end);
@@ -977,11 +955,8 @@ void PM_CheckDuck (void)
 {
 	trace_t	trace;
 
-	pm->mins[0] = -16;
-	pm->mins[1] = -16;
-
-	pm->maxs[0] = 16;
-	pm->maxs[1] = 16;
+	pm->mins[0] = pm->mins[1] = -16;
+	pm->maxs[0] = pm->maxs[1] = 16;
 
 	if (pm->s.pm_type == PM_GIB)
 	{

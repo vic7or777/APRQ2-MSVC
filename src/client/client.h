@@ -65,6 +65,9 @@ typedef struct
 	int			fly_stoptime;
 } centity_t;
 
+//AVI EXPORT -Maniac
+typedef void (*GLAVI_ReadFrameData_t) (byte *buffer);
+
 #define MAX_CLIENTWEAPONMODELS		20		// PGM -- upped from 16 to fit the chainfist vwep
 
 typedef struct
@@ -246,6 +249,14 @@ typedef struct
 
 extern client_static_t	cls;
 
+//Shaws: x_info -Maniac
+typedef struct
+{
+	int			x_pversion;//Shaws: p_version anti-exploit wait-delay
+	int			x_nocheatsay;//Shaws: !nocheatsay anti-exploit wait-delay
+} x_info_t;
+
+extern x_info_t x_info;
 //=============================================================================
 
 //
@@ -296,6 +307,9 @@ extern	cvar_t	*cl_paused;
 extern	cvar_t	*cl_timedemo;
 
 extern	cvar_t	*cl_vwep;
+
+//AVI EXPORT -Maniac
+extern	cvar_t	*avi_fps;
 
 typedef struct
 {
@@ -543,24 +557,18 @@ void V_AddParticle (vec3_t org, int color, float alpha);
 void V_AddLight (vec3_t org, float intensity, float r, float g, float b);
 void V_AddLightStyle (int style, float r, float g, float b);
 
-//
 // cl_tent.c
-//
 void CL_RegisterTEntSounds (void);
 void CL_RegisterTEntModels (void);
 void CL_SmokeAndFlash(vec3_t origin);
 
 
-//
 // cl_pred.c
-//
 void CL_InitPrediction (void);
 void CL_PredictMove (void);
 void CL_CheckPredictionError (void);
 
-//
 // cl_fx.c
-//
 cdlight_t *CL_AllocDlight (int key);
 void CL_BigTeleportParticles (vec3_t org);
 void CL_RocketTrail (vec3_t start, vec3_t end, centity_t *old);
@@ -572,9 +580,7 @@ void CL_EntityEvent (entity_state_t *ent);
 // RAFAEL
 void CL_TrapParticles (entity_t *ent);
 
-//
 // menus
-//
 void M_Init (void);
 void M_Keydown (int key);
 void M_Draw (void);
@@ -582,16 +588,12 @@ void M_Menu_Main_f (void);
 void M_ForceMenuOff (void);
 void M_AddToServerList (netadr_t adr, char *info);
 
-//
 // cl_inv.c
-//
 void CL_ParseInventory (void);
 void CL_KeyInventory (int key);
 void CL_DrawInventory (void);
 
-//
 // cl_pred.c
-//
 void CL_PredictMovement (void);
 
 #if id386

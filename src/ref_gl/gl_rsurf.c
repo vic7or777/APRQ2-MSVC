@@ -192,8 +192,6 @@ void DrawGLPoly (glpoly_t *p)
 	qglEnd ();
 }
 
-//============
-//PGM
 /*
 ================
 DrawGLFlowingPoly -- version of DrawGLPoly that handles scrolling texture
@@ -208,7 +206,7 @@ void DrawGLFlowingPoly (msurface_t *fa)
 
 	p = fa->polys;
 
-	scroll = -64 * ( (r_newrefdef.time / 40.0) - (int)(r_newrefdef.time / 40.0) );
+	scroll = -64 * ( (r_newrefdef.time * 0.025) - (int)(r_newrefdef.time * 0.025) );
 	if(scroll == 0.0)
 		scroll = -64.0;
 
@@ -221,11 +219,11 @@ void DrawGLFlowingPoly (msurface_t *fa)
 	}
 	qglEnd ();
 }
-//PGM
-//============
 
 /*
-** R_DrawTriangleOutlines
+================
+R_DrawTriangleOutlines
+================
 */
 void R_DrawTriangleOutlines (void)
 {
@@ -266,7 +264,9 @@ void R_DrawTriangleOutlines (void)
 }
 
 /*
-** DrawGLPolyChain
+================
+DrawGLPolyChain
+================
 */
 void DrawGLPolyChain( glpoly_t *p, float soffset, float toffset )
 {
@@ -307,10 +307,12 @@ void DrawGLPolyChain( glpoly_t *p, float soffset, float toffset )
 }
 
 /*
-** R_BlendLightMaps
-**
-** This routine takes all the given light mapped surfaces in the world and
-** blends them into the framebuffer.
+================================
+	R_BlendLightMaps
+
+This routine takes all the given light mapped surfaces in the world and
+blends them into the framebuffer.
+================================
 */
 void R_BlendLightmaps (void)
 {
@@ -326,10 +328,7 @@ void R_BlendLightmaps (void)
 	// don't bother writing Z
 	qglDepthMask( 0 );
 
-	/*
-	** set the appropriate blending mode unless we're only looking at the
-	** lightmaps.
-	*/
+	// set the appropriate blending mode unless we're only looking at the lightmaps.
 	if (!gl_lightmap->value)
 	{
 		qglEnable (GL_BLEND);
@@ -366,9 +365,7 @@ void R_BlendLightmaps (void)
 	if ( currentmodel == r_worldmodel )
 		c_visible_lightmaps = 0;
 
-	/*
-	** render static lightmaps first
-	*/
+	// render static lightmaps first
 	for ( i = 1; i < MAX_LIGHTMAPS; i++ )
 	{
 		if ( gl_lms.lightmap_surfaces[i] )
@@ -385,9 +382,7 @@ void R_BlendLightmaps (void)
 		}
 	}
 
-	/*
-	** render dynamic lightmaps
-	*/
+	// render dynamic lightmaps
 	if ( gl_dynamic->value )
 	{
 		LM_InitBlock();
@@ -426,8 +421,8 @@ void R_BlendLightmaps (void)
 				{
 					if ( drawsurf->polys )
 						DrawGLPolyChain( drawsurf->polys, 
-							              ( drawsurf->light_s - drawsurf->dlight_s ) * ( 1.0 / 128.0 ), 
-										( drawsurf->light_t - drawsurf->dlight_t ) * ( 1.0 / 128.0 ) );
+							            ( drawsurf->light_s - drawsurf->dlight_s ) * 0.0078125, 
+										( drawsurf->light_t - drawsurf->dlight_t ) * 0.0078125 );
 				}
 
 				newdrawsurf = drawsurf;
@@ -448,22 +443,18 @@ void R_BlendLightmaps (void)
 			}
 		}
 
-		/*
-		** draw remainder of dynamic lightmaps that haven't been uploaded yet
-		*/
+		// draw remainder of dynamic lightmaps that haven't been uploaded yet
 		if ( newdrawsurf )
 			LM_UploadBlock( true );
 
 		for ( surf = newdrawsurf; surf != 0; surf = surf->lightmapchain )
 		{
 			if ( surf->polys )
-				DrawGLPolyChain( surf->polys, ( surf->light_s - surf->dlight_s ) * ( 1.0 / 128.0 ), ( surf->light_t - surf->dlight_t ) * ( 1.0 / 128.0 ) );
+				DrawGLPolyChain( surf->polys, ( surf->light_s - surf->dlight_s ) * 0.0078125 /*( 1.0 / 128.0 )*/, ( surf->light_t - surf->dlight_t ) * 0.0078125); // ( 1.0 / 128.0 ) );
 		}
 	}
 
-	/*
-	** restore state
-	*/
+	// restore state
 	qglDisable (GL_BLEND);
 	qglBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	qglDepthMask( 1 );
@@ -490,10 +481,7 @@ void R_RenderBrushPoly (msurface_t *fa)
 
 		// warp texture, no lightmaps
 		GL_TexEnv( GL_MODULATE );
-		qglColor4f( gl_state.inverse_intensity, 
-			        gl_state.inverse_intensity,
-					gl_state.inverse_intensity,
-					1.0F );
+		qglColor4f( gl_state.inverse_intensity, gl_state.inverse_intensity, gl_state.inverse_intensity,	1.0F );
 		EmitWaterPolys (fa);
 		GL_TexEnv( GL_REPLACE );
 
@@ -515,9 +503,7 @@ void R_RenderBrushPoly (msurface_t *fa)
 //PGM
 //======
 
-	/*
-	** check for lightmap modification
-	*/
+	// check for lightmap modification
 	for ( maps = 0; maps < MAXLIGHTMAPS && fa->styles[maps] != 255; maps++ )
 	{
 		if ( r_newrefdef.lightstyles[fa->styles[maps]].white != fa->cached_light[maps] )
@@ -544,8 +530,8 @@ dynamic:
 			unsigned	temp[34*34];
 			int			smax, tmax;
 
-			smax = (fa->extents[0]>>4)+1;
-			tmax = (fa->extents[1]>>4)+1;
+			smax = (fa->extents[0] >> 4)+1;
+			tmax = (fa->extents[1] >> 4)+1;
 
 			R_BuildLightMap( fa, (void *)temp, smax*4 );
 			R_SetCacheState( fa );
@@ -589,9 +575,7 @@ void R_DrawAlphaSurfaces (void)
 	msurface_t	*s;
 	float		intens;
 
-	//
 	// go back to the world matrix
-	//
     qglLoadMatrixf (r_world_matrix);
 
 	qglEnable (GL_BLEND);
@@ -782,7 +766,7 @@ dynamic:
 		{
 			float scroll;
 		
-			scroll = -64 * ( (r_newrefdef.time / 40.0) - (int)(r_newrefdef.time / 40.0) );
+			scroll = -64 * ( (r_newrefdef.time * 0.025) - (int)(r_newrefdef.time * 0.025) );
 			if(scroll == 0.0)
 				scroll = -64.0;
 
@@ -830,7 +814,7 @@ dynamic:
 		{
 			float scroll;
 		
-			scroll = -64 * ( (r_newrefdef.time / 40.0) - (int)(r_newrefdef.time / 40.0) );
+			scroll = -64 * ( (r_newrefdef.time * 0.025) - (int)(r_newrefdef.time * 0.025) );
 			if(scroll == 0.0)
 				scroll = -64.0;
 
@@ -903,9 +887,7 @@ void R_DrawInlineBModel (void)
 		GL_TexEnv( GL_MODULATE );
 	}
 
-	//
 	// draw texture
-	//
 	for (i=0 ; i<currentmodel->nummodelsurfaces ; i++, psurf++)
 	{
 	// find which side of the node we are on
@@ -918,7 +900,8 @@ void R_DrawInlineBModel (void)
 			(!(psurf->flags & SURF_PLANEBACK) && (dot > BACKFACE_EPSILON)))
 		{
 			if (psurf->texinfo->flags & (SURF_TRANS33|SURF_TRANS66) )
-			{	// add to the translucent chain
+			{
+				// add to the translucent chain
 				psurf->texturechain = r_alpha_surfaces;
 				r_alpha_surfaces = psurf;
 			}
@@ -1049,7 +1032,7 @@ void R_RecursiveWorldNode (mnode_t *node)
 	if (R_CullBox (node->minmaxs, node->minmaxs+3))
 		return;
 	
-// if a leaf node, draw stuff
+	// if a leaf node, draw stuff
 	if (node->contents != -1)
 	{
 		pleaf = (mleaf_t *)node;
@@ -1076,8 +1059,7 @@ void R_RecursiveWorldNode (mnode_t *node)
 		return;
 	}
 
-// node is just a decision point, so go down the apropriate sides
-
+// node is just a decision point, so go down the appropriate sides
 // find which side of the node we are on
 	plane = node->plane;
 
@@ -1108,7 +1090,7 @@ void R_RecursiveWorldNode (mnode_t *node)
 		sidebit = SURF_PLANEBACK;
 	}
 
-// recurse down the children, front side first
+	// recurse down the children, front side first
 	R_RecursiveWorldNode (node->children[side]);
 
 	// draw stuff
@@ -1137,8 +1119,7 @@ void R_RecursiveWorldNode (mnode_t *node)
 			}
 			else
 			{
-				// the polygon is visible, so add it to the texture
-				// sorted chain
+				// the polygon is visible, so add it to the texture sorted chain
 				// FIXME: this is a hack for animation
 				image = R_TextureAnimation (surf->texinfo);
 				surf->texturechain = image->texturechain;
@@ -1149,42 +1130,7 @@ void R_RecursiveWorldNode (mnode_t *node)
 
 	// recurse down the back side
 	R_RecursiveWorldNode (node->children[!side]);
-/*
-	for ( ; c ; c--, surf++)
-	{
-		if (surf->visframe != r_framecount)
-			continue;
 
-		if ( (surf->flags & SURF_PLANEBACK) != sidebit )
-			continue;		// wrong side
-
-		if (surf->texinfo->flags & SURF_SKY)
-		{	// just adds to visible sky bounds
-			R_AddSkySurface (surf);
-		}
-		else if (surf->texinfo->flags & (SURF_TRANS33|SURF_TRANS66))
-		{	// add to the translucent chain
-//			surf->texturechain = alpha_surfaces;
-//			alpha_surfaces = surf;
-		}
-		else
-		{
-			if ( qglMTexCoord2fSGIS && !( surf->flags & SURF_DRAWTURB ) )
-			{
-				GL_RenderLightmappedPoly( surf );
-			}
-			else
-			{
-				// the polygon is visible, so add it to the texture
-				// sorted chain
-				// FIXME: this is a hack for animation
-				image = R_TextureAnimation (surf->texinfo);
-				surf->texturechain = image->texturechain;
-				image->texturechain = surf;
-			}
-		}
-	}
-*/
 }
 
 
@@ -1240,13 +1186,9 @@ void R_DrawWorld (void)
 		R_RecursiveWorldNode (r_worldmodel->nodes);
 	}
 
-	/*
-	** theoretically nothing should happen in the next two functions
-	** if multitexture is enabled
-	*/
+	// theoretically nothing should happen in the next two functions if multitexture is enabled
 	DrawTextureChains ();
 	R_BlendLightmaps ();
-	
 	R_DrawSkyBox ();
 
 	R_DrawTriangleOutlines ();
@@ -1273,8 +1215,7 @@ void R_MarkLeaves (void)
 	if (r_oldviewcluster == r_viewcluster && r_oldviewcluster2 == r_viewcluster2 && !r_novis->value && r_viewcluster != -1)
 		return;
 
-	// development aid to let you run around and see exactly where
-	// the pvs ends
+	// development aid to let you run around and see exactly where the pvs ends
 	if (gl_lockpvs->value)
 		return;
 
@@ -1296,9 +1237,9 @@ void R_MarkLeaves (void)
 	// may have to combine two clusters because of solid water boundaries
 	if (r_viewcluster2 != r_viewcluster)
 	{
-		memcpy (fatvis, vis, (r_worldmodel->numleafs+7)/8);
+		memcpy (fatvis, vis, (r_worldmodel->numleafs+7)*0.125);
 		vis = Mod_ClusterPVS (r_viewcluster2, r_worldmodel);
-		c = (r_worldmodel->numleafs+31)/32;
+		c = (r_worldmodel->numleafs+31)*0.03125;
 		for (i=0 ; i<c ; i++)
 			((int *)fatvis)[i] |= ((int *)vis)[i];
 		vis = fatvis;
@@ -1456,15 +1397,13 @@ void GL_BuildPolygonFromSurface(msurface_t *fa)
 	glpoly_t	*poly;
 	vec3_t		total;
 
-// reconstruct the polygon
+	// reconstruct the polygon
 	pedges = currentmodel->edges;
 	lnumverts = fa->numedges;
 	vertpage = 0;
 
 	VectorClear (total);
-	//
 	// draw texture
-	//
 	poly = Hunk_Alloc (sizeof(glpoly_t) + (lnumverts-4) * VERTEXSIZE*sizeof(float));
 	poly->next = fa->polys;
 	poly->flags = fa->flags;
@@ -1496,9 +1435,7 @@ void GL_BuildPolygonFromSurface(msurface_t *fa)
 		poly->verts[i][3] = s;
 		poly->verts[i][4] = t;
 
-		//
 		// lightmap texture coordinates
-		//
 		s = DotProduct (vec, fa->texinfo->vecs[0]) + fa->texinfo->vecs[0][3];
 		s -= fa->texturemins[0];
 		s += fa->light_s*16;

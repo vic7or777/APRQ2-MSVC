@@ -125,6 +125,7 @@ void	VID_Init (void)
     ri.FS_LoadFile = FS_LoadFile;
     ri.FS_FreeFile = FS_FreeFile;
     ri.FS_Gamedir = FS_Gamedir;
+	ri.FS_Mapname = FS_Mapname; // -Maniac
 	ri.Vid_NewWindow = VID_NewWindow;
     ri.Cvar_Get = Cvar_Get;
     ri.Cvar_Set = Cvar_Set;

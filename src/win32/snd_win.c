@@ -649,6 +649,9 @@ int SNDDMA_Init(void)
 		}
 	}
 
+	// NeVo - initialize Winamp Integration -Maniac
+	S_WinAmp_Init();
+
 	snd_firsttime = false;
 
 	snd_buffer_count = 1;
@@ -831,6 +834,10 @@ Reset the sound device for exiting
 void SNDDMA_Shutdown(void)
 {
 	FreeSound ();
+
+	// NeVo - shutdown Winamp Integration -Maniac
+	S_WinAmp_Shutdown(); 
+
 }
 
 

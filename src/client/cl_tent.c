@@ -148,7 +148,7 @@ void CL_RegisterTEntSounds (void)
 	S_RegisterSound ("player/fall2.wav");
 	S_RegisterSound ("player/fall1.wav");
 
-	for (i=0 ; i<4 ; i++)
+	for (i = 0; i < 4; i++)
 	{
 		Com_sprintf (name, sizeof(name), "player/step%i.wav", i+1);
 		cl_sfx_footsteps[i] = S_RegisterSound (name);
@@ -367,7 +367,6 @@ int CL_ParseBeam2 (struct model_s *model)
 	MSG_ReadPos (&net_message, end);
 	MSG_ReadPos (&net_message, offset);
 
-//	Com_Printf ("end- %f %f %f\n", end[0], end[1], end[2]);
 
 // override any beam with the same entity
 
@@ -421,7 +420,9 @@ int CL_ParsePlayerBeam (struct model_s *model)
 	MSG_ReadPos (&net_message, end);
 	// PMM - network optimization
 	if (model == cl_mod_heatbeam)
+	{
 		VectorSet(offset, 2, 7, -3);
+	}
 	else if (model == cl_mod_monster_heatbeam)
 	{
 		model = cl_mod_heatbeam;
@@ -430,7 +431,6 @@ int CL_ParsePlayerBeam (struct model_s *model)
 	else
 		MSG_ReadPos (&net_message, offset);
 
-//	Com_Printf ("end- %f %f %f\n", end[0], end[1], end[2]);
 
 // override any beam with the same entity
 // PMM - For player beams, we only want one per player (entity) so..
@@ -1399,8 +1399,7 @@ void CL_AddPlayerBeams (void)
 				ops = &oldframe->playerstate;
 				for (j=0 ; j<3 ; j++)
 				{
-					b->start[j] = cl.refdef.vieworg[j] + ops->gunoffset[j]
-						+ cl.lerpfrac * (ps->gunoffset[j] - ops->gunoffset[j]);
+					b->start[j] = cl.refdef.vieworg[j] + ops->gunoffset[j] + cl.lerpfrac * (ps->gunoffset[j] - ops->gunoffset[j]);
 				}
 				VectorMA (b->start, (hand_multiplier * b->offset[0]), cl.v_right, org);
 				VectorMA (     org, b->offset[1], cl.v_forward, org);
@@ -1607,7 +1606,7 @@ void CL_AddExplosions (void)
 	{
 		if (ex->type == ex_free)
 			continue;
-		frac = (cl.time - ex->start)/100.0;
+		frac = (cl.time - ex->start)* 0.01;
 		f = floor(frac);
 
 		ent = &ex->ent;
@@ -1669,6 +1668,8 @@ void CL_AddExplosions (void)
 			ent->skinnum = 0;
 			ent->flags |= RF_TRANSLUCENT;
 			break;
+		default:
+			break;
 		}
 
 		if (ex->type == ex_free)
@@ -1717,7 +1718,7 @@ void CL_ProcessSustain ()
 
 	for (i=0, s=cl_sustains; i< MAX_SUSTAINS; i++, s++)
 	{
-		if (s->id)
+		if (s->id) {
 			if ((s->endtime >= cl.time) && (cl.time >= s->nextthink))
 			{
 //				Com_Printf ("think %d %d %d\n", cl.time, s->nextthink, s->thinkinterval);
@@ -1725,6 +1726,7 @@ void CL_ProcessSustain ()
 			}
 			else if (s->endtime < cl.time)
 				s->id = 0;
+		}
 	}
 }
 

@@ -24,6 +24,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 void Cmd_ForwardToServer (void);
 
 #define	MAX_ALIAS_NAME	32
+#define	ALIAS_LOOP_COUNT	16
 
 typedef struct cmdalias_s
 {
@@ -36,7 +37,6 @@ cmdalias_t	*cmd_alias;
 
 qboolean	cmd_wait;
 
-#define	ALIAS_LOOP_COUNT	16
 int		alias_count;		// for detecting runaway loops
 
 
@@ -128,7 +128,7 @@ void Cbuf_InsertText (char *text)
 		return;
 	}
 
-// copy off any commands still remaining in the exec buffer
+	// copy off any commands still remaining in the exec buffer
 	templen = cmd_text.cursize;
 	if (templen)
 	{
@@ -139,10 +139,10 @@ void Cbuf_InsertText (char *text)
 	else
 		temp = NULL;	// shut up compiler
 		
-// add the entire text of the file
+	// add the entire text of the file
 	Cbuf_AddText (text);
 	
-// add the copied off data
+	// add the copied off data
 	if (templen)
 	{
 		SZ_Write (&cmd_text, temp, templen);
@@ -158,7 +158,7 @@ Cbuf_CopyToDefer
 */
 void Cbuf_CopyToDefer (void)
 {
-	memcpy(defer_text_buf, cmd_text_buf, cmd_text.cursize);
+	memcpy (defer_text_buf, cmd_text_buf, cmd_text.cursize);
 	defer_text_buf[cmd_text.cursize] = 0;
 	cmd_text.cursize = 0;
 }
@@ -214,11 +214,11 @@ void Cbuf_Execute (void)
 
 	while (cmd_text.cursize)
 	{
-// find a \n or ; line break
+		// find a \n or ; line break
 		text = (char *)cmd_text.data;
 
 		quotes = 0;
-		for (i=0 ; i< cmd_text.cursize ; i++)
+		for (i = 0; i < cmd_text.cursize; i++)
 		{
 			if (text[i] == '"')
 				quotes++;
@@ -232,9 +232,9 @@ void Cbuf_Execute (void)
 		memcpy (line, text, i);
 		line[i] = 0;
 		
-// delete the text from the command buffer and move remaining commands down
-// this is necessary because commands (exec, alias) can insert data at the
-// beginning of the text buffer
+		// delete the text from the command buffer and move remaining commands down
+		// this is necessary because commands (exec, alias) can insert data at the
+		// beginning of the text buffer
 
 		if (i == cmd_text.cursize)
 			cmd_text.cursize = 0;
@@ -245,13 +245,12 @@ void Cbuf_Execute (void)
 			memmove (text, text+i, cmd_text.cursize);
 		}
 
-// execute the command line
+		// execute the command line
 		Cmd_ExecuteString (line);
 		
 		if (cmd_wait)
 		{
-			// skip out while text still remains in buffer, leaving it
-			// for next frame
+			// skip out while text still remains in buffer, leaving it for next frame
 			cmd_wait = false;
 			break;
 		}
@@ -277,7 +276,7 @@ void Cbuf_AddEarlyCommands (qboolean clear)
 	int		i;
 	char	*s;
 
-	for (i=0 ; i<COM_Argc() ; i++)
+	for (i = 0; i < COM_Argc(); i++)
 	{
 		s = COM_Argv(i);
 		if (strcmp (s, "+set"))
@@ -307,16 +306,14 @@ will keep the demoloop from immediately starting
 */
 qboolean Cbuf_AddLateCommands (void)
 {
-	int		i, j;
-	int		s;
-	char	*text, *build, c;
-	int		argc;
+	int		i, j, s, argc;
+	char	*text, *build, c;	
 	qboolean	ret;
 
-// build the combined string to parse from
+	// build the combined string to parse from
 	s = 0;
 	argc = COM_Argc();
-	for (i=1 ; i<argc ; i++)
+	for (i = 1; i < argc; i++)
 	{
 		s += strlen (COM_Argv(i)) + 1;
 	}
@@ -325,18 +322,18 @@ qboolean Cbuf_AddLateCommands (void)
 		
 	text = Z_Malloc (s+1);
 	text[0] = 0;
-	for (i=1 ; i<argc ; i++)
+	for (i = 1; i < argc; i++)
 	{
 		strcat (text,COM_Argv(i));
 		if (i != argc-1)
 			strcat (text, " ");
 	}
 	
-// pull out the commands
+	// pull out the commands
 	build = Z_Malloc (s+1);
 	build[0] = 0;
 	
-	for (i=0 ; i<s-1 ; i++)
+	for (i = 0; i < s-1; i++)
 	{
 		if (text[i] == '+')
 		{
@@ -424,7 +421,7 @@ void Cmd_Echo_f (void)
 {
 	int		i;
 	
-	for (i=1 ; i<Cmd_Argc() ; i++)
+	for (i = 1; i < Cmd_Argc(); i++)
 		Com_Printf ("%s ",Cmd_Argv(i));
 	Com_Printf ("\n");
 }
@@ -439,13 +436,11 @@ Creates a new command that executes a command string (possibly ; seperated)
 void Cmd_Alias_f (void)
 {
 	cmdalias_t	*a;
-	char		cmd[1024];
-	int			i, c;
-	char		*s;
+	char		cmd[1024], *s;
+	int			i, c;		
 
 	if (Cmd_Argc() == 1)
 	{
-		
 		Com_Printf ("Current alias commands:\n");
 		for (a = cmd_alias; a; a = a->next)
 		{
@@ -957,7 +952,8 @@ void	Cmd_ExecuteString (char *text)
 Cmd_List_f
 ============
 */
-void Cmd_List_f (void){
+void Cmd_List_f (void)
+{
 
         cmd_function_t  *cmd;
         int                             i = 0, count = 0, c;
@@ -988,6 +984,56 @@ void Cmd_List_f (void){
         else
                 Com_Printf("%i cmds\n", i);
 }
+
+void Cmd_Savecfg_f (void)
+{
+	FILE	*f;
+	char	path[MAX_QPATH], cmd[1024];
+	cmdalias_t	*a;
+	cvar_t	*var;
+	char	buffer[1024];
+
+    if (Cmd_Argc() != 2)
+	{
+            Com_Printf("Usage: cfg_save <filename>\n");
+            return;
+    }
+
+	Com_sprintf (path, sizeof(path),"%s/%s",FS_Gamedir(), Cmd_Argv(1));
+	f = fopen (path, "w");
+	if (!f)
+	{
+		Com_Printf ("Couldn't write %s.\n", Cmd_Argv(1));
+		return;
+	}
+
+
+	fprintf (f, "// *** BINDINGS ***\n");
+	Key_WriteBindings (f);
+
+	fprintf (f, "\n// *** SETTINGS ***\n");
+	for (var = cvar_vars; var; var = var->next)
+	{
+		if (var->flags)
+		{
+			Com_sprintf (buffer, sizeof(buffer), "set %s \"%s\"\n", var->name, var->string);
+			fprintf (f, "%s", buffer);
+		}
+	}
+	
+	fprintf (f, "\n// *** ALIASES ***\n");
+	for (a = cmd_alias; a; a = a->next)
+	{
+			sprintf(cmd, "alias %s \"%s", a->name, a->value);
+			cmd[strlen(cmd)-1] = 0;
+			sprintf(cmd, "%s\"\n", cmd);					
+			fprintf(f, cmd) ;
+	}
+	fclose (f);
+	Com_Printf ("Config saved to file %s\n", Cmd_Argv(1));
+}
+
+
 /*
 ============
 Cmd_Init
@@ -995,13 +1041,12 @@ Cmd_Init
 */
 void Cmd_Init (void)
 {
-//
-// register our commands
-//
+	// register our commands
 	Cmd_AddCommand ("cmdlist",Cmd_List_f);
 	Cmd_AddCommand ("exec",Cmd_Exec_f);
 	Cmd_AddCommand ("echo",Cmd_Echo_f);
 	Cmd_AddCommand ("alias",Cmd_Alias_f);
 	Cmd_AddCommand ("wait", Cmd_Wait_f);
+	Cmd_AddCommand ("cfg_save", Cmd_Savecfg_f);
 }
 

@@ -30,7 +30,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 //Added own versio & name -Maniac
 #define TS_APPNAME "Apr"
 
-#define TS_DISPLAYVERSION "1.12"
+#define TS_DISPLAYVERSION "1.13"
 //End
 
 #ifdef WIN32
@@ -193,8 +193,7 @@ PROTOCOL
 
 //=========================================
 
-#define	UPDATE_BACKUP	16	// copies of entity_state_t to keep buffered
-							// must be power of two
+#define	UPDATE_BACKUP	16	// copies of entity_state_t to keep buffered must be power of two
 #define	UPDATE_MASK		(UPDATE_BACKUP-1)
 
 
@@ -704,6 +703,7 @@ FILESYSTEM
 void	FS_InitFilesystem (void);
 void	FS_SetGamedir (char *dir);
 char	*FS_Gamedir (void);
+char	*FS_Mapname (void); // -Maniac
 char	*FS_NextPath (char *prevpath);
 void	FS_ExecAutoexec (void);
 

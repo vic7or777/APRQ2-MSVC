@@ -21,11 +21,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "client.h"
 
-//Added cvar laod -Maniac
+//Added cvar load -Maniac
 extern cvar_t *cl_autoscreenshot;
 extern cvar_t *cl_customlimitmsg;
 
-extern cvar_t *scr_autodemo ;
+extern cvar_t *scr_autodemo;
 
 extern cvar_t *cl_recordstopatlimits;
 extern cvar_t *cl_recordstopatmatchsetup ;
@@ -33,6 +33,7 @@ extern cvar_t *cl_custommatchsetup ;
 extern cvar_t *cl_custommatchstart ;
 extern cvar_t *cl_recordatmatchstart ;
 extern cvar_t *cl_dontrecorduntilmatchstart;
+extern cvar_t *ignorewaves;
 //End
 
 char *svc_strings[256] =
@@ -63,6 +64,17 @@ char *svc_strings[256] =
 };
 
 //=============================================================================
+
+//Added custom_to_lower -Maniac
+char custom_to_lower ( char c ) {
+		char difference = 'A' - 'a' ;
+
+		if ((c >='A') && (c <= 'Z')) {
+				c -= difference ;
+		}
+		return c;
+		
+}
 
 void CL_DownloadFileName(char *dest, int destlen, char *fn)
 {
@@ -124,7 +136,9 @@ qboolean	CL_CheckOrDownloadFile (char *filename)
 		MSG_WriteByte (&cls.netchan.message, clc_stringcmd);
 		MSG_WriteString (&cls.netchan.message,
 			va("download %s %i", cls.downloadname, len));
-	} else {
+	}
+	else
+	{
 		Com_Printf ("Downloading %s\n", cls.downloadname);
 		MSG_WriteByte (&cls.netchan.message, clc_stringcmd);
 		MSG_WriteString (&cls.netchan.message,
@@ -169,9 +183,8 @@ void	CL_Download_f (void)
 	strcpy (cls.downloadname, filename);
 	Com_Printf ("Downloading %s\n", cls.downloadname);
 
-	// download to a temp name, and only rename
-	// to the real name when done, so if interrupted
-	// a runt file wont be left
+	// download to a temp name, and only rename to the real name when done,
+	// so if interrupted a runt file wont be left
 	COM_StripExtension (cls.downloadname, cls.downloadtempname);
 	strcat (cls.downloadtempname, ".tmp");
 
@@ -373,7 +386,7 @@ CL_ParseBaseline
 void CL_ParseBaseline (void)
 {
 	entity_state_t	*es;
-	int				bits;
+	unsigned int	bits; //Changed -Maniac
 	int				newnum;
 	entity_state_t	nullstate;
 
@@ -477,7 +490,7 @@ void CL_LoadClientinfo (clientinfo_t *ci, char *s)
 		// it, so default to grunt
 		if (!ci->skin) {
 			// see if the skin exists for the male model
-			Com_sprintf (skin_filename, sizeof(skin_filename), "players/%s/grunt.pcx", model_name, skin_name);
+			Com_sprintf (skin_filename, sizeof(skin_filename), "players/%s/grunt.pcx", model_name);
 			ci->skin = re.RegisterSkin (skin_filename);
 		}
 
@@ -670,11 +683,82 @@ void SHOWNET(char *s)
 
 /*
 =====================
+x_p_version_check
+  reply to "p_version" -Maniac
+  (Shaws added: x_p_version_check(char *s) )
+=====================
+*/
+qboolean x_p_version_check (char *s)
+{
+
+	char ostr[32];
+
+	s = strchr(s, 58); // remove the name (everything before the first colon)
+
+	if (strstr(s, "!nocheatsay"))
+	{
+		if (cl.time > x_info.x_nocheatsay)
+		{
+			Com_sprintf(ostr, sizeof(ostr), "Using Apr Q2 v%s\n",TS_DISPLAYVERSION);
+			Cbuf_ExecuteText(EXEC_NOW, ostr);
+			x_info.x_nocheatsay = cl.time + 8000;
+		}
+	}
+	
+	if (strstr(s, "p_version"))
+	{
+		if (cl.time > x_info.x_pversion)
+		{
+			Com_sprintf(ostr, sizeof(ostr), "Using Apr Q2 v%s\n",TS_DISPLAYVERSION);
+			Cbuf_ExecuteText(EXEC_NOW, ostr);
+			x_info.x_pversion = cl.time + 8000;
+		}
+	}
+
+	return false;
+}
+
+/*
+Added bad_stufftext -Maniac
+=====================
+bad_stufftext
+  see if the server-stuffs should be allowed or not
+  (Shaws added: bad_stufftext )
+=====================
+*/
+qboolean bad_stufftext(char *s)
+{
+	int i = 0;
+	char *filterstuff[11] = {"kill",
+							"error",
+							"unbindall",
+							"unbind",
+							"bind",
+							"quit",
+							"sensitivity",
+							"+move",
+							"+back",
+							"+forward"};
+	
+	while ( filterstuff[i] != NULL )
+		if ( strstr(s, filterstuff[i++]) )
+			return true;
+
+	return false;
+}
+
+
+/*
+=====================
 CL_ParseServerMessage
 =====================
 */
 void CL_ParseServerMessage (void)
 {
+	int			cmd;
+	char		*s;
+	int			i,p;
+
 	//Timestamps, -Maniac
 
     extern cvar_t *cl_timestamps;
@@ -684,10 +768,6 @@ void CL_ParseServerMessage (void)
 	char *temp_print,fmtd_print[1024];
 
 	// End
-
-	int			cmd;
-	char		*s;
-	int			i,p;
 
 //
 // if recording demos, copy the message out
@@ -703,19 +783,15 @@ void CL_ParseServerMessage (void)
 
         if (cl.doscreenshot == 2) {
 
-
-                                        cl.doscreenshot = 0;
-                                        if (cl_autoscreenshot->value == 1)
-                                        {
-                                                        Cbuf_AddText("screenshot\n") ;
-
-                                        }
-                                        else if (cl_autoscreenshot->value == 2)
-                                        {
-                                                        Cbuf_AddText("screenshotjpg\n") ;
-
-                                        }
-
+                 cl.doscreenshot = 0;
+                 if (cl_autoscreenshot->value == 1)
+                 {
+                          Cbuf_AddText("screenshot\n") ;
+				 }
+                 else if (cl_autoscreenshot->value == 2)
+                 {
+                          Cbuf_AddText("screenshotjpg\n") ;
+                 }
 
         }
 
@@ -793,31 +869,32 @@ void CL_ParseServerMessage (void)
 			 *  Changed, added autoscreenshot and autorecord & hud things -Maniac
 			 */
 
-			                        temp_print = MSG_ReadString (&net_message);
+            temp_print = MSG_ReadString (&net_message);
+			strcpy(fmtd_print,temp_print);
+			for(p=0; p<strlen(fmtd_print); p++)		// lowercase + base color
+			{
+				fmtd_print[p]&=127;
+				fmtd_print[p]=custom_to_lower(fmtd_print[p]);
+			}
 
                         if ((i == PRINT_HIGH) && (cl_autoscreenshot->value > 0)) {
-		                        strcpy(fmtd_print,temp_print);
-		                        for(p=0; p<strlen(fmtd_print); p++) // lowercase + base color
-		                        {
-		                                fmtd_print[p]&=127;
-		                                fmtd_print[p]=tolower(fmtd_print[p]);
-		                        }
-                                        if (strstr(fmtd_print, "timelimit hit")) {
-                                                clearchathud ();
-                                                cl.doscreenshot = 1;
-                                        }
-                                        else if (strstr(fmtd_print, "capturelimit hit")) {
-                                                clearchathud ();
-                                                cl.doscreenshot = 1;
-                                        }
-                                        else if (strstr(fmtd_print, "fraglimit hit")) {
-                                                clearchathud ();
-                                                cl.doscreenshot = 1;
-                                        }
-                                        else if (strstr(fmtd_print, cl_customlimitmsg->string) ) {
-                                                clearchathud ();
-                                                cl.doscreenshot = 1;
-                                        }
+                                
+								if (strstr(fmtd_print, "timelimit hit")) {
+                                             clearchathud ();
+                                             cl.doscreenshot = 1;
+                                }
+                                else if (strstr(fmtd_print, "capturelimit hit")) {
+                                             clearchathud ();
+                                             cl.doscreenshot = 1;
+                                }
+                                else if (strstr(fmtd_print, "fraglimit hit")) {
+                                             clearchathud ();
+                                             cl.doscreenshot = 1;
+                                }
+                                else if (strstr(fmtd_print, cl_customlimitmsg->string) ) {
+                                             clearchathud ();
+                                             cl.doscreenshot = 1;
+                                }
                         }
 
 			if ((i == PRINT_HIGH) && (scr_autodemo->value))
@@ -876,22 +953,26 @@ void CL_ParseServerMessage (void)
 
 				// Changed, Chathud, -Maniac
 				addtochathud(temp_print);
+				// reply to P_VERSION
+				(void) x_p_version_check(fmtd_print);
 				// End
 			}
 
-			// Changed, timestamps, -Maniac
 
-                        if (cl_timestamps->value) {
+			if (((i == PRINT_HIGH) && (ignorewaves->value)) && (strstr(fmtd_print, "flipoff") || strstr(fmtd_print, "salute") || strstr(fmtd_print, "taunt") || strstr(fmtd_print, "wave") || strstr(fmtd_print, "point")))
+			{
+			}
+			// Changed, timestamps, -Maniac
+            else if (cl_timestamps->value)
+			{
                                 time( &l_time );
                                 ntime = localtime( &l_time );
                                 strftime( tmpbuf, 9, "%H:%M:%S", ntime );
                                 Com_Printf ("[%s] %s", tmpbuf, temp_print);
-                        }
-                        else
-
+            } else {
 			// End
-
 			Com_Printf ("%s", temp_print);
+			}
 			con.ormask = 0;
 			break;
 			
@@ -901,6 +982,17 @@ void CL_ParseServerMessage (void)
 			
 		case svc_stufftext:
 			s = MSG_ReadString (&net_message);
+			//Added check for bad stuff cmd -Maniac
+			strcpy(fmtd_print,s);
+			for(p=0; p<strlen(fmtd_print); p++)		// lowercase + base color
+			{
+				fmtd_print[p]&=127;
+				fmtd_print[p]=custom_to_lower(fmtd_print[p]);
+			}
+			if ( bad_stufftext(fmtd_print) ) { //Shaws: don't accept evil server stuffs
+				Com_Printf("An evil admin stuffed this to you: %s", s);
+				break;
+			}
 			Com_DPrintf ("stufftext: %s\n", s);
 			Cbuf_AddText (s);
 			break;

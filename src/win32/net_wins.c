@@ -119,8 +119,9 @@ qboolean	NET_CompareAdr (netadr_t a, netadr_t b)
 	{
 		if ((memcmp(a.ipx, b.ipx, 10) == 0) && a.port == b.port)
 			return true;
-		return false;
 	}
+	
+	return false;
 }
 
 /*
@@ -368,12 +369,18 @@ qboolean	NET_GetPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_messag
 				continue;
 			}
 
-			if (dedicated->value)	// let dedicated servers continue after errors
-				Com_Printf ("NET_GetPacket: %s from %s\n", NET_ErrorString(),
-						NET_AdrToString(*net_from));
+			// let dedicated servers continue after errors
+			//Chenged, fixed NET_getpacket error -Maniac
+			if (dedicated->value  ||  err == WSAECONNRESET)
+			{
+				Com_Printf ("NET_GetPacket: %s from %s\n", NET_ErrorString(), NET_AdrToString(*net_from));
+			}
 			else
-				Com_Error (ERR_DROP, "NET_GetPacket: %s from %s", 
-						NET_ErrorString(), NET_AdrToString(*net_from));
+			{
+				Com_Printf ("NET_GetPacket: %s from %s, dropping client\n", NET_ErrorString(), NET_AdrToString(*net_from));
+				// drop the client so we don't flood the console with above message
+				SV_DropClient (GetClientFromAdr(*net_from)); 
+			}
 			continue;
 		}
 

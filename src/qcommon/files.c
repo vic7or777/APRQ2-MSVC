@@ -40,9 +40,7 @@ QUAKE FILESYSTEM
 */
 
 
-//
 // in memory
-//
 
 typedef struct
 {
@@ -103,8 +101,7 @@ FS_filelength
 */
 int FS_filelength (FILE *f)
 {
-	int		pos;
-	int		end;
+	int		pos, end;
 
 	pos = ftell (f);
 	fseek (f, 0, SEEK_END);
@@ -129,7 +126,8 @@ void	FS_CreatePath (char *path)
 	for (ofs = path+1 ; *ofs ; ofs++)
 	{
 		if (*ofs == '/')
-		{	// create the directory
+		{
+			// create the directory
 			*ofs = 0;
 			Sys_Mkdir (path);
 			*ofs = '/';
@@ -142,7 +140,7 @@ void	FS_CreatePath (char *path)
 ==============
 FS_FCloseFile
 
-For some reason, other dll's can't just cal fclose()
+For some reason, other dll's can't just call fclose()
 on files returned by FS_FOpenFile...
 ==============
 */
@@ -214,7 +212,7 @@ int FS_FOpenFile (char *filename, FILE **file)
 	file_from_pak = 0;
 
 	// check for links first
-	for (link = fs_links ; link ; link=link->next)
+	for (link = fs_links; link; link=link->next)
 	{
 		if (!strncmp (filename, link->from, link->fromlength))
 		{
@@ -229,10 +227,8 @@ int FS_FOpenFile (char *filename, FILE **file)
 		}
 	}
 
-//
-// search through the path, one element at a time
-//
-	for (search = fs_searchpaths ; search ; search = search->next)
+	// search through the path, one element at a time
+	for (search = fs_searchpaths; search; search = search->next)
 	{
 	// is the element a pak file?
 		if (search->pack)
@@ -520,15 +516,12 @@ void FS_AddGameDirectory (char *dir)
 
 	strcpy (fs_gamedir, dir);
 
-	//
 	// add the directory to the search path
-	//
 	search = Z_Malloc (sizeof(searchpath_t));
 	strcpy (search->filename, dir);
 	search->next = fs_searchpaths;
 	fs_searchpaths = search;
 
-	//
 	// add any pak files in the format pak0.pak pak1.pak, ...
 	for (i=0; i<10; i++)
 	{
@@ -573,6 +566,18 @@ char *FS_Gamedir (void)
 		return BASEDIRNAME;
 }
 
+
+//Added FS_Mapname -Maniac
+char *FS_Mapname (void)
+{
+	extern char		map_name[MAX_QPATH];
+	char mapname[MAX_QPATH];
+	strcpy(mapname, map_name+5);
+	mapname[strlen(mapname)-4] = 0;
+
+	return mapname;
+}
+
 /*
 =============
 FS_ExecAutoexec
@@ -580,8 +585,7 @@ FS_ExecAutoexec
 */
 void FS_ExecAutoexec (void)
 {
-	char *dir;
-	char name [MAX_QPATH];
+	char name [MAX_QPATH], *dir;
 
 	dir = Cvar_VariableString("gamedir");
 	if (*dir)
@@ -605,16 +609,13 @@ void FS_SetGamedir (char *dir)
 {
 	searchpath_t	*next;
 
-	if (strstr(dir, "..") || strstr(dir, "/")
-		|| strstr(dir, "\\") || strstr(dir, ":") )
+	if (strstr(dir, "..") || strstr(dir, "/") || strstr(dir, "\\") || strstr(dir, ":") )
 	{
 		Com_Printf ("Gamedir should be a single filename, not a path\n");
 		return;
 	}
 
-	//
 	// free up any current game dir info
-	//
 	while (fs_searchpaths != fs_base_searchpaths)
 	{
 		if (fs_searchpaths->pack)
@@ -628,9 +629,7 @@ void FS_SetGamedir (char *dir)
 		fs_searchpaths = next;
 	}
 
-	//
 	// flush all data, so it will be forced to reload
-	//
 	if (dedicated && !dedicated->value)
 		Cbuf_AddText ("vid_restart\nsnd_restart\n");
 
@@ -698,7 +697,9 @@ void FS_Link_f (void)
 }
 
 /*
-** FS_ListFiles
+============
+FS_ListFiles
+============
 */
 char **FS_ListFiles( char *findname, int *numfiles, unsigned musthave, unsigned canthave )
 {
@@ -879,7 +880,9 @@ void FS_Demo_f ( void )
 }
 
 /*
-** FS_Dir_f
+============
+FS_Dir_f
+============
 */
 void FS_Dir_f( void )
 {
@@ -1014,9 +1017,7 @@ void FS_InitFilesystem (void)
 	if (fs_cddir->string[0])
 		FS_AddGameDirectory (va("%s/"BASEDIRNAME, fs_cddir->string) );
 
-	//
 	// start up with baseq2 by default
-	//
 	FS_AddGameDirectory (va("%s/"BASEDIRNAME, fs_basedir->string) );
 
 	// any set gamedirs will be freed up to here

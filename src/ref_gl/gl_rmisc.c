@@ -40,10 +40,32 @@ byte	dottexture[8][8] =
 	{0,0,0,0,0,0,0,0},
 };
 
+//Changed -Maniac
+byte	missing_texture[16][16] =
+{
+	{1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
+	{1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+	{1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+	{1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+	{1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+	{1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+	{1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+	{1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+	{1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+	{1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+	{1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+	{1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+	{1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+	{1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+	{1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1},
+	{1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1},
+};
+
 void R_InitParticleTexture (void)
 {
 	int		x,y;
 	byte	data[8][8][4];
+	byte	notex[16][16][4];
 
 	//
 	// particle texture
@@ -63,19 +85,18 @@ void R_InitParticleTexture (void)
 	//
 	// also use this for bad textures, but without alpha
 	//
-	for (x=0 ; x<8 ; x++)
+	for (x=0 ; x<16 ; x++)
 	{
-		for (y=0 ; y<8 ; y++)
+		for (y=0 ; y<16 ; y++)
 		{
-			data[y][x][0] = dottexture[x&3][y&3]*255;
-			data[y][x][1] = 0; // dottexture[x&3][y&3]*255;
-			data[y][x][2] = 0; //dottexture[x&3][y&3]*255;
-			data[y][x][3] = 255;
+			notex[y][x][0] = missing_texture[x][y]*255;
+			notex[y][x][1] = 0; // dottexture[x&3][y&3]*255;
+			notex[y][x][2] = 0; //dottexture[x&3][y&3]*255;
+			notex[y][x][3] = 255;
 		}
 	}
-	r_notexture = GL_LoadPic ("***r_notexture***", (byte *)data, 8, 8, it_wall, 32);
+	r_notexture = GL_LoadPic ("***r_notexture***", (byte *)notex, 16, 16, it_wall, 32);
 }
-
 
 /* 
 ============================================================================== 
@@ -85,85 +106,62 @@ void R_InitParticleTexture (void)
 ============================================================================== 
 */ 
 
-typedef struct _TargaHeader {
-	unsigned char 	id_length, colormap_type, image_type;
-	unsigned short	colormap_index, colormap_length;
-	unsigned char	colormap_size;
-	unsigned short	x_origin, y_origin, width, height;
-	unsigned char	pixel_size, attributes;
-} TargaHeader;
-
 
 /*
  * Added screenshotjpg, -Maniac
  * Copied from Q2ICE project (http://q2ice.iceware.net)
  */
-
+/* 
+================== 
+GL_ScreenShot_JPG
+By Robert 'Heffo' Heffernan
+================== 
+*/
 void GL_ScreenShot_JPG (void)
 {
         struct jpeg_compress_struct             cinfo;
         struct jpeg_error_mgr                   jerr;
-        byte                                                    *rgbdata;
-        JSAMPROW                                                s[1];
-        FILE                                                    *file;
-        char                                                    picname[80], checkname[MAX_OSPATH];
-        int                                                             i, offset;
+        byte                                    *rgbdata;
+        JSAMPROW                                s[1];
+        FILE                                    *file;
+        char                                    picname[80], checkname[MAX_OSPATH];
+        int                                     i, offset;
 
-	/*
-	 * Changed screenshot naming, -Maniac
-	 */ 
-
+		// Changed screenshot naming, -Maniac
         struct          tm *ntime;
         char            tmpbuf[20];
         time_t          l_time;
 
-	// End
 
         // Create the scrnshots directory if it doesn't exist
         Com_sprintf (checkname, sizeof(checkname), "%s/scrnshot", ri.FS_Gamedir());
         Sys_Mkdir (checkname);
 
 
-	/*
-	 * Changed screenshot naming, -Maniac
-	 */ 
+		// Changed screenshot naming, -Maniac
 
         time( &l_time );
         ntime = localtime( &l_time );
-        strftime( tmpbuf, sizeof(tmpbuf), "%Y-%m-%d_%H-%M-%S", ntime );
-
-	// End
+        strftime( tmpbuf, sizeof(tmpbuf), "%Y-%m-%d_%H-%M", ntime );
 
         // Find a file name to save it to
-        strcpy(picname, tmpbuf);
-
+		Com_sprintf (picname, sizeof(picname), "%s_%s", tmpbuf, ri.FS_Mapname());
         Com_sprintf (checkname, sizeof(checkname), "%s/scrnshot/%s.jpg", ri.FS_Gamedir(), picname);
-
-	/*
-	 * Old screenshot naming, -Maniac
-
-		strcpy(picname,"quake00.tga");
-	 
-
-        for (i=0 ; i<=99 ; i++)
+		
+        for (i=1 ; i<=99 ; i++)
         {
-		picname[8] = '_';
-                picname[9] = i/10 + '0';
-                picname[10] = i%10 + '0';
-                file = fopen (checkname, "rb");
-                if (!file)
-                        break;  // file doesn't exist
-                fclose (file);
-                Com_sprintf (checkname, sizeof(checkname), "%s/scrnshot/%s.jpg", ri.FS_Gamedir(), picname);
+			file = fopen (checkname, "rb");
+			if (!file)
+				break;	// file doesn't exist
+			fclose (file);
+			Com_sprintf (picname, sizeof(picname), "%s_%s_%i%i", tmpbuf, ri.FS_Mapname(), (int)(i/10)%10, i%10);
+			Com_sprintf (checkname, sizeof(checkname), "%s/scrnshot/%s.jpg", ri.FS_Gamedir(), picname);
         }
         if (i==100)
         {
-                ri.Con_Printf (PRINT_ALL, "SCR_JPGScreenShot_f: Couldn't create a file\n");
-                return;
+			ri.Con_Printf (PRINT_ALL, "SCR_JPGScreenShot_f: Couldn't create a file\n"); 
+			return;
         }
-
-	*/
-	// End
 
         // Open the file for Binary Output
         file = fopen(checkname, "wb");
@@ -228,6 +226,28 @@ void GL_ScreenShot_JPG (void)
 
 /* 
 ================== 
+GLAVI_ReadFrameData - Grabs a frame for exporting to AVI EXPORT -Maniac
+This function uses a non-quake-standard export to the main exe
+I put this here so I wouldn't have to link the OpenGL libs into
+the main exe.
+
+  DON'T FORGET TO CHECK THE REF_GL.DEF FILE FOR CHANGES!
+
+By Robert 'Heffo' Heffernan
+================== 
+*/
+
+void GLAVI_ReadFrameData (byte *buffer)
+{
+	if(!buffer)
+		return;
+
+	qglReadPixels(0, 0, vid.width, vid.height, GL_BGR_EXT, GL_UNSIGNED_BYTE, buffer);
+	return;
+}
+
+/* 
+================== 
 GL_ScreenShot_f
 ================== 
 */  
@@ -240,55 +260,42 @@ void GL_ScreenShot_f (void)
 	FILE		*f;
 
 
-	/*
-	 * Changed screenshot naming, -Maniac
-	 */ 
+	// Changed screenshot naming, -Maniac
 
-        struct          tm *ntime;
-        char            tmpbuf[20];
-        time_t          l_time;
+    struct          tm *ntime;
+    char            tmpbuf[20];
+    time_t          l_time;
 
-	// End
 
 	// create the scrnshots directory if it doesn't exist
 	Com_sprintf (checkname, sizeof(checkname), "%s/scrnshot", ri.FS_Gamedir());
 	Sys_Mkdir (checkname);
 
-	/*
-	 * Changed screenshot naming, -Maniac
-	 */ 
 
-        time( &l_time );
-        ntime = localtime( &l_time );
-        strftime( tmpbuf, sizeof(tmpbuf), "%Y-%m-%d_%H-%M-%S", ntime );
+    time( &l_time );
+    ntime = localtime( &l_time );
+    strftime( tmpbuf, sizeof(tmpbuf), "%Y-%m-%d_%H-%M", ntime );
 
-	// End
 
-// 
-// find a file name to save it to 
-// 
-        strcpy(picname, tmpbuf);
-
-        Com_sprintf (checkname, sizeof(checkname), "%s/scrnshot/%s.tga", ri.FS_Gamedir(), picname);
-
-	/*
-	 * Old naming, -Maniac
-	for (i=0 ; i<=99 ; i++) 
-	{ 
-		picname[5] = i/10 + '0'; 
-		picname[6] = i%10 + '0'; 
-		Com_sprintf (checkname, sizeof(checkname), "%s/scrnshot/%s", ri.FS_Gamedir(), picname);
+    // Find a file name to save it to
+	Com_sprintf (picname, sizeof(picname), "%s_%s", tmpbuf, ri.FS_Mapname());
+    Com_sprintf (checkname, sizeof(checkname), "%s/scrnshot/%s.tga", ri.FS_Gamedir(), picname);
+		
+    for (i=1 ; i<=99 ; i++)
+	{
 		f = fopen (checkname, "rb");
 		if (!f)
 			break;	// file doesn't exist
 		fclose (f);
-	} 
-	if (i==100) 
-	{
-		ri.Con_Printf (PRINT_ALL, "SCR_ScreenShot_f: Couldn't create a file\n"); 
+		Com_sprintf (picname, sizeof(picname), "%s_%s_%i%i", tmpbuf, ri.FS_Mapname(), (int)(i/10)%10, i%10);
+		Com_sprintf (checkname, sizeof(checkname), "%s/scrnshot/%s.tga", ri.FS_Gamedir(), picname);
+    }
+    if (i==100)
+    {
+		ri.Con_Printf (PRINT_ALL, "SCR_ScreenShot_f: Couldn't create a file\n");
 		return;
- 	}
-*/
+    }
+
 
 	buffer = malloc(vid.width*vid.height*3 + 18);
 	memset (buffer, 0, 18);

@@ -76,10 +76,8 @@ void SV_New_f (void)
 		return;
 	}
 
-	//
 	// serverdata needs to go over for all types of servers
 	// to make sure the protocol is right, and to set the gamedir
-	//
 	gamedir = Cvar_VariableString ("gamedir");
 
 	// send the serverdata
@@ -98,9 +96,7 @@ void SV_New_f (void)
 	// send full levelname
 	MSG_WriteString (&sv_client->netchan.message, sv.configstrings[CS_NAME]);
 
-	//
 	// game server
-	// 
 	if (sv.state == ss_game)
 	{
 		// set up the entity for the client
@@ -315,7 +311,7 @@ void SV_BeginDownload_f(void)
 	if (Cmd_Argc() > 2)
 		offset = atoi(Cmd_Argv(2)); // downloaded offset
 
-	// hacked by zoid to allow more conrol over download
+	// hacked by zoid to allow more control over download
 	// first off, no .. or global allow check
 	if (strstr (name, "..") || !allow_download->value
 		// leading dot is no good
@@ -323,13 +319,13 @@ void SV_BeginDownload_f(void)
 		// leading slash bad as well, must be in subdir
 		|| *name == '/'
 		// next up, skin check
-		|| (strncmp(name, "players/", 6) == 0 && !allow_download_players->value)
+		|| (strncmp(name, "players/", 8) == 0 && !allow_download_players->value)
 		// now models
-		|| (strncmp(name, "models/", 6) == 0 && !allow_download_models->value)
+		|| (strncmp(name, "models/", 7) == 0 && !allow_download_models->value)
 		// now sounds
 		|| (strncmp(name, "sound/", 6) == 0 && !allow_download_sounds->value)
 		// now maps (note special case for maps, must not be in pak)
-		|| (strncmp(name, "maps/", 6) == 0 && !allow_download_maps->value)
+		|| (strncmp(name, "maps/", 5) == 0 && !allow_download_maps->value)
 		// MUST be in a subdirectory	
 		|| !strstr (name, "/") )	
 	{	// don't allow anything with .. path

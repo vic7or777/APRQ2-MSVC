@@ -776,13 +776,13 @@ void CL_ParticleSteamEffect (vec3_t org, vec3_t dir, int color, int count, int m
 //			p->vel[j] = dir[j]*magnitude;
 		}
 		VectorScale (dir, magnitude, p->vel);
-		d = crand()*magnitude/3;
+		d = crand()*magnitude*0.3333333333;
 		VectorMA (p->vel, d, r, p->vel);
-		d = crand()*magnitude/3;
+		d = crand()*magnitude*0.3333333333;
 		VectorMA (p->vel, d, u, p->vel);
 
 		p->accel[0] = p->accel[1] = 0;
-		p->accel[2] = -PARTICLE_GRAVITY/2;
+		p->accel[2] = -PARTICLE_GRAVITY*0.5;
 		p->alpha = 1.0;
 
 		p->alphavel = -1.0 / (0.5 + frand()*0.3);
@@ -822,13 +822,13 @@ void CL_ParticleSteamEffect2 (cl_sustain_t *self)
 //			p->vel[j] = dir[j]*magnitude;
 		}
 		VectorScale (dir, self->magnitude, p->vel);
-		d = crand()*self->magnitude/3;
+		d = crand()*self->magnitude*0.3333333333;
 		VectorMA (p->vel, d, r, p->vel);
-		d = crand()*self->magnitude/3;
+		d = crand()*self->magnitude*0.3333333333;
 		VectorMA (p->vel, d, u, p->vel);
 
 		p->accel[0] = p->accel[1] = 0;
-		p->accel[2] = -PARTICLE_GRAVITY/2;
+		p->accel[2] = -PARTICLE_GRAVITY*0.5;
 		p->alpha = 1.0;
 
 		p->alphavel = -1.0 / (0.5 + frand()*0.3);
@@ -1216,9 +1216,9 @@ void CL_ParticleSmokeEffect (vec3_t org, vec3_t dir, int color, int count, int m
 //			p->vel[j] = dir[j]*magnitude;
 		}
 		VectorScale (dir, magnitude, p->vel);
-		d = crand()*magnitude/3;
+		d = crand()*magnitude*0.3333333333;
 		VectorMA (p->vel, d, r, p->vel);
-		d = crand()*magnitude/3;
+		d = crand()*magnitude*0.3333333333;
 		VectorMA (p->vel, d, u, p->vel);
 
 		p->accel[0] = p->accel[1] = p->accel[2] = 0;

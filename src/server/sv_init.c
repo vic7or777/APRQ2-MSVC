@@ -36,7 +36,7 @@ int SV_FindIndex (char *name, int start, int max, qboolean create)
 	if (!name || !name[0])
 		return 0;
 
-	for (i=1 ; i<max && sv.configstrings[start+i][0] ; i++)
+	for (i = 1; i < max && sv.configstrings[start+i][0]; i++)
 		if (!strcmp(sv.configstrings[start+i], name))
 			return i;
 
@@ -49,7 +49,8 @@ int SV_FindIndex (char *name, int start, int max, qboolean create)
 	strncpy (sv.configstrings[start+i], name, sizeof(sv.configstrings[i]));
 
 	if (sv.state != ss_loading)
-	{	// send the update to everyone
+	{
+		// send the update to everyone
 		SZ_Clear (&sv.multicast);
 		MSG_WriteChar (&sv.multicast, svc_configstring);
 		MSG_WriteShort (&sv.multicast, start+i);
@@ -228,12 +229,10 @@ void SV_SpawnServer (char *server, char *spawnpoint, server_state_t serverstate,
 	}
 	else
 	{
-		Com_sprintf (sv.configstrings[CS_MODELS+1],sizeof(sv.configstrings[CS_MODELS+1]),
-			"maps/%s.bsp", server);
+		Com_sprintf (sv.configstrings[CS_MODELS+1],sizeof(sv.configstrings[CS_MODELS+1]), "maps/%s.bsp", server);
 		sv.models[1] = CM_LoadMap (sv.configstrings[CS_MODELS+1], false, &checksum);
 	}
-	Com_sprintf (sv.configstrings[CS_MAPCHECKSUM],sizeof(sv.configstrings[CS_MAPCHECKSUM]),
-		"%i", checksum);
+	Com_sprintf (sv.configstrings[CS_MAPCHECKSUM],sizeof(sv.configstrings[CS_MAPCHECKSUM]), "%i", checksum);
 
 	//
 	// clear physics interaction links
@@ -242,8 +241,7 @@ void SV_SpawnServer (char *server, char *spawnpoint, server_state_t serverstate,
 	
 	for (i=1 ; i< CM_NumInlineModels() ; i++)
 	{
-		Com_sprintf (sv.configstrings[CS_MODELS+1+i], sizeof(sv.configstrings[CS_MODELS+1+i]),
-			"*%i", i);
+		Com_sprintf (sv.configstrings[CS_MODELS+1+i], sizeof(sv.configstrings[CS_MODELS+1+i]), "*%i", i);
 		sv.models[i+1] = CM_InlineModel (sv.configstrings[CS_MODELS+1+i]);
 	}
 
@@ -275,8 +273,8 @@ void SV_SpawnServer (char *server, char *spawnpoint, server_state_t serverstate,
 
 	// set serverinfo variable
 	Cvar_FullSet ("mapname", sv.name, CVAR_SERVERINFO | CVAR_NOSET);
-
 	Com_Printf ("-------------------------------------\n");
+
 }
 
 /*

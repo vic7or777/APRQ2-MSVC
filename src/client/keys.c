@@ -646,17 +646,15 @@ void Key_Init (void)
 {
 	int		i;
 
-	for (i=0 ; i<32 ; i++)
+	for (i = 0; i < 32; i++)
 	{
 		key_lines[i][0] = ']';
 		key_lines[i][1] = 0;
 	}
 	key_linepos = 1;
 	
-//
 // init ascii characters in console mode
-//
-	for (i=32 ; i<128 ; i++)
+	for (i = 32; i < 128; i++)
 		consolekeys[i] = true;
 	consolekeys[K_ENTER] = true;
 	consolekeys[K_KP_ENTER] = true;
@@ -695,9 +693,9 @@ void Key_Init (void)
 	consolekeys['`'] = false;
 	consolekeys['~'] = false;
 
-	for (i=0 ; i<256 ; i++)
+	for (i = 0; i < 256; i++)
 		keyshift[i] = i;
-	for (i='a' ; i<='z' ; i++)
+	for (i = 'a'; i <= 'z'; i++)
 		keyshift[i] = i - 'a' + 'A';
 	keyshift['1'] = '!';
 	keyshift['2'] = '@';
@@ -722,12 +720,10 @@ void Key_Init (void)
 	keyshift['\\'] = '|';
 
 	menubound[K_ESCAPE] = true;
-	for (i=0 ; i<12 ; i++)
+	for (i = 0; i < 12; i++)
 		menubound[K_F1+i] = true;
 
-//
 // register our functions
-//
 	Cmd_AddCommand ("bind",Key_Bind_f);
 	Cmd_AddCommand ("unbind",Key_Unbind_f);
 	Cmd_AddCommand ("unbindall",Key_Unbindall_f);

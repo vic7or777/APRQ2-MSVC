@@ -113,8 +113,8 @@ void CL_ParseProjectiles (void)
 		bits[1] = MSG_ReadByte (&net_message);
 		bits[2] = MSG_ReadByte (&net_message);
 
-		pr.angles[0] = 360*bits[0]/256;
-		pr.angles[1] = 360*bits[1]/256;
+		pr.angles[0] = 360*bits[0]*0.00390625;
+		pr.angles[1] = 360*bits[1]*0.00390625;
 		pr.modelindex = bits[2];
 
 		b = MSG_ReadByte (&net_message);
@@ -388,8 +388,8 @@ rest of the data stream.
 void CL_ParsePacketEntities (frame_t *oldframe, frame_t *newframe)
 {
 	int			newnum;
-	int			bits;
-	entity_state_t	*oldstate;
+	unsigned int		bits; //Changed -Maniac
+	entity_state_t	*oldstate  = NULL;
 	int			oldindex, oldnum;
 
 	newframe->parse_entities = cl.parse_entities;
@@ -610,10 +610,10 @@ void CL_ParsePlayerstate (frame_t *oldframe, frame_t *newframe)
 
 	if (flags & PS_BLEND)
 	{
-		state->blend[0] = MSG_ReadByte (&net_message)/255.0;
-		state->blend[1] = MSG_ReadByte (&net_message)/255.0;
-		state->blend[2] = MSG_ReadByte (&net_message)/255.0;
-		state->blend[3] = MSG_ReadByte (&net_message)/255.0;
+		state->blend[0] = MSG_ReadByte (&net_message)*0.003921568627450980392156862745098;
+		state->blend[1] = MSG_ReadByte (&net_message)*0.003921568627450980392156862745098;
+		state->blend[2] = MSG_ReadByte (&net_message)*0.003921568627450980392156862745098;
+		state->blend[3] = MSG_ReadByte (&net_message)*0.003921568627450980392156862745098;
 	}
 
 	if (flags & PS_FOV)
@@ -751,6 +751,10 @@ void CL_ParseFrame (void)
 		// getting a valid frame message ends the connection process
 		if (cls.state != ca_active)
 		{
+			//Addec pversion time -Maniac
+		//	x_info.x_pversion = cl.time;
+		//	x_info.x_nocheatsay = cl.time;
+
 			cls.state = ca_active;
 			cl.force_refdef = true;
 			cl.predicted_origin[0] = cl.frame.playerstate.pmove.origin[0]*0.125;
@@ -1000,7 +1004,7 @@ void CL_AddPacketEntities (frame_t *frame)
 		else if (effects & EF_SPINNINGLIGHTS)
 		{
 			ent.angles[0] = 0;
-			ent.angles[1] = anglemod(cl.time/2) + s1->angles[1];
+			ent.angles[1] = anglemod(cl.time*0.5) + s1->angles[1];
 			ent.angles[2] = 180;
 			{
 				vec3_t forward;
@@ -1103,12 +1107,13 @@ void CL_AddPacketEntities (frame_t *frame)
 						if (renderfx & RF_SHELL_RED)
 							renderfx |= RF_SHELL_BLUE;
 						// if we have a blue shell (and not a red shell), turn it to cyan by adding green
-						else if (renderfx & RF_SHELL_BLUE)
+						else if (renderfx & RF_SHELL_BLUE) {
 							// go to green if it's on already, otherwise do cyan (flash green)
 							if (renderfx & RF_SHELL_GREEN)
 								renderfx &= ~RF_SHELL_BLUE;
 							else
 								renderfx |= RF_SHELL_GREEN;
+						}
 					}
 				}
 //			}
@@ -1358,10 +1363,8 @@ void CL_AddViewWeapon (player_state_t *ps, player_state_t *ops)
 	// set up gun position
 	for (i=0 ; i<3 ; i++)
 	{
-		gun.origin[i] = cl.refdef.vieworg[i] + ops->gunoffset[i]
-			+ cl.lerpfrac * (ps->gunoffset[i] - ops->gunoffset[i]);
-		gun.angles[i] = cl.refdef.viewangles[i] + LerpAngle (ops->gunangles[i],
-			ps->gunangles[i], cl.lerpfrac);
+		gun.origin[i] = cl.refdef.vieworg[i] + ops->gunoffset[i] + cl.lerpfrac * (ps->gunoffset[i] - ops->gunoffset[i]);
+		gun.angles[i] = cl.refdef.viewangles[i] + LerpAngle (ops->gunangles[i], ps->gunangles[i], cl.lerpfrac);
 	}
 
 	if (gun_frame)
@@ -1425,9 +1428,7 @@ void CL_CalcViewValues (void)
 		backlerp = 1.0 - lerp;
 		for (i=0 ; i<3 ; i++)
 		{
-			cl.refdef.vieworg[i] = cl.predicted_origin[i] + ops->viewoffset[i] 
-				+ cl.lerpfrac * (ps->viewoffset[i] - ops->viewoffset[i])
-				- backlerp * cl.prediction_error[i];
+			cl.refdef.vieworg[i] = cl.predicted_origin[i] + ops->viewoffset[i] + cl.lerpfrac * (ps->viewoffset[i] - ops->viewoffset[i])	- backlerp * cl.prediction_error[i];
 		}
 
 		// smooth out stair climbing

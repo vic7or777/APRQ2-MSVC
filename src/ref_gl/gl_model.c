@@ -40,7 +40,6 @@ model_t	mod_inline[MAX_MOD_KNOWN];
 
 int		registration_sequence;
 
-
 /*
 ===============
 Mod_PointInLeaf
@@ -469,36 +468,36 @@ void Mod_LoadTexinfo (lump_t *l)
 		else
 		    out->next = NULL;
 		
-		/*
-		 * Changed, loading 32bit tga textures, -Maniac
-		 */
-
-                if (gl_loadtga->value)
-                {
-                        Com_sprintf (name, sizeof(name), "textures/%s.tga", in->texture);
-                        out->image = GL_FindImage (name, it_wall);
-						
+        if (gl_loadtga->value)
+        {
+				Com_sprintf (name, sizeof(name), "textures/%s.tga", in->texture);
+				out->image = GL_FindImage (name, it_wall);
+		
+				if (!out->image)
+				{
+						/*Com_sprintf (name, sizeof(name), "textures/%s.png", in->texture);
+						out->image = GL_FindImage (name, it_wall);
+		
 						if (!out->image)
-						{
-							Com_sprintf (name, sizeof(name), "textures/%s.wal", in->texture);
-							out->image = GL_FindImage (name, it_wall);
-						}
+						{*/
+								Com_sprintf (name, sizeof(name), "textures/%s.wal", in->texture);
+								out->image = GL_FindImage (name, it_wall);
+						//}
+				}
+        }
+        else
+        {
 
-                }
-                else
-                {
-                        Com_sprintf (name, sizeof(name), "textures/%s.wal", in->texture);
-                        out->image = GL_FindImage (name, it_wall);
-                }
+				Com_sprintf (name, sizeof(name), "textures/%s.wal", in->texture);
+				out->image = GL_FindImage (name, it_wall);
+        }
 
 		if (!out->image)
 		{
-
 			ri.Con_Printf (PRINT_ALL, "Couldn't load %s\n", name);
 			out->image = r_notexture;
 		}
 	}
-
 
 	// count animation frames
 	for (i=0 ; i<count ; i++)
@@ -553,8 +552,8 @@ void CalcSurfaceExtents (msurface_t *s)
 
 	for (i=0 ; i<2 ; i++)
 	{	
-		bmins[i] = floor(mins[i]/16);
-		bmaxs[i] = ceil(maxs[i]/16);
+		bmins[i] = floor(mins[i] * 0.0625);
+		bmaxs[i] = ceil(maxs[i] * 0.0625);
 
 		s->texturemins[i] = bmins[i] * 16;
 		s->extents[i] = (bmaxs[i] - bmins[i]) * 16;
@@ -627,8 +626,7 @@ void Mod_LoadFaces (lump_t *l)
 		else
 			out->samples = loadmodel->lightdata + i;
 		
-	// set the drawing flags
-		
+		// set the drawing flags
 		if (out->texinfo->flags & SURF_WARP)
 		{
 			out->flags |= SURF_DRAWTURB;
@@ -888,7 +886,7 @@ void Mod_LoadBrushModel (model_t *mod, void *buffer)
 // swap all the lumps
 	mod_base = (byte *)header;
 
-	for (i=0 ; i<sizeof(dheader_t)/4 ; i++)
+	for (i=0 ; i<sizeof(dheader_t)*0.25 ; i++)
 		((int *)header)[i] = LittleLong ( ((int *)header)[i]);
 
 // load into heap
@@ -969,7 +967,7 @@ void Mod_LoadAliasModel (model_t *mod, void *buffer)
 	pheader = Hunk_Alloc (LittleLong(pinmodel->ofs_end));
 	
 	// byte swap the header fields and sanity check
-	for (i=0 ; i<sizeof(dmdl_t)/4 ; i++)
+	for (i=0 ; i<sizeof(dmdl_t)*0.25 ; i++)
 		((int *)pheader)[i] = LittleLong (((int *)buffer)[i]);
 
 	if (pheader->skinheight > MAX_LBM_HEIGHT)
@@ -1056,8 +1054,7 @@ void Mod_LoadAliasModel (model_t *mod, void *buffer)
 		pheader->num_skins*MAX_SKINNAME);
 	for (i=0 ; i<pheader->num_skins ; i++)
 	{
-		mod->skins[i] = GL_FindImage ((char *)pheader + pheader->ofs_skins + i*MAX_SKINNAME
-			, it_skin);
+		mod->skins[i] = GL_FindImage ((char *)pheader + pheader->ofs_skins + i*MAX_SKINNAME, it_skin);
 	}
 
 	mod->mins[0] = -32;

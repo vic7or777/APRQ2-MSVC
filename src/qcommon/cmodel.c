@@ -585,9 +585,7 @@ cmodel_t *CM_LoadMap (char *name, qboolean clientload, unsigned *checksum)
 		return &map_cmodels[0];			// cinematic servers won't have anything at all
 	}
 
-	//
 	// load the file
-	//
 	length = FS_LoadFile (name, (void **)&buf);
 	if (!buf)
 		Com_Error (ERR_DROP, "Couldn't load %s", name);

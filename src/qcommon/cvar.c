@@ -423,31 +423,61 @@ void Cvar_Set_f (void)
 }
 
 /*
-//Added cvar toggle -Maniac
+//Added cvar toggle and increase -Maniac
 =============
 Cvar_Toggle_f
 
 Toggles the given variable's value between 0 and 1
 =============
 */
-void Cvar_Toggle_f (void)
+void Cvar_Toggle_f (void) 
+{ 
+	cvar_t *var;  
+
+	if ( (Cmd_Argc() != 2) && (Cmd_Argc() != 4) )
+	{ 
+		Com_Printf("%s [cvar] <optional value1> <optional value2>\n",Cmd_Argv(0)); 
+		return; 
+	}
+
+	var = Cvar_FindVar(Cmd_Argv(1)); 
+	if (!var) 
+	{ 
+		Com_Printf("Cvar %s does not exist.\n",Cmd_Argv(1)); 
+		return; 
+	} 
+
+	if(Cmd_Argc() == 4)
+	{
+		if (Q_stricmp(var->string, Cmd_Argv(2)) == 0) 
+			Cvar_Set(var->name, Cmd_Argv(3));
+		else
+			Cvar_Set(var->name, Cmd_Argv(2));
+	}
+	else
+	{
+		Cvar_Set (var->name, var->value ? "0" : "1");
+	}
+}
+
+void CL_Increase_f (void)
 {
 	cvar_t *var;
+	float val;
 
-	if (Cmd_Argc() != 2)
-	{
-		Com_Printf ("usage: toggle <variable>\n");
+	if (Cmd_Argc() != 3) {
+		Com_Printf ("inc <cvar> <value>\n");
 		return;
 	}
 
-	var = Cvar_FindVar (Cmd_Argv(1));
-	if (!var)
-	{
-		Com_Printf ("no such variable: \"%s\"\n", Cmd_Argv(1));
+	var = Cvar_FindVar(Cmd_Argv(1));
+	if (!var) {
+		Com_Printf ("Unknown cvar '%s'\n", Cmd_Argv(1));
 		return;
 	}
 
-	Cvar_Set (var->name, var->value ? "0" : "1");
+	val=atof(Cmd_Argv(2));
+	Cvar_SetValue(Cmd_Argv(1), var->value+val);
 }
 
 
@@ -580,8 +610,9 @@ Reads in all archived cvars
 void Cvar_Init (void)
 {
 	Cmd_AddCommand ("set", Cvar_Set_f);
-	//Added toggle command cvar -Maniac
+	//Added toggle & inc command -Maniac
 	Cmd_AddCommand ("toggle", Cvar_Toggle_f);
+	Cmd_AddCommand ("inc", CL_Increase_f);
 	Cmd_AddCommand ("cvarlist", Cvar_List_f);
 
 }

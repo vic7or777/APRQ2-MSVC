@@ -56,7 +56,7 @@ BSC32=bscmake.exe
 # ADD BSC32 /nologo
 LINK32=link.exe
 # ADD BASE LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:windows /machine:I386
-# ADD LINK32 winmm.lib wsock32.lib kernel32.lib user32.lib gdi32.lib /nologo /subsystem:windows /machine:I386 /out:".\release/aq2.exe"
+# ADD LINK32 vfw32.lib winmm.lib wsock32.lib kernel32.lib user32.lib gdi32.lib /nologo /subsystem:windows /machine:I386 /out:"d:\games\quake2\aq2.exe"
 # SUBTRACT LINK32 /incremental:yes /debug /nodefaultlib
 
 !ELSEIF  "$(CFG)" == "quake2 - Win32 Debug"
@@ -167,6 +167,21 @@ LINK32=link.exe
 # Begin Group "Source Files"
 
 # PROP Default_Filter "cpp;c;cxx;rc;def;r;odl;hpj;bat;for;f90"
+# Begin Source File
+
+SOURCE=.\client\avi_export.c
+
+!IF  "$(CFG)" == "quake2 - Win32 Release"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
+
+!ENDIF 
+
+# End Source File
 # Begin Source File
 
 SOURCE=.\win32\cd_win.c
@@ -1533,6 +1548,21 @@ DEP_CPP_SND_W=\
 # End Source File
 # Begin Source File
 
+SOURCE=.\win32\snd_winamp.c
+
+!IF  "$(CFG)" == "quake2 - Win32 Release"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Debug Alpha"
+
+!ELSEIF  "$(CFG)" == "quake2 - Win32 Release Alpha"
+
+!ENDIF 
+
+# End Source File
+# Begin Source File
+
 SOURCE=.\server\sv_ccmds.c
 
 !IF  "$(CFG)" == "quake2 - Win32 Release"
@@ -1956,6 +1986,10 @@ DEP_CPP_X86_C=\
 # Begin Source File
 
 SOURCE=.\client\anorms.h
+# End Source File
+# Begin Source File
+
+SOURCE=.\client\avi.h
 # End Source File
 # Begin Source File
 

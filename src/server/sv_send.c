@@ -19,7 +19,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 // sv_main.c -- server main program
 
+#include <windows.h>
 #include "server.h"
+#include <vfw.h>
+#include "../client/avi.h"
 
 /*
 =============================================================================
@@ -439,6 +442,13 @@ SV_DemoCompleted
 */
 void SV_DemoCompleted (void)
 {
+	//AVI EXPORT -Maniac
+	if(avi_fps && avi_fps->value)
+	{
+		AVI_ReleaseExporter(avidm2);
+		Cvar_Set("avi_fps", "0");
+	}
+
 	if (sv.demofile)
 	{
 		fclose (sv.demofile);

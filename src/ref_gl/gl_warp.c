@@ -74,7 +74,7 @@ void SubdividePolygon (int numverts, float *verts)
 	for (i=0 ; i<3 ; i++)
 	{
 		m = (mins[i] + maxs[i]) * 0.5;
-		m = SUBDIVIDE_SIZE * floor (m/SUBDIVIDE_SIZE + 0.5);
+		m = SUBDIVIDE_SIZE * floor (m/SUBDIVIDE_SIZE + 0.5f);
 		if (maxs[i] - m < 8)
 			continue;
 		if (m - mins[i] < 8)
@@ -237,14 +237,16 @@ void EmitWaterPolys (msurface_t *fa)
 			s = os + r_turbsin[Q_ftol( ((ot*0.125+rdt) * TURBSCALE) ) & 255];
 #endif
 			s += scroll;
-			s *= (1.0/64);
+			//s *= (1.0/64);
+			s *= 0.015625;
 
 #if !id386
 			t = ot + r_turbsin[(int)((os*0.125+rdt) * TURBSCALE) & 255];
 #else
 			t = ot + r_turbsin[Q_ftol( ((os*0.125+rdt) * TURBSCALE) ) & 255];
 #endif
-			t *= (1.0/64);
+			//t *= (1.0/64);
+			t *= 0.015625;
 
 			qglTexCoord2f (s, t);
 			qglVertex3fv (v);
@@ -458,7 +460,7 @@ void ClipSkyPolygon (int nump, vec3_t vecs, int stage)
 			break;
 		}
 
-		if (sides[i] == SIDE_ON || sides[i+1] == SIDE_ON || sides[i+1] == sides[i])
+		if ( (sides[i] == SIDE_ON) | (sides[i+1] == SIDE_ON) | (sides[i+1] == sides[i]) )
 			continue;
 
 		d = dists[i] / (dists[i] - dists[i+1]);
@@ -524,14 +526,9 @@ void MakeSkyVec (float s, float t, int axis)
 
 
 	//Changed, skydistance -Maniac
-//	b[0] = s*2300;
-//	b[1] = t*2300;
-//	b[2] = 2300;
-
-	b[0] = s * skydistance->value; // DMP skybox size changes
-	b[1] = t * skydistance->value; // DMP
-	b[2] = skydistance->value;  // DMP
-
+	b[0] = s * skydistance->value;
+	b[1] = t * skydistance->value;
+	b[2] = skydistance->value;
 	//End
 
 	for (j=0 ; j<3 ; j++)
@@ -580,8 +577,7 @@ qglDisable (GL_DEPTH_TEST);
 	if (skyrotate)
 	{	// check for no sky at all
 		for (i=0 ; i<6 ; i++)
-			if (skymins[0][i] < skymaxs[0][i]
-			&& skymins[1][i] < skymaxs[1][i])
+			if (skymins[0][i] < skymaxs[0][i] && skymins[1][i] < skymaxs[1][i])
 				break;
 		if (i == 6)
 			return;		// nothing visible
@@ -601,8 +597,7 @@ qglRotatef (r_newrefdef.time * skyrotate, skyaxis[0], skyaxis[1], skyaxis[2]);
 			skymaxs[1][i] = 1;
 		}
 
-		if (skymins[0][i] >= skymaxs[0][i]
-		|| skymins[1][i] >= skymaxs[1][i])
+		if (skymins[0][i] >= skymaxs[0][i] || skymins[1][i] >= skymaxs[1][i])
 			continue;
 
 		GL_Bind (sky_images[skytexorder[i]]->texnum);
@@ -646,9 +641,10 @@ void R_SetSky (char *name, float rotate, vec3_t axis)
 		if (gl_skymip->value || skyrotate)
 			gl_picmip->value++;
 
-		if ( qglColorTableEXT && gl_ext_palettedtexture->value )
-			Com_sprintf (pathname, sizeof(pathname), "env/%s%s.pcx", skyname, suf[i]);
-		else
+		//changed always load targa skyboxes in OpenGL mode -Maniac
+		//if ( qglColorTableEXT && gl_ext_palettedtexture->value )
+		//	Com_sprintf (pathname, sizeof(pathname), "env/%s%s.pcx", skyname, suf[i]);
+		//else
 			Com_sprintf (pathname, sizeof(pathname), "env/%s%s.tga", skyname, suf[i]);
 
 		sky_images[i] = GL_FindImage (pathname, it_sky);
@@ -658,13 +654,13 @@ void R_SetSky (char *name, float rotate, vec3_t axis)
 		if (gl_skymip->value || skyrotate)
 		{	// take less memory
 			gl_picmip->value--;
-			sky_min = 1.0/256;
-			sky_max = 255.0/256;
+			sky_min = 0.00390625f;
+			sky_max = 0.99609375f;
 		}
 		else	
 		{
-			sky_min = 1.0/512;
-			sky_max = 511.0/512;
+			sky_min = 0.001953125f;
+			sky_max = 0.998046875f;
 		}
 	}
 }

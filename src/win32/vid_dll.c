@@ -30,6 +30,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // Structure containing functions exported from refresh DLL
 refexport_t	re;
 
+//AVI EXPORT -Maniac
+GLAVI_ReadFrameData_t GLAVI_ReadFrameData;
+
 cvar_t *win_noalttab;
 
 #ifndef WM_MOUSEWHEEL
@@ -585,6 +588,7 @@ qboolean VID_LoadRefresh( char *name )
 	ri.FS_LoadFile = FS_LoadFile;
 	ri.FS_FreeFile = FS_FreeFile;
 	ri.FS_Gamedir = FS_Gamedir;
+	ri.FS_Mapname = FS_Mapname; // -Maniac
 	ri.Cvar_Get = Cvar_Get;
 	ri.Cvar_Set = Cvar_Set;
 	ri.Cvar_SetValue = Cvar_SetValue;
@@ -608,6 +612,17 @@ qboolean VID_LoadRefresh( char *name )
 		re.Shutdown();
 		VID_FreeReflib ();
 		return false;
+	}
+
+	//AVI EXPORT -Maniac
+	if ( ( GLAVI_ReadFrameData = (void *) GetProcAddress( reflib_library, "GLAVI_ReadFrameData" ) ) == 0)
+	{
+		GLAVI_ReadFrameData = NULL;
+		Com_Printf("No AVI Export Extensions found in renderer, AVI Export is unavailable\n");
+	}
+	else
+	{
+		Com_Printf("AVI Export Extensions found, AVI Export is enabled\n");
 	}
 
 	Com_Printf( "------------------------------------\n");

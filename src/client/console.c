@@ -96,8 +96,7 @@ void Con_ToggleConsole_f (void)
 		M_ForceMenuOff ();
 		cls.key_dest = key_console;	
 
-		if (Cvar_VariableValue ("maxclients") == 1 
-			&& Com_ServerState ())
+		if (Cvar_VariableValue ("maxclients") == 1 && Com_ServerState ())
 			Cvar_Set ("paused", "1");
 	}
 }
@@ -433,7 +432,7 @@ void Con_CenteredPrint (char *text)
 	char	buffer[1024];
 
 	l = strlen(text);
-	l = (con.linewidth-l)/2;
+	l = (con.linewidth-l)*0.5;
 	if (l < 0)
 		l = 0;
 	memset (buffer, ' ', l);
@@ -649,9 +648,9 @@ void Con_DrawConsole (float frac)
 		else
 			text = cls.downloadname;
 
-		x = con.linewidth - ((con.linewidth * 7) / 40);
+		x = con.linewidth - ((con.linewidth * 7)*0.025);
 		y = x - strlen(text) - 8;
-		i = con.linewidth/3;
+		i = con.linewidth*0.3333333333;
 		if (strlen(text) > i) {
 			y = x - i - 11;
 			strncpy(dlbar, text, i);

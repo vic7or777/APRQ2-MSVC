@@ -20,6 +20,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // cl_view.c -- player rendering positioning
 
 #include "client.h"
+#include <windows.h>
+#include <vfw.h>
+#include "avi.h"
 
 //=============
 //
@@ -62,9 +65,7 @@ Specifies the model that will be used as the world
 */
 void V_ClearScene (void)
 {
-	r_numdlights = 0;
-	r_numentities = 0;
-	r_numparticles = 0;
+	r_numdlights = r_numentities = r_numparticles = 0;
 }
 
 
@@ -192,7 +193,7 @@ void V_TestEntities (void)
 		ent = &r_entities[i];
 
 		r = 64 * ( (i%4) - 1.5 );
-		f = 64 * (i/4) + 128;
+		f = 64 * (i*0.25) + 128;
 
 		for (j=0 ; j<3 ; j++)
 			ent->origin[j] = cl.refdef.vieworg[j] + cl.v_forward[j]*f +
@@ -224,7 +225,7 @@ void V_TestLights (void)
 		dl = &r_dlights[i];
 
 		r = 64 * ( (i%4) - 1.5 );
-		f = 64 * (i/4) + 128;
+		f = 64 * (i*0.25) + 128;
 
 		for (j=0 ; j<3 ; j++)
 			dl->origin[j] = cl.refdef.vieworg[j] + cl.v_forward[j]*f +
@@ -310,7 +311,7 @@ void CL_PrepRefresh (void)
 			Com_Printf ("                                     \r");
 	}
 
-	Com_Printf ("images\r", i); 
+	Com_Printf ("images\r"); 
 	SCR_UpdateScreen ();
 	for (i=1 ; i<MAX_IMAGES && cl.configstrings[CS_IMAGES+i][0] ; i++)
 	{
@@ -333,7 +334,7 @@ void CL_PrepRefresh (void)
 	CL_LoadClientinfo (&cl.baseclientinfo, "unnamed\\male/grunt");
 
 	// set sky textures and speed
-	Com_Printf ("sky\r", i); 
+	Com_Printf ("sky\r"); 
 	SCR_UpdateScreen ();
 	rotate = atof (cl.configstrings[CS_SKYROTATE]);
 	sscanf (cl.configstrings[CS_SKYAXIS], "%f %f %f", 
@@ -353,6 +354,10 @@ void CL_PrepRefresh (void)
 
 	// start the cd track
 	CDAudio_Play (atoi(cl.configstrings[CS_CDTRACK]), true);
+
+	//Added pversion time -Maniac
+	x_info.x_pversion = cl.time;
+	x_info.x_nocheatsay = cl.time;
 }
 
 /*
@@ -368,11 +373,11 @@ float CalcFov (float fov_x, float width, float height)
 	if (fov_x < 1 || fov_x > 179)
 		Com_Error (ERR_DROP, "Bad fov: %f", fov_x);
 
-	x = width/tan(fov_x/360*M_PI);
+	x = width/tan(fov_x*(0.002777777777778*M_PI));
 
 	a = atan (height/x);
 
-	a = a*360/M_PI;
+	a = a*114.59165581759554875079179651068;
 
 	return a;
 }

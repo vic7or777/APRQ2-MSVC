@@ -169,9 +169,7 @@ void GL_DrawAliasFrameLerp (dmdl_t *paliashdr, float backlerp)
 			qglEnableClientState( GL_COLOR_ARRAY );
 			qglColorPointer( 3, GL_FLOAT, 0, colorArray );
 
-			//
 			// pre light everything
-			//
 			for ( i = 0; i < paliashdr->num_xyz; i++ )
 			{
 				float l = shadedots[verts[i].lightnormalindex];
@@ -224,9 +222,9 @@ void GL_DrawAliasFrameLerp (dmdl_t *paliashdr, float backlerp)
 					order += 3;
 
 					// normals and vertexes come from the frame list
-//					l = shadedots[verts[index_xyz].lightnormalindex];
+					//l = shadedots[verts[index_xyz].lightnormalindex];
 					
-//					qglColor4f (l* shadelight[0], l*shadelight[1], l*shadelight[2], alpha);
+					//qglColor4f (l* shadelight[0], l*shadelight[1], l*shadelight[2], alpha);
 					qglArrayElement( index_xyz );
 
 				} while (--count);
@@ -314,8 +312,7 @@ void GL_DrawAliasShadow (dmdl_t *paliashdr, int posenum)
 
 	lheight = currententity->origin[2] - lightspot[2];
 
-	frame = (daliasframe_t *)((byte *)paliashdr + paliashdr->ofs_frames 
-		+ currententity->frame * paliashdr->framesize);
+	frame = (daliasframe_t *)((byte *)paliashdr + paliashdr->ofs_frames + currententity->frame * paliashdr->framesize);
 	verts = frame->verts;
 
 	height = 0;
@@ -403,9 +400,7 @@ static qboolean R_CullAliasModel( vec3_t bbox[8], entity_t *e )
 		                              paliashdr->ofs_frames +
 									  e->oldframe * paliashdr->framesize);
 
-	/*
-	** compute axially aligned mins and maxs
-	*/
+	// compute axially aligned mins and maxs
 	if ( pframe == poldframe )
 	{
 		for ( i = 0; i < 3; i++ )
@@ -436,9 +431,7 @@ static qboolean R_CullAliasModel( vec3_t bbox[8], entity_t *e )
 		}
 	}
 
-	/*
-	** compute a full bounding box
-	*/
+	// compute a full bounding box
 	for ( i = 0; i < 8; i++ )
 	{
 		vec3_t   tmp;
@@ -461,9 +454,7 @@ static qboolean R_CullAliasModel( vec3_t bbox[8], entity_t *e )
 		VectorCopy( tmp, bbox[i] );
 	}
 
-	/*
-	** rotate the bounding box
-	*/
+	// rotate the bounding box
 	VectorCopy( e->angles, angles );
 	angles[YAW] = -angles[YAW];
 	AngleVectors( angles, vectors[0], vectors[1], vectors[2] );
@@ -538,12 +529,10 @@ void R_DrawAliasModel (entity_t *e)
 
 	paliashdr = (dmdl_t *)currentmodel->extradata;
 
-	//
 	// get lighting information
 	//
 	// PMM - rewrote, reordered to handle new shells & mixing
 	// PMM - 3.20 code .. replaced with original way of doing it to keep mod authors happy
-	//
 	if ( currententity->flags & ( RF_SHELL_HALF_DAM | RF_SHELL_GREEN | RF_SHELL_RED | RF_SHELL_BLUE | RF_SHELL_DOUBLE ) )
 	{
 		VectorClear (shadelight);
@@ -565,70 +554,6 @@ void R_DrawAliasModel (entity_t *e)
 		if ( currententity->flags & RF_SHELL_BLUE )
 			shadelight[2] = 1.0;
 	}
-/*
-		// PMM -special case for godmode
-		if ( (currententity->flags & RF_SHELL_RED) &&
-			(currententity->flags & RF_SHELL_BLUE) &&
-			(currententity->flags & RF_SHELL_GREEN) )
-		{
-			for (i=0 ; i<3 ; i++)
-				shadelight[i] = 1.0;
-		}
-		else if ( currententity->flags & ( RF_SHELL_RED | RF_SHELL_BLUE | RF_SHELL_DOUBLE ) )
-		{
-			VectorClear (shadelight);
-
-			if ( currententity->flags & RF_SHELL_RED )
-			{
-				shadelight[0] = 1.0;
-				if (currententity->flags & (RF_SHELL_BLUE|RF_SHELL_DOUBLE) )
-					shadelight[2] = 1.0;
-			}
-			else if ( currententity->flags & RF_SHELL_BLUE )
-			{
-				if ( currententity->flags & RF_SHELL_DOUBLE )
-				{
-					shadelight[1] = 1.0;
-					shadelight[2] = 1.0;
-				}
-				else
-				{
-					shadelight[2] = 1.0;
-				}
-			}
-			else if ( currententity->flags & RF_SHELL_DOUBLE )
-			{
-				shadelight[0] = 0.9;
-				shadelight[1] = 0.7;
-			}
-		}
-		else if ( currententity->flags & ( RF_SHELL_HALF_DAM | RF_SHELL_GREEN ) )
-		{
-			VectorClear (shadelight);
-			// PMM - new colors
-			if ( currententity->flags & RF_SHELL_HALF_DAM )
-			{
-				shadelight[0] = 0.56;
-				shadelight[1] = 0.59;
-				shadelight[2] = 0.45;
-			}
-			if ( currententity->flags & RF_SHELL_GREEN )
-			{
-				shadelight[1] = 1.0;
-			}
-		}
-	}
-			//PMM - ok, now flatten these down to range from 0 to 1.0.
-	//		max_shell_val = max(shadelight[0], max(shadelight[1], shadelight[2]));
-	//		if (max_shell_val > 0)
-	//		{
-	//			for (i=0; i<3; i++)
-	//			{
-	//				shadelight[i] = shadelight[i] / max_shell_val;
-	//			}
-	//		}
-	// pmm
-*/
 	else if ( currententity->flags & RF_FULLBRIGHT )
 	{
 		for (i=0 ; i<3 ; i++)
@@ -715,23 +640,19 @@ void R_DrawAliasModel (entity_t *e)
 // PGM	
 // =================
 
-	shadedots = r_avertexnormal_dots[((int)(currententity->angles[1] * (SHADEDOT_QUANT / 360.0))) & (SHADEDOT_QUANT - 1)];
+	shadedots = r_avertexnormal_dots[((int)(currententity->angles[1] * (SHADEDOT_QUANT * 0.0027777777777777777777777777777778))) & (SHADEDOT_QUANT - 1)];
 	
-	an = currententity->angles[1]/180*M_PI;
+	an = currententity->angles[1]*0.0055555555555555555555555555555556*M_PI;
 	shadevector[0] = cos(-an);
 	shadevector[1] = sin(-an);
 	shadevector[2] = 1;
 	VectorNormalize (shadevector);
 
-	//
 	// locate the proper data
-	//
 
 	c_alias_polys += paliashdr->num_tris;
 
-	//
 	// draw all the triangles
-	//
 	if (currententity->flags & RF_DEPTHHACK) // hack the depth range to prevent view model from poking into walls
 		qglDepthRange (gldepthmin, gldepthmin + 0.3*(gldepthmax-gldepthmin));
 
@@ -770,9 +691,9 @@ void R_DrawAliasModel (entity_t *e)
 	}
 	if (!skin)
 		skin = r_notexture;	// fallback...
-	GL_Bind(skin->texnum);
 
 	// draw it
+	GL_Bind(skin->texnum);
 
 	qglShadeModel (GL_SMOOTH);
 
@@ -783,8 +704,7 @@ void R_DrawAliasModel (entity_t *e)
 	}
 
 
-	if ( (currententity->frame >= paliashdr->num_frames) 
-		|| (currententity->frame < 0) )
+	if ( (currententity->frame >= paliashdr->num_frames) || (currententity->frame < 0) )
 	{
 		ri.Con_Printf (PRINT_ALL, "R_DrawAliasModel %s: no such frame %d\n",
 			currentmodel->name, currententity->frame);
@@ -792,8 +712,7 @@ void R_DrawAliasModel (entity_t *e)
 		currententity->oldframe = 0;
 	}
 
-	if ( (currententity->oldframe >= paliashdr->num_frames)
-		|| (currententity->oldframe < 0))
+	if ( (currententity->oldframe >= paliashdr->num_frames)	|| (currententity->oldframe < 0))
 	{
 		ri.Con_Printf (PRINT_ALL, "R_DrawAliasModel %s: no such oldframe %d\n",
 			currentmodel->name, currententity->oldframe);

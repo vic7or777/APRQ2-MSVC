@@ -49,6 +49,40 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // fall over
 #define	ROLL	2
 
+//Added tga header -Maniac
+// Truevision Targa header
+typedef struct _TargaHeader {
+	unsigned char 	id_length, colormap_type, image_type;
+	unsigned short	colormap_index, colormap_length;
+	unsigned char	colormap_size;
+	unsigned short	x_origin, y_origin, width, height;
+	unsigned char	pixel_size, attributes;
+} TargaHeader;
+
+// Definitions for image types
+#define TGA_Null		0	// no image data
+#define TGA_Map			1	// Uncompressed, color-mapped images
+#define TGA_RGB			2	// Uncompressed, RGB images
+#define TGA_Mono		3	// Uncompressed, black and white images
+#define TGA_RLEMap		9	// Runlength encoded color-mapped images
+#define TGA_RLERGB		10	// Runlength encoded RGB images
+#define TGA_RLEMono		11	// Compressed, black and white images
+#define TGA_CompMap		32	// Compressed color-mapped data, using Huffman, Delta, and runlength encoding
+#define TGA_CompMap4	33	// Compressed color-mapped data, using Huffman, Delta, and runlength encoding. 4-pass quadtree-type process
+
+// Definitions for interleave flag
+#define TGA_IL_None		0	// non-interleaved
+#define TGA_IL_Two		1	// two-way (even/odd) interleaving
+#define TGA_IL_Four		2	// four way interleaving
+#define TGA_IL_Reserved	3	// reserved
+
+// Definitions for origin flag
+#define TGA_O_UPPER		0	// Origin in lower left-hand corner
+#define TGA_O_LOWER		1	// Origin in upper left-hand corner
+
+#define MAXCOLORS 16384
+// Truevision Targa header
+
 
 #ifndef __VIDDEF_T
 #define __VIDDEF_T
@@ -241,11 +275,10 @@ extern	cvar_t		*intensity;
 
 //Added gl_variables -Maniac
 extern  cvar_t  *skydistance; // DMP - skybox size change
-extern	cvar_t	*contransparent;
-extern  cvar_t  *contransparentvalue;
 
-extern	cvar_t	*gl_screenshot_quality;
+extern	cvar_t	*gl_contrans;
 extern	cvar_t	*gl_loadtga;
+extern	cvar_t	*gl_screenshot_quality;
 
 //End
 
@@ -343,7 +376,10 @@ void GL_ResampleTexture (unsigned *in, int inwidth, int inheight, unsigned *out,
 
 struct image_s *R_RegisterSkin (char *name);
 
+//Added loadpng -Maniac
+//void LoadPNG ( char *name, byte **pic, int *width, int *height );
 void LoadPCX (char *filename, byte **pic, byte **palette, int *width, int *height);
+
 image_t *GL_LoadPic (char *name, byte *pic, int width, int height, imagetype_t type, int bits);
 image_t	*GL_FindImage (char *name, imagetype_t type);
 void	GL_TextureMode( char *string );

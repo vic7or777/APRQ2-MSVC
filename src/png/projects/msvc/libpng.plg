@@ -1,0 +1,41 @@
+<html>
+<body>
+<pre>
+<h1>Build Log</h1>
+<h3>
+--------------------Configuration: libpng - Win32 DLL--------------------
+</h3>
+<h3>Command Lines</h3>
+Creating temporary file "C:\WIN\TEMP\RSPC1A0.TMP" with contents
+[
+/nologo /dll /incremental:no /pdb:".\win32\libpng\dll/libpng3.pdb" /machine:I386 /def:".\png32ms.def" /out:".\win32\libpng\dll\libpng3.dll" /implib:".\win32\libpng\dll/libpng3.lib" 
+.\win32\libpng\dll\png.obj
+.\win32\libpng\dll\pngerror.obj
+.\win32\libpng\dll\pngget.obj
+.\win32\libpng\dll\pngmem.obj
+.\win32\libpng\dll\pngpread.obj
+.\win32\libpng\dll\pngread.obj
+.\win32\libpng\dll\pngrio.obj
+.\win32\libpng\dll\pngrtran.obj
+.\win32\libpng\dll\pngrutil.obj
+.\win32\libpng\dll\pngset.obj
+.\win32\libpng\dll\pngtrans.obj
+.\win32\libpng\dll\pngwio.obj
+.\win32\libpng\dll\pngwrite.obj
+.\win32\libpng\dll\pngwtran.obj
+.\win32\libpng\dll\pngwutil.obj
+.\win32\libpng\dll\png.res
+.\win32\zlib\dll\zlib.lib
+]
+Creating command line "link.exe @C:\WIN\TEMP\RSPC1A0.TMP"
+<h3>Output Window</h3>
+Linking...
+   Creating library .\win32\libpng\dll/libpng3.lib and object .\win32\libpng\dll/libpng3.exp
+
+
+
+<h3>Results</h3>
+libpng3.dll - 0 error(s), 0 warning(s)
+</pre>
+</body>
+</html>

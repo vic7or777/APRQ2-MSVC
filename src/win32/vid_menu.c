@@ -68,6 +68,7 @@ static menulist_s  		s_paletted_texture_box;
 static menulist_s  		s_finish_box;
 static menuaction_s		s_cancel_action[2];
 static menuaction_s		s_defaults_action[2];
+static menuaction_s		s_apply_action[2];
 
 static void DriverCallback( void *unused )
 {
@@ -334,11 +335,12 @@ void VID_MenuInit( void )
 		s_defaults_action[i].generic.y    = 90;
 		s_defaults_action[i].generic.callback = ResetDefaults;
 
-		s_cancel_action[i].generic.type = MTYPE_ACTION;
-		s_cancel_action[i].generic.name = "cancel";
-		s_cancel_action[i].generic.x    = 0;
-		s_cancel_action[i].generic.y    = 100;
-		s_cancel_action[i].generic.callback = CancelChanges;
+		//Changed apply setttings -Maniac
+		s_apply_action[i].generic.type = MTYPE_ACTION;
+		s_apply_action[i].generic.name		= "apply";
+		s_apply_action[i].generic.x    = 0;
+		s_apply_action[i].generic.y    = 100;
+		s_apply_action[i].generic.callback = ApplyChanges;
 	}
 
 	s_stipple_box.generic.type = MTYPE_SPINCONTROL;
@@ -386,10 +388,11 @@ void VID_MenuInit( void )
 	Menu_AddItem( &s_opengl_menu, ( void * ) &s_paletted_texture_box );
 	Menu_AddItem( &s_opengl_menu, ( void * ) &s_finish_box );
 
+	//Changed aply settings -Maniac
 	Menu_AddItem( &s_software_menu, ( void * ) &s_defaults_action[SOFTWARE_MENU] );
-	Menu_AddItem( &s_software_menu, ( void * ) &s_cancel_action[SOFTWARE_MENU] );
+	Menu_AddItem( &s_software_menu, ( void * ) &s_apply_action[SOFTWARE_MENU] );
 	Menu_AddItem( &s_opengl_menu, ( void * ) &s_defaults_action[OPENGL_MENU] );
-	Menu_AddItem( &s_opengl_menu, ( void * ) &s_cancel_action[OPENGL_MENU] );
+	Menu_AddItem( &s_opengl_menu, ( void * ) &s_apply_action[OPENGL_MENU] );
 
 	Menu_Center( &s_software_menu );
 	Menu_Center( &s_opengl_menu );
@@ -441,8 +444,9 @@ const char *VID_MenuKey( int key )
 	switch ( key )
 	{
 	case K_ESCAPE:
-		CancelChanges( 0 ); //Changed -Maniac
+		CancelChanges(NULL);  //Changed -Maniac
 		return NULL;
+
 	case K_KP_UPARROW:
 	case K_UPARROW:
 		m->cursor--;
@@ -461,9 +465,10 @@ const char *VID_MenuKey( int key )
 	case K_RIGHTARROW:
 		Menu_SlideItem( m, 1 );
 		break;
+
 	case K_KP_ENTER:
 	case K_ENTER:
-		if ( !Menu_SelectItem( m ) )
+		if ( Menu_SelectItem( m ) )
 			ApplyChanges( NULL );
 		break;
 	}

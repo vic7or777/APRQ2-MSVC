@@ -96,7 +96,7 @@ void Joy_AdvancedUpdate_f (void);
 void IN_JoyMove (usercmd_t *cmd);
 
 //Added m_restart -Maniac
-void IN_MRestart(void);				// MC!XP
+void IN_MRestart(void);
 
 /*
 ============================================================
@@ -165,7 +165,7 @@ void IN_ActivateMouse (void)
 	if (mouseparmsvalid)
 	{
 		//Changed, added m_xpfix -Maniac
-		if(m_xpfix->value==0)
+		if(!m_xpfix->value)
 			restore_spi = SystemParametersInfo (SPI_SETMOUSE, 0, newmouseparms, 0);
 		else
 			restore_spi = SystemParametersInfo (SPI_SETMOUSE, 0, xpmouseparms, 0);
@@ -185,8 +185,8 @@ void IN_ActivateMouse (void)
 	if (window_rect.bottom >= height-1)
 		window_rect.bottom = height-1;
 
-	window_center_x = (window_rect.right + window_rect.left)/2;
-	window_center_y = (window_rect.top + window_rect.bottom)/2;
+	window_center_x = (window_rect.right + window_rect.left)*0.5;
+	window_center_y = (window_rect.top + window_rect.bottom)*0.5;
 
 	SetCursorPos (window_center_x, window_center_y);
 
@@ -363,7 +363,7 @@ void IN_Init (void)
     in_mouse				= Cvar_Get ("in_mouse",					"1",		CVAR_ARCHIVE);
 
 	//Added m_xpfix -Maniac
-	m_xpfix=Cvar_Get("m_xpfix","0",0);	//MC!XP
+	m_xpfix					= Cvar_Get ("m_xpfix",					"0",		0);
 
 	// joystick variables
 	in_joystick				= Cvar_Get ("in_joystick",				"0",		CVAR_ARCHIVE);
@@ -394,7 +394,7 @@ void IN_Init (void)
 	Cmd_AddCommand ("-mlook", IN_MLookUp);
 
 	//Added m_restart -Maniac
-	Cmd_AddCommand ("m_restart", IN_MRestart);	// MC!XP
+	Cmd_AddCommand ("m_restart", IN_MRestart);
 
 	Cmd_AddCommand ("joy_advancedupdate", Joy_AdvancedUpdate_f);
 
@@ -403,7 +403,7 @@ void IN_Init (void)
 }
 
 
-//Added m_resrt -Maniac
+//Added m_restart -Maniac
 void IN_MRestart(void)
 {
 	IN_Shutdown();
@@ -456,9 +456,7 @@ void IN_Frame (void)
 		return;
 	}
 
-	if ( !cl.refresh_prepped
-		|| cls.key_dest == key_console
-		|| cls.key_dest == key_menu)
+	if ( !cl.refresh_prepped || cls.key_dest == key_console || cls.key_dest == key_menu)
 	{
 		// temporarily deactivate if in fullscreen
 		if (Cvar_VariableValue ("vid_fullscreen") == 0)
@@ -599,6 +597,7 @@ PDWORD RawValuePointer (int axis)
 	case JOY_AXIS_V:
 		return &ji.dwVpos;
 	}
+
 }
 
 
