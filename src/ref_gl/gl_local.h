@@ -24,8 +24,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include <stdio.h>
 
-#include <GL/gl.h>
+//#include <GL/gl.h> -Maniac
 #include <GL/glu.h>
+#include "glext.h"
 #include <math.h>
 
 #ifndef __linux__
@@ -35,10 +36,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #endif
 
 #include "../client/ref.h"
-
 #include "qgl.h"
 
-#define	REF_VERSION	"GL 0.01"
+#define	REF_VERSION	"GL 0.05"
 
 // up / down
 #define	PITCH	0
@@ -276,7 +276,6 @@ extern	cvar_t		*intensity;
 //Added gl_variables -Maniac
 extern  cvar_t  *skydistance; // DMP - skybox size change
 
-extern	cvar_t	*gl_contrans;
 extern	cvar_t	*gl_loadtga;
 extern	cvar_t	*gl_screenshot_quality;
 
@@ -308,6 +307,7 @@ void R_PushDlights (void);
 extern	model_t	*r_worldmodel;
 
 extern	unsigned	d_8to24table[256];
+extern	float		d_8to24tablef[256][3]; // -Maniac
 
 extern	int		registration_sequence;
 
@@ -359,7 +359,8 @@ void COM_StripExtension (char *in, char *out);
 
 void	Draw_GetPicSize (int *w, int *h, char *name);
 void	Draw_Pic (int x, int y, char *name);
-void	Draw_StretchPic (int x, int y, int w, int h, char *name);
+// Knightamre- added alpha for Psychospaz's transparent console -Maniac
+void	Draw_StretchPic (int x, int y, int w, int h, char *name, float alpha);
 void	Draw_Char (int x, int y, int c);
 void	Draw_TileClear (int x, int y, int w, int h, char *name);
 void	Draw_Fill (int x, int y, int w, int h, int c);
@@ -377,7 +378,7 @@ void GL_ResampleTexture (unsigned *in, int inwidth, int inheight, unsigned *out,
 struct image_s *R_RegisterSkin (char *name);
 
 //Added loadpng -Maniac
-//void LoadPNG ( char *name, byte **pic, int *width, int *height );
+void LoadPNG ( char *name, byte **pic, int *width, int *height );
 void LoadPCX (char *filename, byte **pic, byte **palette, int *width, int *height);
 
 image_t *GL_LoadPic (char *name, byte *pic, int width, int height, imagetype_t type, int bits);
@@ -454,6 +455,16 @@ typedef struct
 	qboolean	allow_cds;
 } glconfig_t;
 
+// -Maniac
+#define GLSTATE_DISABLE_ALPHATEST	if (gl_state.alpha_test) { qglDisable(GL_ALPHA_TEST); gl_state.alpha_test=false; }
+#define GLSTATE_ENABLE_ALPHATEST	if (!gl_state.alpha_test) { qglEnable(GL_ALPHA_TEST); gl_state.alpha_test=true; }
+
+#define GLSTATE_DISABLE_BLEND		if (gl_state.blend) { qglDisable(GL_BLEND); gl_state.blend=false; }
+#define GLSTATE_ENABLE_BLEND		if (!gl_state.blend) { qglEnable(GL_BLEND); gl_state.blend=true; }
+
+#define GLSTATE_DISABLE_TEXGEN		if (gl_state.texgen) { qglDisable(GL_TEXTURE_GEN_S); qglDisable(GL_TEXTURE_GEN_T); qglDisable(GL_TEXTURE_GEN_R); gl_state.texgen=false; }
+#define GLSTATE_ENABLE_TEXGEN		if (!gl_state.texgen) { qglEnable(GL_TEXTURE_GEN_S); qglEnable(GL_TEXTURE_GEN_T); qglEnable(GL_TEXTURE_GEN_R); gl_state.texgen=true; }
+
 typedef struct
 {
 	float inverse_intensity;
@@ -470,6 +481,9 @@ typedef struct
 
 	float camera_separation;
 	qboolean stereo_enabled;
+
+	qboolean		alpha_test;
+	qboolean		blend;
 
 	unsigned char originalRedGammaTable[256];
 	unsigned char originalGreenGammaTable[256];

@@ -194,10 +194,6 @@ void SCR_DrawDebugGraph (void)
 	float	v;
 	int		color;
 
-		//Added check if connected. -Maniac
-		if ( cls.state != ca_active )
-		return;
-
 	//
 	// draw the graph
 	//
@@ -597,13 +593,13 @@ void SCR_DrawConsole (void)
 	
 	if (cls.state == ca_disconnected || cls.state == ca_connecting)
 	{	// forced full screen console
-		Con_DrawConsole (1.0);
+		Con_DrawConsole (1.0, false); // -Maniac
 		return;
 	}
 
 	if (cls.state != ca_active || !cl.refresh_prepped)
 	{	// connected, but can't render
-		Con_DrawConsole (0.5);
+		Con_DrawConsole (0.5, false); // -Maniac
 		re.DrawFill (0, viddef.height* 0.5, viddef.width, viddef.height* 0.5, 0);
 		//Changed conheight -Maniac
 		return;
@@ -611,7 +607,7 @@ void SCR_DrawConsole (void)
 
 	if (scr_con_current)
 	{
-		Con_DrawConsole (scr_con_current);
+		Con_DrawConsole (scr_con_current, true); // -Maniac
 	}
 	else
 	{
@@ -680,11 +676,11 @@ int entitycmpfnc( const entity_t *a, const entity_t *b )
 	// all other models are sorted by model then skin
 	if ( a->model == b->model )
 	{
-		return ( ( int ) a->skin - ( int ) b->skin );
+		return ( (long int) a->skin - (long int) b->skin );
 	}
 	else
 	{
-		return ( ( int ) a->model - ( int ) b->model );
+		return ( (long int) a->model - (long int) b->model );
 	}
 }
 
@@ -1512,7 +1508,7 @@ void SCR_UpdateScreen (void)
 			           /*
                         * Changed netgraph behind hud items. -Maniac
                         */
-			if(cl_netgraphmode->value == 1 || cl_netgraphmode->value >=3)
+			if(cl_netgraphmode->value == 1 || cl_netgraphmode->value >= 3)
 			{
 				if (scr_timegraph->value)
 					SCR_DebugGraph (cls.frametime*300, 0);
@@ -1528,6 +1524,17 @@ void SCR_UpdateScreen (void)
 
 				SCR_DrawNet ();
 				SCR_CheckDrawCenterString ();
+
+				if (cl_chathud->value) {
+					SCR_Chathud();
+				}
+
+				if (cl_clock->value) {
+					SCR_DrawClock ();
+				}
+				if (cl_fps->value) {
+					SCR_DrawFPS ();
+				}
 
 			}
 			else
@@ -1539,6 +1546,17 @@ void SCR_UpdateScreen (void)
 				if (cl.frame.playerstate.stats[STAT_LAYOUTS] & 2)
 					CL_DrawInventory ();
 
+				if (cl_chathud->value) {
+	                    SCR_Chathud();
+				}
+
+				if (cl_clock->value) {
+					SCR_DrawClock ();
+				}
+				if (cl_fps->value) {
+					SCR_DrawFPS ();
+				}
+
 				SCR_DrawNet ();
 				SCR_CheckDrawCenterString ();
 
@@ -1549,21 +1567,8 @@ void SCR_UpdateScreen (void)
 					SCR_DrawDebugGraph ();
 			}
 
-			//Add clock & fps & Chathud -Maniac
-        	SCR_AutoDemo();
+        	SCR_AutoDemo(); //Autodemo -Maniac
 
-			
-			if (cl_chathud->value) {
-	                        SCR_Chathud();
-			}
-
-			if (cl_clock->value) {
-					SCR_DrawClock ();
-			}
-			if (cl_fps->value) {
-				SCR_DrawFPS ();
-			}
-			//End
 
 			AVI_ProcessFrame (); //Avi export -Maniac
 

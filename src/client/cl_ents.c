@@ -1402,6 +1402,7 @@ void CL_CalcViewValues (void)
 	centity_t	*ent;
 	frame_t		*oldframe;
 	player_state_t	*ps, *ops;
+	//char ostr[256]; // -Maniac
 
 	// find the previous frame to interpolate from
 	ps = &cl.frame.playerstate;
@@ -1458,6 +1459,17 @@ void CL_CalcViewValues (void)
 
 	for (i=0 ; i<3 ; i++)
 		cl.refdef.viewangles[i] += LerpAngle (ops->kick_angles[i], ps->kick_angles[i], lerp);
+
+	//To do when die -Maniac
+	/*if ((cl.frame.playerstate.pmove.pm_type == PM_DEAD) && (x_info.x_deadoralive==1)) {
+		x_info.x_deadoralive = 2; //don't repeat until set to 1 again
+		if (cl_todo->value)
+		{
+			Com_sprintf(ostr,sizeof(ostr), "%s\n", cl_tododie->string);
+			Cbuf_AddText(ostr);
+			Cbuf_Execute() ;
+		}
+	}*/
 
 	AngleVectors (cl.refdef.viewangles, cl.v_forward, cl.v_right, cl.v_up);
 

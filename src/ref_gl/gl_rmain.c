@@ -26,7 +26,7 @@ viddef_t	vid;
 
 refimport_t	ri;
 
-int GL_TEXTURE0, GL_TEXTURE1;
+int GL_TEXTURE_0, GL_TEXTURE_1;
 
 model_t		*r_worldmodel;
 
@@ -133,12 +133,13 @@ cvar_t	*vid_ref;
 
 //Added cvar's -Maniac
 cvar_t *skydistance; // DMP - skybox size change
-cvar_t *gl_contrans;
 cvar_t *gl_screenshot_quality;
 cvar_t *ignorecantfindpic;
 
 cvar_t 	*gl_loadtga;
 cvar_t 	*gl_hudformat;
+cvar_t	*gl_conformat;
+cvar_t	*gl_hudtrans;
 
 //End
 
@@ -231,7 +232,7 @@ void R_DrawSpriteModel (entity_t *e)
 		alpha = e->alpha;
 
 	if ( alpha != 1.0F )
-		qglEnable( GL_BLEND );
+		GLSTATE_ENABLE_BLEND
 
 	qglColor4f( 1, 1, 1, alpha );
 
@@ -240,9 +241,9 @@ void R_DrawSpriteModel (entity_t *e)
 	GL_TexEnv( GL_MODULATE );
 
 	if ( alpha == 1.0 )
-		qglEnable (GL_ALPHA_TEST);
+		GLSTATE_ENABLE_ALPHATEST
 	else
-		qglDisable( GL_ALPHA_TEST );
+		GLSTATE_DISABLE_ALPHATEST
 
 	qglBegin (GL_QUADS);
 
@@ -268,11 +269,12 @@ void R_DrawSpriteModel (entity_t *e)
 	
 	qglEnd ();
 
-	qglDisable (GL_ALPHA_TEST);
+	GLSTATE_DISABLE_ALPHATEST
 	GL_TexEnv( GL_REPLACE );
 
-	if ( alpha != 1.0F )
-		qglDisable( GL_BLEND );
+	if ( alpha != 1.0F ) {
+		GLSTATE_DISABLE_BLEND
+	}
 
 	qglColor4f( 1, 1, 1, 1 );
 }
@@ -303,13 +305,13 @@ void R_DrawNullModel (void)
 	qglBegin (GL_TRIANGLE_FAN);
 	qglVertex3f (0, 0, -16);
 	for (i = 0; i <= 4; i++)
-		qglVertex3f (16*cos(i*M_PI*0.5), 16*sin(i*M_PI*0.5), 0);
+		qglVertex3f (16*cos(i*M_PI*0.5f), 16*sin(i*M_PI*0.5f), 0);
 	qglEnd ();
 
 	qglBegin (GL_TRIANGLE_FAN);
 	qglVertex3f (0, 0, 16);
 	for (i = 4; i >= 0; i--)
-		qglVertex3f (16*cos(i*M_PI*0.5), 16*sin(i*M_PI*0.5), 0);
+		qglVertex3f (16*cos(i*M_PI*0.5f), 16*sin(i*M_PI*0.5f), 0);
 	qglEnd ();
 
 	qglColor3f (1,1,1);
@@ -423,7 +425,7 @@ void GL_DrawParticles( int num_particles, const particle_t particles[], const un
 
     GL_Bind(r_particletexture->texnum);
 	qglDepthMask( GL_FALSE );		// no z buffering
-	qglEnable( GL_BLEND );
+	GLSTATE_ENABLE_BLEND
 	GL_TexEnv( GL_MODULATE );
 	qglBegin( GL_TRIANGLES );
 
@@ -462,7 +464,7 @@ void GL_DrawParticles( int num_particles, const particle_t particles[], const un
 	}
 
 	qglEnd ();
-	qglDisable( GL_BLEND );
+	GLSTATE_DISABLE_BLEND
 	qglColor4f( 1,1,1,1 );
 	qglDepthMask( 1 );		// back to normal Z buffering
 	GL_TexEnv( GL_REPLACE );
@@ -482,7 +484,7 @@ void R_DrawParticles (void)
 		const particle_t *p;
 
 		qglDepthMask( GL_FALSE );
-		qglEnable( GL_BLEND );
+		GLSTATE_ENABLE_BLEND
 		qglDisable( GL_TEXTURE_2D );
 
 		qglPointSize( gl_particle_size->value );
@@ -499,7 +501,7 @@ void R_DrawParticles (void)
 		}
 		qglEnd();
 
-		qglDisable( GL_BLEND );
+		GLSTATE_DISABLE_BLEND
 		qglColor4f( 1.0F, 1.0F, 1.0F, 1.0F );
 		qglDepthMask( GL_TRUE );
 		qglEnable( GL_TEXTURE_2D );
@@ -521,8 +523,8 @@ void R_PolyBlend (void)
 	if (!gl_polyblend->value || !v_blend[3])
 		return;
 
-	qglDisable (GL_ALPHA_TEST);
-	qglEnable (GL_BLEND);
+	GLSTATE_DISABLE_ALPHATEST
+	GLSTATE_ENABLE_BLEND
 	qglDisable (GL_DEPTH_TEST);
 	qglDisable (GL_TEXTURE_2D);
 
@@ -542,9 +544,9 @@ void R_PolyBlend (void)
 	qglVertex3f (10, 100, -100);
 	qglEnd ();
 
-	qglDisable (GL_BLEND);
+	GLSTATE_DISABLE_BLEND
 	qglEnable (GL_TEXTURE_2D);
-	qglEnable (GL_ALPHA_TEST);
+	GLSTATE_ENABLE_ALPHATEST
 
 	qglColor4f(1,1,1,1);
 }
@@ -690,17 +692,15 @@ void R_SetupGL (void)
 	int		x, x2, y2, y, w, h;
 
 	//Added skydistance -Maniac
-	static GLdouble farz; // DMP skybox size change
-	GLdouble boxsize;  // DMP skybox size change
+	static GLdouble farz; //skybox size change
+	GLdouble boxsize;  //skybox size change
 	//End
 	
-	//
 	// set up viewport
-	//
-	x = floor(r_newrefdef.x * vid.width / vid.width);
-	x2 = ceil((r_newrefdef.x + r_newrefdef.width) * vid.width / vid.width);
-	y = floor(vid.height - r_newrefdef.y * vid.height / vid.height);
-	y2 = ceil(vid.height - (r_newrefdef.y + r_newrefdef.height) * vid.height / vid.height);
+	x = (int)floor(r_newrefdef.x * vid.width / vid.width);
+	x2 = (int)ceil((r_newrefdef.x + r_newrefdef.width) * vid.width / vid.width);
+	y = (int)floor(vid.height - r_newrefdef.y * vid.height / vid.height);
+	y2 = (int)ceil(vid.height - (r_newrefdef.y + r_newrefdef.height) * vid.height / vid.height);
 
 	w = x2 - x;
 	h = y - y2;
@@ -757,8 +757,8 @@ if (skydistance->modified)
 	else
 		qglDisable(GL_CULL_FACE);
 
-	qglDisable(GL_BLEND);
-	qglDisable(GL_ALPHA_TEST);
+	GLSTATE_DISABLE_BLEND
+	GLSTATE_DISABLE_ALPHATEST
 	qglEnable(GL_DEPTH_TEST);
 }
 
@@ -880,21 +880,9 @@ void	R_SetGL2D (void)
     qglLoadIdentity ();
 	qglDisable (GL_DEPTH_TEST);
 	qglDisable (GL_CULL_FACE);
-
-	//Added transparent console -Maniac
-	
-	if(gl_contrans->value < 1)
-	{
-		qglEnable (GL_BLEND);
-		qglColor4f (1,1,1,gl_contrans->value);
-	}
-	else
-	{
-		qglDisable (GL_BLEND);
-		qglEnable (GL_ALPHA_TEST);
-		qglColor4f (1,1,1,1);
-	}
-	//End
+	GLSTATE_DISABLE_BLEND
+	GLSTATE_ENABLE_ALPHATEST
+	qglColor4f (1,1,1,1);
 }
 
 static void GL_DrawColoredStereoLinePair( float r, float g, float b, float y )
@@ -1059,11 +1047,12 @@ void R_Register( void )
 
 	//Added cvar's -Maniac
 	skydistance = ri.Cvar_Get("skydistance", "2300", 0 ); // DMP - skybox size change
-	gl_contrans = ri.Cvar_Get ("gl_contrans", "1", CVAR_ARCHIVE );
 	ignorecantfindpic = ri.Cvar_Get ("ignorecantfindpic", "0", 0);
 
 	gl_loadtga = ri.Cvar_Get( "gl_loadtga", "0", 0);
 	gl_hudformat = ri.Cvar_Get( "gl_hudformat", "0", 0);
+	gl_conformat = ri.Cvar_Get ( "gl_conformat", "0", CVAR_ARCHIVE );
+	gl_hudtrans = ri.Cvar_Get( "gl_hudtrans", "1", 0);
 
     gl_screenshot_quality = ri.Cvar_Get( "gl_screenshot_quality", "85", 0 );
     ri.Cmd_AddCommand( "screenshotjpg", GL_ScreenShot_JPG );
@@ -1370,8 +1359,8 @@ int R_Init( void *hinstance, void *hWnd )
 			qglMTexCoord2fSGIS = ( void * ) qwglGetProcAddress( "glMultiTexCoord2fARB" );
 			qglActiveTextureARB = ( void * ) qwglGetProcAddress( "glActiveTextureARB" );
 			qglClientActiveTextureARB = ( void * ) qwglGetProcAddress( "glClientActiveTextureARB" );
-			GL_TEXTURE0 = GL_TEXTURE0_ARB;
-			GL_TEXTURE1 = GL_TEXTURE1_ARB;
+			GL_TEXTURE_0 = GL_TEXTURE0_ARB;
+			GL_TEXTURE_1 = GL_TEXTURE1_ARB;
 		}
 		else
 		{
@@ -1394,8 +1383,8 @@ int R_Init( void *hinstance, void *hWnd )
 			ri.Con_Printf( PRINT_ALL, "...using GL_SGIS_multitexture\n" );
 			qglMTexCoord2fSGIS = ( void * ) qwglGetProcAddress( "glMTexCoord2fSGIS" );
 			qglSelectTextureSGIS = ( void * ) qwglGetProcAddress( "glSelectTextureSGIS" );
-			GL_TEXTURE0 = GL_TEXTURE0_SGIS;
-			GL_TEXTURE1 = GL_TEXTURE1_SGIS;
+			GL_TEXTURE_0 = GL_TEXTURE0_SGIS;
+			GL_TEXTURE_1 = GL_TEXTURE1_SGIS;
 		}
 		else
 		{
@@ -1515,8 +1504,8 @@ void R_BeginFrame( float camera_separation )
     qglLoadIdentity ();
 	qglDisable (GL_DEPTH_TEST);
 	qglDisable (GL_CULL_FACE);
-	qglDisable (GL_BLEND);
-	qglEnable (GL_ALPHA_TEST);
+	GLSTATE_DISABLE_BLEND
+	GLSTATE_ENABLE_ALPHATEST
 	qglColor4f (1,1,1,1);
 
 	// draw buffer stuff
@@ -1640,7 +1629,7 @@ void R_DrawBeam( entity_t *e )
 	}
 
 	qglDisable( GL_TEXTURE_2D );
-	qglEnable( GL_BLEND );
+	GLSTATE_ENABLE_BLEND
 	qglDepthMask( GL_FALSE );
 
 	r = ( d_8to24table[e->skinnum & 0xFF] ) & 0xFF;
@@ -1664,7 +1653,7 @@ void R_DrawBeam( entity_t *e )
 	qglEnd();
 
 	qglEnable( GL_TEXTURE_2D );
-	qglDisable( GL_BLEND );
+	GLSTATE_DISABLE_BLEND
 	qglDepthMask( GL_TRUE );
 }
 

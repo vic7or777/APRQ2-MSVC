@@ -28,9 +28,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define	BASEDIRNAME	"baseq2"
 
 //Added own versio & name -Maniac
-#define TS_APPNAME "Apr"
+#define APR_APPNAME "Apr"
 
-#define TS_DISPLAYVERSION "1.13"
+#define APR_DISPLAYVERSION "1.14"
 //End
 
 #ifdef WIN32

@@ -25,6 +25,8 @@ console_t	con;
 
 cvar_t		*con_notifytime;
 
+cvar_t		*con_transparenty;		//Psychospaz's transparent console -Maniac
+
 
 #define		MAXCMDLINE	256
 extern	char	key_lines[32][MAXCMDLINE];
@@ -316,6 +318,9 @@ void Con_Init (void)
 //
 	con_notifytime = Cvar_Get ("con_notifytime", "3", 0);
 
+	//Psychospaz's transparent console -Maniac
+	con_transparenty = Cvar_Get ("gl_contrans", "0.5", CVAR_ARCHIVE);
+
 	Cmd_AddCommand ("toggleconsole", Con_ToggleConsole_f);
 	Cmd_AddCommand ("togglechat", Con_ToggleChat_f);
 	Cmd_AddCommand ("messagemode", Con_MessageMode_f);
@@ -568,7 +573,8 @@ Con_DrawConsole
 Draws the console with the solid background
 ================
 */
-void Con_DrawConsole (float frac)
+//void Con_DrawConsole (float frac)
+void Con_DrawConsole (float frac, qboolean ingame) //Knightmare
 {
 	int				i, j, x, y, n;
 	int				rows;
@@ -577,6 +583,7 @@ void Con_DrawConsole (float frac)
 	int				lines;
 	char			version[64];
 	char			dlbar[1024];
+	float			alpha; //added -Maniac
 
 	lines = viddef.height * frac;
 	if (lines <= 0)
@@ -585,22 +592,34 @@ void Con_DrawConsole (float frac)
 	if (lines > viddef.height)
 		lines = viddef.height;
 
-// draw the background
-	re.DrawStretchPic (0, -viddef.height+lines, viddef.width, viddef.height, "conback");
+
+	//Psychospaz's transparent console -Maniac
+	if (ingame)
+	{
+		alpha = con_transparenty->value;
+	}
+	else
+	{
+			alpha = 1;
+	}
+	//	alpha = (frac*con_alpha->value*2);
+	//alpha = ((frac/con_height->value)*con_alpha->value);
+	//end
+
+	//added alpha parm for Psychospaz's transparent console
+	// draw the background
+	re.DrawStretchPic (0, -(int)viddef.height+lines, viddef.width, viddef.height, "conback", alpha);
 	SCR_AddDirtyPoint (0,0);
 	SCR_AddDirtyPoint (viddef.width-1,lines-1);
 
-	//Com_sprintf (version, sizeof(version), "v%4.2f", VERSION); //Added versio own versio display -Maniac
-	Com_sprintf (version, sizeof(version), "%s v%s", TS_APPNAME, TS_DISPLAYVERSION);
+	//Added versio own versio display -Maniac
+	Com_sprintf (version, sizeof(version), "%s v%s", APR_APPNAME, APR_DISPLAYVERSION);
 
-	for (x=0 ; x<strlen(version) ; x++)
+	for (x = 0; x < strlen(version); x++) {
 		re.DrawChar (viddef.width-(strlen(version)*8+4)+x*8, lines-12, 128 + version[x] );
-	/* Changed to show own versio -Maniac
-	for (x=0 ; x<5 ; x++)
-		re.DrawChar (viddef.width-44+x*8, lines-12, 128 + version[x] );
-	*/
+	}
 
-// draw the text
+
 // draw the text
 	con.vislines = lines;
 	

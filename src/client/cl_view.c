@@ -358,6 +358,7 @@ void CL_PrepRefresh (void)
 	//Added pversion time -Maniac
 	x_info.x_pversion = cl.time;
 	x_info.x_nocheatsay = cl.time;
+//	x_info.x_deadoralive = 2;
 }
 
 /*

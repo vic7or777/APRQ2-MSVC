@@ -169,7 +169,8 @@ typedef struct
 
 	void	(*DrawGetPicSize) (int *w, int *h, char *name);	// will return 0 0 if not found
 	void	(*DrawPic) (int x, int y, char *name);
-	void	(*DrawStretchPic) (int x, int y, int w, int h, char *name);
+	//Knightamre added alpha for Psychospaz's transparent console -Maniac
+	void	(*DrawStretchPic) (int x, int y, int w, int h, char *name, float alpha);
 	void	(*DrawChar) (int x, int y, int c);
 	void	(*DrawTileClear) (int x, int y, int w, int h, char *name);
 	void	(*DrawFill) (int x, int y, int w, int h, int c);

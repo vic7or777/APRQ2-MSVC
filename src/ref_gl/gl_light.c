@@ -89,7 +89,7 @@ void R_RenderDlights (void)
 	qglDepthMask (0);
 	qglDisable (GL_TEXTURE_2D);
 	qglShadeModel (GL_SMOOTH);
-	qglEnable (GL_BLEND);
+	GLSTATE_ENABLE_BLEND
 	qglBlendFunc (GL_ONE, GL_ONE);
 
 	l = r_newrefdef.dlights;
@@ -97,7 +97,7 @@ void R_RenderDlights (void)
 		R_RenderDlight (l);
 
 	qglColor3f (1,1,1);
-	qglDisable (GL_BLEND);
+	GLSTATE_DISABLE_BLEND
 	qglEnable (GL_TEXTURE_2D);
 	qglBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	qglDepthMask (1);

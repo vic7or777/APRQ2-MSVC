@@ -66,9 +66,7 @@ qboolean VID_CreateWindow( int width, int height, qboolean fullscreen )
 	WNDCLASS		wc;
 	RECT			r;
 	cvar_t			*vid_xpos, *vid_ypos;
-	int				stylebits;
-	int				x, y, w, h;
-	int				exstyle;
+	int				stylebits, x, y, w, h, exstyle;
 
 	/* Register the frame class */
     wc.style         = 0;
@@ -400,14 +398,14 @@ qboolean GLimp_InitGL (void)
 		PFD_SUPPORT_OPENGL |			// support OpenGL
 		PFD_DOUBLEBUFFER,				// double buffered
 		PFD_TYPE_RGBA,					// RGBA type
-		24,								// 24-bit color depth
+		32,								// 24-bit color depth Changed from 24 -Maniac
 		0, 0, 0, 0, 0, 0,				// color bits ignored
 		0,								// no alpha buffer
 		0,								// shift bit ignored
 		0,								// no accumulation buffer
 		0, 0, 0, 0, 					// accum bits ignored
-		32,								// 32-bit z-buffer	
-		0,								// no stencil buffer
+		24,								// 32-bit z-buffer	Changed from 32 -Maniac
+		0,								// no stencil buffer Changed from 0 -Maniac
 		0,								// no auxiliary buffer
 		PFD_MAIN_PLANE,					// main layer
 		0,								// reserved

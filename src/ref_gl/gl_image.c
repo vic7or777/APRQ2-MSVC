@@ -23,7 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "jpeglib.h"
 
 image_t		gltextures[MAX_GLTEXTURES];
-int			numgltextures;
+int			numgltextures = 0;
 int			base_textureid;		// gltextures[i] = base_textureid+i
 
 static byte			 intensitytable[256];
@@ -71,17 +71,17 @@ void GL_EnableMultitexture( qboolean enable )
 
 	if ( enable )
 	{
-		GL_SelectTexture( GL_TEXTURE1 );
+		GL_SelectTexture( GL_TEXTURE_1 );
 		qglEnable( GL_TEXTURE_2D );
 		GL_TexEnv( GL_REPLACE );
 	}
 	else
 	{
-		GL_SelectTexture( GL_TEXTURE1 );
+		GL_SelectTexture( GL_TEXTURE_1 );
 		qglDisable( GL_TEXTURE_2D );
 		GL_TexEnv( GL_REPLACE );
 	}
-	GL_SelectTexture( GL_TEXTURE0 );
+	GL_SelectTexture( GL_TEXTURE_0 );
 	GL_TexEnv( GL_REPLACE );
 }
 
@@ -92,7 +92,7 @@ void GL_SelectTexture( GLenum texture )
 	if ( !qglSelectTextureSGIS && !qglActiveTextureARB )
 		return;
 
-	if ( texture == GL_TEXTURE0 )
+	if ( texture == GL_TEXTURE_0 )
 	{
 		tmu = 0;
 	}
@@ -145,7 +145,7 @@ void GL_Bind (int texnum)
 void GL_MBind( GLenum target, int texnum )
 {
 	GL_SelectTexture( target );
-	if ( target == GL_TEXTURE0 )
+	if ( target == GL_TEXTURE_0 )
 	{
 		if ( gl_state.currenttextures[0] == texnum )
 			return;
@@ -1525,6 +1525,7 @@ qboolean GL_Upload8 (byte *data, int width, int height,  qboolean mipmap, qboole
 		return GL_Upload32 (trans, width, height, mipmap);
 	}
 
+	return false;
 }
 
 
@@ -1581,7 +1582,7 @@ image_t *GL_LoadPic (char *name, byte *pic, int width, int height, imagetype_t t
 	len = strlen(name);
 	strcpy(s,name);
 
-	if (!strcmp(s+len-4, ".tga") || !strcmp(s+len-4, ".jpg") /*|| !strcmp(s+len-4, ".png")*/) {
+	if (!strcmp(s+len-4, ".tga") || !strcmp(s+len-4, ".jpg") || !strcmp(s+len-4, ".png")) {
 		s[len-3] = 'w';
 		s[len-2] = 'a';
 		s[len-1] = 'l';
@@ -1726,23 +1727,23 @@ image_t	*GL_FindImage (char *name, imagetype_t type)
 	{
 		image = GL_LoadWal (name);
 	}
-	else if (!strcmp(name+len-4, ".jpg"))
+	else if (!strcmp(name+len-4, ".tga"))
 	{
-		LoadJPG (name, &pic, &width, &height);
+		LoadTGA (name, &pic, &width, &height);
 		if (!pic)
 			return NULL;
 		image = GL_LoadPic (name, pic, width, height, type, 32);
 	}
-/*	else if (!strcmp(name+len-4, ".png"))
+	else if (!strcmp(name+len-4, ".png"))
 	{
 		LoadPNG (name, &pic, &width, &height);
 		if (!pic)
 			return NULL;
 		image = GL_LoadPic (name, pic, width, height, type, 32);
-	} */
-	else if (!strcmp(name+len-4, ".tga"))
+	} 
+	else if (!strcmp(name+len-4, ".jpg"))
 	{
-		LoadTGA (name, &pic, &width, &height);
+		LoadJPG (name, &pic, &width, &height);
 		if (!pic)
 			return NULL;
 		image = GL_LoadPic (name, pic, width, height, type, 32);

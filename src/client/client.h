@@ -146,7 +146,7 @@ typedef struct
 	FILE		*cinematic_file;
 	int			cinematictime;		// cls.realtime for first cinematic frame
 	int			cinematicframe;
-	char		cinematicpalette[768];
+	unsigned char		cinematicpalette[768];
 	qboolean	cinematicpalette_active;
 
 	//
@@ -249,11 +249,12 @@ typedef struct
 
 extern client_static_t	cls;
 
-//Shaws: x_info -Maniac
+//x_info -Maniac
 typedef struct
 {
-	int			x_pversion;//Shaws: p_version anti-exploit wait-delay
-	int			x_nocheatsay;//Shaws: !nocheatsay anti-exploit wait-delay
+	int			x_pversion;//p_version anti-exploit wait-delay
+	int			x_nocheatsay;//!nocheatsay anti-exploit wait-delay
+//	int			x_deadoralive;
 } x_info_t;
 
 extern x_info_t x_info;

@@ -34,6 +34,8 @@ extern cvar_t *cl_custommatchstart ;
 extern cvar_t *cl_recordatmatchstart ;
 extern cvar_t *cl_dontrecorduntilmatchstart;
 extern cvar_t *ignorewaves;
+//extern cvar_t *cl_todo;
+//extern cvar_t *cl_todoalive;
 //End
 
 char *svc_strings[256] =
@@ -124,7 +126,8 @@ qboolean	CL_CheckOrDownloadFile (char *filename)
 //	FS_CreatePath (name);
 
 	fp = fopen (name, "r+b");
-	if (fp) { // it exists
+	if (fp)
+	{ // it exists
 		int len;
 		fseek(fp, 0, SEEK_END);
 		len = ftell(fp);
@@ -683,6 +686,40 @@ void SHOWNET(char *s)
 
 /*
 =====================
+stristr()
+  case insensitive strstr()
+  (Shaws added: stristr())
+=====================
+*/
+char *stristr (const char *s1, const char *s2)
+{
+	char *cp = (char*) s1;
+	char *s, *t;
+	char l, r;
+
+	while (*cp) {
+		s = cp;
+		t = (char*)s2;
+		while (*s && *t) {
+			l = ( (*s >= 'A') && (*s <= 'Z') ) ? 
+				*s + 'a' - 'A' : *s;
+			r = ( (*t >= 'A') && (*t <= 'Z') ) ? 
+				*t + 'a' - 'A' : *t;
+			if ( l != r)
+				break;
+			s++, t++;
+		}
+
+		if (*t == '\0')
+			return cp;
+
+		cp++;
+	}
+	return 0; /* not found */
+}
+
+/*
+=====================
 x_p_version_check
   reply to "p_version" -Maniac
   (Shaws added: x_p_version_check(char *s) )
@@ -699,7 +736,7 @@ qboolean x_p_version_check (char *s)
 	{
 		if (cl.time > x_info.x_nocheatsay)
 		{
-			Com_sprintf(ostr, sizeof(ostr), "Using Apr Q2 v%s\n",TS_DISPLAYVERSION);
+			Com_sprintf(ostr, sizeof(ostr), "Using Apr Q2 v%s\n",APR_DISPLAYVERSION);
 			Cbuf_ExecuteText(EXEC_NOW, ostr);
 			x_info.x_nocheatsay = cl.time + 8000;
 		}
@@ -709,7 +746,7 @@ qboolean x_p_version_check (char *s)
 	{
 		if (cl.time > x_info.x_pversion)
 		{
-			Com_sprintf(ostr, sizeof(ostr), "Using Apr Q2 v%s\n",TS_DISPLAYVERSION);
+			Com_sprintf(ostr, sizeof(ostr), "Using Apr Q2 v%s\n",APR_DISPLAYVERSION);
 			Cbuf_ExecuteText(EXEC_NOW, ostr);
 			x_info.x_pversion = cl.time + 8000;
 		}
@@ -741,8 +778,11 @@ qboolean bad_stufftext(char *s)
 							"+forward"};
 	
 	while ( filterstuff[i] != NULL )
-		if ( strstr(s, filterstuff[i++]) )
+	{
+		if ( strstr(s, filterstuff[i]) )
 			return true;
+		i++;
+	}
 
 	return false;
 }
@@ -758,6 +798,7 @@ void CL_ParseServerMessage (void)
 	int			cmd;
 	char		*s;
 	int			i,p;
+	char ostr[256];
 
 	//Timestamps, -Maniac
 
@@ -977,7 +1018,22 @@ void CL_ParseServerMessage (void)
 			break;
 			
 		case svc_centerprint:
-			SCR_CenterPrint (MSG_ReadString (&net_message));
+			//To do when alive -Maniac
+			s = MSG_ReadString (&net_message);
+			/*if (stristr(s,"camera...") > 0)
+			{
+				if ((cl.frame.playerstate.pmove.pm_type < PM_DEAD)  && (x_info.x_deadoralive==2)) {
+					x_info.x_deadoralive = 1; //don't repeat until set to 2 again
+					
+					if (cl_todo->value == 1)
+					{
+						Com_sprintf(ostr,sizeof(ostr), "%s\n", cl_todoalive->string);
+						Cbuf_AddText(ostr);
+						Cbuf_Execute() ;
+					}
+				}
+			} */
+			SCR_CenterPrint (s);
 			break;
 			
 		case svc_stufftext:

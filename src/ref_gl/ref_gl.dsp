@@ -56,7 +56,7 @@ BSC32=bscmake.exe
 # ADD BSC32 /nologo
 LINK32=link.exe
 # ADD BASE LINK32 kernel32.lib user32.lib gdi32.lib winspool.lib comdlg32.lib advapi32.lib shell32.lib ole32.lib oleaut32.lib uuid.lib odbc32.lib odbccp32.lib /nologo /subsystem:windows /dll /machine:I386
-# ADD LINK32 kernel32.lib user32.lib gdi32.lib winmm.lib libjpeg.lib /nologo /subsystem:windows /dll /machine:I386 /out:"d:\games\quake2\aq2_gl.dll"
+# ADD LINK32 kernel32.lib user32.lib gdi32.lib winmm.lib /nologo /subsystem:windows /dll /machine:I386 /out:"d:\games\quake2\aq2_gl.dll"
 # SUBTRACT LINK32 /incremental:yes /debug
 
 !ELSEIF  "$(CFG)" == "ref_gl - Win32 Debug"
@@ -700,6 +700,21 @@ NODEP_CPP_QGL_W=\
 !ENDIF 
 
 # End Source File
+# Begin Source File
+
+SOURCE=.\sul_png.c
+
+!IF  "$(CFG)" == "ref_gl - Win32 Release"
+
+!ELSEIF  "$(CFG)" == "ref_gl - Win32 Debug"
+
+!ELSEIF  "$(CFG)" == "ref_gl - Win32 Debug Alpha"
+
+!ELSEIF  "$(CFG)" == "ref_gl - Win32 Release Alpha"
+
+!ENDIF 
+
+# End Source File
 # End Group
 # Begin Group "Header Files"
 
@@ -763,6 +778,18 @@ SOURCE=..\win32\winquake.h
 # Begin Source File
 
 SOURCE=.\ref_gl.def
+# End Source File
+# Begin Source File
+
+SOURCE=.\libjpeg.lib
+# End Source File
+# Begin Source File
+
+SOURCE=..\lib\libpng3.lib
+# End Source File
+# Begin Source File
+
+SOURCE=..\lib\zlib.lib
 # End Source File
 # End Group
 # End Target

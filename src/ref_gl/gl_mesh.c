@@ -318,7 +318,6 @@ void GL_DrawAliasShadow (dmdl_t *paliashdr, int posenum)
 	height = 0;
 
 	order = (int *)((byte *)paliashdr + paliashdr->ofs_glcmds);
-
 	height = -lheight + 1.0;
 
 	while (1)
@@ -700,7 +699,7 @@ void R_DrawAliasModel (entity_t *e)
 	GL_TexEnv( GL_MODULATE );
 	if ( currententity->flags & RF_TRANSLUCENT )
 	{
-		qglEnable (GL_BLEND);
+		GLSTATE_ENABLE_BLEND
 	}
 
 
@@ -754,7 +753,7 @@ void R_DrawAliasModel (entity_t *e)
 
 	if ( currententity->flags & RF_TRANSLUCENT )
 	{
-		qglDisable (GL_BLEND);
+		GLSTATE_DISABLE_BLEND
 	}
 
 	if (currententity->flags & RF_DEPTHHACK)
@@ -766,11 +765,11 @@ void R_DrawAliasModel (entity_t *e)
 		qglPushMatrix ();
 		R_RotateForEntity (e);
 		qglDisable (GL_TEXTURE_2D);
-		qglEnable (GL_BLEND);
+		GLSTATE_ENABLE_BLEND
 		qglColor4f (0,0,0,0.5);
 		GL_DrawAliasShadow (paliashdr, currententity->frame );
 		qglEnable (GL_TEXTURE_2D);
-		qglDisable (GL_BLEND);
+		GLSTATE_DISABLE_BLEND
 		qglPopMatrix ();
 	}
 #endif

@@ -119,6 +119,10 @@ cvar_t *cl_recordatmatchstart;
 cvar_t *cl_dontrecorduntilmatchstart;
 cvar_t *ignorewaves;
 
+//cvar_t *cl_todo;
+//cvar_t *cl_tododie;
+//cvar_t *cl_todoalive;
+
 //AVI EXPORT -Maniac
 cvar_t	*avi_gamma_r;
 cvar_t	*avi_gamma_g;
@@ -130,7 +134,7 @@ cvar_t	*avi_border_g;
 cvar_t	*avi_border_b;
  //END
 
-x_info_t	x_info; //Shaws: x_info -Maniac
+x_info_t	x_info; //x_info -Maniac
 client_static_t	cls;
 client_state_t	cl;
 
@@ -1633,7 +1637,7 @@ void CL_InitLocal (void)
 	cl_clan = Cvar_Get ("cl_clan", "", 0);
 	cl_timestamps = Cvar_Get("cl_timestamps","0", 0);
 	
-	sprintf (hstr, "%i", viddef.height-50);
+	sprintf (hstr, "%i", viddef.height-56);
 	cl_chathud = Cvar_Get ("cl_chathud", "0", CVAR_ARCHIVE);
 	cl_chathudx = Cvar_Get ("cl_chathudx", "10", 0);
 	cl_chathudy = Cvar_Get ("cl_chathudy", hstr, 0);
@@ -1651,6 +1655,10 @@ void CL_InitLocal (void)
 	cl_custommatchsetup = Cvar_Get("cl_custommatchsetup", " has put the server in match setup mode", 0);
 	cl_custommatchstart = Cvar_Get("cl_custommatchstart", " has started the match", 0);
 	cl_recordatmatchstart = Cvar_Get( "cl_recordatmatchstart", "0", 0) ;
+
+//	cl_todo = Cvar_Get("cl_todo", "1", 0);
+//	cl_tododie = Cvar_Get("cl_tododie", "winamppause", 0);
+//	cl_todoalive = Cvar_Get( "cl_todoalive", "winamppause", 0) ;
 
 	ignorewaves = Cvar_Get("ignorewaves", "0", 0);
 
