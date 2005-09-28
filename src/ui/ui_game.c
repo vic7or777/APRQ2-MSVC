@@ -55,19 +55,19 @@ static void StartGame( void )
 
 static void EasyGameFunc( void *data )
 {
-	Cvar_ForceSet( "skill", "0" );
+	Cvar_Set( "skill", "0" );
 	StartGame();
 }
 
 static void MediumGameFunc( void *data )
 {
-	Cvar_ForceSet( "skill", "1" );
+	Cvar_Set( "skill", "1" );
 	StartGame();
 }
 
 static void HardGameFunc( void *data )
 {
-	Cvar_ForceSet( "skill", "2" );
+	Cvar_Set( "skill", "2" );
 	StartGame();
 }
 

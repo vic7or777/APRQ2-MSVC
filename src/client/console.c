@@ -33,6 +33,7 @@ cvar_t		*con_notifylines;	//Notifylines
 cvar_t		*con_notifyfade;	//Notifyfade
 cvar_t		*con_alpha;			//transparent console
 cvar_t		*con_scrlines;
+cvar_t		*con_cmdcomplete;
 
 typedef struct
 {
@@ -48,6 +49,7 @@ static inputField_t chat_inputLines;
 qboolean	key_insert	= true;
 qboolean	chat_team;
 
+#ifndef GL_QUAKE
 void DrawString (int x, int y, const char *s)
 {
 	while (*s)
@@ -68,55 +70,25 @@ void DrawAltString (int x, int y, const char *s)
 	}
 }
 
-void DrawString2 (int x, int y, const char *s, float alpha)
+void DrawString2 (int x, int y, const short *s, float alpha)
 {
-	int flags = COLOR_WHITE;
-	qboolean colors = true;
-
-
-	if(Q_IsColorString( s ) && !strncmp(s+2, S_DISABLE_COLOR, 3))
-	{
-		if(cl_textcolors->integer)
-			flags = ColorIndex(s[1]);
-
-		colors = false;
-		s += 5;
-	}
-
 	while (*s)
 	{
-
-		if ( Q_IsColorString( s ) && colors )
-		{
-			if(cl_textcolors->integer)
-				flags = ColorIndex(s[1]);
-
-			s += 2;
-			continue;
-		}
-
-		Draw_Char (x, y, *s, flags, alpha);
+		Draw_Char (x, y, *s & 0xff, COLOR_WHITE, alpha);
 		x+=8;
 		s++;
 	}
 }
+#endif
 
-void DrawColorString (int x, int y, const char *s, int color, float alpha)
+void Draw_StringLen (int x, int y, short *str, int len, float alpha)
 {
-	while (*s)
-	{
-		Draw_Char (x, y, *s, ColorIndex(clamp(color, 0, 7)), alpha);
-		x+=8;
-		s++;
-	}
-}
+	short saved_byte;
 
-void Draw_StringLen (int x, int y, char *str, int len, float alpha)
-{
-	char saved_byte;
-
-	if (len < 0)
+	if (len < 0) {
 		DrawString2 (x, y, str, alpha);
+		return;
+	}
 
 	saved_byte = str[len];
 	str[len] = 0;
@@ -140,18 +112,17 @@ void Con_ToggleConsole_f (void)
 {
 	SCR_EndLoadingPlaque ();	// get rid of loading plaque
 
-	//Changed Usable console during demoplay, -Maniac
-	/*
-	if (cl.attractloop)
+
+	/*if (cl.attractloop)
 	{
 		Cbuf_AddText ("killserver\n");
 		return;
-	}
-	*/
+	}*/
 
 	if (cls.state == ca_disconnected)
 	{	// start the demo loop again
 		//Cbuf_AddText ("d1\n");
+		cls.key_dest = key_console;
 		return;
 	}
 
@@ -161,14 +132,15 @@ void Con_ToggleConsole_f (void)
 	if (cls.key_dest == key_console)
 	{
 		M_ForceMenuOff ();
-		Cvar_Set ("paused", "0");
+		if(cl_paused->integer)
+			Cvar_Set ("paused", "0");
 	}
 	else
 	{
 		M_ForceMenuOff ();
 		cls.key_dest = key_console;	
 
-		if (Cvar_VariableValue ("maxclients") == 1 && Com_ServerState () && !cl.attractloop)
+		if (Cvar_VariableValue ("maxclients") == 1 && Com_ServerState () && !cl.attractloop && !cl_paused->integer)
 			Cvar_Set ("paused", "1");
 	}
 }
@@ -203,7 +175,11 @@ Con_Clear_f
 */
 void Con_Clear_f (void)
 {
-	memset (con.text, ' ', CON_TEXTSIZE);
+	int		i;
+
+	for ( i = 0 ; i < CON_TEXTSIZE ; i++ ) {
+		con.text[i] = (COLOR_WHITE<<8) | ' ';
+	}
 }
 
 						
@@ -216,8 +192,8 @@ Save the console contents out to a file
 */
 void Con_Dump_f (void)
 {
-	int		l, x;
-	char	*line;
+	int		l, x, i;
+	short	*line;
 	FILE	*f;
 	char	buffer[1024];
 	char	name[MAX_OSPATH];
@@ -244,7 +220,7 @@ void Con_Dump_f (void)
 	{
 		line = con.text + (l%con.totallines)*con.linewidth;
 		for (x=0 ; x<con.linewidth ; x++)
-			if (line[x] != ' ')
+			if ( (line[x] & 0xff) != ' ')
 				break;
 		if (x != con.linewidth)
 			break;
@@ -255,7 +231,8 @@ void Con_Dump_f (void)
 	for ( ; l <= con.current ; l++)
 	{
 		line = con.text + (l%con.totallines)*con.linewidth;
-		strncpy (buffer, line, con.linewidth);
+		for(i=0; i<con.linewidth; i++)
+			buffer[i] = line[i] & 0xff;
 		for (x=con.linewidth-1 ; x>=0 ; x--)
 		{
 			if (buffer[x] == ' ')
@@ -280,7 +257,11 @@ Con_ClearNotify
 */
 void Con_ClearNotify (void)
 {
-	memset (con.times, 0, sizeof (con.times));
+	int		i;
+	
+	for ( i = 0 ; i < MAX_CON_TIMES ; i++ ) {
+		con.times[i] = 0;
+	}
 }
 
 						
@@ -291,6 +272,9 @@ Con_MessageMode_f
 */
 void Con_MessageMode_f (void)
 {
+	if (cls.state != ca_active)
+		return;
+
 	chat_team = false;
 	cls.key_dest = key_message;
 }
@@ -302,6 +286,9 @@ Con_MessageMode2_f
 */
 void Con_MessageMode2_f (void)
 {
+	if (cls.state != ca_active)
+		return;
+
 	chat_team = true;
 	cls.key_dest = key_message;
 }
@@ -316,7 +303,7 @@ If the line width has changed, reformat the buffer.
 void Con_CheckResize (void)
 {
 	int		i, j, width, oldwidth, oldtotallines, numlines, numchars;
-	char	tbuf[CON_TEXTSIZE];
+	short	tbuf[CON_TEXTSIZE];
 
 
 	width = (viddef.width >> 3) - 2;
@@ -329,7 +316,8 @@ void Con_CheckResize (void)
 		width = 38;
 		con.linewidth = width;
 		con.totallines = CON_TEXTSIZE / con.linewidth;
-		memset (con.text, ' ', CON_TEXTSIZE);
+		for(i=0; i<CON_TEXTSIZE; i++)
+			con.text[i] = (COLOR_WHITE<<8) | ' ';
 	}
 	else
 	{
@@ -347,8 +335,9 @@ void Con_CheckResize (void)
 		if (con.linewidth < numchars)
 			numchars = con.linewidth;
 
-		memcpy (tbuf, con.text, CON_TEXTSIZE);
-		memset (con.text, ' ', CON_TEXTSIZE);
+		memcpy (tbuf, con.text, CON_TEXTSIZE * sizeof(short));
+		for(i=0; i<CON_TEXTSIZE; i++)
+			con.text[i] = (COLOR_WHITE<<8) | ' ';
 
 		for (i=0 ; i<numlines ; i++)
 		{
@@ -367,6 +356,11 @@ void Con_CheckResize (void)
 	con.display = con.current;
 }
 
+static void OnChange_scrlines (cvar_t *self, const char *oldValue)
+{
+	if (con_scrlines->integer < 1)
+		Cvar_SetValue ("con_scrlines", 1);
+}
 
 /*
 ================
@@ -376,6 +370,7 @@ Con_Init
 void Con_Init (void)
 {
 	con.linewidth = -1;
+	con.ormask = 0;
 
 	Con_CheckResize ();
 	
@@ -389,8 +384,9 @@ void Con_Init (void)
 	con_notifylines = Cvar_Get("con_notifylines","4", CVAR_ARCHIVE); //Notifylines -Maniac
 	con_notifyfade = Cvar_Get("con_notifyfade","0", CVAR_ARCHIVE); //Notify fade
 	con_scrlines = Cvar_Get("con_scrlines", "2", CVAR_ARCHIVE);
-
-	//transparent console -Maniac
+	con_cmdcomplete = Cvar_Get("con_cmdcomplete", "2", 0);
+	con_scrlines->OnChange = OnChange_scrlines;
+	OnChange_scrlines(NULL, NULL);
 	con_alpha = Cvar_Get ("con_alpha", "0.6", CVAR_ARCHIVE);
 
 	Cmd_AddCommand ("toggleconsole", Con_ToggleConsole_f);
@@ -410,12 +406,14 @@ Con_Linefeed
 */
 void Con_Linefeed (void)
 {
+	int i;
+
 	con.x = 0;
 	if (con.display == con.current)
 		con.display++;
 	con.current++;
-	memset (&con.text[(con.current%con.totallines)*con.linewidth]
-	, ' ', con.linewidth);
+	for(i=0; i<con.linewidth; i++)
+		con.text[(con.current%con.totallines)*con.linewidth+i] = (COLOR_WHITE<<8) | ' ';
 }
 
 /*
@@ -432,10 +430,13 @@ void Con_Print (const char *txt)
 	int		y;
 	int		c, l;
 	static int	cr;
-	int		mask;
+	int		mask, color;
+	qboolean colors = false;
 
 	if (!con.initialized)
 		return;
+
+	color = COLOR_WHITE;
 
 	if (txt[0] == 1 || txt[0] == 2)
 	{
@@ -446,54 +447,76 @@ void Con_Print (const char *txt)
 		mask = 0;
 
 
-	while ( (c = *txt) )
+	if(Q_IsOneColorString(txt))
 	{
+		txt++;
+		if(Q_IsColorString( txt )) {
+			color = ColorIndex(*(txt+1));
+			txt+=2;
+		}
+	}
+	else if(Q_IsColorEnabled(txt))
+	{
+		txt++;
+		colors = true;
+	}
+
+	while ( (c = *txt) != 0 )
+	{
+		if ( colors && Q_IsColorString( txt ) ) {
+			color = ColorIndex( *(txt+1) );
+			txt += 2;
+			continue;
+		}
 	// count word length
-		for (l=0 ; l< con.linewidth ; l++)
+		for (l=0 ; l< con.linewidth ; l++) {
 			if ( txt[l] <= ' ')
 				break;
+		}
 
 	// word wrap
 		if (l != con.linewidth && (con.x + l > con.linewidth) )
 			con.x = 0;
-
-		txt++;
 
 		if (cr)
 		{
 			con.current--;
 			cr = false;
 		}
-
-		
+	
 		if (!con.x)
 		{
 			Con_Linefeed ();
 		// mark time for transparent overlay
 			if (con.current >= 0)
 				con.times[con.current % MAX_CON_TIMES] = cls.realtime;
+
 		}
+
+		txt++;
 
 		switch (c)
 		{
 		case '\n':
+			color = COLOR_WHITE;
 			con.x = 0;
 			break;
 
 		case '\r':
+			color = COLOR_WHITE;
 			con.x = 0;
 			cr = 1;
 			break;
 
 		default:	// display character and advance
 			y = con.current % con.totallines;
-			con.text[y*con.linewidth+con.x] = c | mask | con.ormask;
+			con.text[y*con.linewidth+con.x] = c | mask | con.ormask | (color << 8);
 			con.x++;
 			if (con.x >= con.linewidth)
 				con.x = 0;
+
 			break;
 		}
-		
 	}
 }
 
@@ -527,10 +550,8 @@ DRAWING
 */
 void Draw_Input( const char *text, int x, int y, int curPos )
 {
-	int cursorPos;
+	int cursorPos = curPos;
 	int i, len = strlen(text);
-
-	cursorPos = curPos;
 
 	// prestep if horizontally scrolling
 	if (cursorPos >= con.linewidth - x/8 + 2)
@@ -584,13 +605,13 @@ Draws the last few lines of output transparently over the game top
 */
 void Con_DrawNotify (void)
 {
-	int		v;
-	char	*text;
+	int		v = 0;
+	short	*text;
 	int		i;
 	int		time;
 	int		skip;
 	float	alpha = 1;
-	int lines;
+	int		lines = 0;
 
 	v = 0;
 	
@@ -606,13 +627,13 @@ void Con_DrawNotify (void)
 			time = con.times[i % MAX_CON_TIMES];
 			if (time == 0)
 				continue;
-			time = cls.realtime - time;
-			if (time > con_notifytime->value*1000)
+
+			if (cls.realtime - time > con_notifytime->value*1000)
 				continue;
 			text = con.text + (i % con.totallines)*con.linewidth;
 			
 			if (con_notifyfade->value)
-				alpha = 0.1 + 0.9*(con_notifytime->value-(time*0.0015)+(con_notifytime->value/2)) / con_notifytime->value;
+				alpha = 0.1 + (time + con_notifytime->value*1000 - cls.realtime)*0.001f;
 
 			Draw_StringLen (8, v, text, con.linewidth, alpha);
 
@@ -656,12 +677,11 @@ void Con_DrawConsole (float frac, qboolean ingame)
 {
 	int				i, j, x, y, n;
 	int				rows;
-	char			*text;
+	short			*text;
 	int				row;
 	int				lines;
-	char			version[64];
+	char			version[64], *text2;
 	char			dlbar[1024];
-	float			alpha = 1;
 
 	lines = viddef.height * frac;
 	if (lines <= 0)
@@ -670,11 +690,8 @@ void Con_DrawConsole (float frac, qboolean ingame)
 	if (lines > viddef.height)
 		lines = viddef.height;
 
-	if (ingame)
-		alpha = con_alpha->value;
-
 	// draw the background
-	Draw_StretchPic (0, lines-viddef.height, viddef.width, viddef.height, "conback", alpha);
+	Draw_StretchPic (0, lines-viddef.height, viddef.width, viddef.height, "conback", ingame ? con_alpha->value : 1);
 	SCR_AddDirtyPoint (0,0);
 	SCR_AddDirtyPoint (viddef.width-1,lines-1);
 
@@ -719,21 +736,21 @@ void Con_DrawConsole (float frac, qboolean ingame)
 	// draw the download bar
 	// figure out width
 	if (cls.download) {
-		if ((text = strrchr(cls.downloadname, '/')) != NULL)
-			text++;
+		if ((text2 = strrchr(cls.downloadname, '/')) != NULL)
+			text2++;
 		else
-			text = cls.downloadname;
+			text2 = cls.downloadname;
 
 		x = con.linewidth - ((con.linewidth * 7) / 40);
-		y = x - strlen(text) - 8;
+		y = x - strlen(text2) - 8;
 		i = con.linewidth/3;
-		if (strlen(text) > i) {
+		if (strlen(text2) > i) {
 			y = x - i - 11;
-			strncpy(dlbar, text, i);
+			strncpy(dlbar, text2, i);
 			dlbar[i] = 0;
 			strcat(dlbar, "...");
 		} else
-			strcpy(dlbar, text);
+			strcpy(dlbar, text2);
 		strcat(dlbar, ": ");
 		i = strlen(dlbar);
 		dlbar[i++] = '\x80';
@@ -778,31 +795,116 @@ void IF_Init( inputField_t *field )
 	field->cursorPos = 0;
 }
 
-qboolean Cmd_IsComplete (const char *cmd);
-void CompleteCommand (void)
+typedef struct compMatches_s
 {
-	char	*cmd, *text;
+	const char *name;
+	const char *value;
+} compMatches_t;
 
-	text = con_inputLines.text[con_inputLines.editLine];
-	if (*text == '\\' || *text == '/')
-		text++;
+#define MAX_MATCHES 1024
+static compMatches_t compMatches[MAX_MATCHES];
+static char shortestMatch[MAX_TOKEN_CHARS];
+static int matchCount;
+static char *completionString;
 
-	if( *text == '\0' )
+static int MatchShort (const compMatches_t *a, const compMatches_t *b)
+{
+	return strcmp(a->name, b->name);
+}
+
+static void AddMatches (const char *name, const char *value)
+{
+	int i;
+
+	if(matchCount >= MAX_MATCHES)
 		return;
 
-	cmd = Cmd_CompleteCommand (text);
-	if (cmd)
-	{
-		IF_Init(&con_inputLines);
-		con_inputLines.text[con_inputLines.editLine][0] = '/';
-		strcpy (con_inputLines.text[con_inputLines.editLine]+1, cmd);
-		con_inputLines.cursorPos = strlen(con_inputLines.text[con_inputLines.editLine]);
-		if (Cmd_IsComplete(cmd)) {
-			con_inputLines.text[con_inputLines.editLine][con_inputLines.cursorPos] = ' ';
-			con_inputLines.cursorPos++;
-		}
+	compMatches[matchCount].name = name;
+	compMatches[matchCount].value = value;
+	matchCount++;
+
+	if ( matchCount == 1 ) {
+		Q_strncpyz( shortestMatch, name, sizeof( shortestMatch ) );
 		return;
 	}
+	
+	if(con_cmdcomplete->integer <= 1) //want first match
+	{
+		if( !Q_stricmp(name, completionString) ) //exact match
+			Q_strncpyz( shortestMatch, name, sizeof( shortestMatch ) );
+		return;
+	}
+
+	// cut shortestMatch to the amount common with s
+	for ( i = 0; MAX_TOKEN_CHARS; i++ ) {
+		if ( !name[i] || !shortestMatch[i]) {
+			if(shortestMatch[i])
+				shortestMatch[i] = 0;
+
+			break;
+		}
+		if ( tolower(shortestMatch[i]) != tolower(name[i]) ) {
+			shortestMatch[i] = 0;
+		}
+	}
+}
+
+void CompleteCommand (void)
+{
+	int		i;
+	compMatches_t *match;
+
+	completionString = con_inputLines.text[con_inputLines.editLine];
+	if (*completionString == '\\' || *completionString == '/')
+		completionString++;
+
+	if( *completionString == '\0' )
+		return;
+
+	matchCount = 0;
+	shortestMatch[0] = 0;
+
+	if ( strlen( completionString ) == 0 ) {
+		return;
+	}
+
+	Cmd_CommandCompletion(completionString, AddMatches);
+	Cvar_CommandCompletion(completionString, AddMatches);
+
+	if ( matchCount == 0 ) {
+		return;	// no matches
+	}
+
+	IF_Init(&con_inputLines);
+
+	con_inputLines.text[con_inputLines.editLine][0] = '/';
+	strcpy (con_inputLines.text[con_inputLines.editLine]+1, shortestMatch);
+	con_inputLines.cursorPos = strlen(con_inputLines.text[con_inputLines.editLine]);
+
+	if ( matchCount == 1 || con_cmdcomplete->integer <= 1) {
+		con_inputLines.text[con_inputLines.editLine][con_inputLines.cursorPos] = ' ';
+		con_inputLines.cursorPos++;
+		if(matchCount == 1 || con_cmdcomplete->integer < 1)
+			return;
+	}
+
+	//Print partial matches
+	Com_Printf("]%s\n", con_inputLines.text[con_inputLines.editLine]);
+
+	qsort(&compMatches, matchCount, sizeof(compMatches[0]), (int (*)(const void *, const void *))MatchShort);
+
+	for(i=0; i<matchCount; i++)
+	{
+		match = &compMatches[i];
+		if(con_cmdcomplete->integer == 3 && match->value)
+			Com_Printf("   %s = %s\n", match->name, match->value);
+		else
+			Com_Printf("   %s\n", match->name);
+
+		match->name = NULL;
+		match->value = NULL;
+	}
+
 }
 
 void IF_CharEvent( inputField_t *field, int key )
@@ -837,12 +939,12 @@ void IF_KeyEvent( inputField_t *field, int key )
 
 			for( i=0; cbd[i]; i++ )
 			{
-				if(cbd[i] == '\n')
-					cbd[i] = ' ';
-
-				IF_CharEvent (field, cbd[i]);
+				if(cbd[i] == '\n' || cbd[i] == '\r')
+					IF_CharEvent (field, ' ');
+				else
+					IF_CharEvent (field, cbd[i]);
 			}
-			free( cbd );
+			Z_Free( cbd );
 		}
 
 		return;
@@ -903,7 +1005,7 @@ void IF_KeyEvent( inputField_t *field, int key )
 	if ( key == K_DEL )
 	{
 		if (field->text[field->editLine][field->cursorPos])
-			memmove( field->text[field->editLine] + field->cursorPos, field->text[field->editLine] + field->cursorPos + 1, sizeof( field->text[field->editLine] ) - field->cursorPos );
+			memmove( field->text[field->editLine] + field->cursorPos, field->text[field->editLine] + field->cursorPos + 1, sizeof( field->text[field->editLine] ) - field->cursorPos - 1);
 
 		return;
 	}
@@ -1033,18 +1135,12 @@ void Key_Console (int key)
 
 	if (key == K_PGUP || key == K_KP_PGUP || key == K_MWHEELUP)
 	{
-		if (con_scrlines->integer < 1)
-			Cvar_SetValue ("con_scrlines", 1);
-
 		con.display -= con_scrlines->integer;
 		return;
 	}
 
 	if (key == K_PGDN || key == K_KP_PGDN || key == K_MWHEELDOWN)
 	{
-		if (con_scrlines->integer < 1)
-			Cvar_SetValue ("con_scrlines", 1);
-
 		con.display += con_scrlines->integer;
 		if (con.display > con.current)
 			con.display = con.current;
@@ -1131,6 +1227,11 @@ void Key_Message (int key)
 
 	if ( key == K_ENTER || key == K_KP_ENTER )
 	{
+		if(!chat_inputLines.text[chat_inputLines.editLine][0]) {
+			cls.key_dest = key_game;
+			return;
+		}
+
 		if (chat_team)
 			Cbuf_AddText ("say_team \"");
 		else

@@ -40,7 +40,7 @@ swwstate_t sww_state;
 /*
 ** VID_CreateWindow
 */
-#define	WINDOW_CLASS_NAME "Quake 2"
+#define	WINDOW_CLASS_NAME APPLICATION"WndClass"
 
 void VID_CreateWindow( int width, int height, int stylebits )
 {
@@ -65,9 +65,9 @@ void VID_CreateWindow( int width, int height, int stylebits )
     wc.cbClsExtra    = 0;
     wc.cbWndExtra    = 0;
     wc.hInstance     = sww_state.hInstance;
-    wc.hIcon         = 0;
+    wc.hIcon         = LoadIcon(sww_state.hInstance, MAKEINTRESOURCE(101));
     wc.hCursor       = LoadCursor (NULL,IDC_ARROW);
-	wc.hbrBackground = (void *)COLOR_GRAYTEXT;
+	wc.hbrBackground = (HBRUSH)GetStockObject(GRAY_BRUSH);
     wc.lpszMenuName  = 0;
     wc.lpszClassName = WINDOW_CLASS_NAME;
 
@@ -87,9 +87,9 @@ void VID_CreateWindow( int width, int height, int stylebits )
 	y = vid_ypos->integer;
 
 	sww_state.hWnd = CreateWindowEx (
-		exstyle,
+		 exstyle,
 		 WINDOW_CLASS_NAME,
-		 "Quake 2",
+		 APPLICATION,
 		 stylebits,
 		 x, y, w, h,
 		 NULL,
@@ -270,7 +270,7 @@ rserr_t SWimp_SetMode( int *pwidth, int *pheight, int mode, qboolean fullscreen 
 
 	Com_Printf ("setting mode %d:", mode );
 
-	if ( !VID_GetModeInfo( pwidth, pheight, mode ) )
+	if ( !R_GetModeInfo( pwidth, pheight, mode ) )
 	{
 		Com_Printf ( " invalid mode\n" );
 		return rserr_invalid_mode;

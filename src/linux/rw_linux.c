@@ -32,7 +32,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 //void HandleEvents(void);
 extern int mx, my;
-static qboolean	mouse_avail;
+qboolean	mouse_avail;
 static int old_mouse_x, old_mouse_y;
 
 static qboolean	mlooking;

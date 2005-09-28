@@ -63,8 +63,8 @@ typedef struct searchpath_s
 	struct		searchpath_s *next;
 } searchpath_t;
 
-searchpath_t	*fs_searchpaths;
-searchpath_t	*fs_base_searchpaths;	// without gamedirs
+static searchpath_t	*fs_searchpaths;
+static searchpath_t	*fs_base_searchpaths;	// without gamedirs
 
 #define FS_MAX_HASH_SIZE 1024
 
@@ -84,17 +84,18 @@ The "game directory" is the first tree on the search path and directory that all
 FS_PackHashKey
 ===========
 */
-static unsigned int FS_PackHashKey( const char *str, int hashSize )
+static int FS_HashKey( const char *name, int hashSize )
 {
-	int c;
-	unsigned int hashval = 0;
+	int i;
+	unsigned int c, hash = 0;
 
-	while ( (c = *str++) != 0 ) {
+	for( i = 0; name[i]; i++ ) {
+		c = tolower(name[i]);
 		if( c == '\\' )
 			c = '/';
-		hashval = hashval*37 + tolower( c );
+		hash += c * (i+119);
 	}
-	return hashval & (hashSize - 1);
+	return hash & (hashSize - 1);
 }
 
 /*
@@ -156,19 +157,10 @@ void FS_FCloseFile (FILE *f)
 /*
 	Developer_searchpath
 */
-int	Developer_searchpath (int who)
+int	Developer_searchpath (void)
 {
-	
-	int		ch;
-	// PMM - warning removal
-//	char	*start;
 	searchpath_t	*search;
 	
-	if (who == 1) // xatrix
-		ch = 'x';
-	else if (who == 2)
-		ch = 'r';
-
 	for (search = fs_searchpaths ; search ; search = search->next)
 	{
 		if (strstr (search->filename, "xatrix"))
@@ -176,18 +168,8 @@ int	Developer_searchpath (int who)
 
 		if (strstr (search->filename, "rogue"))
 			return 2;
-/*
-		start = strchr (search->filename, ch);
-
-		if (start == NULL)
-			continue;
-
-		if (strcmp (start ,"xatrix") == 0)
-			return (1);
-*/
 	}
-	return (0);
-
+	return 0;
 }
 
 
@@ -223,7 +205,7 @@ int FS_FOpenFile (const char *filename, FILE **file)
 		{
 		// look through all the pak file elements
 			pak = search->pack;
-			hash = FS_PackHashKey (filename, pak->hashSize);
+			hash = FS_HashKey(filename, pak->hashSize);
 			for ( pakfile = pak->fileHash[hash]; pakfile; pakfile = pakfile->hashNext)
 				if (!Q_stricmp( pakfile->name, filename ) )	{	// found it!
 					file_from_pak = 1;
@@ -332,10 +314,9 @@ a null buffer will just return the file length without loading
 int FS_LoadFile (const char *path, void **buffer)
 {
 	FILE	*h;
-	byte	*buf;
+	byte	*buf = NULL;
 	int		len;
 
-	buf = NULL;	// quiet compiler warning
 
 // look for it in the filesystem or pack files
 	len = FS_FOpenFile (path, &h);
@@ -352,7 +333,7 @@ int FS_LoadFile (const char *path, void **buffer)
 		return len;
 	}
 
-	buf = Z_Malloc(len+1);
+	buf = Z_TagMalloc(len+1, TAGMALLOC_FSLOADFILE);
 	buf[len] = 0;
 	*buffer = buf;
 
@@ -384,7 +365,7 @@ Loads the header and directory, adding the files at the beginning
 of the list so they override previous pack files.
 =================
 */
-pack_t *FS_LoadPackFile (const char *packfile)
+static pack_t *FS_LoadPackFile (const char *packfile)
 {
 	dpackheader_t	header;
 	int				i;
@@ -392,7 +373,7 @@ pack_t *FS_LoadPackFile (const char *packfile)
 	int				numpackfiles;
 	pack_t			*pack;
 	FILE			*packhandle;
-	dpackfile_t		info;
+	dpackfile_t		*info;
 	int				hashSize;
 	unsigned int	hash;
 
@@ -415,32 +396,42 @@ pack_t *FS_LoadPackFile (const char *packfile)
 		return NULL;
 	}
 
+	if(fseek(packhandle, header.dirofs, SEEK_SET)) {
+		Com_Printf("FS_LoadPackFile: fseek() to offset %u in %s failed (corrupt packfile?)", header.dirofs, packfile);
+		return NULL;
+	}
+
+	info = Z_TagMalloc (numpackfiles * sizeof(dpackfile_t), TAGMALLOC_FSLOADPAK);
+	if (fread(info, 1, header.dirlen, packhandle) != header.dirlen) {
+		Com_Printf("FS_LoadPackFile: error reading packfile directory from %s (failed to read %u bytes at %u)", packfile, header.dirofs, header.dirlen);
+		Z_Free(info);
+		return NULL;
+	}
+
 	for(hashSize = 1; (hashSize < numpackfiles) && (hashSize < FS_MAX_HASH_SIZE); hashSize <<= 1);
 
-	pack = Z_Malloc (sizeof(pack_t) + numpackfiles * sizeof(packfile_t) + hashSize * sizeof(packfile_t *));
-	strcpy (pack->filename, packfile);
+	pack = Z_TagMalloc (sizeof(pack_t) + numpackfiles * sizeof(packfile_t) + hashSize * sizeof(packfile_t *), TAGMALLOC_FSLOADPAK);
+	Q_strncpyz(pack->filename, packfile, sizeof(pack->filename));
 	pack->files = ( packfile_t * )((byte *)pack + sizeof(pack_t));
 	pack->fileHash = ( packfile_t **)((byte *)pack->files + numpackfiles * sizeof( packfile_t ));
 	pack->handle = packhandle;
 	pack->numfiles = numpackfiles;
 	pack->hashSize = hashSize;
 
-	fseek (packhandle, header.dirofs, SEEK_SET);
-
+	for(i = 0; i<hashSize; i++)
+		pack->fileHash[i] = NULL;
 // parse the directory
 	for (i=0, file=pack->files; i<numpackfiles; i++, file++)
 	{
-		fread (&info, 1, sizeof(dpackfile_t), packhandle);
+		Q_strncpyz (file->name, info[i].name, sizeof(file->name));
+		file->filepos = LittleLong(info[i].filepos);
+		file->filelen = LittleLong(info[i].filelen);
 
-		strcpy (file->name, info.name);
-		file->filepos = LittleLong(info.filepos);
-		file->filelen = LittleLong(info.filelen);
-
-		hash = FS_PackHashKey(file->name, hashSize);
+		hash = FS_HashKey(file->name, hashSize);
 		file->hashNext = pack->fileHash[hash];
 		pack->fileHash[hash] = file;
 	}
-	
+	Z_Free(info);
 	Com_Printf ("Added packfile %s (%i files)\n", packfile, numpackfiles);
 	return pack;
 }
@@ -454,7 +445,7 @@ Sets fs_gamedir, adds the directory to the head of the path,
 then loads and adds pak1.pak pak2.pak ... 
 ================
 */
-void FS_AddGameDirectory (const char *dir)
+static void FS_AddGameDirectory (const char *dir)
 {
 	int				i, numfiles;
 	searchpath_t	*search;
@@ -465,14 +456,14 @@ void FS_AddGameDirectory (const char *dir)
 	char buf[16];
 	qboolean numberedpak;
 
-	Q_strncpyz(fs_gamedir,dir,sizeof(fs_gamedir));
+	Q_strncpyz(fs_gamedir, dir, sizeof(fs_gamedir));
 
 	//
 	// add the directory to the search path
 	//
-	search = Z_Malloc (sizeof(searchpath_t));
+	search = Z_TagMalloc (sizeof(searchpath_t), TAGMALLOC_SEARCHPATH);
 	Q_strncpyz (search->filename, dir, sizeof(search->filename));
-
+	search->pack = NULL;
 	search->next = fs_searchpaths;
 	fs_searchpaths = search;
 
@@ -485,7 +476,8 @@ void FS_AddGameDirectory (const char *dir)
 		pak = FS_LoadPackFile (pakfile);
 		if (!pak)
 			continue;
-		search = Z_Malloc (sizeof(searchpath_t));
+		search = Z_TagMalloc (sizeof(searchpath_t), TAGMALLOC_SEARCHPATH);
+		search->filename[0] = 0;
 		search->pack = pak;
 		search->next = fs_searchpaths;
 		fs_searchpaths = search;		
@@ -501,33 +493,39 @@ void FS_AddGameDirectory (const char *dir)
 	{
 		for (i=0 ; i<numfiles - 1 ; i++)
 		{
-			if( strcmp(searchnames[i]+strlen(searchnames[i])-4, ".pak") )
+			if( Q_stricmp(searchnames[i]+strlen(searchnames[i])-4, ".pak") )
 				continue;
 
 			numberedpak = false;
 
-			for (j=0; j<100; j++) 
-			{ 
-				Com_sprintf( buf, sizeof(buf), "/pak%i.pak", j); 
+			for (j=0; j<100; j++)
+			{
+				Com_sprintf( buf, sizeof(buf), "/pak%i.pak", j);
 				if ( strstr(searchnames[i], buf) )
-				{ 
-					numberedpak = true; 
-					break; 
-				} 
+				{
+					numberedpak = true;
+					break;
+				}
 			}
 
 			if (numberedpak)
 				continue;
+
 			pak = FS_LoadPackFile (searchnames[i]);
 			if (!pak)
 				continue;
-			search = Z_Malloc (sizeof(searchpath_t));
+
+			search = Z_TagMalloc (sizeof(searchpath_t), TAGMALLOC_SEARCHPATH);
+			search->filename[0] = 0;
 			search->pack = pak;
 			search->next = fs_searchpaths;
 			fs_searchpaths = search;
 		}
 
-		free (searchnames);
+		for (i=0 ; i<numfiles - 1 ; i++)
+			Z_Free (searchnames[i]);
+
+		Z_Free (searchnames);
 	}
 }
 
@@ -538,11 +536,11 @@ FS_AddHomeAsGameDirectory
 Use ~/.quake2/dir as fs_gamedir
 ================
 */
-void FS_AddHomeAsGameDirectory (const char *dir)
+static void FS_AddHomeAsGameDirectory (const char *dir)
 {
 #ifndef _WIN32
 	char gdir[MAX_OSPATH];
-	char *homedir=getenv("HOME");
+	char *homedir = getenv("HOME");
 
 	if(homedir) {
 		int len = snprintf(gdir,sizeof(gdir),"%s/.quake2/%s/", homedir, dir);
@@ -617,8 +615,6 @@ void FS_SetGamedir (const char *dir)
 		if (fs_searchpaths->pack)
 		{
 			fclose (fs_searchpaths->pack->handle);
-			//Z_Free (fs_searchpaths->pack->files);
-			//Z_Free (fs_searchpaths->pack->fileHash);
 			Z_Free (fs_searchpaths->pack);
 		}
 		next = fs_searchpaths->next;
@@ -674,7 +670,7 @@ char **FS_ListFiles( const char *findname, int *numfiles, unsigned musthave, uns
 	nfiles++; // add space for a guard
 	*numfiles = nfiles;
 
-	list = malloc( sizeof( char * ) * nfiles );
+	list = Z_TagMalloc( sizeof( char * ) * nfiles, TAGMALLOC_FILELIST );
 	memset( list, 0, sizeof( char * ) * nfiles );
 
 	s = Sys_FindFirst( findname, musthave, canthave );
@@ -683,7 +679,7 @@ char **FS_ListFiles( const char *findname, int *numfiles, unsigned musthave, uns
 	{
 		if ( s[strlen(s)-1] != '.' )
 		{
-			list[nfiles] = strdup( s );
+			list[nfiles] = CopyString( s, TAGMALLOC_FILELIST );
 #ifdef _WIN32
 			Q_strlwr( list[nfiles] );
 #endif
@@ -699,7 +695,7 @@ char **FS_ListFiles( const char *findname, int *numfiles, unsigned musthave, uns
 /*
 ** FS_Dir_f
 */
-void FS_Dir_f( void )
+static void FS_Dir_f( void )
 {
 	char	*path = NULL;
 	char	findname[1024];
@@ -738,12 +734,12 @@ void FS_Dir_f( void )
 				else
 					Com_Printf( "%s\n", dirnames[i] );
 
-				free( dirnames[i] );
+				Z_Free( dirnames[i] );
 			}
-			free( dirnames );
+			Z_Free( dirnames );
 		}
 		Com_Printf( "\n" );
-	};
+	}
 }
 
 /*
@@ -752,7 +748,7 @@ FS_Path_f
 
 ============
 */
-void FS_Path_f (void)
+static void FS_Path_f (void)
 {
 	searchpath_t	*s;
 
@@ -767,6 +763,97 @@ void FS_Path_f (void)
 			Com_Printf ("%s\n", s->filename);
 	}
 }
+
+#if 0
+typedef struct packList_s
+{
+	char *pakname;
+	char *filename;
+} packList_t;
+
+packList_t *FS_ListPakFiles (const char *findname, int *numfiles)
+{
+	searchpath_t	*search;
+	pack_t			*pak;
+	int				i = 0, j = 0, count = 0;
+	packList_t		*fileList = NULL;
+	qboolean		skip = false;
+
+
+	for (search = fs_searchpaths ; search ; search = search->next) {
+		if (search->pack) {	// look through all the pak file elements
+			for (i = 0, pak = search->pack; i < pak->numfiles; i++)	{
+				if (Com_WildCmp(findname, pak->files[i].name, true ) )
+					count++;
+			}
+		}
+	}
+
+	if(!count)
+		return NULL;
+
+	fileList = Z_TagMalloc (sizeof(packList_t) * count, TAGMALLOC_FILELIST);
+	count = 0;
+
+	for (search = fs_searchpaths ; search ; search = search->next)
+	{
+		if (search->pack) {	// look through all the pak file elements
+			for (i = 0, pak = search->pack; i < pak->numfiles; i++)
+			{
+				if ( Com_WildCmp(findname, pak->files[i].name, true ) )
+				{
+					skip = false;
+					for(j = 0; j < count; j++) { //Check so dont add same file from different pak to list
+						if( !Q_stricmp(fileList[j].filename, pak->files[i].name) ) {
+							skip = true;
+							break;
+						}
+					}
+
+					if(skip)
+						continue;
+
+					fileList[count].pakname = CopyString(pak->filename, TAGMALLOC_FILELIST);
+					fileList[count].filename = CopyString(pak->files[i].name, TAGMALLOC_FILELIST);
+					count++;
+				}
+			}
+		}
+	}
+	*numfiles = count;
+	return fileList;
+}
+
+void FS_PakFind_f (void)
+{
+	packList_t *fileList = NULL;
+	int	i = 0, numFiles = 0;
+
+	if ( Cmd_Argc() != 2 )
+	{
+		Com_Printf("Usage: pakfind <string>\n" );
+		return;
+	}
+
+	fileList = FS_ListPakFiles ( Cmd_Argv(1), &numFiles );
+
+	if(!fileList)
+	{
+		Com_Printf("Didnt find any files matching to '%s'\n", Cmd_Argv(1));
+		return;
+	}
+
+	for(i = 0; i < numFiles; i++)
+	{
+		Com_Printf ("PackFile: %s (%s)\n", fileList[i].filename, fileList[i].pakname);
+		Z_Free(fileList[i].pakname);
+		Z_Free (fileList[i].filename);
+	}
+	Z_Free (fileList);
+
+	Com_Printf("%i files found\n", numFiles);
+}
+#endif
 
 /*
 ================
@@ -795,7 +882,7 @@ char *FS_NextPath(char *prevpath)
 }
 
 
-void FS_PakList_f( void )
+static void FS_PakList_f( void )
 {
 	searchpath_t *s;
 
@@ -817,6 +904,7 @@ void FS_InitFilesystem (void)
 	Cmd_AddCommand ("dir", FS_Dir_f );
 
 	Cmd_AddCommand ("paklist", FS_PakList_f );
+//	Cmd_AddCommand ("pakfind", FS_PakFind_f );
 
 	//
 	// basedir <path>

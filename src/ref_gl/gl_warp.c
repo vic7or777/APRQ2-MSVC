@@ -21,10 +21,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "gl_local.h"
 
-char	skyname[MAX_QPATH];
-float	skyrotate;
-vec3_t	skyaxis;
-image_t	*sky_images[6];
+static char		skyname[MAX_QPATH];
+static float	skyrotate;
+static vec3_t	skyaxis;
+static image_t	*sky_images[6];
 
 
 // speed up sin calculations - Ed
@@ -32,7 +32,7 @@ float	r_turbsin[] =
 {
 	#include "warpsin.h"
 };
-#define TURBSCALE (256.0 / (2 * M_PI))
+#define TURBSCALE (256.0 / M_TWOPI)
 #define TURBSIN(f, s) r_turbsin[((int)(((f)*(s) + r_newrefdef.time) * TURBSCALE) & 255)]
 
 /*
@@ -42,19 +42,17 @@ EmitWaterPolys
 Does a water warp
 =============
 */
-void EmitWaterPolys (msurface_t *fa)
+void EmitWaterPolys (const msurface_t *fa)
 {
 	vec3_t		wv;   // Water waves
 	float		*v;
 	int			i, nv;
 	float		st[2];
-	float		scroll, rdt = r_newrefdef.time;
+	float		scroll = 0, rdt = r_newrefdef.time;
 
 
 	if (fa->texinfo->flags & SURF_FLOWING)
 		scroll = -64 * ( (r_newrefdef.time*0.5) - (int)(r_newrefdef.time*0.5) );
-	else
-		scroll = 0;
 
 	v = fa->polys->verts[0];
 	nv = fa->polys->numverts;
@@ -62,18 +60,13 @@ void EmitWaterPolys (msurface_t *fa)
 	qglBegin (GL_TRIANGLE_FAN);
 	for (i=0 ; i<nv ; i++, v+=VERTEXSIZE)
 	{
-			st[0] = (v[3] + TURBSIN(v[4], 0.125) + scroll) * (1.0/64);
-			st[1] = (v[4] + TURBSIN(v[3], 0.125)) * (1.0/64);
+			st[0] = (v[3] + TURBSIN(v[4], 0.125) + scroll) * ONEDIV64;
+			st[1] = (v[4] + TURBSIN(v[3], 0.125)) * ONEDIV64;
 			qglTexCoord2fv (st);
 
 			//=============== Water waves ============
 			if (!(fa->texinfo->flags & SURF_FLOWING) && gl_waterwaves->value)
 			{
-				if (gl_waterwaves->value < 0)
-					Cvar_Set( "gl_waterwaves", "0");
-				else if (gl_waterwaves->value > 4)
-					Cvar_Set( "gl_waterwaves", "4");
-
 				wv[0] =v[0];
 				wv[1] =v[1];
 				#if !id386
@@ -99,7 +92,7 @@ void EmitWaterPolys (msurface_t *fa)
 //===================================================================
 
 
-vec3_t	skyclip[6] = {
+static const vec3_t skyclip[6] = {
 	{1,1,0},
 	{1,-1,0},
 	{0,-1,1},
@@ -109,7 +102,7 @@ vec3_t	skyclip[6] = {
 };
 
 // 1 = s, 2 = t, 3 = 2048
-int	st_to_vec[6][3] =
+static const int st_to_vec[6][3] =
 {
 	{3,-1,2},
 	{-3,1,2},
@@ -122,7 +115,7 @@ int	st_to_vec[6][3] =
 };
 
 // s = [0]/[2], t = [1]/[2]
-int	vec_to_st[6][3] =
+static const int vec_to_st[6][3] =
 {
 	{-2,3,1},
 	{2,3,-1},
@@ -134,27 +127,22 @@ int	vec_to_st[6][3] =
 	{-2,1,-3}
 };
 
-float	skymins[2][6], skymaxs[2][6];
-float	sky_min, sky_max;
+static float	skymins[2][6], skymaxs[2][6];
+static float	sky_min, sky_max;
 
-void DrawSkyPolygon (int nump, vec3_t vecs)
+static void DrawSkyPolygon (int nump, vec3_t vecs)
 {
 	int		i,j;
-	vec3_t	v, av;
+	vec3_t	v = {0,0,0}, av;
 	float	s, t, dv;
 	int		axis;
 	float	*vp;
 
 	// decide which face it maps to
-	//VectorCopy (vec3_origin, v);
-	VectorClear (v);
-
 	for (i=0, vp=vecs ; i<nump ; i++, vp+=3)
 		VectorAdd (vp, v, v);
 
-	av[0] = fabs(v[0]);
-	av[1] = fabs(v[1]);
-	av[2] = fabs(v[2]);
+	VectorSet(av, fabs(v[0]), fabs(v[1]), fabs(v[2]));
 	if (av[0] > av[1] && av[0] > av[2])
 	{
 		if (v[0] < 0)
@@ -215,11 +203,11 @@ void DrawSkyPolygon (int nump, vec3_t vecs)
 #define	ON_EPSILON		0.1			// point on plane side epsilon
 #define	MAX_CLIP_VERTS	64
 
-void ClipSkyPolygon (int nump, vec3_t vecs, int stage)
+static void ClipSkyPolygon (int nump, vec3_t vecs, int stage)
 {
-	float	*norm;
+	const float	*norm;
 	float	*v;
-	qboolean	front, back;
+	qboolean	front = false, back = false;
 	float	d, e;
 	float	dists[MAX_CLIP_VERTS];
 	int		sides[MAX_CLIP_VERTS];
@@ -236,7 +224,6 @@ void ClipSkyPolygon (int nump, vec3_t vecs, int stage)
 		return;
 	}
 
-	front = back = false;
 	norm = skyclip[stage];
 	for (i=0, v = vecs ; i<nump ; i++, v+=3)
 	{
@@ -288,15 +275,14 @@ void ClipSkyPolygon (int nump, vec3_t vecs, int stage)
 			break;
 		}
 
-		if ( (sides[i] == SIDE_ON) | (sides[i+1] == SIDE_ON) | (sides[i+1] == sides[i]) )
+		if ( (sides[i] == SIDE_ON) || (sides[i+1] == SIDE_ON) || (sides[i+1] == sides[i]) )
 			continue;
 
 		d = dists[i] / (dists[i] - dists[i+1]);
 		for (j=0 ; j<3 ; j++)
 		{
 			e = v[j] + d*(v[j+3] - v[j]);
-			newv[0][newc[0]][j] = e;
-			newv[1][newc[1]][j] = e;
+			newv[0][newc[0]][j] = newv[1][newc[1]][j] = e;
 		}
 		newc[0]++;
 		newc[1]++;
@@ -312,11 +298,11 @@ void ClipSkyPolygon (int nump, vec3_t vecs, int stage)
 R_AddSkySurface
 =================
 */
-void R_AddSkySurface (msurface_t *fa)
+void R_AddSkySurface (const msurface_t *fa)
 {
 	int			i;
 	vec3_t		verts[MAX_CLIP_VERTS];
-	glpoly_t	*p;
+	const glpoly_t	*p;
 
 	// calculate vertex values for sky box
 	p = fa->polys;
@@ -345,7 +331,7 @@ void R_ClearSkyBox (void)
 }
 
 
-void MakeSkyVec (float s, float t, int axis)
+static void MakeSkyVec (float s, float t, int axis)
 {
 	vec3_t		v, b;
 	int			j, k;
@@ -386,7 +372,7 @@ void MakeSkyVec (float s, float t, int axis)
 R_DrawSkyBox
 ==============
 */
-int	skytexorder[6] = {0,2,1,3,4,5};
+static const int	skytexorder[6] = {0,2,1,3,4,5};
 void R_DrawSkyBox (void)
 {
 	int		i;
@@ -409,10 +395,8 @@ void R_DrawSkyBox (void)
 	{
 		if (skyrotate)
 		{	// hack, forces full sky to draw when rotating
-			skymins[0][i] = -1;
-			skymins[1][i] = -1;
-			skymaxs[0][i] = 1;
-			skymaxs[1][i] = 1;
+			skymins[0][i] =	skymins[1][i] = -1;
+			skymaxs[0][i] =	skymaxs[1][i] = 1;
 		}
 
 		if (skymins[0][i] >= skymaxs[0][i] || skymins[1][i] >= skymaxs[1][i])
@@ -438,7 +422,7 @@ R_SetSky
 ============
 */
 // 3dstudio environment map names
-char	*suf[6] = {"rt", "bk", "lf", "ft", "up", "dn"};
+static const char	*suf[6] = {"rt", "bk", "lf", "ft", "up", "dn"};
 void R_SetSky (const char *name, float rotate, vec3_t axis)
 {
 	int		i;
@@ -477,19 +461,18 @@ void R_SetSky (const char *name, float rotate, vec3_t axis)
 	}
 }
 
-//For water caustics -Maniac
-void EmitCausticPolys (msurface_t *fa)
+//Water caustics
+void EmitCausticPolys (const msurface_t *fa)
 {
 	float		*v;
-	int			i, nv;
+	int			i;
 	float		txm, tym;
-		
+
 
 	txm = cos (r_newrefdef.time*0.3) * 0.3;
 	tym = sin (r_newrefdef.time*-0.3) * 0.6;
 
 	v = fa->polys->verts[0];	
-	nv = fa->polys->numverts;
 
 	GL_SelectTexture(QGL_TEXTURE1);
 	qglDisable(GL_TEXTURE_2D);
@@ -497,13 +480,13 @@ void EmitCausticPolys (msurface_t *fa)
 	qglEnable(GL_BLEND);
 
     qglBlendFunc(GL_ZERO, GL_SRC_COLOR);
-	
+
 	qglColor4f (1, 1, 1, 0.275f);
 
 	GL_Bind(r_caustictexture->texnum);
-	qglBegin (GL_TRIANGLE_FAN);
+	qglBegin (GL_POLYGON);
 
-	for (i=0 ; i<nv ; i++, v+= VERTEXSIZE)
+	for (i=0 ; i<fa->polys->numverts; i++, v+= VERTEXSIZE)
 	{
 		qglTexCoord2f (v[3]+txm, v[4]+tym);
 		qglVertex3fv (v);

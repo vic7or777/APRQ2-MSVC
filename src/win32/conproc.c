@@ -18,7 +18,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 */
 // conproc.c -- support for qhost
+#define WIN32_LEAN_AND_MEAN
 #include <stdio.h>
+#include <stdlib.h>
 #include <process.h>
 #include <windows.h>
 #include "conproc.h"
@@ -37,12 +39,12 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // Param1 : Number of lines
 
 
-HANDLE	heventDone;
-HANDLE	hfileBuffer;
-HANDLE	heventChildSend;
-HANDLE	heventParentSend;
-HANDLE	hStdout;
-HANDLE	hStdin;
+static HANDLE	heventDone;
+static HANDLE	hfileBuffer;
+static HANDLE	heventChildSend;
+static HANDLE	heventParentSend;
+static HANDLE	hStdout;
+static HANDLE	hStdin;
 
 unsigned _stdcall RequestProc (void *arg);
 LPVOID GetMappedBuffer (HANDLE hfileBuffer);
@@ -54,8 +56,8 @@ BOOL WriteText (LPCTSTR szText);
 int CharToCode (char c);
 BOOL SetConsoleCXCY(HANDLE hStdout, int cx, int cy);
 
-int		ccom_argc;
-char	**ccom_argv;
+static int	ccom_argc;
+static char	**ccom_argv;
 
 /*
 ================
@@ -83,12 +85,11 @@ int CCheckParm (char *parm)
 
 void InitConProc (int argc, char **argv)
 {
-	unsigned	threadAddr;
+	DWORD		threadAddr;
 	HANDLE		hFile = NULL;
 	HANDLE		heventParent = NULL;
 	HANDLE		heventChild = NULL;
 	int			t;
-	HANDLE		hThread;
 
 	ccom_argc = argc;
 	ccom_argv = argv;
@@ -136,13 +137,12 @@ void InitConProc (int argc, char **argv)
 	}
 
 //	if (!_beginthreadex (NULL, 0, RequestProc, NULL, 0, &threadAddr))
-	if( !(hThread = CreateThread( NULL, 0, RequestProc, NULL, 0, &threadAddr )) )
+	if (!CreateThread (NULL, 0, RequestProc, NULL, 0, &threadAddr))
 	{
 		CloseHandle (heventDone);
 		printf ("Couldn't create QHOST thread\n");
 		return;
 	}
-	CloseHandle( hThread );
 
 // save off the input/output handles.
 	hStdout = GetStdHandle (STD_OUTPUT_HANDLE);
@@ -219,6 +219,7 @@ unsigned _stdcall RequestProc (void *arg)
 	}
 
 //	_endthreadex (0);
+	ExitThread (0);
 	return 0;
 }
 

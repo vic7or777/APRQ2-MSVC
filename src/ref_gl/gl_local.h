@@ -19,6 +19,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define VC_LEANMEAN
 #  include <windows.h>
 #endif
 
@@ -150,6 +152,7 @@ extern	image_t		*r_notexture;
 extern	image_t		*r_particletexture;
 extern	image_t		*r_caustictexture;
 extern	image_t		*r_bholetexture;
+extern	image_t		*r_shelltexture;
 
 extern	entity_t	*currententity;
 extern	model_t		*currentmodel;
@@ -258,19 +261,19 @@ extern	cvar_t	*gl_fog;
 extern	cvar_t	*gl_decals;
 extern	cvar_t	*gl_decals_time;
 extern	cvar_t	*gl_coloredlightmaps;
-
+extern	cvar_t	*gl_shelleffect;
 //End
 
-extern	int		gl_lightmap_format;
-extern	int		gl_solid_format;
-extern	int		gl_alpha_format;
+//extern	int		gl_lightmap_format;
+//extern	int		gl_solid_format;
+//extern	int		gl_alpha_format;
 extern	int		gl_tex_solid_format;
 extern	int		gl_tex_alpha_format;
 
 extern	int		c_visible_lightmaps;
 extern	int		c_visible_textures;
 
-extern	float	r_world_matrix[16];
+extern	float	r_WorldViewMatrix[16];
 
 void R_TranslatePlayerSkin (int playernum);
 void GL_Bind (int texnum);
@@ -279,7 +282,7 @@ void GL_TexEnv( GLenum value );
 void GL_EnableMultitexture( qboolean enable );
 void GL_SelectTexture( GLenum );
 
-void R_LightPoint (vec3_t p, vec3_t color);
+void R_LightPoint (const vec3_t p, vec3_t color);
 void R_PushDlights (void);
 
 //====================================================================
@@ -292,34 +295,34 @@ extern	float		d_8to24tablef[256][3];
 extern	int		registration_sequence;
 
 
-void V_AddBlend (float r, float g, float b, float a, float *v_blend);
+//void V_AddBlend (float r, float g, float b, float a, float *v_blend);
 
 int 	R_Init( void *hinstance, void *hWnd );
 void	R_Shutdown( void );
 
-void R_RenderView (refdef_t *fd);
+//void R_RenderView (refdef_t *fd);
 
 void GL_ScreenShot_f (void);
 void R_DrawAliasModel (void);
 void R_DrawBrushModel (void);
-void R_DrawSpriteModel (void);
+//void R_DrawSpriteModel (void);
 void R_DrawBeam( void );
 void R_DrawWorld (void);
 void R_RenderDlights (void);
 void R_DrawAlphaSurfaces (void);
-void R_RenderBrushPoly (msurface_t *fa);
+//void R_RenderBrushPoly (msurface_t *fa);
 void R_InitParticleTexture (void);
 void Draw_InitLocal (void);
-qboolean R_CullBox (vec3_t mins, vec3_t maxs);
-void R_RotateForEntity (entity_t *e);
+qboolean R_CullBox (const vec3_t mins, const vec3_t maxs);
+void R_RotateForEntity (const entity_t *e);
 void R_MarkLeaves (void);
 
 glpoly_t *WaterWarpPolyVerts (glpoly_t *p);
-void EmitWaterPolys (msurface_t *fa);
-void R_AddSkySurface (msurface_t *fa);
+void EmitWaterPolys (const msurface_t *fa);
+void R_AddSkySurface (const msurface_t *fa);
 void R_ClearSkyBox (void);
 void R_DrawSkyBox (void);
-void R_MarkLights (dlight_t *light, int bit, mnode_t *node);
+void R_MarkLights (const dlight_t *light, int bit, const mnode_t *node);
 
 
 void	Draw_GetPicSize (int *w, int *h, const char *name);
@@ -338,12 +341,12 @@ void	R_CinematicSetPalette ( const unsigned char *palette);
 
 int		Draw_GetPalette (void);
 
-void GL_ResampleTexture (unsigned *in, int inwidth, int inheight, unsigned *out,  int outwidth, int outheight);
+//void GL_ResampleTexture (unsigned *in, int inwidth, int inheight, unsigned *out,  int outwidth, int outheight);
 
 struct image_s *R_RegisterSkin (const char *name);
 
 
-void LoadPCX (const char *filename, byte **pic, byte **palette, int *width, int *height);
+//void LoadPCX (const char *filename, byte **pic, byte **palette, int *width, int *height);
 
 image_t *GL_LoadPic (const char *name, byte *pic, int width, int height, imagetype_t type, int bits, int scale);
 image_t	*GL_FindImage (const char *name, imagetype_t type);
@@ -363,7 +366,7 @@ void GL_TextureSolidMode( const char *string );
 /*
 ** GL extension emulation functions
 */
-void GL_DrawParticles( int n, const particle_t particles[], const unsigned colortable[768] );
+//void GL_DrawParticles( int n, const particle_t particles[], const unsigned colortable[768] );
 
 /*
 ** GL config stuff
@@ -439,6 +442,7 @@ typedef struct
 	qboolean		sgis_mipmap; //sgis mipmap -Maniac
 	int				maxtexsize; //max texture size -Maniac
 	qboolean		texture_compression; // Heffo - ARB Texture Compression
+	qboolean		stencil;
 
 	qboolean		tex_rectangle;
 
@@ -450,17 +454,10 @@ extern glstate_t   gl_state;
 
 #define MAX_ARRAY MAX_PARTICLES*4
 
-#define VA_SetElem2(v,a,b)		((v)[0]=(a),(v)[1]=(b))
-#define VA_SetElem3(v,a,b,c)	((v)[0]=(a),(v)[1]=(b),(v)[2]=(c))
-#define VA_SetElem4(v,a,b,c,d)	((v)[0]=(a),(v)[1]=(b),(v)[2]=(c),(v)[3]=(d))
-
-extern float	tex_array[MAX_ARRAY][2];
-extern float	vert_array[MAX_ARRAY][3];
-extern float	col_array[MAX_ARRAY][4];
-
-
 #include "gl_decal.h"
+void R_RotateForEntity2 (const entity_t *e);
 
+qboolean R_GetModeInfo( int *width, int *height, int mode );
 
 /*
 ====================================================================
@@ -474,5 +471,35 @@ void		GLimp_BeginFrame( float camera_separation );
 void		GLimp_EndFrame( void );
 int 		GLimp_Init( void *hinstance, void *hWnd );
 void		GLimp_Shutdown( void );
-int     	GLimp_SetMode( int *pwidth, int *pheight, int mode, qboolean fullscreen );
+rserr_t    	GLimp_SetMode( int *pwidth, int *pheight, int mode, qboolean fullscreen );
 void		GLimp_AppActivate( qboolean active );
+
+#define WIREFRAME_OFF 0
+#define	WIREFRAME_LINE 1
+#define WIREFRAME_DOT 2
+#define WIREFRAME_DASH 3
+#define WIREFRAME_DOT_DASH 4
+
+#define BG_TEXTURED_LIGHTMAPED 0
+#define BG_TEXTURED 1
+#define BG_LIGHTMAPED 2
+#define BG_FLAT_COLOR 3
+
+extern	cvar_t	*gl_eff_world_wireframe;
+extern	cvar_t	*gl_eff_world_bg_type;
+extern	cvar_t	*gl_eff_world_bg_color_r;
+extern	cvar_t	*gl_eff_world_bg_color_g;
+extern	cvar_t	*gl_eff_world_bg_color_b;
+extern	cvar_t	*gl_eff_world_lines_color_r;
+extern	cvar_t	*gl_eff_world_lines_color_g;
+extern	cvar_t	*gl_eff_world_lines_color_b;
+
+extern	cvar_t	*gl_eff_entities_wireframe;
+extern	cvar_t	*gl_eff_entities_bg_type;
+extern	cvar_t	*gl_eff_entities_bg_color_r;
+extern	cvar_t	*gl_eff_entities_bg_color_g;
+extern	cvar_t	*gl_eff_entities_bg_color_b;
+extern	cvar_t	*gl_eff_entities_lines_color_r;
+extern	cvar_t	*gl_eff_entities_lines_color_g;
+extern	cvar_t	*gl_eff_entities_lines_color_b;
+

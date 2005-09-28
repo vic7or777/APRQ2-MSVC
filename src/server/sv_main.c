@@ -292,8 +292,7 @@ void SVC_DirectConnect (void)
 
 	challenge = atoi(Cmd_Argv(3));
 
-	strncpy (userinfo, Cmd_Argv(4), sizeof(userinfo)-1);
-	userinfo[sizeof(userinfo) - 1] = 0;
+	Q_strncpyz (userinfo, Cmd_Argv(4), sizeof(userinfo));
 
 	// force the IP key/value pair so the game can filter based on ip
 	Info_SetValueForKey (userinfo, "ip", NET_AdrToString(&net_from));
@@ -393,13 +392,13 @@ gotnewcl:
 	}
 
 	// parse some info from the info strings
-	strncpy (newcl->userinfo, userinfo, sizeof(newcl->userinfo)-1);
+	Q_strncpyz (newcl->userinfo, userinfo, sizeof(newcl->userinfo));
 	SV_UserinfoChanged (newcl);
 
 	// send the connect packet to the client
 	Netchan_OutOfBandPrint (NS_SERVER, &adr, "client_connect");
 
-	Netchan_Setup (NS_SERVER, &newcl->netchan , &adr, qport);
+	Netchan_Setup (NS_SERVER, &newcl->netchan, &adr, PROTOCOL_VERSION, qport);
 
 	newcl->state = cs_connected;
 	
@@ -906,7 +905,7 @@ void SV_UserinfoChanged (client_t *cl)
 	ge->ClientUserinfoChanged (cl->edict, cl->userinfo);
 	
 	// name for C code
-	strncpy (cl->name, Info_ValueForKey (cl->userinfo, "name"), sizeof(cl->name)-1);
+	Q_strncpyz (cl->name, Info_ValueForKey (cl->userinfo, "name"), sizeof(cl->name));
 	// mask off high bit
 	for (i=0 ; i<sizeof(cl->name) ; i++)
 		cl->name[i] &= 127;
@@ -956,7 +955,7 @@ void SV_Init (void)
 	Cvar_Get ("fraglimit", "0", CVAR_SERVERINFO);
 	Cvar_Get ("timelimit", "0", CVAR_SERVERINFO);
 	Cvar_Get ("cheats", "0", CVAR_SERVERINFO|CVAR_LATCH);
-	Cvar_Get ("protocol", va("%i", PROTOCOL_VERSION), CVAR_SERVERINFO|CVAR_NOSET);;
+	Cvar_Get ("protocol", va("%i", PROTOCOL_VERSION), CVAR_SERVERINFO|CVAR_NOSET);
 	maxclients = Cvar_Get ("maxclients", "1", CVAR_SERVERINFO | CVAR_LATCH);
 	hostname = Cvar_Get ("hostname", "noname", CVAR_SERVERINFO | CVAR_ARCHIVE);
 	timeout = Cvar_Get ("timeout", "125", 0);

@@ -45,7 +45,7 @@ typedef struct
 	int		h_count[512];
 } cinematics_t;
 
-cinematics_t	cin;
+static cinematics_t	cin;
 
 /*
 =================================================================
@@ -61,7 +61,7 @@ PCX LOADING
 SCR_LoadPCX
 ==============
 */
-void SCR_LoadPCX (const char *filename, byte **pic, byte **palette, int *width, int *height)
+static void SCR_LoadPCX (const char *filename, byte **pic, byte **palette, int *width, int *height)
 {
 	byte	*raw;
 	pcx_t	*pcx;
@@ -97,7 +97,7 @@ void SCR_LoadPCX (const char *filename, byte **pic, byte **palette, int *width, 
 		return;
 	}
 
-	out = Z_Malloc ( (pcx->ymax+1) * (pcx->xmax+1) );
+	out = Z_TagMalloc ( (pcx->ymax+1) * (pcx->xmax+1), TAGMALLOC_CLIENT_LOADPCX);
 
 	*pic = out;
 
@@ -105,7 +105,7 @@ void SCR_LoadPCX (const char *filename, byte **pic, byte **palette, int *width, 
 
 	if (palette)
 	{
-		*palette = Z_Malloc(768);
+		*palette = Z_TagMalloc(768, TAGMALLOC_CLIENT_LOADPCX);
 		memcpy (*palette, (byte *)pcx + len - 768, 768);
 	}
 
@@ -141,7 +141,7 @@ void SCR_LoadPCX (const char *filename, byte **pic, byte **palette, int *width, 
 		*pic = NULL;
 	}
 
-	FS_FreeFile (pcx);
+	FS_FreeFile ((void *)pcx);
 }
 
 //=============================================================
@@ -253,7 +253,7 @@ void Huff1TableInit (void)
 	byte	counts[256];
 	int		numhnodes;
 
-	cin.hnodes1 = Z_Malloc (256*256*2*4);
+	cin.hnodes1 = Z_TagMalloc (256*256*2*4, TAGMALLOC_CLIENT_CINEMA);
 	memset (cin.hnodes1, 0, 256*256*2*4);
 
 	for (prev=0 ; prev<256 ; prev++)
@@ -310,7 +310,8 @@ cblock_t Huff1Decompress (cblock_t in)
 	// get decompressed count
 	count = in.data[0] + (in.data[1]<<8) + (in.data[2]<<16) + (in.data[3]<<24);
 	input = in.data + 4;
-	out_p = out.data = Z_Malloc (count);
+	out_p = out.data = Z_TagMalloc (count, TAGMALLOC_CLIENT_CINEMA);
+	memset(out_p, 0, count);
 
 	// read bits
 

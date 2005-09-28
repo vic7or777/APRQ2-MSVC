@@ -22,6 +22,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "../client/client.h"
 
+extern int Developer_searchpath( void );
+
 #define MAXMENUITEMS	64
 
 #define MTYPE_SLIDER		0
@@ -125,6 +127,7 @@ typedef struct
 	int	width;
 	int height;
 	int lastClick;
+	int maxItems;
 } menulist_s;
 
 typedef struct
@@ -167,6 +170,8 @@ void	Menu_SetStatusBar( menuframework_s *s, const char *string );
 void	Menu_SlideItem( menuframework_s *s, int dir );
 //int		Menu_TallySlots( menuframework_s *menu );
 
+void MenuList_Init( menulist_s *l );
+
 void	 Menu_DrawString( int, int, const char * );
 void	 Menu_DrawStringDark( int, int, const char * );
 void	 Menu_DrawStringR2L( int, int, const char * );
@@ -190,8 +195,8 @@ void M_Menu_Main_f (void);
 		void M_Menu_Demos_f( void );
 		void M_Menu_Keys_f (void);
 	void M_Menu_Quit_f (void);
-#ifdef _WIN32
-void M_Menu_WA_f( void );
+#if defined(_WIN32) || defined(WITH_XMMS)
+	void M_Menu_MP3_f( void );
 #endif
 	void M_Menu_Credits( void );
 #endif

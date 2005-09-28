@@ -24,6 +24,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <float.h>
 
 #include "..\client\client.h"
+#ifndef CD_AUDIO
+# define WIN32_LEAN_AND_MEAN
+#endif
+#define VC_LEANMEAN
 #include "winquake.h"
 //#include "zmouse.h"
 
@@ -42,6 +46,9 @@ cvar_t		*vid_xpos;			// X coordinate of window position
 cvar_t		*vid_ypos;			// Y coordinate of window position
 cvar_t		*vid_fullscreen;
 
+cvar_t		*vid_displayfrequency;
+cvar_t		*vid_restore_on_switch;
+
 // Global variables used internally by this module
 viddef_t	viddef;				// global video state; used by other modules
 
@@ -51,57 +58,55 @@ HWND        cl_hwnd;            // Main window handle for life of program
 
 LONG WINAPI MainWndProc( HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam );
 
-static qboolean s_alttab_disabled;
+static qboolean s_alttab_disabled = false;
 
 extern	unsigned	sys_msg_time;
 
-qboolean vid_restart = false;
-qboolean vid_active = false;
-
+static qboolean vid_restart = false;
+static qboolean vid_active = false;
 // WIN32 helper functions
 extern qboolean s_win95;
 
-static void WIN_ToggleAltTab( qboolean enable )
+static void WIN_DisableAltTab( void )
 {
-	if (enable) {
-		if (!s_alttab_disabled)
-			return;
+	if ( s_alttab_disabled )
+		return;
 
-		if ( s_win95 )
-		{
-			BOOL old;
-			SystemParametersInfo( SPI_SCREENSAVERRUNNING, 0, &old, 0 );
-		}
-		else
-		{
-			UnregisterHotKey( 0, 0 );
-			UnregisterHotKey( 0, 1 );
-		}
-
-		s_alttab_disabled = false;
+	if ( s_win95 )
+	{
+		BOOL old;
+		SystemParametersInfo( SPI_SCREENSAVERRUNNING, 1, &old, 0 );
 	}
 	else
 	{
-		if ( s_alttab_disabled )
-			return;
-
-		if ( s_win95 )
-		{
-			BOOL old;
-			SystemParametersInfo( SPI_SCREENSAVERRUNNING, 1, &old, 0 );
-		}
-		else
-		{
-			RegisterHotKey( 0, 0, MOD_ALT, VK_TAB );
-			RegisterHotKey( 0, 1, MOD_ALT, VK_RETURN );
-		}
-		s_alttab_disabled = true;
+		RegisterHotKey( 0, 0, MOD_ALT, VK_TAB );
+		//RegisterHotKey( 0, 1, MOD_ALT, VK_RETURN );
 	}
+	s_alttab_disabled = true;
 }
 
 
+static void WIN_EnableAltTab( void )
+{
+	if (!s_alttab_disabled)
+		return;
+
+	if ( s_win95 )
+	{
+		BOOL old;
+		SystemParametersInfo( SPI_SCREENSAVERRUNNING, 0, &old, 0 );
+	}
+	else
+	{
+		UnregisterHotKey( 0, 0 );
+		//UnregisterHotKey( 0, 1 );
+	}
+
+	s_alttab_disabled = false;
+}
+
 //==========================================================================
-byte        scantokey[128] = 
+static const byte scantokey[128] = 
 					{ 
 //  0           1       2       3       4       5       6       7 
 //  8           9       A       B       C       D       E       F 
@@ -123,6 +128,7 @@ byte        scantokey[128] =
 	0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0  ,    0         // 7 
 }; 
 
+
 /*
 =======
 MapKey
@@ -132,21 +138,19 @@ Map from windows to quake keynums
 */
 int MapKey (int key)
 {
-	int result;
+	int is_extended;
 	int modified = ( key >> 16 ) & 255;
-	qboolean is_extended = false;
 
 	if ( modified > 127)
 		return 0;
 
-	if ( key & ( 1 << 24 ) )
-		is_extended = true;
+	is_extended = (key >> 24) & 1;
 
-	result = scantokey[modified];
+	key = scantokey[modified];
 
 	if ( !is_extended )
 	{
-		switch ( result )
+		switch ( key )
 		{
 		case K_HOME:
 			return K_KP_HOME;
@@ -169,12 +173,12 @@ int MapKey (int key)
 		case K_DEL:
 			return K_KP_DEL;
 		default:
-			return result;
+			return key;
 		}
 	}
 	else
 	{
-		switch ( result )
+		switch ( key )
 		{
 		case 0x0D:
 			return K_KP_ENTER;
@@ -182,12 +186,14 @@ int MapKey (int key)
 			return K_KP_SLASH;
 		case 0xAF:
 			return K_KP_PLUS;
+		default:
+			return key;
 		}
-		return result;
 	}
 }
 
-void VID_AppActivate(BOOL fActive, BOOL minimize)
+
+static void VID_AppActivate(BOOL fActive, BOOL minimize)
 {
 	Minimized = minimize;
 
@@ -208,7 +214,10 @@ void VID_AppActivate(BOOL fActive, BOOL minimize)
 
 	if ( win_noalttab->integer )
 	{
-		WIN_ToggleAltTab(!ActiveApp);
+		if(!ActiveApp)
+			WIN_EnableAltTab();
+		else
+			WIN_DisableAltTab();
 	}
 
 	if ( vid_active )
@@ -232,15 +241,6 @@ main window procedure
    #define MK_XBUTTON2         0x0040 
 #endif 
 
-#ifndef MK_XBUTTON3	
-	#define MK_XBUTTON3         0x0080	
-	#define MK_XBUTTON4         0x0100	
-#endif	
-
-#ifndef MK_XBUTTON5	
-	#define MK_XBUTTON5         0x0200	
-#endif	
-
 
 LONG WINAPI MainWndProc (
     HWND    hWnd,
@@ -248,10 +248,12 @@ LONG WINAPI MainWndProc (
     WPARAM  wParam,
     LPARAM  lParam)
 {
-	LONG			lRet = 0;
 
 	if ( uMsg == MSH_MOUSEWHEEL )
 	{
+		if(DIMouse)
+			return DefWindowProc (hWnd, uMsg, wParam, lParam);
+
 		if ( ( ( int ) wParam ) > 0 )
 		{
 			Key_Event( K_MWHEELUP, true, sys_msg_time );
@@ -272,6 +274,9 @@ LONG WINAPI MainWndProc (
 		** this chunk of code theoretically only works under NT4 and Win98
 		** since this message doesn't exist under Win95
 		*/
+		if(DIMouse)
+			break;
+
 		if ( ( short ) HIWORD( wParam ) > 0 )
 		{
 			Key_Event( K_MWHEELUP, true, sys_msg_time );
@@ -282,38 +287,29 @@ LONG WINAPI MainWndProc (
 			Key_Event( K_MWHEELDOWN, true, sys_msg_time );
 			Key_Event( K_MWHEELDOWN, false, sys_msg_time );
 		}
-		break;
+		return 0;
 
 	case WM_HOTKEY:
 		return 0;
 
 	case WM_CREATE:
 		cl_hwnd = hWnd;
-
-		MSH_MOUSEWHEEL = RegisterWindowMessage("MSWHEEL_ROLLMSG"); 
-        return DefWindowProc (hWnd, uMsg, wParam, lParam);
+		MSH_MOUSEWHEEL = RegisterWindowMessage("MSWHEEL_ROLLMSG");
+        break;
 
 	case WM_PAINT:
 		SCR_DirtyScreen ();	// force entire screen to update next frame
-        return DefWindowProc (hWnd, uMsg, wParam, lParam);
+        break;
 
 	case WM_DESTROY:
 		// let sound and input know about this?
 		cl_hwnd = NULL;
-        return DefWindowProc (hWnd, uMsg, wParam, lParam);
+        break;
 
 	case WM_ACTIVATE:
-		{
-			int	fActive, fMinimized;
-
-			// KJB: Watch this for problems in fullscreen modes with Alt-tabbing.
-			fActive = LOWORD(wParam);
-			fMinimized = (BOOL) HIWORD(wParam);
-
-			VID_AppActivate( fActive != WA_INACTIVE, fMinimized);
-
-		}
-        return DefWindowProc (hWnd, uMsg, wParam, lParam);
+		// KJB: Watch this for problems in fullscreen modes with Alt-tabbing.
+		VID_AppActivate(  LOWORD(wParam) != WA_INACTIVE, (BOOL) HIWORD(wParam) );
+        break;
 
 	case WM_MOVE:
 		{
@@ -334,13 +330,11 @@ LONG WINAPI MainWndProc (
 
 				Cvar_SetValue( "vid_xpos", xPos + r.left);
 				Cvar_SetValue( "vid_ypos", yPos + r.top);
-				vid_xpos->modified = false;
-				vid_ypos->modified = false;
 				if (ActiveApp)
 					IN_Activate (true);
 			}
 		}
-        return DefWindowProc (hWnd, uMsg, wParam, lParam);
+        break;
 
 // this is complicated because Win32 seems to pack multiple mouse events into
 // one update sometimes, so we always check all states and look for events
@@ -354,9 +348,10 @@ LONG WINAPI MainWndProc (
 	case WM_XBUTTONDOWN:
 	case WM_XBUTTONUP:
 		{
-			int	temp;
+			int	temp = 0;
 
-			temp = 0;
+			if(DIMouse)
+				break;
 
 			if (wParam & MK_LBUTTON)
 				temp |= 1;
@@ -373,13 +368,7 @@ LONG WINAPI MainWndProc (
 			if (wParam & MK_XBUTTON2) 
 				temp |= 16;
 
-			if (wParam & MK_XBUTTON3) 
-				temp |= 32;
-
-			if (wParam & MK_XBUTTON4) 
-				temp |= 64;
-
-			IN_MouseEvent (temp);
+			IN_MouseEvent (temp, 5);
 		}
 		break;
 
@@ -390,18 +379,22 @@ LONG WINAPI MainWndProc (
 		  case SC_MONITORPOWER: 
 			 return 0; 
 		  case SC_CLOSE: 
-			 CL_Quit_f (); 
+			 Cbuf_ExecuteText( EXEC_APPEND, "quit" ); 
 		  case SC_MAXIMIZE: 
 			 Cvar_SetValue ("vid_fullscreen", 1); 
 		  return 0; 
 		} 
 		return DefWindowProc (hWnd, uMsg, wParam, lParam);
 
+	case WM_QUIT:
+	case WM_CLOSE:
+		Cbuf_ExecuteText( EXEC_APPEND, "quit" );
+		break;
+
 	case WM_SYSKEYDOWN:
 		if ( wParam == 13 )
 		{
-			if ( vid_fullscreen )
-			{
+			if ( vid_fullscreen ) {
 				Cvar_SetValue( "vid_fullscreen", !vid_fullscreen->integer );
 			}
 			return 0;
@@ -419,13 +412,12 @@ LONG WINAPI MainWndProc (
 #ifdef CD_AUDIO
 	case MM_MCINOTIFY:
 		{
+			LONG lRet = 0;
 			LONG CDAudio_MessageHandler(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam);
 			lRet = CDAudio_MessageHandler (hWnd, uMsg, wParam, lParam);
 		}
 		break;
 #endif
-	default:	// pass all unhandled messages to DefWindowProc
-        return DefWindowProc (hWnd, uMsg, wParam, lParam);
     }
 
     // return 0 if handled message, 1 if not
@@ -450,47 +442,6 @@ void VID_Front_f( void )
 {
 	SetWindowLong( cl_hwnd, GWL_EXSTYLE, WS_EX_TOPMOST );
 	SetForegroundWindow( cl_hwnd );
-}
-
-/*
-================
-VID_GetModeInfo
-================
-*/
-typedef struct vidmode_s
-{
-	const char *description;
-	int         width, height;
-	int         mode;
-} vidmode_t;
-
-vidmode_t vid_modes[] =
-{
-	{ "Mode 0: 320x240",	 320,  240,	0  },
-	{ "Mode 1: 400x300",	 400,  300,	1  },
-	{ "Mode 2: 512x384",	 512,  384,	2  },
-	{ "Mode 3: 640x480",	 640,  480,	3  },
-	{ "Mode 4: 800x600",	 800,  600,	4  },
-	{ "Mode 5: 960x720",	 960,  720,	5  },
-	{ "Mode 6: 1024x768",	1024,  768,	6  },
-	{ "Mode 7: 1152x864",	1152,  864,	7  },
-	{ "Mode 8: 1280x960",	1280,  960,	8  },
-	{ "Mode 9: 1600x1200",	1600, 1200,	9  },
-	{ "Mode 10: 2048x1536",	2048, 1536,	10 },
-	{ "Mode 11: 1024x480",	1024,  480,	11 },
-	{ "Mode 12: 1280x768",	1280,  768,	12 },
-	{ "Mode 13: 1280x1024",	1280, 1024,	13 }
-};
-
-qboolean VID_GetModeInfo( int *width, int *height, int mode )
-{
-	if ( mode < 0 || mode >= VID_NUM_MODES )
-		return false;
-
-	*width  = vid_modes[mode].width;
-	*height = vid_modes[mode].height;
-
-	return true;
 }
 
 /*
@@ -540,19 +491,6 @@ update the rendering DLL and/or video mode to match.
 void VID_CheckChanges (void)
 {
 
-	if ( win_noalttab->modified )
-	{
-		if ( win_noalttab->integer )
-		{
-			WIN_ToggleAltTab(false);
-		}
-		else
-		{
-			WIN_ToggleAltTab(true);
-		}
-		win_noalttab->modified = false;
-	}
-
 	if ( vid_restart )
 	{
 		cl.force_refdef = true;		// can't use a paused refdef
@@ -569,8 +507,6 @@ void VID_CheckChanges (void)
 
 		Com_Printf( "-------- [Loading Renderer] --------\n" );
 
-		//Swap_Init ();
-
 		if ( R_Init( global_hInstance, MainWndProc ) == -1 )
 		{
 			R_Shutdown();
@@ -584,18 +520,22 @@ void VID_CheckChanges (void)
 		vid_active = true;
 		cls.disable_screen = false;
 	}
+}
 
-	/*
-	** update our window position
-	*/
-	if ( vid_xpos->modified || vid_ypos->modified )
-	{
-		if (!vid_fullscreen->integer)
-			VID_UpdateWindowPosAndSize();
 
-		vid_xpos->modified = false;
-		vid_ypos->modified = false;
-	}
+static void OnChange_VID_AltTab (cvar_t *self, const char *oldValue)
+{
+	if(win_noalttab->integer)
+		WIN_DisableAltTab();
+	else
+		WIN_EnableAltTab();
+}
+
+static void OnChange_VID_XY (cvar_t *self, const char *oldValue)
+{
+	// update our window position
+	if (!vid_fullscreen->integer)
+		VID_UpdateWindowPosAndSize();
 }
 
 /*
@@ -609,13 +549,20 @@ void VID_Init (void)
 	vid_xpos = Cvar_Get ("vid_xpos", "3", CVAR_ARCHIVE);
 	vid_ypos = Cvar_Get ("vid_ypos", "22", CVAR_ARCHIVE);
 	vid_fullscreen = Cvar_Get ("vid_fullscreen", "0", CVAR_ARCHIVE);
-	vid_gamma = Cvar_Get( "vid_gamma", "1", CVAR_ARCHIVE );
+	vid_gamma = Cvar_Get( "vid_gamma", "1.0", CVAR_ARCHIVE );
 	win_noalttab = Cvar_Get( "win_noalttab", "0", CVAR_ARCHIVE );
 
 	/* Add some console commands that we want to handle */
 	Cmd_AddCommand ("vid_restart", VID_Restart_f);
 	Cmd_AddCommand ("vid_front", VID_Front_f);
 
+	vid_displayfrequency = Cvar_Get ( "vid_displayfrequency", "0", CVAR_ARCHIVE|CVAR_LATCHVIDEO );
+	vid_restore_on_switch = Cvar_Get ("vid_flip_on_switch", "0", 0);
+
+	vid_xpos->OnChange = OnChange_VID_XY;
+	vid_ypos->OnChange = OnChange_VID_XY;
+	win_noalttab->OnChange = OnChange_VID_AltTab;
+	OnChange_VID_AltTab(win_noalttab, win_noalttab->resetString);
 	/*
 	** this is a gross hack but necessary to clamp the mode for 3Dfx
 	*/

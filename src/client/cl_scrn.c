@@ -61,9 +61,6 @@ cvar_t		*scr_graphshift;
 cvar_t		*scr_drawall;
 
 cvar_t		*scr_conheight;
-#ifdef AVI_EXPORT
-void AVI_ProcessFrame (void);
-#endif
 
 typedef struct
 {
@@ -72,7 +69,7 @@ typedef struct
 
 dirty_t		scr_dirty, scr_old_dirty[2];
 
-char		crosshair_pic[MAX_QPATH];
+char		crosshair_pic[8];
 int			crosshair_width, crosshair_height;
 
 void SCR_TimeRefresh_f (void);
@@ -95,9 +92,7 @@ A new packet was just parsed
 */
 void CL_AddNetgraph (void)
 {
-	int		i;
-	int		in;
-	int		ping;
+	int		i, in, ping;
 
 	// if using the debuggraph for something else, don't
 	// add the net lines
@@ -260,14 +255,10 @@ void SCR_CenterPrint (const char *str)
 void SCR_DrawCenterString (void)
 {
 	char	*start;
-	int		l;
-	int		j;
-	int		x, y;
-	int		remaining;
+	int		l, j, x, y;
+	int		remaining = 9999;
 
 // the finale prints the characters one at a time
-	remaining = 9999;
-
 	scr_erase_center = 0;
 	start = scr_centerstring;
 
@@ -327,12 +318,6 @@ static void SCR_CalcVrect (void)
 {
 	int		size;
 
-	// bound viewsize
-	if (scr_viewsize->integer < 40)
-		Cvar_Set ("viewsize","40");
-	if (scr_viewsize->integer > 100)
-		Cvar_Set ("viewsize","100");
-
 	size = scr_viewsize->integer;
 
 	scr_vrect.width = viddef.width*size/100;
@@ -380,7 +365,7 @@ Set a specific sky and rotation speed
 */
 void SCR_Sky_f (void)
 {
-	float	rotate;
+	float	rotate = 0;
 	vec3_t	axis;
 
 	if (Cmd_Argc() < 2)
@@ -390,25 +375,33 @@ void SCR_Sky_f (void)
 	}
 	if (Cmd_Argc() > 2)
 		rotate = atof(Cmd_Argv(2));
-	else
-		rotate = 0;
+
 	if (Cmd_Argc() == 6)
-	{
-		axis[0] = atof(Cmd_Argv(3));
-		axis[1] = atof(Cmd_Argv(4));
-		axis[2] = atof(Cmd_Argv(5));
-	}
+		VectorSet(axis, atof(Cmd_Argv(3)), atof(Cmd_Argv(4)), atof(Cmd_Argv(5)));
 	else
-	{
-		axis[0] = 0;
-		axis[1] = 0;
-		axis[2] = 1;
-	}
+		VectorSet(axis, 0, 0, 1);
 
 	R_SetSky (Cmd_Argv(1), rotate, axis);
 }
 
 //============================================================================
+
+static void OnChange_Conheight (cvar_t *self, const char *oldValue)
+{
+	if(self->value < 0.1)
+		Cvar_SetValue (self->name, 0.1);
+	else if(self->value > 1)
+		Cvar_SetValue (self->name, 1);
+}
+
+static void OnChange_Viewsize (cvar_t *self, const char *oldValue)
+{
+	// bound viewsize
+	if (self->integer < 40)
+		Cvar_Set (self->name, "40");
+	if (self->integer > 100)
+		Cvar_Set (self->name, "100");
+}
 
 /*
 ==================
@@ -432,6 +425,11 @@ void SCR_Init (void)
 	scr_drawall = Cvar_Get ("scr_drawall", "0", 0);
 
 	scr_conheight = Cvar_Get ("scr_conheight", "0.5", CVAR_ARCHIVE);
+
+	scr_conheight->OnChange = OnChange_Conheight;
+	OnChange_Conheight(scr_conheight, scr_conheight->resetString);
+	scr_viewsize->OnChange = OnChange_Viewsize;
+	OnChange_Viewsize(scr_viewsize, scr_viewsize->resetString);
 
 	SCR_InitDraw();
 
@@ -487,7 +485,7 @@ SCR_DrawLoading
 */
 void SCR_DrawLoading (void)
 {
-	int		w, h;
+	int		w = 0, h = 0;
 		
 	if (!scr_draw_loading)
 		return;
@@ -510,12 +508,7 @@ void SCR_RunConsole (void)
 {
 // decide on the height of the console
 	if (cls.key_dest == key_console)
-	{
-		if(scr_conheight->value < 0.1)
-			Cvar_SetValue ("scr_conheight", 0.1);
-
 		scr_conlines = scr_conheight->value;	// user controllable
-	}
 	else
 		scr_conlines = 0;				// none visible
 	
@@ -552,11 +545,6 @@ void SCR_DrawConsole (void)
 
 	if (cls.state != ca_active || !cl.refresh_prepped)
 	{	// connected, but can't render
-		if(scr_conheight->value < 0.1)
-			Cvar_SetValue ("scr_conheight", 0.1);
-		else if(scr_conheight->value > 1)
-			Cvar_SetValue ("scr_conheight", 1);
-
 		Draw_Fill (0, 0, viddef.width, viddef.height, 0);
 		Con_DrawConsole (scr_conheight->value, false);
 		return;
@@ -630,19 +618,6 @@ void SCR_Loading_f (void)
 SCR_TimeRefresh_f
 ================
 */
-int entitycmpfnc( const entity_t *a, const entity_t *b )
-{
-	// all other models are sorted by model then skin
-	if ( a->model == b->model )
-	{
-		return ( (long int) a->skin - (long int) b->skin );
-	}
-	else
-	{
-		return ( (long int) a->model - (long int) b->model );
-	}
-}
-
 void SCR_TimeRefresh_f (void)
 {
 	int		i;
@@ -799,7 +774,7 @@ void SCR_TileClear (void)
 
 
 #define STAT_MINUS		10	// num frame for '-' stats digit
-char		*sb_nums[2][11] = 
+static const char	*sb_nums[2][11] = 
 {
 	{"num_0", "num_1", "num_2", "num_3", "num_4", "num_5",
 	"num_6", "num_7", "num_8", "num_9", "num_minus"},
@@ -821,14 +796,10 @@ SizeHUDString
 Allow embedded \n in the string
 ================
 */
-void SizeHUDString (char *string, int *w, int *h)
+void SizeHUDString (const char *string, int *w, int *h)
 {
-	int		lines, width, current;
+	int		lines = 1, width = 0, current = 0;
 
-	lines = 1;
-	width = 0;
-
-	current = 0;
 	while (*string)
 	{
 		if (*string == '\n')
@@ -849,12 +820,11 @@ void SizeHUDString (char *string, int *w, int *h)
 	*h = lines * 8;
 }
 
-void DrawHUDString (char *string, int x, int y, int centerwidth, int xor)
+void DrawHUDString (const char *string, int x, int y, int centerwidth, int xor)
 {
 	int		margin;
 	char	line[1024];
-	int		width;
-	int		i;
+	int		width, i;
 
 	margin = x;
 
@@ -866,10 +836,10 @@ void DrawHUDString (char *string, int x, int y, int centerwidth, int xor)
 			line[width++] = *string++;
 		line[width] = 0;
 
+		x = margin;
 		if (centerwidth)
-			x = margin + (centerwidth - width*8)/2;
-		else
-			x = margin;
+			x += (centerwidth - width*8)* 0.5;
+			
 		for (i=0 ; i<width ; i++)
 		{
 			Draw_Char (x, y, line[i]^xor, COLOR_WHITE, 1);
@@ -944,7 +914,6 @@ void SCR_TouchPics (void)
 
 	if (crosshair->integer)
 	{
-		//changed, support crosshair up to 8 -Maniac
 		if (crosshair->integer > 8 || crosshair->integer < 0)
 			crosshair->integer = 8;
 
@@ -963,22 +932,17 @@ SCR_ExecuteLayoutString
 */
 void SCR_ExecuteLayoutString (char *s)
 {
-	int		x, y;
+	int		x = 0, y = 0;
 	int		value;
-	char	*token;
-	int		width;
-	int		index;
+	const char	*token;
+	int		width = 3, index;
 	clientinfo_t	*ci;
 
-	if (cls.state != ca_active || !cl.refresh_prepped)
+	if (!cl.refresh_prepped)
 		return;
 
 	if (!s[0])
 		return;
-
-	x = 0;
-	y = 0;
-	width = 3;
 
 	while (s)
 	{
@@ -1019,12 +983,9 @@ void SCR_ExecuteLayoutString (char *s)
 			token = COM_Parse (&s);
 			y = viddef.height*0.5 - 120 + atoi(token);
 
-			//Added Autoscreenshot, -Maniac
-            if (cls.doscreenshot == 1) {
-                 Com_DPrintf("Scores up height*0.5 ?\n") ;
+            if (cls.doscreenshot == 1)
                  cls.doscreenshot = 2;
-			}
- 		// End
+
 			continue;
 		}
 
@@ -1403,12 +1364,6 @@ void SCR_UpdateScreen (void)
 	if (!scr_initialized || !con.initialized)
 		return;				// not initialized yet
 
-	// range check cl_camera_separation so we don't inadvertently fry someone's brain
-	if ( cl_stereo_separation->value > 1.0 )
-		Cvar_SetValue( "cl_stereo_separation", 1.0 );
-	else if ( cl_stereo_separation->value < 0 )
-		Cvar_SetValue( "cl_stereo_separation", 0.0 );
-
 	if ( cl_stereo->value )
 	{
 		SCR_DrawScreenFrame( -cl_stereo_separation->value / 2 );
@@ -1416,7 +1371,7 @@ void SCR_UpdateScreen (void)
 	}		
 	else
 	{
-		SCR_DrawScreenFrame( 0.0f );
+		SCR_DrawScreenFrame( 0 );
 	}
 
 	R_EndFrame();

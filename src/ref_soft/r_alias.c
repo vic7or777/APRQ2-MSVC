@@ -56,17 +56,17 @@ static vec3_t	s_alias_forward, s_alias_right, s_alias_up;
 
 #define NUMVERTEXNORMALS	162
 
-float	r_avertexnormals[NUMVERTEXNORMALS][3] = {
+const float	r_avertexnormals[NUMVERTEXNORMALS][3] = {
 #include "anorms.h"
 };
 
 // precalculated dot products for quantized angles
 #define SHADEDOT_QUANT 16
-float	r_avertexnormal_dots[SHADEDOT_QUANT][256] =
+const float	r_avertexnormal_dots[SHADEDOT_QUANT][256] =
 #include "anormtab.h"
 ;
 
-float	*r_shadedots = r_avertexnormal_dots[0];
+const float	*r_shadedots = r_avertexnormal_dots[0];
 
 void R_AliasSetUpLerpData( dmdl_t *pmdl, float backlerp );
 void R_AliasSetUpTransform (void);
@@ -118,11 +118,8 @@ unsigned long R_AliasCheckFrameBBox( daliasframe_t *frame, float worldxf[3][4] )
 	/*
 	** get the exact frame bounding box
 	*/
-	for (i=0 ; i<3 ; i++)
-	{
-		mins[i] = frame->translate[i];
-		maxs[i] = mins[i] + frame->scale[i]*255;
-	}
+	VectorCopy(frame->translate, mins);
+	VectorMA(mins, 255, frame->scale, maxs);
 
 	/*
 	** transform the min and max values into view space
@@ -153,30 +150,15 @@ unsigned long R_AliasCheckFrameBBox( daliasframe_t *frame, float worldxf[3][4] )
 		vec3_t   tmp, transformed;
 		unsigned long clipcode = 0;
 
-		if ( i & 1 )
-			tmp[0] = mins[0];
-		else
-			tmp[0] = maxs[0];
-
-		if ( i & 2 )
-			tmp[1] = mins[1];
-		else
-			tmp[1] = maxs[1];
-
-		if ( i & 4 )
-			tmp[2] = mins[2];
-		else
-			tmp[2] = maxs[2];
+		tmp[0] = ( i & 1 ) ? mins[0] : maxs[0];
+		tmp[1] = ( i & 2 ) ? mins[1] : maxs[1];
+		tmp[2] = ( i & 4 ) ? mins[2] : maxs[2];
 
 		R_AliasTransformVector( tmp, transformed, worldxf );
 
 		for ( j = 0; j < 4; j++ )
-		{
-			float dp = DotProduct( transformed, view_clipplanes[j].normal );
-
-			if ( ( dp - view_clipplanes[j].dist ) < 0.0F )
+			if ( DotProduct( transformed, view_clipplanes[j].normal ) < view_clipplanes[j].dist )
 				clipcode |= 1 << j;
-		}
 
 		aggregate_and_clipcode &= clipcode;
 		aggregate_or_clipcode  |= clipcode;
@@ -433,7 +415,7 @@ void R_AliasTransformFinalVerts( int numpoints, finalvert_t *fv, dtrivertx_t *ol
 		// PMM - added double damage shell
 		if ( currententity->flags & ( RF_SHELL_RED | RF_SHELL_GREEN | RF_SHELL_BLUE | RF_SHELL_DOUBLE | RF_SHELL_HALF_DAM) )
 		{
-			float	*normal = r_avertexnormals[newv->lightnormalindex];
+			const float	*normal = r_avertexnormals[newv->lightnormalindex];
 			lerped_vert[0] += normal[0] * POWERSUIT_SCALE;
 			lerped_vert[1] += normal[1] * POWERSUIT_SCALE;
 			lerped_vert[2] += normal[2] * POWERSUIT_SCALE;
@@ -614,8 +596,7 @@ void R_AliasSetupLighting (void)
 	// all components of light should be identical in software
 	if ( currententity->flags & RF_FULLBRIGHT )
 	{
-		for (i=0 ; i<3 ; i++)
-			light[i] = 1.0;
+		VectorSet(light, 1.0, 1.0, 1.0);
 	}
 	else
 	{
@@ -747,11 +728,9 @@ void R_AliasSetUpLerpData( dmdl_t *pmdl, float backlerp )
 		r_lerp_move[i] = backlerp*r_lerp_move[i] + frontlerp * r_thisframe->translate[i];
 	}
 
-	for (i=0 ; i<3 ; i++)
-	{
-		r_lerp_frontv[i] = frontlerp * r_thisframe->scale[i];
-		r_lerp_backv[i]  = backlerp  * r_lastframe->scale[i];
-	}
+	VectorScale(r_thisframe->scale, frontlerp, r_lerp_frontv);
+	VectorScale(r_lastframe->scale, backlerp, r_lerp_backv);
+
 }
 
 /*

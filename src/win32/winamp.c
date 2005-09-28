@@ -29,16 +29,15 @@ typedef struct qwinamp_s
 {
 	HWND	 hWnd;
 	qboolean isOK;
-	char	 title[WA_TITLE_LENGHT];
-	int		 track;
 } qwinamp_t;
 
-qwinamp_t mywinamp;
+static qwinamp_t mywinamp;
 
-cvar_t	*cl_winampmessages;
-cvar_t	*cl_winamp_dir;
+static cvar_t	*cl_winampmessages;
+static cvar_t	*cl_winamp_dir;
+static qboolean	updateSong = false;
 
-void WA_GetWinAmp (void)
+static void MP3_GetWinAmp (void)
 {
 
 	mywinamp.hWnd = FindWindow( "Winamp v1.x", NULL);
@@ -46,6 +45,7 @@ void WA_GetWinAmp (void)
 	{
 		mywinamp.isOK = true;
 		Com_Printf ("Winamp Integration Enabled\n");
+		updateSong = true;
 	}
 	else
 	{
@@ -56,34 +56,49 @@ void WA_GetWinAmp (void)
 	}
 }
 
-qboolean WA_Status(void)
+static qboolean MP3_Status(void)
 {
-	if (!mywinamp.isOK)
+	if (mywinamp.isOK)
+		return true;
+
+	mywinamp.hWnd = FindWindow( "Winamp v1.x", NULL);
+	if (mywinamp.hWnd)
 	{
-		mywinamp.hWnd = FindWindow( "Winamp v1.x", NULL);
-		if (mywinamp.hWnd)
-		{
-			mywinamp.isOK = true;
-			return true;
-		}
-		mywinamp.hWnd = NULL;
-		Com_Printf ("Winamp Integration Disabled\n");
-		return false;
+		mywinamp.isOK = true;
+		return true;
 	}
-	return true;
+	mywinamp.hWnd = NULL;
+	Com_Printf ("Winamp Integration Disabled\n");
+	return false;
+
 }
+
+int MP3_GetStatus(void) {
+	int ret;
+
+	if (!MP3_Status())
+		return MP3_NOTRUNNING;
+	ret = SendMessage(mywinamp.hWnd, WM_USER, 0, 104);
+	switch (ret) {
+		case 3 : return MP3_PAUSED; break;
+		case 1 : return MP3_PLAYING; break;
+		case 0 : 
+		default : return MP3_STOPPED; break;
+	}
+}
+
 /*
 ===================
-WA_SetVolume
+MP3_SetVolume
 
 Updates Winamp's volume to give value
 ===================
 */
-void WA_SetVolume (void)
+void MP3_SetVolume_f (void)
 {
 	int vol, percent;
 
-	if (!WA_Status())
+	if (!MP3_Status())
 		return;
 	
 	if (Cmd_Argc() != 2)
@@ -104,15 +119,15 @@ void WA_SetVolume (void)
 
 /*
 ===================
-WA_ToggleShuffle
+MP3_ToggleShuffle
 Toggles suffle mode
 ===================
 */
-void WA_ToggleShuffle (void)
+void MP3_ToggleShuffle_f (void)
 {
 	int ret;
 
-	if (!WA_Status())
+	if (!MP3_Status())
 		return;
 
 	SendMessage(mywinamp.hWnd, WM_COMMAND, 40023, 0);
@@ -126,15 +141,15 @@ void WA_ToggleShuffle (void)
 
 /*
 ===================
-WA_ToggleRepeat
+MP3_ToggleRepeat
 Toggles repeat mode
 ===================
 */
-void WA_ToggleRepeat (void)
+void MP3_ToggleRepeat_f (void)
 {
 	int ret;
 
-	if (!WA_Status())
+	if (!MP3_Status())
 		return;
 
 	SendMessage(mywinamp.hWnd, WM_COMMAND, 40022, 0);
@@ -148,13 +163,13 @@ void WA_ToggleRepeat (void)
 
 /*
 ===================
-WA_VolumeUp
+MP3_VolumeUp
 Increase winamp volume by 1%
 ===================
 */
-void WA_VolumeUp (void)
+void MP3_VolumeUp_f (void)
 {
-	if (!WA_Status())
+	if (!MP3_Status())
 		return;
 
 	SendMessage(mywinamp.hWnd, WM_COMMAND, 40058, 0);
@@ -162,9 +177,9 @@ void WA_VolumeUp (void)
 		Com_Printf ("Winamp Volume Increased by 1%%\n");
 }
 
-void WA_VolumeDown (void)
+void MP3_VolumeDown_f (void)
 {
-	if (!WA_Status())
+	if (!MP3_Status())
 		return;
 
 	SendMessage(mywinamp.hWnd, WM_COMMAND, 40059, 0);
@@ -173,10 +188,10 @@ void WA_VolumeDown (void)
 }
 /*
 ===================
-WA_GetPlayListInfo
+MP3_GetPlaylistInfo
 ===================
 */
-void WA_GetPlayListInfo (int *current, int *length)
+void MP3_GetPlaylistInfo (int *current, int *length)
 {
 	if (!mywinamp.isOK)
 		return;
@@ -188,8 +203,9 @@ void WA_GetPlayListInfo (int *current, int *length)
 		*current = SendMessage (mywinamp.hWnd, WM_USER, 0, 125);
 }
 
-qboolean WA_GetTrackTime(int *elapsed, int *total) {
-	int ret1, ret2;
+qboolean MP3_GetTrackTime(int *elapsed, int *total)
+{
+	int ret1 = 0, ret2 = 0;
 
 	if (!mywinamp.isOK)
 		return false;
@@ -208,48 +224,52 @@ qboolean WA_GetTrackTime(int *elapsed, int *total) {
 }
 /*
 ===================
-WA_PlayTrack
+MP3_PlayTrack
 Start playing given track
 ===================
 */
-qboolean WA_PlayTrack (int num)
+qboolean MP3_PlayTrack (int num)
 {
-	int lenght, ret;
+	int length, ret;
 
-	WA_GetPlayListInfo(NULL, &lenght);
-		
-	if(num > lenght)
+	num -= 1;
+	if (num < 0)
+		return false;
+
+	MP3_GetPlaylistInfo(NULL, &length);
+	if(num > length)
 	{
-		Com_Printf("Winamp: playlist got only %i tracks\n", lenght);
+		Com_Printf("Winamp: playlist got only %i tracks\n", length);
         return false;
 	}
 
+	updateSong = true;
 	ret = SendMessage(mywinamp.hWnd, WM_USER, 1, 104); //status of playback. ret 1 is playing. ret 3 is paused.
 	if(ret == 3) //in paused case it just resume it so we need to stop it
 		SendMessage(mywinamp.hWnd, WM_COMMAND, 40047, 0);
 
-	SendMessage(mywinamp.hWnd, WM_USER, num-1, 121);	//Sets position in playlist
+	SendMessage(mywinamp.hWnd, WM_USER, num, 121);	//Sets position in playlist
 	SendMessage(mywinamp.hWnd, WM_COMMAND, 40045, 0);	//Play it
 
 	return true;
 }
 /*
 ===================
-WA_Play
+MP3_Play
 ===================
 */
-void WA_Play (void)
+void MP3_Play_f (void)
 {
 	int track;
 
-	if (!WA_Status())
+	if (!MP3_Status())
 		return;
 
 	if (Cmd_Argc() == 2)
 	{
-		track = atoi(Cmd_Args());
+		track = atoi(Cmd_Argv(1));
         
-		if(!WA_PlayTrack (track))
+		if(!MP3_PlayTrack (track))
 			return;
 
 		if (cl_winampmessages->integer)
@@ -257,8 +277,7 @@ void WA_Play (void)
 
 		return;
     }
-	
-
+	updateSong = true;
 	SendMessage(mywinamp.hWnd, WM_COMMAND, 40045, 0);
 	if (cl_winampmessages->integer)
 		Com_Printf ("Winamp Play\n");
@@ -266,12 +285,12 @@ void WA_Play (void)
 
 /*
 ===================
-WA_Play
+MP3_Play
 ===================
 */
-void WA_Stop (void)
+void MP3_Stop_f (void)
 {
-	if (!WA_Status())
+	if (!MP3_Status())
 		return;
 
 	SendMessage(mywinamp.hWnd, WM_COMMAND, 40047, 0);
@@ -281,29 +300,39 @@ void WA_Stop (void)
 
 /*
 ===================
-WA_Play
+MP3_Play
 ===================
 */
-void WA_Pause (void)
+void MP3_Pause_f (void)
 {
-	if (!WA_Status())
+	int status;
+
+	status = MP3_GetStatus();
+	if (status == MP3_NOTRUNNING)
 		return;
+
+	if(status == MP3_STOPPED)
+	{
+		Com_Printf("Winamp is stopped\n");
+		return;
+	}
 
 	SendMessage(mywinamp.hWnd, WM_COMMAND, 40046, 0);
 	if (cl_winampmessages->integer)
-		Com_Printf ("Winamp Pause\n");
+		Com_Printf ("Winamp is %s\n", (status == MP3_PAUSED) ? "playing" : "paused");
 }
 
 /*
 ===================
-WA_NextTrack
+MP3_NextTrack
 ===================
 */
-void WA_NextTrack (void)
+void MP3_NextTrack_f (void)
 {
-	if (!WA_Status())
+	if (!MP3_Status())
 		return;
 
+	updateSong = true;
 	SendMessage(mywinamp.hWnd, WM_COMMAND, 40048, 0);
 	if (cl_winampmessages->integer)
 		Com_Printf ("Winamp Next Track\n");
@@ -311,14 +340,15 @@ void WA_NextTrack (void)
 
 /*
 ===================
-WA_PreviousTrack
+MP3_PreviousTrack
 ===================
 */
-void WA_PreviousTrack (void)
+void MP3_PreviousTrack_f (void)
 {
-	if (!WA_Status())
+	if (!MP3_Status())
 		return;
 
+	updateSong = true;
 	SendMessage(mywinamp.hWnd, WM_COMMAND, 40044, 0);
 	if (cl_winampmessages->integer)
 		Com_Printf ("Winamp Previous Track\n");
@@ -326,73 +356,104 @@ void WA_PreviousTrack (void)
 
 /*
 ===================
-WA_SongTitle
+MP3_SongTitle
 
 Returns current song title
 ===================
 */
-char *WA_SongTitle (void)
+static char *MP3_SongTitle (qboolean tracknum)
 { 
-   static char title[WA_TITLE_LENGHT]; 
+   static char title[MP3_MAXSONGTITLE]; 
    char			*s; 
 
    GetWindowText(mywinamp.hWnd, title, sizeof(title)); 
    
-   //cut out the crap from the title 
    if ((s = strrchr(title, '-')) && s > title) 
       *(s - 1) = 0;
 
-   for (s = title + strlen(title) - 1; s > title; s--)
-   { 
-      if (*s == ' ') 
-         *s = 0; 
-      else 
-         break; 
+   if(!tracknum)
+   {
+		for (s = title; *s && isdigit(*s); s++)
+			;
+		if (*s == '.' && s[1] == ' ' && s[2])
+			memmove(title, s + 2, strlen(s + 2) + 1);
    }
 
-   return title; 
+	COM_MakePrintable (title);
+
+	return title; 
+}
+
+char *MP3_Menu_SongTitle (void)
+{
+   return MP3_SongTitle (true); 
 }
 
 /*
 ===================
-WA_Title
+MP3_Title
 ===================
 */
-void WA_Title (void)
+void MP3_Title_f (void)
 {
 	char *songtitle;
 	int	 total;
 
-	if (!WA_Status())
+	if (!MP3_Status())
 		return;
 
-	if(!WA_GetTrackTime(NULL, &total))
+	if(!MP3_GetTrackTime(NULL, &total))
 		return;
 
-	songtitle = WA_SongTitle();
+	songtitle = MP3_SongTitle(true);
 	if (!songtitle)
 		return;
 
-	Com_Printf ("%sWinamp Title: %s%s %s[%i:%02i]\n", S_COLOR_CYAN, S_COLOR_YELLOW, songtitle, S_COLOR_CYAN, total / 60, total % 60);
+	Com_Printf (S_ENABLE_COLOR "%sWinamp Title: %s%s %s[%i:%02i]\n",
+		S_COLOR_CYAN, S_COLOR_YELLOW, songtitle, S_COLOR_CYAN, total / 60, total % 60);
+}
+
+static void MP3_SongTitle_m ( char *buffer, int bufferSize )
+{
+	char *songtitle;
+	int	 total;
+
+	if (!MP3_Status()) {
+		Q_strncpyz ( buffer, "", bufferSize );
+		return;
+	}
+
+	if(!MP3_GetTrackTime(NULL, &total)) {
+		Q_strncpyz ( buffer, "", bufferSize );
+		return;
+	}
+
+	songtitle = MP3_SongTitle(false);
+	if (!songtitle) {
+		Q_strncpyz ( buffer, "", bufferSize );
+		return;
+	}
+
+	Q_strncpyz ( buffer, va("%s [%i:%02i]", songtitle, total / 60, total % 60), bufferSize );
 }
 
 /*
 ===================
-WA_SongInfo
+MP3_SongInfo
 ===================
 */
-void WA_SongInfo (void)
+void MP3_SongInfo_f (void)
 {
 	char *songtitle;
 	int total, elapsed, remaining, samplerate, bitrate;
 
-	if (!WA_Status())
+	if (!MP3_Status())
 		return;
 
-	if(!WA_GetTrackTime(&elapsed, &total))
+	if(!MP3_GetTrackTime(&elapsed, &total))
 		return;
 
-	songtitle = WA_SongTitle();
+	songtitle = MP3_SongTitle(true);
 	if (!songtitle)
 		return;
 
@@ -402,7 +463,7 @@ void WA_SongInfo (void)
 	bitrate = SendMessage(mywinamp.hWnd, WM_USER, 1, 126);
 
 	Com_Printf ("WinAmp current song info:\n");
-	Com_Printf ("Name: %s Length: %i:%02i\n", S_COLOR_CYAN, S_COLOR_YELLOW, songtitle, S_COLOR_CYAN, S_COLOR_YELLOW, total / 60, total % 60);
+	Com_Printf ("Name: %s Length: %i:%02i\n", songtitle, total / 60, total % 60);
 	Com_Printf ("Elapsed: %i:%02i Remaining: %i:%02i Bitrate: %ikbps Samplerate: %ikHz\n",
 				elapsed / 60, elapsed % 60, remaining / 60, remaining % 60, bitrate, samplerate);
 }
@@ -410,18 +471,18 @@ void WA_SongInfo (void)
 extern int FS_filelength (FILE *f);
 /*
 ===================
-WA_GetPlaylist
+MP3_GetPlaylist
 
 ===================
 */
-long WA_GetPlaylist (char **buf)
+int MP3_GetPlaylist (char **buf)
 {
 	FILE			*file;
 	char			path[512];
 	int				pathlength;
 	long			filelength;
 
-	if (!WA_Status())
+	if (!MP3_Status())
 		return -1;
 
 	SendMessage (mywinamp.hWnd, WM_USER, 0, 120);
@@ -439,10 +500,10 @@ long WA_GetPlaylist (char **buf)
 	}
 	filelength = FS_filelength (file);
 
-	*buf = malloc (filelength);
+	*buf = Z_TagMalloc (filelength, TAGMALLOC_MP3LIST);
 	if (filelength != fread (*buf, 1,  filelength, file))
 	{
-		free (*buf);
+		Z_Free (*buf);
 		fclose (file);
 		return -1;
 	}
@@ -452,76 +513,101 @@ long WA_GetPlaylist (char **buf)
 	return filelength;
 }
 
-int WA_ParsePlaylist_EXTM3U(char *playlist_buf, unsigned int length, wa_tracks_t *song, char *filter)
+
+int MP3_ParsePlaylist_EXTM3U(char *playlist_buf, unsigned int length, mp3_tracks_t *songList, const char *filter)
 {
-	int skip = 0, playlist_size = 0;
+	int i, skip = 0, playlist_size = 0;
 	char *s, *t, *buf, *line;
-	char track[WA_TITLE_LENGHT];
-	int tracknum = 0;
+	char track[MP3_MAXSONGTITLE];
+	int trackNum = 0, songCount = 0, trackNum2 = 0;
+	qboolean counted = false;
 
-	buf = playlist_buf;
-	while (playlist_size < WA_MAX_TITLES) {
-		for (s = line = buf; s - playlist_buf < length && *s && *s != '\n' && *s != '\r'; s++)
-			;
-		if (s - playlist_buf >= length)
-			break;
-		*s = 0;
-		buf = s + 2;
-		if (skip || !strncmp(line, "#EXTM3U", 7)) {
-			skip = 0;
-			continue;
-		}
-		if (!strncmp(line, "#EXTINF:", 8)) {
-			if (!(s = strstr(line, ",")) || ++s - playlist_buf >= length) 
+	for(i = 0; i < 2; i++)
+	{
+		buf = playlist_buf;
+		trackNum = 0;
+		for (;;) {
+			for (s = line = buf; s - playlist_buf < length && *s && *s != '\n' && *s != '\r'; s++)
+				;
+			if (s - playlist_buf >= length)
 				break;
-			
-			skip = 1;
-			goto print;
+			*s = 0;
+			buf = s + 2;
+			if (skip || !strncmp(line, "#EXTM3U", 7)) {
+				skip = 0;
+				continue;
+			}
+			if (!strncmp(line, "#EXTINF:", 8)) {
+				if (!(s = strstr(line, ",")) || ++s - playlist_buf >= length) 
+					break;
+				
+				skip = 1;
+				goto print;
+			}
+		
+			for (s = line + strlen(line); s > line && *s != '\\' && *s != '/'; s--)
+				;
+			if (s != line)
+				s++;
+		
+			if ((t = strrchr(s, '.')) && t - playlist_buf < length)
+				*t = 0;		
+		
+			for (t = s + strlen(s) - 1; t > s && *t == ' '; t--)
+				*t = 0;
+
+	print:
+			trackNum++;
+
+			Q_strncpyz (track, s, sizeof (track));
+			Q_strlwr(track);
+			if(!strstr(track, filter))
+				continue;
+
+			if(!counted) {
+				trackNum2 = trackNum;
+				songCount++;
+				continue;
+			}
+
+			if (strlen(s) >= MP3_MAXSONGTITLE-1)
+				s[MP3_MAXSONGTITLE-1] = 0;
+
+			COM_MakePrintable(s);
+			songList->num[playlist_size] = trackNum;
+			songList->name[playlist_size++] = CopyString(va( (trackNum2 < 10) ? "%i. %s" : (trackNum2 < 100) ? "%2i. %s" : (trackNum2 < 1000) ? "%3i. %s" : "%4i. %s", trackNum, s), TAGMALLOC_MP3LIST);
+
+			if(playlist_size >= songCount)
+				break;
 		}
-	
-		for (s = line + strlen(line); s > line && *s != '\\' && *s != '/'; s--)
-			;
-		if (s != line)
-			s++;
-	
-		if ((t = strrchr(s, '.')) && t - playlist_buf < length)
-			*t = 0;		
-	
-		for (t = s + strlen(s) - 1; t > s && *t == ' '; t--)
-			*t = 0;
+		if(!counted)
+		{
+			if(!songCount)
+				return 0;
 
-print:
-		tracknum++;
-		Q_strncpyz (track, s, sizeof (track));
-		Q_strlwr(track);
-		if(!strstr(track, filter))
-			continue;
-
-		song->num[playlist_size] = tracknum;
-		if (strlen(s) > WA_TITLE_LENGHT)
-			s[WA_TITLE_LENGHT] = 0;
-		song->name[playlist_size++] = strdup(s);
+			songList->name = Z_TagMalloc (sizeof(char *) * songCount, TAGMALLOC_MP3LIST);
+			songList->num = Z_TagMalloc (sizeof(int) * songCount, TAGMALLOC_MP3LIST);
+			counted = true;
+		}
 	}
 	return playlist_size;
 }
 
-
-
 /*
 ===================
-WA_PrintPlaylist
+MP3_PrintPlaylist
 
 ===================
 */
-void WA_PrintPlaylist (void)
+void MP3_PrintPlaylist_f (void)
 {
 	char *playlist_buf;
 	unsigned int length;
 	int i, playlist_size, current;
 	char *filter;
-	wa_tracks_t song;
+	mp3_tracks_t songList;
 
-	if (!WA_Status())
+	if (!MP3_Status())
 		return;
 
 	if (Cmd_Argc() < 2)
@@ -530,68 +616,77 @@ void WA_PrintPlaylist (void)
 		return;
     }
 
-	if ((length = WA_GetPlaylist(&playlist_buf)) == -1)
+	if ((length = MP3_GetPlaylist(&playlist_buf)) == -1)
 		return;
 
 	filter = Cmd_Args();
 	Q_strlwr(filter);
 
-	WA_GetPlayListInfo (&current, NULL);
-	playlist_size = WA_ParsePlaylist_EXTM3U(playlist_buf, length, &song, filter);
+	MP3_GetPlaylistInfo (&current, NULL);
+
+	playlist_size = MP3_ParsePlaylist_EXTM3U(playlist_buf, length, &songList, filter);
+	Z_Free (playlist_buf);
+
+	if(!playlist_size)
+	{
+		Com_Printf("Cant find any tracks with %s\n", filter);
+		return;
+	}
 	
 	for (i = 0; i < playlist_size; i++) {
-		Com_Printf("%s%3d. %s\n", song.num[i] == current+1 ? "\x02" : "", song.num[i], song.name[i]);
-		free(&song.num[i]);
+		Com_Printf("%s%s\n", songList.num[i] == current+1 ? "\x02" : "", songList.name[i]);
+		Z_Free(songList.name[i]);
 	}
-	free (playlist_buf);
+	Z_Free (songList.name);
+	Z_Free (songList.num);
 }
 
 /*
 ===================
-WA_Restart
+MP3_Restart
 ===================
 */
-void WA_Restart (void)
+void MP3_Restart_f (void)
 {
-	WA_GetWinAmp();
+	MP3_GetWinAmp();
 }
 
 /*
 ===================
-WA_Init
+MP3_Init
 ===================
 */
-void WA_Init (void)
+void MP3_Init (void)
 {
 	cl_winampmessages = Cvar_Get("cl_winampmessages", "1", CVAR_ARCHIVE);
 	cl_winamp_dir = Cvar_Get("cl_winamp_dir", "C:/Program Files/Winamp", CVAR_ARCHIVE);
 
-	Cmd_AddCommand ( "winampnext", WA_NextTrack );
-	Cmd_AddCommand ( "winamppause", WA_Pause );
-	Cmd_AddCommand ( "winampplay", WA_Play );
-	Cmd_AddCommand ( "winampprev", WA_PreviousTrack );
-	Cmd_AddCommand ( "winampstop", WA_Stop );
-	Cmd_AddCommand ( "winampvolup", WA_VolumeUp );
-	Cmd_AddCommand ( "winampvoldown", WA_VolumeDown );
-	Cmd_AddCommand ( "winamprestart", WA_Restart );
-	Cmd_AddCommand ( "winampshuffle", WA_ToggleShuffle );
-	Cmd_AddCommand ( "winamprepeat", WA_ToggleRepeat );
-	Cmd_AddCommand ( "winampvolume", WA_SetVolume );
-	Cmd_AddCommand ( "winamptitle", WA_Title );
-	Cmd_AddCommand ( "winampsonginfo", WA_SongInfo );
-	Cmd_AddCommand ( "winampsearch", WA_PrintPlaylist );
-
+	Cmd_AddCommand ( "winampnext", MP3_NextTrack_f );
+	Cmd_AddCommand ( "winamppause", MP3_Pause_f );
+	Cmd_AddCommand ( "winampplay", MP3_Play_f );
+	Cmd_AddCommand ( "winampprev", MP3_PreviousTrack_f );
+	Cmd_AddCommand ( "winampstop", MP3_Stop_f );
+	Cmd_AddCommand ( "winampvolup", MP3_VolumeUp_f );
+	Cmd_AddCommand ( "winampvoldown", MP3_VolumeDown_f );
+	Cmd_AddCommand ( "winamprestart", MP3_Restart_f );
+	Cmd_AddCommand ( "winampshuffle", MP3_ToggleShuffle_f );
+	Cmd_AddCommand ( "winamprepeat", MP3_ToggleRepeat_f );
+	Cmd_AddCommand ( "winampvolume", MP3_SetVolume_f );
+	Cmd_AddCommand ( "winamptitle", MP3_Title_f );
+	Cmd_AddCommand ( "winampsonginfo", MP3_SongInfo_f );
+	Cmd_AddCommand ( "winampsearch", MP3_PrintPlaylist_f );
+	Cmd_AddMacro( "cursong", MP3_SongTitle_m );
 
 	// Get WinAmp
-	WA_GetWinAmp();
+	MP3_GetWinAmp();
 }
 
 /*
 ===================
-WA_Shutdown
+MP3_Shutdown
 ===================
 */
-void WA_Shutdown (void)
+void MP3_Shutdown (void)
 {
 	Cmd_RemoveCommand ( "winampnext" );
 	Cmd_RemoveCommand ( "winamppause" );
@@ -607,34 +702,40 @@ void WA_Shutdown (void)
 	Cmd_RemoveCommand ( "winamptitle" );
 	Cmd_RemoveCommand ( "winampsonginfo" );
 	Cmd_RemoveCommand ( "winampsearch" );
-	
 }
 
 /*
 ===================
-WA_Frame
+MP3_Frame
 ===================
 */
-void WA_Frame (void)
+void MP3_Frame (void)
 {
 	char *songtitle;
-	int total, track;
+	static int curTrack = -1;
+	int	total, track = -1;
 
 	if (!mywinamp.isOK || !cl_winampmessages->integer)
 		return;
 
-	WA_GetPlayListInfo (&track, NULL);
-	if(track == mywinamp.track)
+	if(!((int)(cls.realtime>>8)&8) && !updateSong)
 		return;
 
-	if(!WA_GetTrackTime(NULL, &total))
+	MP3_GetPlaylistInfo (&track, NULL);
+	if(track  == curTrack)
 		return;
 
-	songtitle = WA_SongTitle();
+	if(!MP3_GetTrackTime(NULL, &total))
+		return;
+
+	songtitle = MP3_SongTitle(true);
 	if (!songtitle)
 		return;
 
-	mywinamp.track = track;
+	curTrack = track;
+	Com_Printf (S_ENABLE_COLOR "%sWinamp Title: %s%s %s[%i:%02i]\n",
+		S_COLOR_CYAN, S_COLOR_YELLOW, songtitle, S_COLOR_CYAN, total / 60, total % 60);
 
-	Com_Printf ("%sWinamp Title: %s%s %s[%i:%02i]\n", S_COLOR_CYAN, S_COLOR_YELLOW, songtitle, S_COLOR_CYAN, total / 60, total % 60);
+	updateSong = false;
 }
+

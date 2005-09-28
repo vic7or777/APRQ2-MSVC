@@ -1110,9 +1110,9 @@ static void Mod_RemoveHash(model_t *mod)
 			break;
 		}
 	}
-	if( !entry ) {
-		Com_Error( ERR_FATAL, "MOD_removefromHash: %s not found in hash table", mod->name );
-	}
+	//if( !entry )
+	//	Com_Error( ERR_FATAL, "MOD_removefromHash: %s not found in hash table", mod->name );
+
 }
 /*
 @@@@@@@@@@@@@@@@@@@@@

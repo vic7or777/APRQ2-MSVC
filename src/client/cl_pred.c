@@ -30,7 +30,6 @@ void CL_CheckPredictionError (void)
 {
 	int		frame;
 	int		delta[3];
-	int		i;
 	int		len;
 
 	if (!cl_predict->integer || (cl.frame.playerstate.pmove.pm_flags & PMF_NO_PREDICTION))
@@ -58,8 +57,7 @@ void CL_CheckPredictionError (void)
 		VectorCopy (cl.frame.playerstate.pmove.origin, cl.predicted_origins[frame]);
 
 		// save for error itnerpolation
-		for (i=0 ; i<3 ; i++)
-			cl.prediction_error[i] = delta[i]*0.125;
+		VectorScale(delta, 0.125f, cl.prediction_error);
 	}
 }
 
@@ -203,7 +201,7 @@ void CL_PredictMovement (void)
 	int			oldframe;
 	usercmd_t	*cmd;
 	pmove_t		pm;
-	int			i;
+	//int			i;
 	int			step;
 	int			oldz;
 
@@ -215,10 +213,9 @@ void CL_PredictMovement (void)
 
 	if (!cl_predict->integer || (cl.frame.playerstate.pmove.pm_flags & PMF_NO_PREDICTION))
 	{	// just set angles
-		for (i=0 ; i<3 ; i++)
-		{
-			cl.predicted_angles[i] = cl.viewangles[i] + SHORT2ANGLE(cl.frame.playerstate.pmove.delta_angles[i]);
-		}
+		cl.predicted_angles[0] = cl.viewangles[0] + SHORT2ANGLE(cl.frame.playerstate.pmove.delta_angles[0]);
+		cl.predicted_angles[1] = cl.viewangles[1] + SHORT2ANGLE(cl.frame.playerstate.pmove.delta_angles[1]);
+		cl.predicted_angles[2] = cl.viewangles[2] + SHORT2ANGLE(cl.frame.playerstate.pmove.delta_angles[2]);
 		return;
 	}
 
@@ -234,17 +231,30 @@ void CL_PredictMovement (void)
 	}
 
 	// copy current state to pmove
-	memset (&pm, 0, sizeof(pm));
+	pm.snapinitial = false;
 	pm.trace = CL_PMTrace;
 	pm.pointcontents = CL_PMpointcontents;
-
-	pm_airaccelerate = atof(cl.configstrings[CS_AIRACCEL]);
-
 	pm.s = cl.frame.playerstate.pmove;
 
 //	SCR_DebugGraph (current - ack - 1, 0);
 
 	frame = 0;
+
+	if (cl.enhancedServer)
+	{
+		VectorCopy (cl.frame.playerstate.mins, pm.mins);
+		VectorCopy (cl.frame.playerstate.maxs, pm.maxs);
+	}
+	else
+	{
+		VectorClear(pm.mins);
+		VectorClear(pm.maxs);
+	}
+
+	if (pm.s.pm_type == PM_SPECTATOR && cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
+		pm_multiplier = 2;
+	else
+		pm_multiplier = 1;
 
 	// run frames
 	while (++ack < current)
@@ -264,15 +274,13 @@ void CL_PredictMovement (void)
 	step = pm.s.origin[2] - oldz;
 	if (step > 63 && step < 160 && (pm.s.pm_flags & PMF_ON_GROUND) )
 	{
-		cl.predicted_step = step * 0.125;
+		cl.predicted_step = step * 0.125f;
 		cl.predicted_step_time = cls.realtime - cls.frametime * 500;
 	}
 
 
 	// copy results out for rendering
-	cl.predicted_origin[0] = pm.s.origin[0]*0.125;
-	cl.predicted_origin[1] = pm.s.origin[1]*0.125;
-	cl.predicted_origin[2] = pm.s.origin[2]*0.125;
+	VectorScale(pm.s.origin, 0.125f, cl.predicted_origin);
 
 	VectorCopy (pm.viewangles, cl.predicted_angles);
 }

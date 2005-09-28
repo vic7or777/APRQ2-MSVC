@@ -123,6 +123,13 @@ void	SNDDMA_BeginPainting (void);
 
 void	SNDDMA_Submit(void);
 
+#if defined(__linux__) || defined(__FreeBSD__)
+// custom Snd_Memset implementation for glibc memset bug workaround
+void Snd_Memset (void* dest, const int val, const size_t count);
+#else
+#define Snd_Memset memset
+#endif
+
 //====================================================================
 
 #define	MAX_CHANNELS			32
@@ -130,10 +137,10 @@ extern	channel_t   channels[MAX_CHANNELS];
 
 extern	int		paintedtime;
 extern	int		s_rawend;
-extern	vec3_t	listener_origin;
+/*extern	vec3_t	listener_origin;
 extern	vec3_t	listener_forward;
 extern	vec3_t	listener_right;
-extern	vec3_t	listener_up;
+extern	vec3_t	listener_up;*/
 extern	dma_t	dma;
 extern	playsound_t	s_pendingplays;
 
@@ -149,7 +156,9 @@ extern cvar_t	*s_mixahead;
 extern cvar_t	*s_testsound;
 extern cvar_t	*s_primary;
 
-wavinfo_t GetWavinfo (char *name, byte *wav, int wavlength);
+extern cvar_t	*s_swapstereo;
+
+wavinfo_t GetWavinfo (const char *name, byte *wav, int wavlength);
 
 void S_InitScaletable (void);
 
@@ -163,4 +172,4 @@ void S_PaintChannels(int endtime);
 channel_t *S_PickChannel(int entnum, int entchannel);
 
 // spatializes a channel
-void S_Spatialize(channel_t *ch);
+//void S_Spatialize(channel_t *ch);

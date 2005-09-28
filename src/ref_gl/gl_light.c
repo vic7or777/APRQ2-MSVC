@@ -35,12 +35,11 @@ DYNAMIC LIGHTS BLEND RENDERING
 =============================================================================
 */
 
-void R_RenderDlight (dlight_t *light)
+static void R_RenderDlight (const dlight_t *light)
 {
-	int		i, j;
-	float	a;
+	int		i;
+	float	a, b, rad;
 	vec3_t	v;
-	float	rad;
 
 	rad = light->intensity * 0.35;
 
@@ -57,9 +56,12 @@ void R_RenderDlight (dlight_t *light)
 	qglColor3f (0,0,0);
 	for (i=16 ; i>=0 ; i--)
 	{
-		a = i*0.39269875;
-		for (j=0 ; j<3 ; j++)
-			v[j] = light->origin[j] + vright[j] * cos(a) * rad + vup[j] * sin(a) * rad;
+		a = i*0.39269908169872415f;
+		b = cos(a) * rad;
+		a = sin(a) * rad;
+		v[0] = light->origin[0] + vright[0] * b + vup[0] * a;
+		v[1] = light->origin[1] + vright[1] * b + vup[1] * a;
+		v[2] = light->origin[2] + vright[2] * b + vup[2] * a;
 		qglVertex3fv (v);
 	}
 	qglEnd ();
@@ -80,7 +82,7 @@ void R_RenderDlights (void)
 
 	r_dlightframecount = r_framecount + 1;	// because the count hasn't advanced yet for this frame
 
-	qglDepthMask (0);
+	qglDepthMask (GL_FALSE);
 	qglDisable (GL_TEXTURE_2D);
 	//qglShadeModel (GL_SMOOTH);
 	qglEnable(GL_BLEND);
@@ -94,7 +96,7 @@ void R_RenderDlights (void)
 	qglDisable(GL_BLEND);
 	qglEnable (GL_TEXTURE_2D);
 	qglBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-	qglDepthMask (1);
+	qglDepthMask (GL_TRUE);
 }
 
 
@@ -112,7 +114,7 @@ R_MarkLights
 =============
 */
 
-void R_MarkLights (dlight_t *light, int bit, mnode_t *node)
+void R_MarkLights (const dlight_t *light, int bit, const mnode_t *node)
 {
 	cplane_t	*splitplane;
 	float		dist;
@@ -124,11 +126,11 @@ void R_MarkLights (dlight_t *light, int bit, mnode_t *node)
 
 	splitplane = node->plane;
 
-	if ( splitplane->type < 3 ) {
+	if ( splitplane->type < 3 )
 		dist = light->origin[splitplane->type] - splitplane->dist;
-	} else {
+	else
 		dist = DotProduct (light->origin, splitplane->normal) - splitplane->dist;
-	}
+
 
 	if (dist > light->intensity - DLIGHT_CUTOFF)
 	{
@@ -188,11 +190,11 @@ LIGHT SAMPLING
 =============================================================================
 */
 
-vec3_t			pointcolor;
-cplane_t		*lightplane;		// used as shadow plane
+static vec3_t	pointcolor;
+static cplane_t	*lightplane;		// used as shadow plane
 vec3_t			lightspot;
 
-int RecursiveLightPoint (mnode_t *node, vec3_t start, vec3_t end)
+int RecursiveLightPoint (const mnode_t *node, const vec3_t start, const vec3_t end)
 {
 	float		front, back, frac;
 	int			side;
@@ -273,9 +275,9 @@ int RecursiveLightPoint (mnode_t *node, vec3_t start, vec3_t end)
 				scale[1] = gl_modulate->value*r_newrefdef.lightstyles[surf->styles[maps]].rgb[1];
 				scale[2] = gl_modulate->value*r_newrefdef.lightstyles[surf->styles[maps]].rgb[2];
 	
-				pointcolor[0] += lightmap[0] * scale[0] * (1.0/255);
-				pointcolor[1] += lightmap[1] * scale[1] * (1.0/255);
-				pointcolor[2] += lightmap[2] * scale[2] * (1.0/255);
+				pointcolor[0] += lightmap[0] * scale[0] * ONEDIV255;
+				pointcolor[1] += lightmap[1] * scale[1] * ONEDIV255;
+				pointcolor[2] += lightmap[2] * scale[2] * ONEDIV255;
 				lightmap += 3*((surf->extents[0]>>4)+1)*((surf->extents[1]>>4)+1);
 			}
 
@@ -294,13 +296,12 @@ int RecursiveLightPoint (mnode_t *node, vec3_t start, vec3_t end)
 R_LightPoint
 ===============
 */
-void R_LightPoint (vec3_t p, vec3_t color)
+void R_LightPoint (const vec3_t p, vec3_t color)
 {
 	vec3_t		end;
 	float		r;
 	int			lnum;
 	dlight_t	*dl;
-	vec3_t		dist;
 	float		add;
 	
 	if (!r_worldmodel->lightdata)
@@ -309,32 +310,23 @@ void R_LightPoint (vec3_t p, vec3_t color)
 		return;
 	}
 	
-	end[0] = p[0];
-	end[1] = p[1];
-	end[2] = p[2] - 2048;
+	VectorSet(end, p[0], p[1], p[2] - 2048);
 	
 	r = RecursiveLightPoint (r_worldmodel->nodes, p, end);
 	
 	if (r == -1)
-	{
 		VectorClear (color);
-	}
 	else
-	{
 		VectorCopy (pointcolor, color);
-	}
 
-	//
 	// add dynamic lights
-	//
 	dl = r_newrefdef.dlights;
 	for (lnum = 0; lnum < r_newrefdef.num_dlights; lnum++, dl++)
 	{
-		VectorSubtract (currententity->origin, dl->origin, dist);
-		add = dl->intensity - VectorLength(dist);
+		add = dl->intensity - Distance (currententity->origin, dl->origin);
 		if (add > 0)
 		{
-			add *= (1.0/256);
+			add *= ONEDIV256;
 			VectorMA (color, add, dl->color, color);
 		}
 	}
@@ -346,14 +338,12 @@ void R_LightPoint (vec3_t p, vec3_t color)
 //===================================================================
 
 static float s_blocklights[34*34*3];
-
-//Added R_StainNode & R_Applystains -Maniac
 /*
 ===============
 R_StainNode
 ===============
 */
-void R_StainNode (stain_t *st, mnode_t *node) { 
+static void R_StainNode (const stain_t *st, const mnode_t *node) { 
 	msurface_t *surf;
 	float		dist;
 	int			c;
@@ -403,8 +393,9 @@ void R_StainNode (stain_t *st, mnode_t *node) {
 
 		fminlight = frad - fminlight;
 
-		for (i = 0; i < 3; i++)
-			impact[i] = st->origin[i] - surf->plane->normal[i]*fdist;
+		impact[0] = st->origin[0] - surf->plane->normal[0]*fdist;
+		impact[1] = st->origin[1] - surf->plane->normal[1]*fdist;
+		impact[2] = st->origin[2] - surf->plane->normal[2]*fdist;
 
 		local[0] = DotProduct (impact, tex->vecs[0]) + tex->vecs[0][3] - surf->texturemins[0];
 		local[1] = DotProduct (impact, tex->vecs[1]) + tex->vecs[1][3] - surf->texturemins[1];
@@ -471,7 +462,7 @@ void R_ApplyStains (void)
 R_AddDynamicLights
 ===============
 */
-void R_AddDynamicLights (msurface_t *surf)
+void R_AddDynamicLights (const msurface_t *surf)
 {
 	int			lnum;
 	int			sd, td;
@@ -484,17 +475,14 @@ void R_AddDynamicLights (msurface_t *surf)
 	float		*pfBL;
 	float		fsacc, ftacc;
 	qboolean	rotated = false;
-	vec3_t		forward, right, up, temp;
+	vec3_t		temp;
 
 	smax = (surf->extents[0]>>4)+1;
 	tmax = (surf->extents[1]>>4)+1;
 	tex = surf->texinfo;
 
 	if (currententity->angles[0] || currententity->angles[1] || currententity->angles[2])
-	{
 		rotated = true;
-		AngleVectors (currententity->angles, forward, right, up);
-	}
 
 	for (lnum = 0; lnum < r_newrefdef.num_dlights; lnum++)
 	{
@@ -508,9 +496,9 @@ void R_AddDynamicLights (msurface_t *surf)
 		if (rotated)
 		{
 			VectorCopy (dlorigin, temp);
-			dlorigin[0] = DotProduct (temp, forward);
-			dlorigin[1] = -DotProduct (temp, right);
-			dlorigin[2] = DotProduct (temp, up);
+			dlorigin[0] = DotProduct (temp, currententity->axis[0]);
+			dlorigin[1] = DotProduct (temp, currententity->axis[1]);
+			dlorigin[2] = DotProduct (temp, currententity->axis[2]);
 		}
 
 		if (surf->plane->type < 3)
@@ -560,17 +548,9 @@ void R_AddDynamicLights (msurface_t *surf)
 
 				if (fdist < fminlight)
 				{
-					/*if(gl_dynamic->value == 2) {
-						pfBL[0] += ( fminlight - fdist ) * dl->color[0];
-						pfBL[1] += ( fminlight - fdist ) * dl->color[1];
-						pfBL[2] += ( fminlight - fdist ) * dl->color[2];
-					}
-					else {*/
-						pfBL[0] += ( frad - fdist ) * dl->color[0];
-						pfBL[1] += ( frad - fdist ) * dl->color[1];
-						pfBL[2] += ( frad - fdist ) * dl->color[2];
-					//}
-
+					pfBL[0] += ( frad - fdist ) * dl->color[0];
+					pfBL[1] += ( frad - fdist ) * dl->color[1];
+					pfBL[2] += ( frad - fdist ) * dl->color[2];
 				}
 
 			}
@@ -599,7 +579,7 @@ R_BuildLightMap
 Combine and scale multiple lightmaps into the floating format in blocklights
 ===============
 */
-void R_BuildLightMap (msurface_t *surf, byte *dest, int stride)
+void R_BuildLightMap (const msurface_t *surf, byte *dest, int stride)
 {
 	int			smax, tmax;
 	int			r, g, b, a, max;
@@ -608,7 +588,6 @@ void R_BuildLightMap (msurface_t *surf, byte *dest, int stride)
 	float		scale[4];
 	int			nummaps;
 	float		*bl;
-	//lightstyle_t	*style;
 	int monolightmap;
 
 	if ( surf->texinfo->flags & (SURF_SKY|SURF_TRANS33|SURF_TRANS66|SURF_WARP) )
@@ -623,14 +602,9 @@ void R_BuildLightMap (msurface_t *surf, byte *dest, int stride)
 	// set to full bright if no light data
 	if (!surf->samples)
 	{
-		//int maps;
-
 		for (i=0; i<size*3; i++)
 			s_blocklights[i] = 255;
-		/*for (maps = 0; maps < MAXLIGHTMAPS && surf->styles[maps] != 255; maps++)
-		{
-			style = &r_newrefdef.lightstyles[surf->styles[maps]];
-		}*/
+
 		goto store;
 	}
 
@@ -645,18 +619,19 @@ void R_BuildLightMap (msurface_t *surf, byte *dest, int stride)
 	{
 		bl = s_blocklights;
 
-		for (i=0 ; i<3 ; i++)
-			scale[i] = gl_modulate->value*r_newrefdef.lightstyles[surf->styles[0]].rgb[i];
+		scale[0] = gl_modulate->value*r_newrefdef.lightstyles[surf->styles[0]].rgb[0];
+		scale[1] = gl_modulate->value*r_newrefdef.lightstyles[surf->styles[0]].rgb[1];
+		scale[2] = gl_modulate->value*r_newrefdef.lightstyles[surf->styles[0]].rgb[2];
 
 		if ( scale[0] != 1.0F || scale[1] != 1.0F || scale[2] != 1.0F )
 		{
 			for (i=0 ; i<size ; i++, bl+=3)
 			{
-					bl[0] = lightmap[i*3+0] * scale[0];
-					bl[1] = lightmap[i*3+1] * scale[1];
-					bl[2] = lightmap[i*3+2] * scale[2];
-				}
+				bl[0] = lightmap[i*3+0] * scale[0];
+				bl[1] = lightmap[i*3+1] * scale[1];
+				bl[2] = lightmap[i*3+2] * scale[2];
 			}
+		}
 		else
 		{
 			for (i=0 ; i<size ; i++, bl+=3 )
@@ -678,8 +653,9 @@ void R_BuildLightMap (msurface_t *surf, byte *dest, int stride)
 		{
 			bl = s_blocklights;
 
-			for (i=0 ; i<3 ; i++)
-				scale[i] = gl_modulate->value*r_newrefdef.lightstyles[surf->styles[maps]].rgb[i];
+			scale[0] = gl_modulate->value*r_newrefdef.lightstyles[surf->styles[maps]].rgb[0];
+			scale[1] = gl_modulate->value*r_newrefdef.lightstyles[surf->styles[maps]].rgb[1];
+			scale[2] = gl_modulate->value*r_newrefdef.lightstyles[surf->styles[maps]].rgb[2];
 
 			if ( scale[0] != 1.0F || scale[1] != 1.0F || scale[2] != 1.0F )
 			{
@@ -847,9 +823,9 @@ store:
 				case 'C':
 					// try faking colored lighting
 					a = 255 - ((r+g+b)/3);
-					r *= a/255.0;
-					g *= a/255.0;
-					b *= a/255.0;
+					r *= a*ONEDIV255;
+					g *= a*ONEDIV255;
+					b *= a*ONEDIV255;
 					break;
 				case 'A':
 				default:

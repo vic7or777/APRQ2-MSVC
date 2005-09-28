@@ -51,6 +51,9 @@ typedef struct entity_s
 {
 	struct model_s		*model;			// opaque type outside refresh
 	float				angles[3];
+#ifdef GL_QUAKE
+	vec3_t				axis[3];
+#endif
 
 	/*
 	** most recent data
@@ -100,13 +103,11 @@ typedef struct
 	float		white;			// highest of rgb
 } lightstyle_t;
 
-// Stainmaps: Begin -Maniac
 typedef struct {
 	vec3_t			origin;
 	float			size;
 	float			color[3];
 } stain_t;
-// Stainmaps: End
 
 typedef struct
 {
@@ -138,8 +139,7 @@ typedef struct
 
 /* REFIMPORT */
 
-qboolean VID_GetModeInfo( int *width, int *height, int mode );
-void VID_MenuInit( void );
+//void VID_MenuInit( void );
 void VID_NewWindow ( int width, int height);
 
 /* REFEXPORT */
@@ -174,6 +174,7 @@ void	R_EndFrame( void );
 void	R_AppActivate( qboolean active );
 
 #ifdef GL_QUAKE
+qboolean R_IsWideScreen(void);
 void R_AddDecal	(vec3_t origin, vec3_t dir, float red, float green, float blue, float alpha,
 				 float size, int type, int flags, float angle);
 #endif

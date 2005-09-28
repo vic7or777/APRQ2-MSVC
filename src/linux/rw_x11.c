@@ -472,6 +472,22 @@ static int XLateKey(XKeyEvent *ev)
 		case XK_KP_Subtract: key = K_KP_MINUS; break;
 		case XK_KP_Divide: key = K_KP_SLASH; break;
 
+		case XK_exclam: key = '1'; break;
+		case XK_at: key = '2'; break;
+		case XK_numbersign: key = '3'; break;
+		case XK_dollar: key = '4'; break;
+		case XK_percent: key = '5'; break;
+		case XK_asciicircum: key = '6'; break;
+		case XK_ampersand: key = '7'; break;
+		case XK_asterisk: key = '8'; break;
+		case XK_parenleft: key = '9'; break;
+		case XK_parenright: key = '0'; break;
+
+		case XK_twosuperior: key = '~'; break;
+
+		case XK_space:
+		case XK_KP_Space: key = K_SPACE; break;
+
 		default:
 			key = *(unsigned char*)buf;
 			if (key >= 'A' && key <= 'Z')
@@ -628,7 +644,7 @@ char *Sys_GetClipboardData()
 					   &type, &format, &len,
 					   &tmp, &data);
 			if (result == Success) {
-				ret = strdup(data);
+				ret = CopyString(data, TAGMALLOC_CLIPBOARD);
 			}
 			XFree(data);
 		}
@@ -1045,7 +1061,7 @@ rserr_t SWimp_SetMode( int *pwidth, int *pheight, int mode, qboolean fullscreen 
 
 	Com_Printf ("setting mode %d:", mode );
 
-	if ( !VID_GetModeInfo( pwidth, pheight, mode ) )
+	if ( !R_GetModeInfo( pwidth, pheight, mode ) )
 	{
 		Com_Printf ( " invalid mode\n" );
 		return rserr_invalid_mode;

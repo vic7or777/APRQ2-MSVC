@@ -37,8 +37,8 @@ static menuaction_s		s_options_defaults_action;
 static menuaction_s		s_options_customize_options_action;
 static menuaction_s		s_options_new_options_action;
 static menuaction_s		s_options_demos_action;
-#ifdef _WIN32
-static menuaction_s		s_options_winamp_action;
+#if defined(_WIN32) || defined(WITH_XMMS)
+static menuaction_s		s_options_mp3_action;
 #endif
 static menuslider_s		s_options_sensitivity_slider;
 static menulist_s		s_options_freelook_box;
@@ -86,10 +86,10 @@ static void DemosFunc( void *unused )
 	M_Menu_Demos_f();
 }
 
-#ifdef _WIN32
-static void WinampFunc( void *unused )
+#if defined(_WIN32) || defined(WITH_XMMS)
+static void MP3Func( void *unused )
 {
-	M_Menu_WA_f();
+	M_Menu_MP3_f();
 }
 #endif
 
@@ -200,13 +200,13 @@ static void UpdateCDVolumeFunc( void *unused )
 }
 #endif
 
+extern void Key_ClearTyping( void );
+
 void ConsoleFunc( void *unused )
 {
 	/*
 	** the proper way to do this is probably to have ToggleConsole_f accept a parameter
 	*/
-	extern void Key_ClearTyping( void );
-
 	if ( cl.attractloop )
 	{
 		Cbuf_AddText ("killserver\n");
@@ -441,12 +441,16 @@ void Options_MenuInit( void )
 	s_options_demos_action.generic.name	= "Demos";
 	s_options_demos_action.generic.callback = DemosFunc;
 
-#ifdef _WIN32
-	s_options_winamp_action.generic.type	= MTYPE_ACTION;
-	s_options_winamp_action.generic.x		= 0;
-	s_options_winamp_action.generic.y		= y += 10;
-	s_options_winamp_action.generic.name	= "Winamp";
-	s_options_winamp_action.generic.callback = WinampFunc;
+#if defined(_WIN32) || defined(WITH_XMMS)
+	s_options_mp3_action.generic.type	= MTYPE_ACTION;
+	s_options_mp3_action.generic.x		= 0;
+	s_options_mp3_action.generic.y		= y += 10;
+	s_options_mp3_action.generic.callback = MP3Func;
+#endif
+#if defined(_WIN32)
+	s_options_mp3_action.generic.name	= "Winamp";
+#elif defined(WITH_XMMS)
+	s_options_mp3_action.generic.name	= "XMMS";
 #endif
 
 	s_options_customize_options_action.generic.type	= MTYPE_ACTION;
@@ -490,8 +494,8 @@ void Options_MenuInit( void )
 #endif
 	Menu_AddItem( &s_options_menu, ( void * ) &s_options_new_options_action );
 	Menu_AddItem( &s_options_menu, ( void * ) &s_options_demos_action );
-#ifdef _WIN32
-	Menu_AddItem( &s_options_menu, ( void * ) &s_options_winamp_action );
+#if defined(_WIN32) || defined(WITH_XMMS)
+	Menu_AddItem( &s_options_menu, ( void * ) &s_options_mp3_action );
 #endif
 	Menu_AddItem( &s_options_menu, ( void * ) &s_options_customize_options_action );
 	Menu_AddItem( &s_options_menu, ( void * ) &s_options_defaults_action );

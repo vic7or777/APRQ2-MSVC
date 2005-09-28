@@ -118,9 +118,8 @@ void Hunk_Free (void *base)
 Sys_Milliseconds
 ================
 */
-//AVI EXPORT
-cvar_t	*avi_fps;
 int	curtime;
+
 int Sys_Milliseconds (void)
 {
 	static int		base;
@@ -131,10 +130,6 @@ int Sys_Milliseconds (void)
 		base = timeGetTime() & 0xffff0000;
 		initialized = true;
 	}
-
-	//AVI EXPORT
-	if(avi_fps && avi_fps->integer)
-		return (curtime++) - base;
 
 	curtime = timeGetTime() - base;
 

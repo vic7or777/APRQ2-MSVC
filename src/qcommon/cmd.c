@@ -38,14 +38,26 @@ typedef struct cmdalias_s
 #define ALIAS_HASH_SIZE	64
 static cmdalias_t	*cmd_aliasHash[ALIAS_HASH_SIZE];
 
-cmdalias_t	*cmd_alias;
+static cmdalias_t	*cmd_alias;
 
-qboolean	cmd_wait;
+static int	cmd_wait = 0;
 
-int		alias_count;		// for detecting runaway loops
+static int	alias_count = 0;		// for detecting runaway loops
 
 
 //=============================================================================
+
+static unsigned int CmdHashValue( const char *name, int hashSize )
+{
+	int i;
+	unsigned int hash = 0;
+
+	for( i = 0; name[i]; i++ )
+		hash += tolower(name[i]) * (i+119);
+
+	return hash & (hashSize-1);
+}
+
 
 /*
 ============
@@ -56,9 +68,12 @@ next frame.  This allows commands like:
 bind g "impulse 5 ; +attack ; wait ; -attack ; impulse 2"
 ============
 */
-void Cmd_Wait_f (void)
+static void Cmd_Wait_f (void)
 {
-	cmd_wait = true;
+	if( Cmd_Argc() > 1 )
+		cmd_wait = atoi( Cmd_Argv( 1 ) );
+	else
+		cmd_wait = 1;
 }
 
 
@@ -69,11 +84,12 @@ void Cmd_Wait_f (void)
 
 =============================================================================
 */
+#define	MAX_CMD_BUFFER	32768
+#define	MAX_CMD_LINE	1024
+static sizebuf_t	cmd_text;
 
-sizebuf_t	cmd_text;
-
-byte		cmd_text_buf[32768];
-byte		defer_text_buf[32768];
+static byte		cmd_text_buf[MAX_CMD_BUFFER];
+static byte		defer_text_buf[MAX_CMD_BUFFER];
 
 /*
 ============
@@ -82,7 +98,7 @@ Cbuf_Init
 */
 void Cbuf_Init (void)
 {
-	SZ_Init (&cmd_text, cmd_text_buf, sizeof(cmd_text_buf));
+	SZ_Init(&cmd_text, cmd_text_buf, MAX_CMD_BUFFER);
 }
 
 /*
@@ -92,10 +108,13 @@ Cbuf_AddText
 Adds command text at the end of the buffer
 ============
 */
-void Cbuf_AddText (char *text)
+void Cbuf_AddText (const char *text)
 {
 	int		l;
 	
+	if (!text[0])
+		return;
+
 	l = strlen (text);
 
 	if (cmd_text.cursize + l >= cmd_text.maxsize)
@@ -103,7 +122,8 @@ void Cbuf_AddText (char *text)
 		Com_Printf ("Cbuf_AddText: overflow\n");
 		return;
 	}
-	SZ_Write (&cmd_text, text, l);
+	memcpy(&cmd_text.data[cmd_text.cursize], text, l);
+	cmd_text.cursize += l;
 }
 
 
@@ -113,37 +133,31 @@ Cbuf_InsertText
 
 Adds command text immediately after the current command
 Adds a \n to the text
-FIXME: actually change the command buffer to do less copying
 ============
 */
-void Cbuf_InsertText (char *text)
+void Cbuf_InsertText (const char *text)
 {
-	char	*temp;
-	int		templen;
+	int		len;
+	int		i;
 
-	// copy off any commands still remaining in the exec buffer
-	templen = cmd_text.cursize;
-	if (templen)
-	{
-		temp = Z_Malloc (templen);
-		memcpy (temp, cmd_text.data, templen);
-		SZ_Clear (&cmd_text);
+	len = strlen( text ) + 1;
+	if ( len + cmd_text.cursize > cmd_text.maxsize ) {
+		Com_Printf( "Cbuf_InsertText overflowed\n" );
+		return;
 	}
-	else
-		temp = NULL;	// shut up compiler
-		
-	// add the entire text of the file
-	Cbuf_AddText (text);
-	
-	if( text[strlen( text ) - 1] != '\n' )
-		Cbuf_AddText( "\n" );
 
-	// add the copied off data
-	if (templen)
-	{
-		SZ_Write (&cmd_text, temp, templen);
-		Z_Free (temp);
+	// move the existing command text
+	for ( i = cmd_text.cursize - 1 ; i >= 0 ; i-- ) {
+		cmd_text.data[ i + len ] = cmd_text.data[ i ];
 	}
+
+	// copy the new text in
+	memcpy( cmd_text.data, text, len - 1 );
+
+	// add a \n
+	cmd_text.data[ len - 1 ] = '\n';
+
+	cmd_text.cursize += len;
 }
 
 
@@ -206,13 +220,19 @@ void Cbuf_Execute (void)
 {
 	int		i;
 	char	*text;
-	char	line[1024];
+	char	line[MAX_CMD_LINE];
 	int		quotes;
 
 	alias_count = 0;		// don't allow infinite alias loops
 
 	while (cmd_text.cursize)
 	{
+		if (cmd_wait > 0) {
+			// skip out while text still remains in buffer, leaving it for next frame
+			cmd_wait--;
+			break;
+		}
+
 		// find a \n or ; line break
 		text = (char *)cmd_text.data;
 
@@ -223,18 +243,16 @@ void Cbuf_Execute (void)
 				quotes++;
 			if ( !(quotes&1) &&  text[i] == ';')
 				break;	// don't break if inside a quoted string
-			if (text[i] == '\n')
+			if (text[i] == '\n' || text[i] == '\r' )
 				break;
 		}
 			
-		if (i >= sizeof(line)-1) {
-			Com_Printf ("Cbuf_Execute: overflow of %d truncated\n", i);
-			memcpy (line, text, sizeof(line)-1);
-		} else {				
-			memcpy (line, text, i);
-		}
+		if( i > MAX_CMD_LINE - 1)
+			i = MAX_CMD_LINE - 1;		
+
+		memcpy (line, text, i);
 		line[i] = 0;
-		
+
 		// delete the text from the command buffer and move remaining commands down
 		// this is necessary because commands (exec, alias) can insert data at the
 		// beginning of the text buffer
@@ -251,13 +269,6 @@ void Cbuf_Execute (void)
 
 		// execute the command line
 		Cmd_ExecuteString (line);
-		
-		if (cmd_wait)
-		{
-			// skip out while text still remains in buffer, leaving it for next frame
-			cmd_wait = false;
-			break;
-		}
 	}
 }
 
@@ -310,21 +321,19 @@ will keep the demoloop from immediately starting
 */
 qboolean Cbuf_AddLateCommands (void)
 {
-	int		i, j, s, argc;
+	int		i, j, s = 0, argc;
 	char	*text, *build, c;	
 	qboolean	ret;
 
 	// build the combined string to parse from
-	s = 0;
 	argc = COM_Argc();
 	for (i = 1; i < argc; i++)
-	{
 		s += strlen (COM_Argv(i)) + 1;
-	}
+
 	if (!s)
 		return false;
 		
-	text = Z_Malloc (s+1);
+	text = Z_TagMalloc (s+1, TAGMALLOC_CMDBUFF);
 	text[0] = 0;
 	for (i = 1; i < argc; i++)
 	{
@@ -334,7 +343,7 @@ qboolean Cbuf_AddLateCommands (void)
 	}
 	
 	// pull out the commands
-	build = Z_Malloc (s+1);
+	build = Z_TagMalloc (s+1, TAGMALLOC_CMDBUFF);
 	build[0] = 0;
 	
 	for (i = 0; i < s-1; i++)
@@ -381,9 +390,9 @@ qboolean Cbuf_AddLateCommands (void)
 Cmd_Exec_f
 ===============
 */
-void Cmd_Exec_f (void)
+static void Cmd_Exec_f (void)
 {
-	char	*f, *f2;
+	char	*f, config[MAX_QPATH];
 	int		len;
 
 	if (Cmd_Argc () != 2)
@@ -392,23 +401,18 @@ void Cmd_Exec_f (void)
 		return;
 	}
 
-	len = FS_LoadFile (Cmd_Argv(1), (void **)&f);
+	Q_strncpyz(config, Cmd_Argv(1), sizeof(config));
+	COM_DefaultExtension(config, sizeof(config), ".cfg");
+	len = FS_LoadFile (config, (void **)&f);
 	if (!f || !len)
 	{
-		Com_Printf ("couldn't exec %s\n",Cmd_Argv(1));
+		Com_Printf ("couldn't exec %s\n", config);
 		return;
 	}
-	Com_Printf ("execing %s\n",Cmd_Argv(1));
+	Com_Printf ("execing %s\n", config);
 	
-	// the file doesn't have a trailing 0, so we need to copy it off
-	f2 = Z_Malloc(len+2);
-	memcpy (f2, f, len);
-	f2[len] = '\n';
-	f2[len+1] = '\0';
+	Cbuf_InsertText (f);
 
-	Cbuf_InsertText (f2);
-
-	Z_Free (f2);
 	FS_FreeFile (f);
 }
 
@@ -419,61 +423,48 @@ Cmd_Echo_f
 Just prints the rest of the line to the console
 ===============
 */
-void Cmd_Echo_f (void)
+static void Cmd_Echo_f (void)
 {
-	int		i;
-	
-	for (i = 1; i < Cmd_Argc(); i++)
-		Com_Printf ("%s ",Cmd_Argv(i));
-	Com_Printf ("\n");
+	Com_Printf (S_ENABLE_COLOR "%s\n", Cmd_ArgsFrom(1));
 }
 
-static int aliassort( const void *_a, const void *_b )
+static int AliasSort( const cmdalias_t *a, const cmdalias_t *b )
 {
-	const cmdalias_t	*a = (const cmdalias_t *)_a;
-	const cmdalias_t	*b = (const cmdalias_t *)_b;
-
 	return strcmp (a->name, b->name);
 }
 
-void Cmd_Aliaslist_f (void)
+static void Cmd_Aliaslist_f (void)
 {
-	cmdalias_t	*a;
+	const cmdalias_t	*a;
     int		i, j, c;
     char    *filter = "*";
-	int		len, count = 0;
+	int		count = 0;
 	cmdalias_t *sortedList;
 
 	c = Cmd_Argc();
-
-    if (c == 2)
+    if (c > 1)
 		filter = Cmd_Argv(1);
 
-	for (a = cmd_alias, i = 0; a ; a = a->next, i++);
+	for (a = cmd_alias, i = 0; a; a = a->next, i++);
 
-	len = i * sizeof(cmdalias_t);
-	sortedList = Z_Malloc (len);
+	sortedList = Z_TagMalloc (i * sizeof(cmdalias_t), TAGMALLOC_ALIAS);
 	
-	for (a = cmd_alias, i = 0; a ; a = a->next, i++)
-	{
+	for (a = cmd_alias, i = 0; a; a = a->next, i++)
 		sortedList[i] = *a;
-	}
 
-	qsort (sortedList, i, sizeof(sortedList[0]), (int (*)(const void *, const void *))aliassort);
+	qsort (sortedList, i, sizeof(sortedList[0]), (int (*)(const void *, const void *))AliasSort);
 
-	//for (a = cmd_alias ; a ; a=a->next)
 	for (j = 0; j < i; j++)
 	{
 		a = &sortedList[j];
-		if (c == 2 && !Com_WildCmp(filter, a->name, 1) && !strstr(a->name, filter))
+		if (c > 1 && !Com_WildCmp(filter, a->name, true) && !strstr(a->name, filter))
 			continue;
-
 
 		Com_Printf ("%s : \"%s\"\n", a->name, a->value);
 		count++;
 	}
 
-	if (c == 2)
+	if (c > 1)
 		Com_Printf("%i alias found (%i total alias)\n", count, i);
 	else
 		Com_Printf("%i alias\n", i);
@@ -491,11 +482,10 @@ static cmdalias_t *Cmd_AliasFind( const char *name )
 	unsigned int hash;
 	cmdalias_t *alias;
 
-	hash = Com_HashKey (name, ALIAS_HASH_SIZE);
+	hash = CmdHashValue (name, ALIAS_HASH_SIZE);
 	for( alias=cmd_aliasHash[hash]; alias ; alias=alias->hashNext ) {
-		if( !Q_stricmp( name, alias->name ) ) {
+		if( !Q_stricmp( name, alias->name ) )
 			return alias;
-		}
 	}
 
 	return NULL;
@@ -508,11 +498,10 @@ Cmd_Alias_f
 Creates a new command that executes a command string (possibly ; seperated)
 ===============
 */
-void Cmd_Alias_f (void)
+static void Cmd_Alias_f (void)
 {
 	cmdalias_t	*a;
-	char		cmd[1024], *s;
-	int			i, c;
+	char		*s;
 	unsigned int hash;
 
 	if (Cmd_Argc() == 1)
@@ -548,29 +537,21 @@ void Cmd_Alias_f (void)
 	}
 	else
 	{
-		a = Z_Malloc (sizeof(cmdalias_t));
+		a = Z_TagMalloc (sizeof(cmdalias_t), TAGMALLOC_ALIAS);
 		strcpy (a->name, s);
 		a->next = cmd_alias;
 		cmd_alias = a;
 
-		hash = Com_HashKey( s, ALIAS_HASH_SIZE );
+		hash = CmdHashValue( s, ALIAS_HASH_SIZE );
 		a->hashNext = cmd_aliasHash[hash];
 		cmd_aliasHash[hash] = a;
 	}
 
 // copy the rest of the command line
-	cmd[0] = 0;		// start out with a null string
-	c = Cmd_Argc();
-	for (i=2 ; i< c ; i++)
-	{
-		strcat (cmd, Cmd_Argv(i));
-		if (i != (c - 1))
-			strcat (cmd, " ");
-	}
-	a->value = CopyString (cmd);
+	a->value = CopyString (Cmd_ArgsFrom(2), TAGMALLOC_ALIAS);
 }
 
-void Cmd_UnAlias_f (void)
+static void Cmd_UnAlias_f (void)
 {
 	char		*s;
 	unsigned int hash;
@@ -589,7 +570,7 @@ void Cmd_UnAlias_f (void)
 		return;
 	}
 
-	hash = Com_HashKey( s, ALIAS_HASH_SIZE );
+	hash = CmdHashValue( s, ALIAS_HASH_SIZE );
 	back = &cmd_aliasHash[hash];
 	while( 1 ) {
 		a = *back;
@@ -632,10 +613,232 @@ WriteAliases
 */
 void Cmd_WriteAliases (FILE *f)
 {
-	cmdalias_t	*a;
+	const cmdalias_t	*a;
 
 	for (a = cmd_alias; a; a = a->next)
 		fprintf (f, "alias %s \"%s\"\n", a->name, a->value);
+}
+
+
+/*
+=============================================================================
+
+					MESSAGE TRIGGERS
+
+=============================================================================
+*/
+
+typedef struct cmd_trigger_s {
+	char		*match;
+	char		*command;
+
+	struct cmd_trigger_s	*next;
+} cmd_trigger_t;
+
+static cmd_trigger_t	*cmd_triggers = NULL;
+
+/*
+============
+Cmd_Trigger_f
+============
+*/
+static void Cmd_Trigger_f( void )
+{
+	cmd_trigger_t *trigger;
+	char *command, *match;
+	int count = 0, clen, mlen;
+
+	if( Cmd_Argc() == 1 ) {
+		for( trigger=cmd_triggers ; trigger ; trigger=trigger->next ) {
+			count++;
+			if(count == 1)
+				Com_Printf( "Current message triggers:\n" );
+
+			Com_Printf( "%2i. \"%s\" = \"%s\"\n", count, trigger->command, trigger->match );
+		}
+		if(!count)
+			Com_Printf("No current message triggers\n");
+		return;
+	}
+
+	if( Cmd_Argc() < 3 ) {
+		Com_Printf( "Usage: %s <command> <match>\n", Cmd_Argv( 0 ) );
+		return;
+	}
+
+	command = Cmd_Argv(1);
+	match = Cmd_ArgsFrom(2);
+
+	// don't create the same trigger twice
+	for( trigger=cmd_triggers; trigger; trigger=trigger->next ) {
+		if(!strcmp(trigger->command, command) && !strcmp(trigger->match, match))
+		{
+			Com_Printf( "Exactly same trigger allready exists\n" );
+			return;
+		}
+	}
+
+	clen = strlen(command);
+	mlen = strlen(match);
+	if(mlen < 3) {
+		Com_Printf("match too short\n");
+		return;
+	}
+
+	trigger = Z_TagMalloc( sizeof( cmd_trigger_t ) + clen+1 + mlen+1, TAGMALLOC_TRIGGER );
+	trigger->command = (char *)((byte *)trigger + sizeof( cmd_trigger_t ));
+	trigger->match = (char *)((byte *)trigger->command + clen+1);
+	strcpy(trigger->command, command);
+	strcpy(trigger->match, match);
+	trigger->next = cmd_triggers;
+	cmd_triggers = trigger;
+}
+
+static void Cmd_TriggerRemove_f( void )
+{
+	cmd_trigger_t *trigger, **back;
+	int count = 0, num;
+
+	if( Cmd_Argc() != 2 )
+	{
+		Com_Printf("Usage: %s <num>\n", Cmd_Argv(0));
+		return;
+	}
+
+	if(!cmd_triggers)
+	{
+		Com_Printf("No triggers\n");
+		return;
+	}
+
+	num = atoi(Cmd_Argv(1));
+	back = &cmd_triggers;
+	for(;;)
+	{
+		trigger = *back;
+		count++;
+		if(!trigger)
+		{
+			Com_Printf ("Cant find trigger '%i'.\n", num);
+			return;
+		}
+		if(count == num)
+		{
+			*back = trigger->next;
+			Com_Printf ("Removed trigger: \"%s\" = \"%s\"\n", trigger->command, trigger->match );
+			Z_Free (trigger);
+			return;
+		}
+
+		back = &trigger->next;
+	}
+}
+
+/*
+============
+Cmd_ExecTrigger
+============
+*/
+static char *Cmd_MacroExpandString (char *text);
+
+void Cmd_ExecTrigger( const char *string ) {
+	char buffer[MAX_STRING_CHARS];
+	int l = 0;
+	const cmd_trigger_t *trigger;
+	const char *text;
+	int c;
+
+	if(!cmd_triggers)
+		return;
+
+	// remove unprintable characters
+	while( *string && l < sizeof( buffer ) - 1 ) {
+		c = *string & 127;
+		if( c > 31 ) {
+			buffer[l++] = c;
+		}
+		string++;
+	}
+	buffer[l] = 0;
+
+	// execute matching triggers
+	for( trigger=cmd_triggers ; trigger ; trigger=trigger->next )
+	{
+		text = Cmd_MacroExpandString( trigger->match );
+		if( text && Com_WildCmp( text, buffer, true ) )
+			Cbuf_AddText( va( "%s\n", trigger->command ) );
+	}
+
+}
+
+/*
+=============================================================================
+
+					MACRO EXECUTION
+
+=============================================================================
+*/
+
+typedef struct cmd_macro_s {
+	struct cmd_macro_s	*next;
+
+	const char		*name;
+	void		(*function)( char *buffer, int bufferSize );
+} cmd_macro_t;
+
+static cmd_macro_t	*cmd_macros;
+
+/*
+============
+Cmd_MacroFind
+============
+*/
+static cmd_macro_t *Cmd_MacroFind( const char *name )
+{
+	cmd_macro_t *macro;
+
+	for( macro = cmd_macros; macro; macro = macro->next ) {
+		if( !Q_stricmp( macro->name, name ) )
+			return macro;
+	}
+
+	return NULL;
+}
+
+/*
+============
+Cmd_AddMacro
+============
+*/
+void Cmd_AddMacro( const char *name, void (*function)( char *, int ) )
+{
+	cmd_macro_t	*macro;
+	
+// fail if the macro already exists
+	if( Cmd_MacroFind( name ) ) {
+		Com_Printf( "Cmd_AddMacro: %s already defined\n", name );
+		return;
+	}
+
+	macro = Z_TagMalloc( sizeof( cmd_macro_t ), TAGMALLOC_MACRO );
+	macro->name = name;
+	macro->function = function;
+	macro->next = cmd_macros;
+	cmd_macros = macro;
+}
+
+static char *Cmd_MacroString( const char *name )
+{
+	const cmd_macro_t	*macro;
+	static char macroString[128];
+	
+	macro = Cmd_MacroFind( name );
+	if( !macro )
+		return "";
+
+	macro->function( macroString, sizeof( macroString ) );
+
+	return macroString;
 }
 
 /*
@@ -651,14 +854,14 @@ typedef struct cmd_function_s
 	struct cmd_function_s	*next;
 	struct cmd_function_s	*hashNext;
 
-	char					*name;
+	const char				*name;
 	xcommand_t				function;
 } cmd_function_t;
 
 
 static	int			cmd_argc;
 static	char		*cmd_argv[MAX_STRING_TOKENS];
-static	char		*cmd_null_string = "";
+static	char		cmd_tokenized[MAX_STRING_CHARS*2];
 static	char		cmd_args[MAX_STRING_CHARS];
 
 static	cmd_function_t	*cmd_functions;		// possible commands to execute
@@ -684,7 +887,7 @@ Cmd_Argv
 char *Cmd_Argv (int arg)
 {
 	if ( (unsigned)arg >= cmd_argc )
-		return cmd_null_string;
+		return "";
 	return cmd_argv[arg];	
 }
 
@@ -700,20 +903,41 @@ char *Cmd_Args (void)
 	return cmd_args;
 }
 
+char *Cmd_ArgsFrom (int arg)
+{
+	static char argsFrom[2048];
+	int i;
+
+	argsFrom[0] = 0;
+
+	if (arg < 0)
+		arg = 0;
+	for (i = arg; i < cmd_argc; i++)
+	{
+		if (argsFrom[0]) {
+			strcat(argsFrom, " ");
+		}
+		strcat(argsFrom, cmd_argv[i]);
+	}
+
+	return argsFrom;
+}
+
 
 /*
 ======================
 Cmd_MacroExpandString
 ======================
 */
-char *Cmd_MacroExpandString (char *text)
+static char *Cmd_MacroExpandString (char *text)
 {
-	int		i, j, count, len;
+	int		i, j, k, count, len;
 	qboolean	inquote;
 	char	*scan;
 	static	char	expanded[MAX_STRING_CHARS];
 	char	temporary[MAX_STRING_CHARS];
-	char	*token, *start;
+	char	*start, *extra, *endp;
+	const char *token, *cvarname;
 
 	inquote = false;
 	scan = text;
@@ -737,32 +961,31 @@ char *Cmd_MacroExpandString (char *text)
 			continue;
 		// scan out the complete macro
 		start = scan+i+1;
-//		token = COM_Parse (&start);
-		if (!*start)
+		token = COM_Parse (&start);
+		if (!start)
 			break;
 
-		while( *start == 32 ) {
-			start++;
-		}
-
 		// allow $var1$$var2 scripting
-		token = temporary;
-		while( *start > 32 ) {
-			*token++ = *start++;
-			if( *start == '$' ) {
-				start++;
-				break;
-			}
+		k = 0;
+		extra = NULL;
+		endp = strchr (token, '$');
+		if (endp) {
+			*endp = 0;
+			extra = endp+1;
+			k = strlen(extra);
+			len--;
 		}
-		*token = 0;
 
-		if( token == temporary )
-			continue;
+		cvarname = token;
 
-		token = Cvar_VariableString ( temporary );
+		token = Cvar_VariableString ( cvarname );
+
+		if(!*token)
+			token = Cmd_MacroString( cvarname );
 
 		j = strlen(token);
-		len += j;
+
+		len += j-strlen(cvarname)-1;
 		if (len >= MAX_STRING_CHARS)
 		{
 			Com_Printf ("Expanded line exceeded %i chars, discarded.\n", MAX_STRING_CHARS);
@@ -771,12 +994,15 @@ char *Cmd_MacroExpandString (char *text)
 
 		strncpy (temporary, scan, i);
 		strcpy (temporary+i, token);
-		strcpy (temporary+i+j, start);
+
+		if (extra)
+			strcpy (temporary+i+j, extra);
+
+		strcpy (temporary+i+j+k, start);
 
 		strcpy (expanded, temporary);
 		scan = expanded;
 		i--;
-
 		if (++count == 100)
 		{
 			Com_Printf ("Macro expansion loop, discarded.\n");
@@ -804,18 +1030,15 @@ $Cvars will be expanded unless they are in a quoted token
 */
 void Cmd_TokenizeString (char *text, qboolean macroExpand)
 {
-	int		i;
-	char	*com_token;
+	int			cmd_pointer = 0;
+	const char	*com_token;
 
 // clear the args from the last string
-	for (i=0 ; i<cmd_argc ; i++)
-		Z_Free (cmd_argv[i]);
-		
 	cmd_argc = 0;
 	cmd_args[0] = 0;
 	
 	// macro expand the text
-	if (macroExpand && strstr(text, "$"))
+	if (macroExpand)
 		text = Cmd_MacroExpandString (text);
 	if (!text)
 		return;
@@ -859,7 +1082,17 @@ void Cmd_TokenizeString (char *text, qboolean macroExpand)
 
 		if (cmd_argc < MAX_STRING_TOKENS)
 		{
-			cmd_argv[cmd_argc++] = CopyString( com_token );
+			//cmd_argv[cmd_argc++] = CopyString( com_token, TAGMALLOC_CMDTOKEN);
+			int len;
+			len = strlen(com_token);
+			if (len+1 + cmd_pointer >= MAX_STRING_CHARS*2)
+			{
+				Com_Printf ("Cmd_TokenizeString: overflow\n");
+				return;
+			}
+			strcpy (cmd_tokenized + cmd_pointer, com_token);
+			cmd_argv[cmd_argc++] = cmd_tokenized + cmd_pointer;
+			cmd_pointer += len+1;
 		}
 	}
 	
@@ -870,15 +1103,15 @@ void Cmd_TokenizeString (char *text, qboolean macroExpand)
 Cmd_Find
 ============
 */
-static cmd_function_t *Cmd_Find( const char *name ) {
+static cmd_function_t *Cmd_Find( const char *name )
+{
 	cmd_function_t *cmd;
 	unsigned int hash;
 
-	hash = Com_HashKey( name, CMD_HASH_SIZE );
+	hash = CmdHashValue( name, CMD_HASH_SIZE );
 	for( cmd=cmd_hash[hash]; cmd; cmd=cmd->hashNext ) {
-		if( !Q_stricmp( cmd->name, name ) ) {
+		if( !Q_stricmp( cmd->name, name ) )
 			return cmd;
-		}
 	}
 
 	return NULL;
@@ -891,7 +1124,7 @@ Cmd_AddCommand
 */
 cvar_t *Cvar_FindVar (const char *var_name);
 
-void Cmd_AddCommand (char *cmd_name, xcommand_t function)
+void Cmd_AddCommand (const char *cmd_name, xcommand_t function)
 {
 	cmd_function_t	*cmd;
 	unsigned int hash;
@@ -910,14 +1143,13 @@ void Cmd_AddCommand (char *cmd_name, xcommand_t function)
 		return;
 	}
 
-	cmd = Z_Malloc (sizeof(cmd_function_t) + strlen(cmd_name) + 1);
-	cmd->name = (char *)((byte *)cmd + sizeof(cmd_function_t));
-	strcpy (cmd->name, cmd_name);
+	cmd = Z_TagMalloc (sizeof(cmd_function_t), TAGMALLOC_CMD);
+	cmd->name = cmd_name;
 	cmd->function = function;
 	cmd->next = cmd_functions;
 	cmd_functions = cmd;
 
-	hash = Com_HashKey( cmd_name, CMD_HASH_SIZE );
+	hash = CmdHashValue( cmd_name, CMD_HASH_SIZE );
 	cmd->hashNext = cmd_hash[hash];
 	cmd_hash[hash] = cmd;
 }
@@ -932,7 +1164,7 @@ void Cmd_RemoveCommand (const char *cmd_name)
 	cmd_function_t	*cmd, **back;
 	unsigned int hash;
 
-	hash = Com_HashKey( cmd_name, CMD_HASH_SIZE );
+	hash = CmdHashValue( cmd_name, CMD_HASH_SIZE );
 	back = &cmd_hash[hash];
 	while( 1 ) {
 		cmd = *back;
@@ -969,103 +1201,29 @@ void Cmd_RemoveCommand (const char *cmd_name)
 
 /*
 ============
-Cmd_CompleteCommand
+Cmd_CommandCompletion
 ============
 */
-char *Cmd_CompleteCommand (const char *partial)
+void Cmd_CommandCompletion( const char *partial, void(*callback)(const char *name, const char *value) )
 {
+	int len;
 	cmd_function_t	*cmd;
-	int				len,i,o,p;
 	cmdalias_t		*a;
-	cvar_t			*cvar;
-	char			*pmatch[1024];
-	qboolean		diff = false;
-	static char		retval[256];
 
-	
 	len = strlen(partial);
+	if(!len)
+		return;
 	
-	if (!len)
-		return NULL;
-		
-	// check for exact match
-	cmd = Cmd_Find(partial);
-	if(cmd)
-		return cmd->name;
-	a = Cmd_AliasFind(partial);
-	if(a)
-		return a->name;
-	cvar = Cvar_FindVar(partial);
-	if(cvar)
-		return cvar->name;
-
-	memset(pmatch, 0, 1024);
-	i=0;
-
-	// check for partial match
-	for (cmd=cmd_functions ; cmd ; cmd=cmd->next)
-		if (!Q_strnicmp (partial,cmd->name, len)) {
-			pmatch[i]=cmd->name;
-			i++;
-		}
-	for (a=cmd_alias ; a ; a=a->next)
-		if (!Q_strnicmp (partial, a->name, len)) {
-			pmatch[i]=a->name;
-			i++;
-		}
-	for (cvar=cvar_vars ; cvar ; cvar=cvar->next)
-		if (!Q_strnicmp (partial,cvar->name, len)) {
-			pmatch[i]=cvar->name;
-			i++;
-		}
-
-	if (i)
-	{
-		if (i == 1)
-			return pmatch[0];
-
-		Com_Printf("]/%s\n",partial);
-		for (o=0; o<i; o++)
-			Com_Printf("   %s\n",pmatch[o]);
-
-		memset(retval, 0, sizeof(retval));
-		p=0;
-
-		while (!diff && p < 255)
-		{
-			retval[p]=pmatch[0][p];
-			for (o=0; o<i; o++) {
-				if (p > strlen(pmatch[o]))
-					continue;
-				if (retval[p] != pmatch[o][p]) {
-					retval[p] = 0;
-					diff=true;
-				}
-			}
-			p++;
-		}
-		return retval;
+	for (cmd=cmd_functions ; cmd ; cmd=cmd->next) {
+		if (!Q_strnicmp (partial, cmd->name, len))
+			callback( cmd->name, NULL );
 	}
 
-	return NULL;
+	for (a=cmd_alias ; a ; a=a->next) {
+		if (!Q_strnicmp (partial, a->name, len))
+			callback( a->name, NULL );
+	}
 }
-
-qboolean Cmd_IsComplete (const char *command)
-{
-
-	// check for exact match
-	if(Cmd_Find(command) != NULL)
-		return true;
-
-	if(Cmd_AliasFind(command) != NULL)
-		return true;
-
-	if(Cvar_FindVar(command) != NULL)
-		return true;
-
-	return false;
-}
-
 
 /*
 ============
@@ -1077,8 +1235,8 @@ FIXME: lookupnoadd the token to speed search?
 */
 void	Cmd_ExecuteString (char *text)
 {	
-	cmd_function_t	*cmd;
-	cmdalias_t		*a;
+	const cmd_function_t	*cmd;
+	const cmdalias_t		*a;
 
 	Cmd_TokenizeString (text, true);
 			
@@ -1092,10 +1250,13 @@ void	Cmd_ExecuteString (char *text)
 	{
 		if (!cmd->function)
 		{	// forward to server command
-			Cmd_ExecuteString (va("cmd %s", text));
+			//Cmd_ExecuteString (va("cmd %s", text));
+			Cmd_ForwardToServer ();
 		}
 		else
+		{
 			cmd->function ();
+		}
 		return;
 	}
 
@@ -1108,7 +1269,7 @@ void	Cmd_ExecuteString (char *text)
 			Com_Printf ("ALIAS_LOOP_COUNT\n");
 			return;
 		}
-		Cbuf_InsertText (va("%s\n", a->value));
+		Cbuf_InsertText (a->value);
 		return;
 	}
 	
@@ -1125,55 +1286,63 @@ void	Cmd_ExecuteString (char *text)
 Cmd_List_f
 ============
 */
-static int cmdsort( const void *_a, const void *_b )
+static int CmdSort( const cmd_function_t *a, const cmd_function_t *b )
 {
-	const cmd_function_t	*a = (const cmd_function_t *)_a;
-	const cmd_function_t	*b = (const cmd_function_t *)_b;
-
 	return strcmp (a->name, b->name);
 }
 
 void Cmd_List_f (void)
 {
-    cmd_function_t  *cmd;
+    const cmd_function_t  *cmd;
     int		i, j, c;
     char	*filter = "*";
-	int		len, count = 0;
+	int		count = 0;
 	cmd_function_t	*sortedList;
 
     c = Cmd_Argc();
-
-    if (c == 2)
+    if (c > 1)
 	    filter = Cmd_Argv(1);
 
 	for (cmd = cmd_functions, i = 0; cmd ; cmd = cmd->next, i++);
 
-	len = i * sizeof(cmd_function_t);
-	sortedList = Z_Malloc (len);
+	sortedList = Z_TagMalloc (i * sizeof(cmd_function_t), TAGMALLOC_CMD);
 	
 	for (cmd = cmd_functions, i = 0; cmd ; cmd = cmd->next, i++)
-	{
 		sortedList[i] = *cmd;
-	}
 
-	qsort (sortedList, i, sizeof(sortedList[0]), (int (*)(const void *, const void *))cmdsort);
+	qsort (sortedList, i, sizeof(sortedList[0]), (int (*)(const void *, const void *))CmdSort);
 
 	for (j = 0; j < i; j++)
 	{
 		cmd = &sortedList[j];
-        if (c == 2 && !Com_WildCmp(filter, cmd->name, 1) && !strstr(cmd->name, filter))
+        if (c > 1 && !Com_WildCmp(filter, cmd->name, true) && !strstr(cmd->name, filter))
 			continue;
 
         Com_Printf("%s\n", cmd->name);
 		count++;
     }
 
-    if (c == 2)
+    if (c > 1)
 		Com_Printf("%i cmds found (%i total cmds)\n", count, i);
     else
 		Com_Printf("%i cmds\n", i);
 
 	Z_Free (sortedList);
+}
+
+/*
+============
+Cmd_MacroList_f
+============
+*/
+static void Cmd_MacroList_f( void ) {
+	const cmd_macro_t	*macro;
+	int					total = 0;
+
+	for( macro = cmd_macros; macro; macro = macro->next, total++ ) {
+		Com_Printf( "%s - \"%s\"\n", macro->name, Cmd_MacroString(macro->name) );
+	}
+	Com_Printf( "%i macros\n", total );
 }
 
 /*
@@ -1184,6 +1353,10 @@ Cmd_Init
 void Cmd_Init (void)
 {
 	// register our commands
+	Cmd_AddCommand( "trigger", Cmd_Trigger_f );
+	Cmd_AddCommand( "untrigger", Cmd_TriggerRemove_f);
+	Cmd_AddCommand( "macrolist", Cmd_MacroList_f );
+
 	Cmd_AddCommand ("cmdlist",Cmd_List_f);
 	Cmd_AddCommand ("exec",Cmd_Exec_f);
 	Cmd_AddCommand ("echo",Cmd_Echo_f);

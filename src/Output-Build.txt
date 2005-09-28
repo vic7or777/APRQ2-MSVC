@@ -1,0 +1,11 @@
+------ Clean started: Project: Q2, Configuration: Release Win32 ------
+
+Deleting intermediate files and output files for project 'Q2', configuration 'Release|Win32'.
+
+
+
+---------------------- Done ----------------------
+
+    Clean: 1 succeeded, 0 failed, 0 skipped
+
+

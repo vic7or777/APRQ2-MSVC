@@ -85,7 +85,7 @@ void x86_TimerInit( unsigned long smallest, unsigned length )
 	}
 
 	bias += smallest;
-	histogram = Z_Malloc( range * sizeof( unsigned long ) );
+	histogram = Z_TagMalloc( range * sizeof( unsigned long ), TAGMALLOC_X86 );
 }
 
 unsigned long *x86_TimerGetHistogram( void )

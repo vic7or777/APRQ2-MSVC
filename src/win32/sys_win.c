@@ -39,7 +39,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 qboolean s_win95;
 
 int			starttime;
-int			ActiveApp;
+qboolean	ActiveApp;
 qboolean	Minimized;
 
 static HANDLE		hinput, houtput;
@@ -73,7 +73,7 @@ void Sys_Error (const char *error, ...)
 	Qcommon_Shutdown ();
 
 	va_start (argptr, error);
-	vsprintf (text, error, argptr);
+	vsnprintf (text, sizeof(text), error, argptr);
 	va_end (argptr);
 
 	MessageBox(NULL, text, "Error", 0 /* MB_OK */ );
@@ -92,10 +92,12 @@ void Sys_Quit (void)
 	timeEndPeriod( 1 );
 
 	CL_Shutdown();
-	Qcommon_Shutdown ();
+
 	CloseHandle (qwclsemaphore);
 	if (dedicated && dedicated->integer)
 		FreeConsole ();
+
+	Qcommon_Shutdown();
 
 // shut down QHOST hooks if necessary
 	DeinitConProc ();
@@ -235,9 +237,9 @@ void Sys_Init (void)
 		Sys_Error ("Couldn't get OS info");
 
 	if (vinfo.dwMajorVersion < 4)
-		Sys_Error ("Quake2 requires windows version 4 or greater");
+		Sys_Error ("%s requires windows version 4 or greater", APPLICATION);
 	if (vinfo.dwPlatformId == VER_PLATFORM_WIN32s)
-		Sys_Error ("Quake2 doesn't run on Win32s");
+		Sys_Error ("%s doesn't run on Win32s", APPLICATION);
 	else if ( vinfo.dwPlatformId == VER_PLATFORM_WIN32_WINDOWS )
 		s_win95 = true;
 
@@ -411,8 +413,8 @@ char *Sys_GetClipboardData( void )
 		{
 			if ( ( cliptext = GlobalLock( hClipboardData ) ) != 0 ) 
 			{
-				data = malloc( GlobalSize( hClipboardData ) + 1 );
-				strcpy( data, cliptext );
+				data = Z_TagMalloc( GlobalSize( hClipboardData ) + 1, TAGMALLOC_CLIPBOARD );
+				Q_strncpyz( data, cliptext, GlobalSize( hClipboardData ) + 1 );
 				GlobalUnlock( hClipboardData );
 			}
 		}
@@ -593,10 +595,6 @@ WinMain
 */
 HINSTANCE	global_hInstance;
 
-#ifdef AVI_EXPORT
-extern cvar_t *avi_fps; // -Maniac
-#endif
-
 int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
     MSG				msg;
@@ -660,17 +658,7 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 		//	_controlfp( ~( _EM_ZERODIVIDE /*| _EM_INVALID*/ ), _MCW_EM );
 		_controlfp( _PC_24, _MCW_PC );
 
-#ifdef AVI_EXPORT
-		if(avi_fps && avi_fps->integer)
-		{
-			curtime += (1000/avi_fps->integer);
-			Qcommon_Frame(1000/avi_fps->integer);
-		}
-		else
-#endif
-		{
-			Qcommon_Frame (time);
-		}
+		Qcommon_Frame (time);
 
 		oldtime = newtime;
 	}

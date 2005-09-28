@@ -128,8 +128,11 @@ cvar_t  *r_novis;
 cvar_t	*r_speeds;
 cvar_t	*r_lightlevel;	//FIXME HACK
 
-cvar_t	*vid_fullscreen;
-cvar_t	*vid_gamma;
+extern cvar_t	*vid_fullscreen;
+extern cvar_t	*vid_gamma;
+cvar_t	*r_customwidth;
+cvar_t	*r_customheight;
+static void R_ModeList_f( void );
 
 //PGM
 cvar_t	*sw_lockpvs;
@@ -243,7 +246,7 @@ void R_Register (void)
 	sw_allow_modex = Cvar_Get( "sw_allow_modex", "1", CVAR_ARCHIVE );
 	sw_clearcolor = Cvar_Get ("sw_clearcolor", "2", 0);
 	sw_drawflat = Cvar_Get ("sw_drawflat", "0", 0);
-	sw_draworder = Cvar_Get ("sw_draworder", "0", 0);
+	sw_draworder = Cvar_Get ("sw_draworder", "0", CVAR_CHEAT);
 	sw_maxedges = Cvar_Get ("sw_maxedges", STRINGER(MAXSTACKSURFACES), 0);
 	sw_maxsurfs = Cvar_Get ("sw_maxsurfs", "0", 0);
 	sw_mipcap = Cvar_Get ("sw_mipcap", "0", 0);
@@ -257,16 +260,19 @@ void R_Register (void)
 
 	r_lefthand = Cvar_Get( "hand", "0", CVAR_USERINFO | CVAR_ARCHIVE );
 	r_speeds = Cvar_Get ("r_speeds", "0", 0);
-	r_fullbright = Cvar_Get ("r_fullbright", "0", 0);
+	r_fullbright = Cvar_Get ("r_fullbright", "0", CVAR_CHEAT);
 	r_drawentities = Cvar_Get ("r_drawentities", "1", 0);
-	r_drawworld = Cvar_Get ("r_drawworld", "1", 0);
+	r_drawworld = Cvar_Get ("r_drawworld", "1", CVAR_CHEAT);
 	r_dspeeds = Cvar_Get ("r_dspeeds", "0", 0);
 	r_lightlevel = Cvar_Get ("r_lightlevel", "0", 0);
 	r_lerpmodels = Cvar_Get( "r_lerpmodels", "1", 0 );
 	r_novis = Cvar_Get( "r_novis", "0", 0 );
 
-	vid_fullscreen = Cvar_Get( "vid_fullscreen", "0", CVAR_ARCHIVE );
-	vid_gamma = Cvar_Get( "vid_gamma", "1.0", CVAR_ARCHIVE );
+	//vid_fullscreen = Cvar_Get( "vid_fullscreen", "0", CVAR_ARCHIVE );
+	//vid_gamma = Cvar_Get( "vid_gamma", "1.0", CVAR_ARCHIVE );
+	r_customwidth = Cvar_Get ("r_customwidth",  "800", CVAR_ARCHIVE);
+	r_customheight = Cvar_Get ("r_customheight", "600", CVAR_ARCHIVE);
+	Cmd_AddCommand( "modelist", R_ModeList_f );
 
 	Cmd_AddCommand ("modellist", Mod_Modellist_f);
 	Cmd_AddCommand( "screenshot", R_ScreenShot_f );
@@ -282,6 +288,7 @@ void R_Register (void)
 
 void R_UnRegister (void)
 {
+	Cmd_RemoveCommand("modelist");
 	Cmd_RemoveCommand( "screenshot" );
 	Cmd_RemoveCommand ("modellist");
 	Cmd_RemoveCommand( "imagelist" );
@@ -525,10 +532,8 @@ void R_DrawEntitiesOnList (void)
 
 		if ( currententity->flags & RF_BEAM )
 		{
-			modelorg[0] = -r_origin[0];
-			modelorg[1] = -r_origin[1];
-			modelorg[2] = -r_origin[2];
-			VectorCopy( vec3_origin, r_entorigin );
+			VectorNegate(r_origin, modelorg);
+			VectorClear(r_entorigin);
 			R_DrawBeam( currententity );
 		}
 		else
@@ -570,10 +575,8 @@ void R_DrawEntitiesOnList (void)
 
 		if ( currententity->flags & RF_BEAM )
 		{
-			modelorg[0] = -r_origin[0];
-			modelorg[1] = -r_origin[1];
-			modelorg[2] = -r_origin[2];
-			VectorCopy( vec3_origin, r_entorigin );
+			VectorNegate(r_origin, modelorg);
+			VectorClear(r_entorigin);
 			R_DrawBeam( currententity );
 		}
 		else
@@ -612,11 +615,8 @@ R_BmodelCheckBBox
 */
 int R_BmodelCheckBBox (float *minmaxs)
 {
-	int			i, *pindex, clipflags;
+	int			i, *pindex, clipflags = 0;
 	vec3_t		acceptpt, rejectpt;
-	float		d;
-
-	clipflags = 0;
 
 	for (i=0 ; i<4 ; i++)
 	{
@@ -630,20 +630,14 @@ int R_BmodelCheckBBox (float *minmaxs)
 		rejectpt[1] = minmaxs[pindex[1]];
 		rejectpt[2] = minmaxs[pindex[2]];
 		
-		d = DotProduct (rejectpt, view_clipplanes[i].normal);
-		d -= view_clipplanes[i].dist;
-
-		if (d <= 0)
+		if (DotProduct (rejectpt, view_clipplanes[i].normal) <= view_clipplanes[i].dist)
 			return BMODEL_FULLY_CLIPPED;
 
 		acceptpt[0] = minmaxs[pindex[3+0]];
 		acceptpt[1] = minmaxs[pindex[3+1]];
 		acceptpt[2] = minmaxs[pindex[3+2]];
 
-		d = DotProduct (acceptpt, view_clipplanes[i].normal);
-		d -= view_clipplanes[i].dist;
-
-		if (d <= 0)
+		if (DotProduct (acceptpt, view_clipplanes[i].normal) <= view_clipplanes[i].dist)
 			clipflags |= (1<<i);
 	}
 
@@ -680,7 +674,7 @@ mnode_t *R_FindTopnode (vec3_t mins, vec3_t maxs)
 		}
 		
 		splitplane = node->plane;
-		sides = BoxOnPlaneSide (mins, maxs, (cplane_t *)splitplane);
+		sides = BOX_ON_PLANE_SIDE(mins, maxs, (cplane_t *)splitplane);
 		
 		if (sides == 3)
 			return node;	// this is the splitter
@@ -724,21 +718,9 @@ void RotatedBBox (vec3_t mins, vec3_t maxs, vec3_t angles, vec3_t tmins, vec3_t 
 
 	for ( i = 0; i < 8; i++ )
 	{
-		if ( i & 1 )
-			tmp[0] = mins[0];
-		else
-			tmp[0] = maxs[0];
-
-		if ( i & 2 )
-			tmp[1] = mins[1];
-		else
-			tmp[1] = maxs[1];
-
-		if ( i & 4 )
-			tmp[2] = mins[2];
-		else
-			tmp[2] = maxs[2];
-
+		tmp[0] = ( i & 1 ) ? mins[0] : maxs[0];
+		tmp[1] = ( i & 2 ) ? mins[1] : maxs[1];
+		tmp[2] = ( i & 4 ) ? mins[2] : maxs[2];
 
 		VectorScale (forward, tmp[0], v);
 		VectorMA (v, -tmp[1], right, v);
@@ -810,7 +792,7 @@ void R_DrawBEntitiesOnList (void)
 		R_RotateBmodel ();
 
 	// calculate dynamic lighting for bmodel
-		R_PushDlights ();
+		R_PushDlights();
 
 		if (topnode->contents == CONTENTS_NODE)
 		{
@@ -1000,7 +982,7 @@ void R_RenderFrame (refdef_t *fd)
 
 	R_MarkLeaves ();	// done here so we know if we're in water
 
-	R_PushDlights ();
+	R_PushWorldDlights(r_worldmodel);
 
 	R_EdgeDrawing ();
 
@@ -1082,6 +1064,65 @@ void R_InitGraphics( int width, int height )
 	R_InitCaches ();
 
 	R_GammaCorrectAndSetPalette( ( const unsigned char *) d_8to24table );
+}
+
+/*
+================
+R_GetModeInfo
+================
+*/
+typedef struct vidmode_s
+{
+	const char *description;
+	int         width, height;
+	int         mode;
+} vidmode_t;
+
+static const vidmode_t r_vidModes[] =
+{
+	{ "Mode 0: 320x240",	 320,  240,	0  },
+	{ "Mode 1: 400x300",	 400,  300,	1  },
+	{ "Mode 2: 512x384",	 512,  384,	2  },
+	{ "Mode 3: 640x480",	 640,  480,	3  },
+	{ "Mode 4: 800x600",	 800,  600,	4  },
+	{ "Mode 5: 960x720",	 960,  720,	5  },
+	{ "Mode 6: 1024x768",	1024,  768,	6  },
+	{ "Mode 7: 1152x864",	1152,  864,	7  },
+	{ "Mode 8: 1280x960",	1280,  960,	8  },
+	{ "Mode 9: 1600x1200",	1600, 1200,	9  },
+	{ "Mode 10: 2048x1536",	2048, 1536,	10 },
+	{ "Mode 11: 1024x480",	1024,  480,	11 },
+	{ "Mode 12: 1280x768",	1280,  768,	12 },
+	{ "Mode 13: 1280x1024",	1280, 1024,	13 }
+};
+
+static const int s_numVidModes = ( sizeof( r_vidModes ) / sizeof( r_vidModes[0] ) );
+
+qboolean R_GetModeInfo( int *width, int *height, int mode )
+{
+	if ( mode < -1 || mode >= s_numVidModes )
+		return false;
+
+	if ( mode == -1 ) {
+		*width = r_customwidth->integer;
+		*height = r_customheight->integer;
+		return true;
+	}
+	*width  = r_vidModes[mode].width;
+	*height = r_vidModes[mode].height;
+
+	return true;
+}
+
+static void R_ModeList_f( void )
+{
+	int i;
+
+	Com_Printf("Mode -1: Custom resolution (%dx%d)\n", r_customwidth->integer, r_customheight->integer);
+	for ( i = 0; i < s_numVidModes; i++ )
+	{
+		Com_Printf("%s\n", r_vidModes[i].description);
+	}
 }
 
 /*
@@ -1287,8 +1328,8 @@ R_SetSky
 ============
 */
 // 3dstudio environment map names
-char	*suf[6] = {"rt", "bk", "lf", "ft", "up", "dn"};
-int	r_skysideimage[6] = {5, 2, 4, 1, 0, 3};
+const char	*suf[6] = {"rt", "bk", "lf", "ft", "up", "dn"};
+const int	r_skysideimage[6] = {5, 2, 4, 1, 0, 3};
 extern	mtexinfo_t		r_skytexinfo[6];
 void R_SetSky (const char *name, float rotate, vec3_t axis)
 {

@@ -26,7 +26,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 R_InitParticleTexture
 ==================
 */
-byte	dottexture[8][8] =
+static const byte	dottexture[8][8] =
 {
 	{0,0,0,0,0,0,0,0},
 	{0,0,1,1,0,0,0,0},
@@ -42,12 +42,12 @@ void R_InitParticleTexture (void)
 {
 	int		x,y;
 	byte	data[8][8][4];
+	byte	data1[16][16][4];
+	int		dx2, dy, d;
 
 	//
 	// particle texture
 	//
-	byte	data1[16][16][4];
-	int		dx2, dy, d;
 
 	for (x = 0; x < 16; x++) {
 		dx2 = x - 8;
@@ -69,9 +69,14 @@ void R_InitParticleTexture (void)
 			data1[y][x][3] = (byte) d;
 		}
 	}
+
 	//r_particletexture = GL_FindImage("pics/particle.tga",it_sprite);
 	//if(!r_particletexture)
 		r_particletexture = GL_LoadPic ("***particle***", (byte *)data1, 16, 16, 0, 32, 0);
+
+	r_shelltexture = GL_FindImage("pics/shell.tga", it_pic);
+	if(!r_shelltexture)
+		r_shelltexture = r_particletexture;
 
 	//
 	// also use this for bad textures, but without alpha
@@ -118,9 +123,8 @@ void GL_ScreenShot_f (void)
 	byte	*buffer;
 	int		i;
 	char	picname[80], checkname[MAX_OSPATH];
-	struct	tm *ntime;
 	char	date[32], map[32] = "\0";
-	time_t	l_time;
+	time_t	clock;
 	qboolean jpg = false;
 
 	if(CL_Mapname()[0])
@@ -136,12 +140,11 @@ void GL_ScreenShot_f (void)
 
 	if(Cmd_Argc() == 1)
 	{
-		time( &l_time );
-		ntime = localtime( &l_time );
-		strftime( date, sizeof(date), "%Y-%m-%d_%H-%M", ntime );
+		time( &clock );
+		strftime( date, sizeof(date), "%Y-%m-%d_%H-%M", localtime(&clock));
 
 		// Find a file name to save it to
-		for (i=0 ; i<=100 ; i++)
+		for (i=0 ; i<100 ; i++)
 		{
 			if(jpg)
 				Com_sprintf (picname, sizeof(picname), "%s%s-%02i.jpg", date, map, i);
@@ -170,13 +173,13 @@ void GL_ScreenShot_f (void)
 	}
 
 	if( jpg ) {
-		buffer = malloc(vid.width * vid.height * 3);
+		buffer = Z_TagMalloc(vid.width * vid.height * 3, TAGMALLOC_RENDER_SCRSHOT);
 		qglReadPixels( 0, 0, vid.width, vid.height, GL_RGB, GL_UNSIGNED_BYTE, buffer);
 
 		if( WriteJPG(checkname, buffer, vid.width, vid.height, gl_screenshot_quality->integer) )
 			Com_Printf( "Wrote %s\n", picname );
 	} else {
-		buffer = malloc(vid.width * vid.height * 3 + 18);
+		buffer = Z_TagMalloc(vid.width * vid.height * 3 + 18, TAGMALLOC_RENDER_SCRSHOT);
 		memset (buffer, 0, 18);
 		qglReadPixels( 0, 0, vid.width, vid.height, GL_RGB, GL_UNSIGNED_BYTE, buffer + 18 ); 
 
@@ -184,7 +187,7 @@ void GL_ScreenShot_f (void)
 			Com_Printf( "Wrote %s\n", picname );
 	}
 
-	free( buffer );
+	Z_Free( buffer );
 } 
 
 /* 
@@ -200,7 +203,6 @@ void GLAVI_ReadFrameData (byte *buffer)
 		return;
 
 	qglReadPixels(0, 0, vid.width, vid.height, GL_BGR_EXT, GL_UNSIGNED_BYTE, buffer);
-	return;
 }
 #endif
 /*
@@ -219,8 +221,7 @@ void GL_Strings_f( void )
 */
 void GL_SetDefaultState( void )
 {
-	//qglClearColor (1,0, 0.5 , 0.5);
-	qglClearColor (0,0,0,1);
+	qglClearColor (1, 0.2, 0, 1);
 	qglCullFace(GL_FRONT);
 	qglEnable(GL_TEXTURE_2D);
 
@@ -235,8 +236,9 @@ void GL_SetDefaultState( void )
 
 	qglColor4f (1,1,1,1);
 
-	qglPolygonMode (GL_FRONT_AND_BACK, GL_FILL);
-	qglShadeModel (GL_SMOOTH);
+	qglPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+	qglShadeModel(GL_SMOOTH);
+	qglDepthMask(GL_TRUE);
 
 	GL_TextureMode( gl_texturemode->string );
 	GL_TextureAlphaMode( gl_texturealphamode->string );

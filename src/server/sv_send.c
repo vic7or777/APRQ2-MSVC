@@ -21,9 +21,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "server.h"
 
-#ifdef AVI_EXPORT
-void AVI_StopExport(void);
-#endif
 
 /*
 =============================================================================
@@ -443,9 +440,6 @@ SV_DemoCompleted
 */
 void SV_DemoCompleted (void)
 {
-#ifdef AVI_EXPORT
-	AVI_StopExport();
-#endif
 	if (sv.demofile)
 	{
 		fclose (sv.demofile);

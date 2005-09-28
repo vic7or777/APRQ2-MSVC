@@ -39,8 +39,8 @@ cvar_t		*vid_fullscreen;
 // Global variables used internally by this module
 viddef_t	viddef;				// global video state; used by other modules
 
-qboolean vid_restart = false;
-qboolean vid_active = false;
+static qboolean vid_restart = false;
+static qboolean vid_active = false;
 
 #define VID_NUM_MODES ( sizeof( vid_modes ) / sizeof( vid_modes[0] ) )
 
@@ -59,45 +59,6 @@ cause the entire video mode and refresh DLL to be reset on the next frame.
 void VID_Restart_f (void)
 {
 	vid_restart = true;
-}
-
-/*
-** VID_GetModeInfo
-*/
-typedef struct vidmode_s
-{
-	const char *description;
-	int         width, height;
-	int         mode;
-} vidmode_t;
-
-vidmode_t vid_modes[] =
-{
-	{ "Mode 0: 320x240",	 320,  240,	0  },
-	{ "Mode 1: 400x300",	 400,  300,	1  },
-	{ "Mode 2: 512x384",	 512,  384,	2  },
-	{ "Mode 3: 640x480",	 640,  480,	3  },
-	{ "Mode 4: 800x600",	 800,  600,	4  },
-	{ "Mode 5: 960x720",	 960,  720,	5  },
-	{ "Mode 6: 1024x768",	1024,  768,	6  },
-	{ "Mode 7: 1152x864",	1152,  864,	7  },
-	{ "Mode 8: 1280x960",	1280,  960,	8  },
-	{ "Mode 9: 1600x1200",	1600, 1200,	9  },
-	{ "Mode 10: 2048x1536",	2048, 1536,	10 },
-	{ "Mode 11: 1024x480",	1024,  480,	11 },
-	{ "Mode 12: 1280x768",	1280,  768,	12 },
-	{ "Mode 13: 1280x1024",	1280, 1024,	13 }
-};
-
-qboolean VID_GetModeInfo( int *width, int *height, int mode )
-{
-	if ( mode < 0 || mode >= VID_NUM_MODES )
-		return false;
-
-	*width  = vid_modes[mode].width;
-	*height = vid_modes[mode].height;
-
-	return true;
 }
 
 /*
@@ -137,8 +98,6 @@ void VID_CheckChanges (void)
 
 		Com_Printf( "--------- [Loading Renderer] ---------\n" );
 
-		Swap_Init ();
-
 		if ( R_Init( 0, 0 ) == -1 )
 		{
 			R_Shutdown();
@@ -167,7 +126,7 @@ void VID_Init (void)
 	vid_xpos = Cvar_Get ("vid_xpos", "3", CVAR_ARCHIVE);
 	vid_ypos = Cvar_Get ("vid_ypos", "22", CVAR_ARCHIVE);
 	vid_fullscreen = Cvar_Get ("vid_fullscreen", "0", CVAR_ARCHIVE);
-	vid_gamma = Cvar_Get( "vid_gamma", "1", CVAR_ARCHIVE );
+	vid_gamma = Cvar_Get( "vid_gamma", "1.0", CVAR_ARCHIVE );
 
 	/* Add some console commands that we want to handle */
 	Cmd_AddCommand ("vid_restart", VID_Restart_f);

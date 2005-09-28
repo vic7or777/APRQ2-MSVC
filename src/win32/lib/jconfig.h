@@ -1,4 +1,4 @@
-/* jconfig.vc --- jconfig.h for Microsoft Visual C++ on Windows 95 or NT. */
+/* jconfig.vc --- jconfig.h for Microsoft Visual C++ and LCC on Windows 95 or NT. */
 /* see jconfig.doc for explanations */
 
 #define HAVE_PROTOTYPES
@@ -16,11 +16,10 @@
 #undef INCOMPLETE_TYPES_BROKEN
 
 /* Define "boolean" as unsigned char, not int, per Windows custom */
-#ifndef __RPCNDR_H__		/* don't conflict if rpcndr.h already read */
+//#ifndef __RPCNDR_H__		/* don't conflict if rpcndr.h already read */
 typedef unsigned char boolean;
-#endif
+//#endif
 #define HAVE_BOOLEAN		/* prevent jmorecfg.h from redefining it */
-
 
 #ifdef JPEG_INTERNALS
 

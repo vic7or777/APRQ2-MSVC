@@ -277,20 +277,20 @@ void CL_BaseMove (usercmd_t *cmd)
 	VectorCopy (cl.viewangles, cmd->angles);
 	if (in_strafe.state & 1)
 	{
-		cmd->sidemove += cl_sidespeed->value * CL_KeyState (&in_right);
-		cmd->sidemove -= cl_sidespeed->value * CL_KeyState (&in_left);
+		cmd->sidemove += (int)(cl_sidespeed->value * CL_KeyState (&in_right));
+		cmd->sidemove -= (int)(cl_sidespeed->value * CL_KeyState (&in_left));
 	}
 
-	cmd->sidemove += cl_sidespeed->value * CL_KeyState (&in_moveright);
-	cmd->sidemove -= cl_sidespeed->value * CL_KeyState (&in_moveleft);
+	cmd->sidemove += (int)(cl_sidespeed->value * CL_KeyState (&in_moveright));
+	cmd->sidemove -= (int)(cl_sidespeed->value * CL_KeyState (&in_moveleft));
 
-	cmd->upmove += cl_upspeed->value * CL_KeyState (&in_up);
-	cmd->upmove -= cl_upspeed->value * CL_KeyState (&in_down);
+	cmd->upmove += (int)(cl_upspeed->value * CL_KeyState (&in_up));
+	cmd->upmove -= (int)(cl_upspeed->value * CL_KeyState (&in_down));
 
 	if (! (in_klook.state & 1) )
 	{	
-		cmd->forwardmove += cl_forwardspeed->value * CL_KeyState (&in_forward);
-		cmd->forwardmove -= cl_forwardspeed->value * CL_KeyState (&in_back);
+		cmd->forwardmove += (int)(cl_forwardspeed->value * CL_KeyState (&in_forward));
+		cmd->forwardmove -= (int)(cl_forwardspeed->value * CL_KeyState (&in_back));
 	}	
 
 //
@@ -331,8 +331,6 @@ CL_FinishMove
 void CL_FinishMove (usercmd_t *cmd)
 {
 	int		ms;
-	int		i;
-
 //
 // figure button bits
 //	
@@ -348,14 +346,15 @@ void CL_FinishMove (usercmd_t *cmd)
 		cmd->buttons |= BUTTON_ANY;
 
 	// send milliseconds of time to apply the move
-	ms = cls.frametime * 1000;
+	ms = (int)(cls.frametime * 1000);
 	if (ms > 250)
 		ms = 100;		// time was unreasonable
 	cmd->msec = ms;
 
 	CL_ClampPitch ();
-	for (i=0 ; i<3 ; i++)
-		cmd->angles[i] = ANGLE2SHORT(cl.viewangles[i]);
+	cmd->angles[0] = ANGLE2SHORT(cl.viewangles[0]);
+	cmd->angles[1] = ANGLE2SHORT(cl.viewangles[1]);
+	cmd->angles[2] = ANGLE2SHORT(cl.viewangles[2]);
 
 	cmd->impulse = in_impulse;
 	in_impulse = 0;
@@ -376,7 +375,7 @@ usercmd_t CL_CreateCmd (void)
 	frame_msec = sys_frame_time - old_sys_frame_time;
 	if (frame_msec < 1)
 		frame_msec = 1;
-	if (frame_msec > 200)
+	else if (frame_msec > 200)
 		frame_msec = 200;
 	
 	// get basic movement from keyboard
@@ -459,7 +458,7 @@ void CL_SendCmd (void)
 	int			i;
 	usercmd_t	*cmd, *oldcmd;
 	usercmd_t	nullcmd;
-	int			checksumIndex;
+	int			checksumIndex = 0;
 	static int	prevTime;
 	int			time;
 
@@ -480,7 +479,7 @@ void CL_SendCmd (void)
 	if ( cls.state == ca_connected)
 	{
 		if (cls.netchan.message.cursize	|| curtime - cls.netchan.last_sent > 1000 )
-			Netchan_Transmit (&cls.netchan, 0, data);	
+			Netchan_Transmit (&cls.netchan, 0, NULL);	
 		return;
 	}
 
@@ -505,8 +504,15 @@ void CL_SendCmd (void)
 	MSG_WriteByte (&buf, clc_move);
 
 	// save the position for a checksum byte
-	checksumIndex = buf.cursize;
-	MSG_WriteByte (&buf, 0);
+#ifdef R1Q2_PROTOCOL
+	if (cls.serverProtocol == ORIGINAL_PROTOCOL_VERSION)
+	{
+#endif
+		checksumIndex = buf.cursize;
+		MSG_WriteByte (&buf, 0);
+#ifdef R1Q2_PROTOCOL
+	}
+#endif
 
 	// let the server know what the last frame we
 	// got was, so the next message can be delta compressed
@@ -533,9 +539,16 @@ void CL_SendCmd (void)
 	MSG_WriteDeltaUsercmd (&buf, oldcmd, cmd);
 
 	// calculate a checksum over the move commands
+#ifdef R1Q2_PROTOCOL
+	if (cls.serverProtocol == ORIGINAL_PROTOCOL_VERSION)
+	{
+#endif
 	buf.data[checksumIndex] = COM_BlockSequenceCRCByte(
 		buf.data + checksumIndex + 1, buf.cursize - checksumIndex - 1,
 		cls.netchan.outgoing_sequence);
+#ifdef R1Q2_PROTOCOL
+	}
+#endif
 
 	//cl_maxpackets code from q2pro
 	// Hack from fuzzquake2 - we simply drop outgoing packets
@@ -546,16 +559,15 @@ void CL_SendCmd (void)
 	// and this will probably result in prediction error (see sv_user.c)
 	//
 	if( cl_maxpackets->integer ) {
-		if( cl_maxpackets->integer < cl_maxfps->integer/3 ) {
+		if( cl_maxpackets->integer < cl_maxfps->integer/3 )
 			Cvar_SetValue( "cl_maxpackets", cl_maxfps->integer/3 );
-		} else if( cl_maxpackets->value > cl_maxfps->integer ) {
+		else if( cl_maxpackets->value > cl_maxfps->integer )
 			Cvar_SetValue( "cl_maxpackets", cl_maxfps->integer );
-		}
+
 
 		time = cls.realtime;
-		if( prevTime > time ) {
+		if( prevTime > time )
 			prevTime = time;
-		}
 
 		if( !cls.netchan.message.cursize && time - prevTime < 1000 / cl_maxpackets->integer ) {
 			// drop the packet, saving reliable contents

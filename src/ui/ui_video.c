@@ -27,7 +27,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define REF_OPENGLX	0
 #define REF_MESA3DGLX 1
 
-extern qboolean vid_restart;
+void VID_Restart_f (void);
 extern cvar_t *vid_fullscreen;
 extern cvar_t *vid_gamma;
 extern cvar_t *scr_viewsize;
@@ -44,6 +44,7 @@ extern cvar_t *sw_stipplealpha;
 #endif
 extern void M_ForceMenuOff( void );
 
+void VID_MenuInit( void );
 /*
 ====================================================================
 
@@ -51,7 +52,7 @@ MENU INTERACTION
 
 ====================================================================
 */
-
+#define RMODES 14
 static menuframework_s  s_video_menu;
 
 static menulist_s		s_mode_list;
@@ -111,9 +112,15 @@ static void ApplyChanges( void *unused )
 	Cvar_SetValue( "gl_finish", s_finish_box.curvalue );
 
 #ifndef GL_QUAKE
-	Cvar_SetValue( "sw_mode", s_mode_list.curvalue );
+	if(s_mode_list.curvalue == RMODES)
+		Cvar_SetValue( "sw_mode", -1 );
+	else
+		Cvar_SetValue( "sw_mode", s_mode_list.curvalue );
 #else
-	Cvar_SetValue( "gl_mode", s_mode_list.curvalue );
+	if(s_mode_list.curvalue == RMODES)
+		Cvar_SetValue( "gl_mode", -1 );
+	else
+		Cvar_SetValue( "gl_mode", s_mode_list.curvalue );
 
 	switch ( s_ref_list.curvalue )
 	{
@@ -138,7 +145,7 @@ static void ApplyChanges( void *unused )
 #endif
 	}
 	if ( gl_driver->modified )
-		vid_restart = true;
+		VID_Restart_f ();
 #endif
 	/*
 	** update appropriate stuff if we're running OpenGL and gamma
@@ -147,13 +154,10 @@ static void ApplyChanges( void *unused )
 #if defined(GL_QUAKE) && defined(_WIN32)
 		if ( vid_gamma->modified )
 		{
-			vid_restart = true;
-			if ( stricmp( gl_driver->string, "3dfxgl" ) == 0 )
+			if ( Q_stricmp( gl_driver->string, "3dfxgl" ) == 0 )
 			{
 				char envbuffer[1024];
 				float g;
-
-				vid_restart = true;
 
 				g = 2.00 * ( 0.8 - ( vid_gamma->value - 0.5 ) ) + 1.0F;
 				Com_sprintf( envbuffer, sizeof(envbuffer), "SSTV2_GAMMA=%f", g );
@@ -163,6 +167,7 @@ static void ApplyChanges( void *unused )
 
 				vid_gamma->modified = false;
 			}
+			VID_Restart_f ();
 		}
 #endif
 
@@ -217,6 +222,7 @@ void VID_MenuInit( void )
 		"[1024 480 ]",
 		"[1280 768 ]",
 		"[1280 1024]",
+		"[Custom   ]",
 		0
 	};
 	static const char *refs[] =
@@ -241,9 +247,15 @@ void VID_MenuInit( void )
 	s_screensize_slider.curvalue = scr_viewsize->integer/10;
 
 #ifndef GL_QUAKE
-	s_mode_list.curvalue = sw_mode->integer;
+	if(sw_mode->integer == -1)
+		s_mode_list.curvalue = RMODES;
+	else
+		s_mode_list.curvalue = sw_mode->integer;
 #else
-	s_mode_list.curvalue = gl_mode->integer;
+	if(gl_mode->integer == -1)
+		s_mode_list.curvalue = RMODES;
+	else
+		s_mode_list.curvalue = gl_mode->integer;
 
 # ifdef _WIN32
 	if ( strcmp( gl_driver->string, "3dfxgl" ) == 0 )

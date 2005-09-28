@@ -27,78 +27,47 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 ResampleSfx
 ================
 */
-void ResampleSfx (sfxcache_t *sc, byte *data, char *name)
+static void ResampleSfx (sfxcache_t *sc, int inwidth, byte *data)
 {
-	int i, srclength, outcount, fracstep, chancount;
-	int	samplefrac, srcsample, srcnextsample;
+	int i, outcount, fracstep;
+	int	sample, samplefrac, srcsample;
+	float	stepscale;
 
-	// this is usually 0.5 (128), 1 (256), or 2 (512)
-	fracstep = ((double) sc->speed / (double) dma.speed) * 256.0;
+	stepscale = (float)sc->speed / (float)dma.speed; // this is usually 0.5, 1, or 2
 
-	chancount = sc->channels - 1;
-	srclength = sc->length / sc->channels;
-	outcount = (double) sc->length * (double) dma.speed / (double) sc->speed;
-
+	outcount = sc->length / stepscale;
 	sc->length = outcount;
 	if (sc->loopstart != -1)
-		sc->loopstart = (double) sc->loopstart * (double) dma.speed / (double) sc->speed;
+		sc->loopstart = sc->loopstart / stepscale;
 
 	sc->speed = dma.speed;
+	if (s_loadas8bit->integer)
+		sc->width = 1;
 
 // resample / decimate to the current source rate
-	if (fracstep == 256)
+	if (stepscale == 1 && inwidth == 1 && sc->width == 1)
 	{
-		if (sc->width == 2)
-			for (i = 0; i < srclength; i++)
-				((short *)sc->data)[i] = LittleShort (((short *)data)[i]);
-		else // 8bit
-			for (i = 0; i < srclength; i++)
-				((signed char *)sc->data)[i] = ((unsigned char *)data)[i] - 128;
+		for (i=0 ; i<outcount ; i++)
+			((signed char *)sc->data)[i]
+			= (int)( (unsigned char)(data[i]) - 128);
 	}
 	else
 	{
-		int j, a, b, sample;
-
 // general case
-		Com_DPrintf("ResampleSfx: resampling sound %s\n", name);
 		samplefrac = 0;
-		srcsample = 0;
-		srcnextsample = sc->channels;
-		outcount *= sc->channels;
-
-#define RESAMPLE_AND_ADVANCE	\
-				sample = (((b - a) * (samplefrac & 255)) >> 8) + a; \
-				if (j == chancount) \
-				{ \
-					samplefrac += fracstep; \
-					srcsample = (samplefrac >> 8) << chancount; \
-					srcnextsample = srcsample + sc->channels; \
-				}
-
-		if (sc->width == 2)
+		fracstep = stepscale*256;
+		for (i=0 ; i<outcount ; i++)
 		{
-			short *out = (void *)sc->data, *in = (void *)data;
-
-			for (i = 0, j = 0; i < outcount; i++, j = i & chancount)
-			{
-				a = LittleShort (in[srcsample + j]);
-				b = ((srcnextsample < srclength) ? LittleShort (in[srcnextsample + j]) : 0);
-				RESAMPLE_AND_ADVANCE;
-				*out++ = (short)sample;
-			}
-		}
-		else
-		{
-			signed char *out = (void *)sc->data;
-			unsigned char *in = (void *)data;
-
-			for (i = 0, j = 0; i < outcount; i++, j = i & chancount)
-			{
-				a = (int)in[srcsample + j] - 128;
-				b = ((srcnextsample < srclength) ? (int)in[srcnextsample + j] - 128 : 0);
-				RESAMPLE_AND_ADVANCE;
-				*out++ = (signed char)sample;
-			}
+			srcsample = samplefrac >> 8;
+			samplefrac += fracstep;
+			if (inwidth == 2)
+				sample = LittleShort ( ((short *)data)[srcsample] );
+			else
+				sample = (int)( (unsigned char)(data[srcsample]) - 128) << 8;
+			if (sc->width == 2)
+				((short *)sc->data)[i] = sample;
+			else
+				((signed char *)sc->data)[i] = sample >> 8;
 		}
 	}
 }
@@ -121,7 +90,7 @@ sfxcache_t *S_LoadSound (sfx_t *s)
 	int		size;
 	char	*name;
 
-	if (!s->name[0] || s->name[0] == '*')
+	if (s->name[0] == '*')
 		return NULL;
 
 // see if still in memory
@@ -151,16 +120,16 @@ sfxcache_t *S_LoadSound (sfx_t *s)
 	info = GetWavinfo (s->name, data, size);
 	if (info.channels != 1)
 	{
-		Com_Printf ("%s is a stereo sample\n",s->name);
+		Com_Printf ("%s is a stereo sample\n", s->name);
 		FS_FreeFile (data);
 		return NULL;
 	}
 
 	// calculate resampled length
-	len = (int) ((double) info.samples * ((double) dma.speed  / (double) info.rate));
+	len = (int)((double)info.samples * ((double)dma.speed / (double)info.rate));
 	len = len * info.width * info.channels;
 
-	sc = s->cache = Z_Malloc (len + sizeof(sfxcache_t));
+	sc = s->cache = Z_TagMalloc (len + sizeof(sfxcache_t), TAGMALLOC_CLIENT_SOUNDCACHE);
 	if (!sc)
 	{
 		FS_FreeFile (data);
@@ -173,7 +142,7 @@ sfxcache_t *S_LoadSound (sfx_t *s)
 	sc->width = info.width;
 	sc->channels = info.channels;
 
-	ResampleSfx (sc, data + info.dataofs, s->name);
+	ResampleSfx (sc, sc->width, data + info.dataofs);
 
 	FS_FreeFile (data);
 
@@ -190,15 +159,13 @@ WAV loading
 ===============================================================================
 */
 
+static byte		*data_p;
+static byte 	*iff_end;
+static byte 	*last_chunk;
+static byte 	*iff_data;
+static int 		iff_chunk_len;
 
-byte	*data_p;
-byte 	*iff_end;
-byte 	*last_chunk;
-byte 	*iff_data;
-int 	iff_chunk_len;
-
-
-short GetLittleShort(void)
+static short GetLittleShort(void)
 {
 	short val = 0;
 	val = *data_p;
@@ -207,18 +174,18 @@ short GetLittleShort(void)
 	return val;
 }
 
-int GetLittleLong(void)
+static int GetLittleLong(void)
 {
 	int val = 0;
 	val = *data_p;
-	val = val + (*(data_p+1)<<8);
-	val = val + (*(data_p+2)<<16);
-	val = val + (*(data_p+3)<<24);
+	val += (*(data_p+1)<<8);
+	val += (*(data_p+2)<<16);
+	val += (*(data_p+3)<<24);
 	data_p += 4;
 	return val;
 }
 
-void FindNextChunk(char *name)
+static void FindNextChunk(const char *name)
 {
 	while (1)
 	{
@@ -229,8 +196,9 @@ void FindNextChunk(char *name)
 			data_p = NULL;
 			return;
 		}
-		
+
 		data_p += 4;
+
 		iff_chunk_len = GetLittleLong();
 		if (iff_chunk_len < 0)
 		{
@@ -245,7 +213,7 @@ void FindNextChunk(char *name)
 	}
 }
 
-void FindChunk(char *name)
+static void FindChunk(const char *name)
 {
 	last_chunk = iff_data;
 	FindNextChunk (name);
@@ -256,14 +224,10 @@ void FindChunk(char *name)
 GetWavinfo
 ============
 */
-wavinfo_t GetWavinfo (char *name, byte *wav, int wavlength)
+wavinfo_t GetWavinfo (const char *name, byte *wav, int wavlength)
 {
-	wavinfo_t	info;
-	int     i;
-	int     format;
-	int		samples;
-
-	memset (&info, 0, sizeof(info));
+	wavinfo_t	info = {0};
+	int     i, format, samples;
 
 	if (!wav)
 		return info;
@@ -333,7 +297,7 @@ wavinfo_t GetWavinfo (char *name, byte *wav, int wavlength)
 	}
 
 	data_p += 4;
-	samples = GetLittleLong () / info.width;
+	samples = GetLittleLong () / info.width / info.channels;
 
 	if (info.samples)
 	{

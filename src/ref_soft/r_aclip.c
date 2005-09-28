@@ -186,11 +186,10 @@ void R_Alias_clip_bottom (finalvert_t *pfv0, finalvert_t *pfv1,
 int R_AliasClip (finalvert_t *in, finalvert_t *out, int flag, int count,
 	void(*clip)(finalvert_t *pfv0, finalvert_t *pfv1, finalvert_t *out) )
 {
-	int			i,j,k;
+	int			i, j, k = 0;
 	int			flags, oldflags;
 	
 	j = count-1;
-	k = 0;
 	for (i=0 ; i<count ; j = i, i++)
 	{
 		oldflags = in[j].flags & flag;

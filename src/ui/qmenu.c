@@ -41,9 +41,6 @@ extern viddef_t viddef;
 #define VID_WIDTH viddef.width
 #define VID_HEIGHT viddef.height
 
-#define Draw_Char Draw_Char
-#define Draw_Fill Draw_Fill
-
 void Action_DoEnter( menuaction_s *a )
 {
 	if ( a->generic.callback )
@@ -219,13 +216,13 @@ qboolean Field_Key( menufield_s *f, int key )
 		{
 			strtok( cbd, "\n\r\b" );
 
-			strncpy( f->buffer, cbd, f->length - 1 );
+			Q_strncpyz( f->buffer, cbd, f->length );
 			f->cursor = strlen( f->buffer );
 			f->visible_offset = f->cursor - f->visible_length;
 			if ( f->visible_offset < 0 )
 				f->visible_offset = 0;
 
-			free( cbd );
+			Z_Free( cbd );
 		}
 		return true;
 	}
@@ -447,42 +444,31 @@ void Menu_DrawStatusBar( const char *string )
 
 void Menu_DrawString( int x, int y, const char *string )
 {
-	unsigned i;
-
-	for ( i = 0; i < strlen( string ); i++ )
-	{
-		Draw_Char( ( x + i*8 ), y, string[i], COLOR_WHITE, 1 );
-	}
+	DrawString(x, y, string);
 }
 
 void Menu_DrawStringDark( int x, int y, const char *string )
 {
-	unsigned i;
-
-	for ( i = 0; i < strlen( string ); i++ )
-	{
-		Draw_Char( ( x + i*8 ), y, string[i] + 128, COLOR_WHITE, 1 );
-	}
+	DrawAltString(x, y, string);
 }
 
 void Menu_DrawStringR2L( int x, int y, const char *string )
 {
 	unsigned i;
+	int len = strlen(string);
 
-	for ( i = 0; i < strlen( string ); i++ )
-	{
-		Draw_Char( ( x - i*8 ), y, string[strlen(string)-i-1], COLOR_WHITE, 1 );
-	}
+	for ( i = 0; i < len; i++ )
+		Draw_Char( ( x - i*8 ), y, string[len-i-1], COLOR_WHITE, 1 );
+
 }
 
 void Menu_DrawStringR2LDark( int x, int y, const char *string )
 {
-	unsigned i;
+	int i, len = strlen(string);
 
-	for ( i = 0; i < strlen( string ); i++ )
-	{
-		Draw_Char( ( x - i*8 ), y, string[strlen(string)-i-1]+128, COLOR_WHITE, 1 );
-	}
+	for ( i = 0; i < len; i++ )
+		Draw_Char( ( x - i*8 ), y, string[len-i-1]+128, COLOR_WHITE, 1 );
+
 }
 
 void *Menu_ItemAtCursor( menuframework_s *m )
@@ -551,34 +537,33 @@ void Menulist_DoEnter( menulist_s *l )
 
 static void DrawBoarder (int x, int y, int w, int h, int c, int s)
 {
-	Draw_Fill( x,   y,  w, s, c );
-	Draw_Fill( x,  y+h-s, w, s, c );
-	Draw_Fill( x,   y,  s, h, c );
-	Draw_Fill( x+w-s, y,  s, h, c );
+	Draw_Fill( x,		y,		w, s, c );
+	Draw_Fill( x,		y+h-s,	w, s, c );
+	Draw_Fill( x,		y,		s, h, c );
+	Draw_Fill( x+w-s,	y,		s, h, c );
 }
 
 #define MLIST_SPACING	10
 #define MLIST_BSIZE 3
 #define MLIST_SSIZE 16
 
+
+void MenuList_Init( menulist_s *l )
+{
+	l->maxItems = (l->height-2*MLIST_BSIZE) / MLIST_SPACING;
+	l->height  -= (l->height-2*MLIST_BSIZE) % MLIST_SPACING;
+}
+
 void MenuList_Draw( menulist_s *l )
 {
-	const char **n;
 	int y = l->generic.y + l->generic.parent->y;
 	int x = l->generic.x + l->generic.parent->x;
-	int width = l->width;
-	int height = l->height;
-	int i;
-	int numItems = l->count;
-	int maxItems = 0;
-	char buffer[MAX_QPATH];
-	int pituus = 100, px = 0;
+	int width = l->width, height = l->height;
+	int numItems = l->count, maxItems = l->maxItems;
+	const char **n;
+	char buffer[128];
+	int i, pituus = 100, px = 0;
 
-	maxItems = (height-2*MLIST_BSIZE) / MLIST_SPACING;
-
-	n = l->itemnames + l->prestep;
-
-	height = maxItems * MLIST_SPACING + 2*MLIST_BSIZE;
 	DrawBoarder (x, y, width, height, 215, MLIST_BSIZE);
 	x += MLIST_BSIZE;
 	y += MLIST_BSIZE;
@@ -598,63 +583,58 @@ void MenuList_Draw( menulist_s *l )
 	else
 		maxItems = numItems;
 
+	n = l->itemnames + l->prestep;
+
 	y += 1;
 	for( i=0 ; i<maxItems; i++ )
 	{
-		if( n - l->itemnames == l->curvalue ) {
+		if( n - l->itemnames == l->curvalue )
 			Draw_Fill( x, y-1, width, 10, 16 );
-		}
 
 		Q_strncpyz( buffer, *n, sizeof( buffer ) );
-		if(strlen(buffer) > (width/8)) {
+		if(strlen(buffer) > (width/8))
 			strcpy( buffer + (width/8) - 3, "..." );
-		}
 
 		DrawString( x, y, buffer );
 		y += MLIST_SPACING;
 
 		n++;
-		if( !*n ) {
+		if( !*n )
 			break;
-		}
 	}
 }
 
-int MenuList_HitTest( menulist_s *l, int mx, int my ) {
-	const char **n;
+int MenuList_HitTest( menulist_s *l, int mx, int my )
+{
 	int y = l->generic.y + l->generic.parent->y + MLIST_BSIZE;
 	int x = l->generic.x + l->generic.parent->x + MLIST_BSIZE;
 	int width = l->width - (MLIST_BSIZE * 2);
 	int height = l->height - (MLIST_BSIZE * 2);
-	int i;
-	int numItems = l->count;
-	int maxItems = 0;
-	int sbheight, sby;
+	int numItems = l->count, maxItems = l->maxItems;
+	const char **n;
+	int i, sbheight, sby;
 	
 	if(!numItems)
 		return -1;
-
-	maxItems = height / MLIST_SPACING;
-
-	n = l->itemnames + l->prestep;
 
 	if(numItems > maxItems)
 	{
 		sbheight = (double)height/100*((double)maxItems / (double)numItems * 100);
 		sby = (double)height/100*((double)l->prestep / (double)numItems * 100);
 		width -= MLIST_SSIZE;
-		if(mx >= x + width && mx  <= x + width + MLIST_SSIZE &&
-		   my >= y+sby+1 && my <= y+sby + sbheight)
+		if(mx >= x + width && mx <= x + width + MLIST_SSIZE &&
+		   my >= y + sby+1 && my <= y + sby + sbheight)
 		   return -2;
 
 	}
 	else
 		maxItems = numItems;
 
+	n = l->itemnames + l->prestep;
 	for( i=0 ; i<maxItems ; i++ ) {
 
-		if( mx >= x && mx <= x + width &&
-			my >= y - 1 && my <= y + MLIST_SPACING )
+		if( mx >= x   && mx <= x + width &&
+			my >= y-1 && my <= y + MLIST_SPACING )
 		{
 			return n - l->itemnames;
 		}
@@ -662,9 +642,8 @@ int MenuList_HitTest( menulist_s *l, int mx, int my ) {
 		y += MLIST_SPACING;
 
 		n++;
-		if( !*n ) {
+		if( !*n )
 			break;
-		}
 	}
 
 	return -1;
@@ -678,15 +657,14 @@ void List_MoveB ( menulist_s *l, int moy, int my)
 	int y = l->generic.y + l->generic.parent->y + MLIST_BSIZE;
 	int height = l->height - (MLIST_BSIZE * 2);
 	int numItems = l->count;
-	int maxItems;
+	int maxItems = l->maxItems;
 	int count;
 	static double remainders = 0;
 
-	maxItems = height / MLIST_SPACING;
-	clamp(maxItems, 0, numItems);
-
 	if(!my)
 		return;
+
+	clamp(maxItems, 0, numItems);
 
 	if(moy <= y+2)
 	{
@@ -699,7 +677,7 @@ void List_MoveB ( menulist_s *l, int moy, int my)
 		return;
 	}
 
-	remainders += (double)numItems/100 * ((double)my / (double) height * 100);
+	remainders += (double)numItems/100 * ((double)my / (double)height * 100);
 	count = (int)remainders;
 	remainders -= count;
 
@@ -713,54 +691,50 @@ extern qboolean bselected;
 qboolean List_Key ( menulist_s *l, int key)
 {
 	int i;
-	int maxItems = (l->height - (MLIST_BSIZE * 2))/MLIST_SPACING;
+	int maxItems = l->maxItems;
+
+	if (!l->count)
+		return true;
 
 	clamp(maxItems, 0, l->count);
 
 	switch( key ) {
 	case K_UPARROW:
 	case K_KP_UPARROW:
-		if (!l->count)
-			return true;
-		l->curvalue--;
-		if( l->curvalue < 0 ) {
-			l->curvalue = 0;
-		}
-		if(l->curvalue < l->prestep) {
-			l->prestep = l->curvalue;
-		}
-		else if(l->curvalue + 1 > l->prestep + maxItems) {
-			l->prestep = l->curvalue + 1 - maxItems;
+		if( l->curvalue > 0)
+		{
+			l->curvalue--;
+
+			if(l->curvalue < l->prestep)
+				l->prestep = l->curvalue;
+			else if(l->curvalue + 1 > l->prestep + maxItems)
+				l->prestep = l->curvalue + 1 - maxItems;
 		}
 		return true;
 	case K_DOWNARROW:
 	case K_KP_DOWNARROW:
-		if (!l->count)
-			return true;
-		l->curvalue++;
-		if( l->curvalue > l->count - 1) {
-			l->curvalue = l->count - 1;
-		}
-		if(l->curvalue < l->prestep) {
-			l->prestep = l->curvalue;
-		}
-		else if(l->curvalue + 1 > l->prestep + maxItems) {
-			l->prestep = l->curvalue + 1 - maxItems;
+		if(l->curvalue < l->count - 1)
+		{
+			l->curvalue++;
+
+			if(l->curvalue < l->prestep)
+				l->prestep = l->curvalue;
+			else if(l->curvalue + 1 > l->prestep + maxItems)
+				l->prestep = l->curvalue + 1 - maxItems;
 		}
 		return true;
 	case K_MWHEELUP:
 		l->prestep -= 3;
-		if( l->prestep < 0 ) {
+		if( l->prestep < 0 )
 			l->prestep = 0;
-		}
+
 		return true;
 	case K_MWHEELDOWN:
 		if(l->count > maxItems)
 		{
 			l->prestep += 3;
-			if( l->prestep > l->count - maxItems ) {
+			if( l->prestep > l->count - maxItems )
 				l->prestep = l->count - maxItems;
-			}
 		}
 		return true;
 	case K_HOME:
@@ -769,22 +743,19 @@ qboolean List_Key ( menulist_s *l, int key)
 		return true;
 	case K_END:
 	case K_KP_END:
-		if(l->count > maxItems) {
+		if(l->count > maxItems)
 			l->prestep = l->count - maxItems;
-		}
 		return true;
 	case K_PGUP:
-		l->prestep = l->prestep - maxItems;
-		if(l->prestep < 0) {
+		l->prestep -= maxItems;
+		if(l->prestep < 0)
 			l->prestep = 0;
-		}
 		return true;
 	case K_PGDN:
 		if(l->count > maxItems) {
-			l->prestep = l->prestep + maxItems;
-			if( l->prestep > l->count - maxItems ) {
+			l->prestep += maxItems;
+			if( l->prestep > l->count - maxItems )
 				l->prestep = l->count - maxItems;
-			}
 		}
 		return true;
 	case K_MOUSE1:
@@ -793,9 +764,9 @@ qboolean List_Key ( menulist_s *l, int key)
 			bselected = true;
 			return true;
 		}
-		if( i == -1 ) {
+		if( i == -1 )
 			return true;
-		}
+
 		if( l->curvalue == i && Sys_Milliseconds() - l->lastClick < DOUBLE_CLICK_DELAY )
 		{
 			if ( l->generic.callback )
@@ -805,7 +776,6 @@ qboolean List_Key ( menulist_s *l, int key)
 		}
 		l->lastClick = Sys_Milliseconds();
 		l->curvalue = i;
-
 		return true;
 	}
 
@@ -838,8 +808,7 @@ void Slider_Draw( menuslider_s *s )
 	int	i;
 
 	Menu_DrawStringR2LDark( s->generic.x + s->generic.parent->x + LCOLUMN_OFFSET,
-		                s->generic.y + s->generic.parent->y, 
-						s->generic.name );
+		                s->generic.y + s->generic.parent->y, s->generic.name );
 
 	s->range = ( s->curvalue - s->minvalue ) / ( float ) ( s->maxvalue - s->minvalue );
 

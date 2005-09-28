@@ -24,21 +24,28 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #ifndef __QGL_H__
 #define __QGL_H__
 
-#ifdef _WIN32
-#  include <windows.h>
-#endif
+#if defined( _WIN32 )
+
+#define WIN32_LEAN_AND_MEAN
+#define VC_LEANMEAN
+#include <windows.h>
+#include <gl/gl.h>
+
+#elif defined( __linux__ ) || defined( __FreeBSD__ )
 
 #include <GL/gl.h>
-
-#ifdef __linux__
 #include <GL/glx.h>
+
 #endif
 
 qboolean QGL_Init( const char *dllname );
 void     QGL_Shutdown( void );
 
 #ifndef APIENTRY
-#  define APIENTRY
+#define APIENTRY
+#endif
+#ifndef WINAPI
+#define WINAPI
 #endif
 
 extern  void ( APIENTRY * qglAccum )(GLenum op, GLfloat value);
@@ -429,7 +436,7 @@ extern BOOL ( WINAPI * qwglSetDeviceGammaRampEXT ) ( const unsigned char *pRed, 
 
 #endif
 
-#ifdef __linux__
+#if defined(__linux__ ) || defined(__FreeBSD__)
 
 // local function in dll
 extern void *qwglGetProcAddress(const GLubyte *procName);
@@ -460,7 +467,7 @@ void Fake_glColorTableEXT( GLenum target, GLenum internalformat,
 
 #define GL_TEXTURE0_ARB						0x84C0
 #define GL_TEXTURE1_ARB						0x84C1
-#endif
+#endif //n _linux
 
 #define GL_TEXTURE0_SGIS					0x835E
 #define GL_TEXTURE1_SGIS					0x835F
@@ -489,13 +496,6 @@ extern unsigned int QGL_TEXTURE0, QGL_TEXTURE1;
 #define GL_NUM_COMPRESSED_TEXTURE_FORMATS_ARB				0x86A2
 #define GL_COMPRESSED_TEXTURE_FORMATS_ARB					0x86A3
 #endif /* GL_ARB_texture_compression */
-
-#ifndef GL_EXT_polygon_offset
-#define GL_EXT_polygon_offset 1
-#define GL_POLYGON_OFFSET_EXT             0x8037
-#define GL_POLYGON_OFFSET_FACTOR_EXT      0x8038
-#define GL_POLYGON_OFFSET_BIAS_EXT        0x8039
-#endif /* GL_POLYGON_OFFSET */
 
 #ifndef GL_SGIS_generate_mipmap
 #define GL_SGIS_generate_mipmap 1

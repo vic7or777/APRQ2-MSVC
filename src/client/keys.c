@@ -58,7 +58,8 @@ keyname_t keynames[] =
 	{"ALT", K_ALT},
 	{"CTRL", K_CTRL},
 	{"SHIFT", K_SHIFT},
-	{"CAPSLOCK", K_CAPSLOCK},
+
+	{"CAPSLOCK",		K_CAPSLOCK },
 	
 	{"F1", K_F1},
 	{"F2", K_F2},
@@ -87,6 +88,7 @@ keyname_t keynames[] =
 	{"MOUSE5", K_MOUSE5},
 	{"MOUSE6", K_MOUSE6},
 	{"MOUSE7", K_MOUSE7},
+	{"MOUSE8", K_MOUSE8},
 
 #ifdef JOYSTICK
 	{"JOY1", K_JOY1},
@@ -229,10 +231,9 @@ char *Key_KeynumToString (int keynum)
 Key_SetBinding
 ===================
 */
-void Key_SetBinding (int keynum, char *binding)
+void Key_SetBinding (int keynum, const char *binding)
 {
-	char	*new;
-	int		l;
+//	int		l;
 			
 	if (keynum == -1)
 		return;
@@ -245,11 +246,7 @@ void Key_SetBinding (int keynum, char *binding)
 	}
 			
 // allocate memory for new binding
-	l = strlen (binding);	
-	new = Z_Malloc (l+1);
-	strcpy (new, binding);
-	new[l] = 0;
-	keybindings[keynum] = new;	
+	keybindings[keynum] = CopyString(binding, TAGMALLOC_CLIENT_KEYBIND);
 }
 
 /*
@@ -294,8 +291,8 @@ Key_Bind_f
 */
 void Key_Bind_f (void)
 {
-	int			i, c, b;
-	char		cmd[1024];
+	int			c, b;
+//	char		cmd[1024];
 	
 	c = Cmd_Argc();
 
@@ -321,15 +318,15 @@ void Key_Bind_f (void)
 	}
 	
 // copy the rest of the command line
-	cmd[0] = 0;		// start out with a null string
+/*	cmd[0] = 0;		// start out with a null string
 	for (i=2 ; i< c ; i++)
 	{
 		strcat (cmd, Cmd_Argv(i));
 		if (i != (c-1))
 			strcat (cmd, " ");
-	}
+	}*/
 
-	Key_SetBinding (b, cmd);
+	Key_SetBinding (b, Cmd_ArgsFrom(2));
 }
 
 /*
@@ -475,23 +472,13 @@ void Key_Event (int key, qboolean down, unsigned time)
 	if (down)
 	{
 		key_repeats[key]++;
-
-		if (key_repeats[key] > 1)
-		{
-			if (key != K_BACKSPACE 
-				&& key != K_PAUSE 
-				&& key != K_PGUP 
-				&& key != K_KP_PGUP 
-				&& key != K_PGDN
-				&& key != K_KP_PGDN
-				&& key != K_DEL
-				&& key != K_LEFTARROW && key != K_RIGHTARROW
-				&& key != K_UPARROW && key != K_DOWNARROW
-				&& (key < 32 || key > 126))
-				return;	// ignore most autorepeats
-		}
-	//	if (key >= 200 && !keybindings[key])
-	//		Com_Printf ("%s is unbound, hit F4 to set.\n", Key_KeynumToString (key) );
+		if ((cls.key_dest == key_game ||
+			(cls.key_dest == key_menu && key != K_UPARROW && key != K_DOWNARROW))
+			&& key != K_BACKSPACE && key != K_PAUSE 
+			&& key != K_PGUP && key != K_KP_PGUP 
+			&& key != K_PGDN && key != K_KP_PGDN
+			&& key_repeats[key] > 1)
+			return;	// ignore most autorepeats
 	}
 	else
 	{

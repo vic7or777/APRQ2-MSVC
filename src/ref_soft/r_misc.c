@@ -608,13 +608,12 @@ R_ScreenShot_f
 */  
 void R_ScreenShot_f (void) 
 { 
-	int			i; 
-	char		picname[80], checkname[MAX_OSPATH];
-	FILE		*f;
-	byte		palette[768];
-	struct	tm *ntime;
+	int		i; 
+	char	picname[80], checkname[MAX_OSPATH];
+	FILE	*f;
+	byte	palette[768];
 	char	date[32], map[32] = "\0";
-	time_t	l_time;
+	time_t	clock;
 
 	if(CL_Mapname()[0])
 		Com_sprintf(map, sizeof(map), "_%s", CL_Mapname());
@@ -625,9 +624,8 @@ void R_ScreenShot_f (void)
 
 	if(Cmd_Argc() == 1)
 	{
-		time( &l_time );
-		ntime = localtime( &l_time );
-		strftime( date, sizeof(date), "%Y-%m-%d_%H-%M", ntime );
+		time( &clock );
+		strftime( date, sizeof(date), "%Y-%m-%d_%H-%M", localtime(&clock));
 
 		// Find a file name to save it to
 		for (i=0 ; i<=100 ; i++)

@@ -67,7 +67,7 @@ V_AddEntity
 
 =====================
 */
-void V_AddEntity (entity_t *ent)
+void V_AddEntity (const entity_t *ent)
 {
 	if (r_numentities >= MAX_ENTITIES)
 		return;
@@ -81,16 +81,11 @@ V_AddParticle
 
 =====================
 */
-void V_AddParticle (vec3_t org, int color, float alpha)
+void V_AddParticle (const particle_t *p)
 {
-	particle_t	*p;
-
 	if (r_numparticles >= MAX_PARTICLES)
 		return;
-	p = &r_particles[r_numparticles++];
-	VectorCopy (org, p->origin);
-	p->color = color;
-	p->alpha = alpha;
+	r_particles[r_numparticles++] = *p;
 }
 
 /*
@@ -99,7 +94,7 @@ V_AddStain
 
 =====================
 */
-void V_AddStain (vec3_t org, vec3_t color, float size)
+void V_AddStain (const vec3_t org, const vec3_t color, float size)
 {
 #ifdef GL_QUAKE
 	stain_t	*s;
@@ -120,7 +115,7 @@ V_AddLight
 
 =====================
 */
-void V_AddLight (vec3_t org, float intensity, float r, float g, float b)
+void V_AddLight (const vec3_t org, float intensity, float r, float g, float b)
 {
 	dlight_t	*dl;
 
@@ -129,9 +124,7 @@ void V_AddLight (vec3_t org, float intensity, float r, float g, float b)
 	dl = &r_dlights[r_numdlights++];
 	VectorCopy (org, dl->origin);
 	dl->intensity = intensity;
-	dl->color[0] = r;
-	dl->color[1] = g;
-	dl->color[2] = b;
+	VectorSet(dl->color, r, g, b);
 }
 
 
@@ -150,9 +143,7 @@ void V_AddLightStyle (int style, float r, float g, float b)
 	ls = &r_lightstyles[style];
 
 	ls->white = r+g+b;
-	ls->rgb[0] = r;
-	ls->rgb[1] = g;
-	ls->rgb[2] = b;
+	VectorSet(ls->rgb, r, g, b);
 }
 
 /*
@@ -307,8 +298,8 @@ void CL_PrepRefresh (void)
 			// special player weapon model
 			if (num_cl_weaponmodels < MAX_CLIENTWEAPONMODELS)
 			{
-				strncpy(cl_weaponmodels[num_cl_weaponmodels], cl.configstrings[CS_MODELS+i]+1,
-					sizeof(cl_weaponmodels[num_cl_weaponmodels]) - 1);
+				Q_strncpyz(cl_weaponmodels[num_cl_weaponmodels], cl.configstrings[CS_MODELS+i]+1,
+					sizeof(cl_weaponmodels[num_cl_weaponmodels]));
 				num_cl_weaponmodels++;
 			}
 		} 
@@ -381,7 +372,6 @@ CalcFov
 */
 float CalcFov (float fov_x, float width, float height)
 {
-	float	a;
 	float	x;
 
 	if (fov_x < 1 || fov_x > 179)
@@ -389,15 +379,19 @@ float CalcFov (float fov_x, float width, float height)
 
 	x = width/tan(fov_x/360*M_PI);
 
-	a = atan (height/x);
-
-	a = a*360/M_PI;
-
-	return a;
+	return (float)atan(height/x)*360/M_PI;
 }
 
 //============================================================================
 
+static int entitycmpfnc( const entity_t *a, const entity_t *b )
+{
+	// all other models are sorted by model then skin
+	if ( a->model == b->model )
+		return ( (long int) a->skin - (long int) b->skin );
+
+	return ( (long int) a->model - (long int) b->model );
+}
 
 /*
 ==================
@@ -407,10 +401,6 @@ V_RenderView
 */
 void V_RenderView( float stereo_separation )
 {
-	extern int entitycmpfnc( const entity_t *, const entity_t * );
-
-	//if (cls.state != ca_active)
-	//	return;
 
 	if (!cl.refresh_prepped)
 		return;			// still loading
@@ -442,12 +432,7 @@ void V_RenderView( float stereo_separation )
 		if (cl_testlights->integer)
 			V_TestLights ();
 		if (cl_testblend->integer)
-		{
-			cl.refdef.blend[0] = 1;
-			cl.refdef.blend[1] = 0.5;
-			cl.refdef.blend[2] = 0.25;
-			cl.refdef.blend[3] = 0.5;
-		}
+			Vector4Set(cl.refdef.blend, 1, 0.5, 0.25, 0.5);
 
 		// offset vieworg appropriately if we're doing stereo separation
 		if ( stereo_separation != 0 )
@@ -461,16 +446,21 @@ void V_RenderView( float stereo_separation )
 		// never let it sit exactly on a node line, because a water plane can
 		// dissapear when viewed with the eye exactly on it.
 		// the server protocol only specifies to 1/8 pixel, so add 1/16 in each axis
-		cl.refdef.vieworg[0] += 0.0625;
-		cl.refdef.vieworg[1] += 0.0625;
-		cl.refdef.vieworg[2] += 0.0625;
+		cl.refdef.vieworg[0] += 0.0625f;
+		cl.refdef.vieworg[1] += 0.0625f;
+		cl.refdef.vieworg[2] += 0.0625f;
 
 		cl.refdef.x = scr_vrect.x;
 		cl.refdef.y = scr_vrect.y;
 		cl.refdef.width = scr_vrect.width;
 		cl.refdef.height = scr_vrect.height;
-		cl.refdef.fov_y = CalcFov (cl.refdef.fov_x, cl.refdef.width, cl.refdef.height);
-		cl.refdef.time = cl.time*0.001;
+#ifdef GL_QUAKE
+		if(R_IsWideScreen())
+			cl.refdef.fov_y = CalcFov (cl.refdef.fov_x, cl.refdef.width*0.75, cl.refdef.height);
+		else
+#endif
+			cl.refdef.fov_y = CalcFov (cl.refdef.fov_x, cl.refdef.width, cl.refdef.height);
+		cl.refdef.time = cl.time*0.001f;
 
 		cl.refdef.areabits = cl.frame.areabits;
 
@@ -481,9 +471,7 @@ void V_RenderView( float stereo_separation )
 		if (!cl_add_lights->integer)
 			r_numdlights = 0;
 		if (!cl_add_blend->integer)
-		{
 			VectorClear (cl.refdef.blend);
-		}
 
 		cl.refdef.num_newstains = r_numstains;
 		cl.refdef.newstains = r_stains;
@@ -506,9 +494,6 @@ void V_RenderView( float stereo_separation )
 	R_RenderFrame (&cl.refdef);
 	if (cl_stats->integer)
 		Com_Printf ("ent:%i  lt:%i  part:%i\n", r_numentities, r_numdlights, r_numparticles);
-	if ( log_stats->integer && ( log_stats_file != 0 ) )
-		fprintf( log_stats_file, "%i,%i,%i,",r_numentities, r_numdlights, r_numparticles);
-
 
 	SCR_AddDirtyPoint (scr_vrect.x, scr_vrect.y);
 	SCR_AddDirtyPoint (scr_vrect.x+scr_vrect.width-1,
@@ -540,7 +525,7 @@ void V_Init (void)
 	cl_testblend = Cvar_Get ("cl_testblend", "0", 0);
 	cl_testparticles = Cvar_Get ("cl_testparticles", "0", 0);
 	cl_testentities = Cvar_Get ("cl_testentities", "0", 0);
-	cl_testlights = Cvar_Get ("cl_testlights", "0", 0);
+	cl_testlights = Cvar_Get ("cl_testlights", "0", CVAR_CHEAT);
 
 	cl_stats = Cvar_Get ("cl_stats", "0", 0);
 }

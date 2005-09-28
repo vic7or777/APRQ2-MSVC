@@ -43,8 +43,8 @@ typedef struct explosion_s
 
 
 #define	MAX_EXPLOSIONS	64
-explosion_t	cl_explosions[MAX_EXPLOSIONS];
-explosion_t	cl_explosions_headnode, *cl_free_expl;
+static explosion_t	cl_explosions[MAX_EXPLOSIONS];
+static explosion_t	cl_explosions_headnode, *cl_free_expl;
 
 
 #define	MAX_BEAMS	32
@@ -57,9 +57,9 @@ typedef struct
 	vec3_t	offset;
 	vec3_t	start, end;
 } beam_t;
-beam_t		cl_beams[MAX_BEAMS];
+static beam_t		cl_beams[MAX_BEAMS];
 //PMM - added this for player-linked beams.  Currently only used by the plasma beam
-beam_t		cl_playerbeams[MAX_BEAMS];
+static beam_t		cl_playerbeams[MAX_BEAMS];
 
 
 #define	MAX_LASERS	32
@@ -68,19 +68,19 @@ typedef struct
 	entity_t	ent;
 	int			endtime;
 } laser_t;
-laser_t		cl_lasers[MAX_LASERS];
+static laser_t		cl_lasers[MAX_LASERS];
 
 //ROGUE
-cl_sustain_t	cl_sustains[MAX_SUSTAINS];
+static cl_sustain_t	cl_sustains[MAX_SUSTAINS];
 //ROGUE
 
 //PGM
-extern void CL_TeleportParticles (vec3_t org);
+extern void CL_TeleportParticles (const vec3_t org);
 //PGM
 
-void CL_BlasterParticles (vec3_t org, vec3_t dir);
-void CL_ExplosionParticles (vec3_t org);
-void CL_BFGExplosionParticles (vec3_t org);
+void CL_BlasterParticles (const vec3_t org, const vec3_t dir);
+void CL_ExplosionParticles (const vec3_t org);
+void CL_BFGExplosionParticles (const vec3_t org);
 // RAFAEL
 //void CL_BlueBlasterParticles (vec3_t org, vec3_t dir);
 
@@ -175,7 +175,6 @@ void CL_RegisterTEntModels (void)
 	cl_mod_bfg_explo = R_RegisterModel ("sprites/s_bfg2.sp2");
 	cl_mod_powerscreen = R_RegisterModel ("models/items/armor/effect/tris.md2");
 
-	//r1: why are these being reigstered?
 	/*
 	R_RegisterModel ("models/objects/laser/tris.md2");
 	R_RegisterModel ("models/objects/grenade2/tris.md2");
@@ -283,7 +282,7 @@ void CL_FreeExplosion ( explosion_t *ex )
 CL_SmokeAndFlash
 =================
 */
-void CL_SmokeAndFlash(vec3_t origin)
+void CL_SmokeAndFlash(const vec3_t origin)
 {
 	explosion_t	*ex;
 
@@ -632,11 +631,10 @@ void CL_ParseWidow (void)
 {
 	vec3_t	pos;
 	int		id, i;
-	cl_sustain_t	*s, *free_sustain;
+	cl_sustain_t	*s, *free_sustain = NULL;
 
 	id = MSG_ReadShort (&net_message);
 
-	free_sustain = NULL;
 	for (i=0, s=cl_sustains; i<MAX_SUSTAINS; i++, s++)
 	{
 		if (s->id == 0)
@@ -665,9 +663,8 @@ void CL_ParseNuke (void)
 {
 	vec3_t	pos;
 	int		i;
-	cl_sustain_t	*s, *free_sustain;
+	cl_sustain_t	*s, *free_sustain = NULL;
 
-	free_sustain = NULL;
 	for (i=0, s=cl_sustains; i<MAX_SUSTAINS; i++, s++)
 	{
 		if (s->id == 0)
@@ -701,7 +698,7 @@ void CL_ParseNuke (void)
 CL_ParseTEnt
 =================
 */
-static byte splash_color[] = {0x00, 0xe0, 0xb0, 0x50, 0xd0, 0xe0, 0xe8};
+static const byte splash_color[] = {0x00, 0xe0, 0xb0, 0x50, 0xd0, 0xe0, 0xe8};
 
 void CL_ParseTEnt (void)
 {
@@ -712,7 +709,6 @@ void CL_ParseTEnt (void)
 	int		color;
 	int		r;
 	int		ent;
-	int		magnitude;
 	vec3_t	rgbcolor;
 
 	type = MSG_ReadByte (&net_message);
@@ -742,12 +738,9 @@ void CL_ParseTEnt (void)
 #endif
 			CL_SmokeAndFlash(pos);
 
-			rgbcolor[0] = 0.89;
-			rgbcolor[1] = 0.89;
-			rgbcolor[2] = 0.89;
+			VectorSet(rgbcolor, 0.89, 0.89, 0.89);
 			V_AddStain(pos, rgbcolor, 5);
 
-			
 			// impact sound
 			cnt = rand()&15;
 			if (cnt == 1)
@@ -781,9 +774,7 @@ void CL_ParseTEnt (void)
 		CL_ParticleEffect (pos, dir, 0, 20);
 		CL_SmokeAndFlash(pos);
 
-		rgbcolor[0] = 0.89;
-		rgbcolor[1] = 0.89;
-		rgbcolor[2] = 0.89;
+		VectorSet(rgbcolor, 0.89, 0.89, 0.89);
 		V_AddStain(pos, rgbcolor, 9);
 		break;
 
@@ -830,9 +821,7 @@ void CL_ParseTEnt (void)
 		MSG_ReadDir (&net_message, dir);
 		CL_BlasterParticles (pos, dir);
 
-		rgbcolor[0] = 1.1;
-		rgbcolor[1] = 1.1;
-		rgbcolor[2] = 0;
+		VectorSet(rgbcolor, 1.1, 1.1, 0);
 		V_AddStain(pos, rgbcolor, 10);
 
 		ex = CL_AllocExplosion ();
@@ -851,8 +840,7 @@ void CL_ParseTEnt (void)
 		ex->type = ex_misc;
 		ex->ent.flags = RF_FULLBRIGHT|RF_TRANSLUCENT;
 		ex->light = 150;
-		ex->lightcolor[0] = 1;
-		ex->lightcolor[1] = 1;
+		ex->lightcolor[0] =	ex->lightcolor[1] = 1;
 		ex->ent.model = cl_mod_explode;
 		ex->frames = 4;
 		S_StartSound (pos,  0, 0, cl_sfx_lashit, 1, ATTN_NORM, 0);
@@ -870,9 +858,7 @@ void CL_ParseTEnt (void)
 	case TE_GRENADE_EXPLOSION_WATER:
 		MSG_ReadPos (&net_message, pos);
 
-		rgbcolor[0] = 0.8;
-		rgbcolor[1] = 0.8;
-		rgbcolor[2] = 0.8;
+		VectorSet(rgbcolor, 0.8, 0.8, 0.8);
 		V_AddStain(pos, rgbcolor, 35);
 
 		ex = CL_AllocExplosion ();
@@ -880,9 +866,7 @@ void CL_ParseTEnt (void)
 		ex->type = ex_poly;
 		ex->ent.flags = RF_FULLBRIGHT;
 		ex->light = 350;
-		ex->lightcolor[0] = 1.0;
-		ex->lightcolor[1] = 0.5;
-		ex->lightcolor[2] = 0.5;
+		VectorSet(ex->lightcolor, 1.0, 0.5, 0.5);
 		ex->ent.model = cl_mod_explo4;
 		ex->frames = 19;
 		ex->baseframe = 30;
@@ -902,9 +886,7 @@ void CL_ParseTEnt (void)
 		ex->type = ex_poly;
 		ex->ent.flags = RF_FULLBRIGHT;
 		ex->light = 350;
-		ex->lightcolor[0] = 1.0; 
-		ex->lightcolor[1] = 0.5;
-		ex->lightcolor[2] = 0.5;
+		VectorSet(ex->lightcolor, 1.0, 0.5, 0.5);
 		ex->ent.angles[1] = rand() % 360;
 		ex->ent.model = cl_mod_explo4;
 		if (frand() < 0.5)
@@ -921,9 +903,7 @@ void CL_ParseTEnt (void)
 	case TE_EXPLOSION1_NP:						// PMM
 		MSG_ReadPos (&net_message, pos);
 
-		rgbcolor[0] = 0.8;
-		rgbcolor[1] = 0.8;
-		rgbcolor[2] = 0.8;
+		VectorSet(rgbcolor, 0.8, 0.8, 0.8);
 		V_AddStain(pos, rgbcolor, 35);
 
 		ex = CL_AllocExplosion ();
@@ -931,9 +911,7 @@ void CL_ParseTEnt (void)
 		ex->type = ex_poly;
 		ex->ent.flags = RF_FULLBRIGHT;
 		ex->light = 350;
-		ex->lightcolor[0] = 1.0;
-		ex->lightcolor[1] = 0.5;
-		ex->lightcolor[2] = 0.5;
+		VectorSet(ex->lightcolor, 1.0, 0.5, 0.5);
 		ex->ent.angles[1] = rand() % 360;
 		if (type != TE_EXPLOSION1_BIG)				// PMM
 			ex->ent.model = cl_mod_explo4;			// PMM
@@ -957,9 +935,7 @@ void CL_ParseTEnt (void)
 		ex->type = ex_poly;
 		ex->ent.flags = RF_FULLBRIGHT;
 		ex->light = 350;
-		ex->lightcolor[0] = 0.0;
-		ex->lightcolor[1] = 1.0;
-		ex->lightcolor[2] = 0.0;
+		VectorSet(ex->lightcolor, 0.0, 1.0, 0.0);
 		ex->ent.model = cl_mod_bfg_explo;
 		ex->ent.flags |= RF_TRANSLUCENT;
 		ex->ent.alpha = 0.30;
@@ -1011,9 +987,7 @@ void CL_ParseTEnt (void)
 		// we need a better no draw flag
 		ex->ent.flags = RF_BEAM;
 		ex->light = 100 + (rand()%75);
-		ex->lightcolor[0] = 1.0;
-		ex->lightcolor[1] = 1.0;
-		ex->lightcolor[2] = 0.3;
+		VectorSet(ex->lightcolor, 1.0, 1.0, 0.3);
 		ex->ent.model = cl_mod_flash;
 		ex->frames = 2;
 		break;
@@ -1074,11 +1048,8 @@ void CL_ParseTEnt (void)
 		if (type == TE_BLASTER2)
 			ex->lightcolor[1] = 1;
 		else // flechette
-		{
-			ex->lightcolor[0] = 0.19;
-			ex->lightcolor[1] = 0.41;
-			ex->lightcolor[2] = 0.75;
-		}
+			VectorSet(ex->lightcolor, 0.19, 0.41, 0.75);
+
 		ex->ent.model = cl_mod_explode;
 		ex->frames = 4;
 		S_StartSound (pos,  0, 0, cl_sfx_lashit, 1, ATTN_NORM, 0);
@@ -1099,9 +1070,7 @@ void CL_ParseTEnt (void)
 	case TE_PLAIN_EXPLOSION:
 		MSG_ReadPos (&net_message, pos);
 
-		rgbcolor[0] = 0.8;
-		rgbcolor[1] = 0.8;
-		rgbcolor[2] = 0.8;
+		VectorSet(rgbcolor, 0.8, 0.8, 0.8);
 		V_AddStain(pos, rgbcolor, 35);
 
 		ex = CL_AllocExplosion ();
@@ -1109,9 +1078,7 @@ void CL_ParseTEnt (void)
 		ex->type = ex_poly;
 		ex->ent.flags = RF_FULLBRIGHT;
 		ex->light = 350;
-		ex->lightcolor[0] = 1.0;
-		ex->lightcolor[1] = 0.5;
-		ex->lightcolor[2] = 0.5;
+		VectorSet(ex->lightcolor, 1.0, 0.5, 0.5);
 		ex->ent.angles[1] = rand() % 360;
 		ex->ent.model = cl_mod_explo4;
 		if (frand() < 0.5)
@@ -1145,23 +1112,16 @@ void CL_ParseTEnt (void)
 		break;
 
 	case TE_HEATBEAM_SPARKS:
-		cnt = 50;
 		MSG_ReadPos (&net_message, pos);
 		MSG_ReadDir (&net_message, dir);
-		r = 8;
-		magnitude = 60;
-		color = r & 0xff;
-		CL_ParticleSteamEffect (pos, dir, color, cnt, magnitude);
+		CL_ParticleSteamEffect (pos, dir, 0x8, 50, 60);
 		S_StartSound (pos,  0, 0, cl_sfx_lashit, 1, ATTN_NORM, 0);
 		break;
 	
 	case TE_HEATBEAM_STEAM:
-		cnt = 20;
 		MSG_ReadPos (&net_message, pos);
 		MSG_ReadDir (&net_message, dir);
-		color = 0xe0;
-		magnitude = 60;
-		CL_ParticleSteamEffect (pos, dir, color, cnt, magnitude);
+		CL_ParticleSteamEffect (pos, dir, 0xe0, 20, 60);
 		S_StartSound (pos,  0, 0, cl_sfx_lashit, 1, ATTN_NORM, 0);
 		break;
 
@@ -1170,10 +1130,9 @@ void CL_ParseTEnt (void)
 		break;
 
 	case TE_BUBBLETRAIL2:
-		cnt = 8;
 		MSG_ReadPos (&net_message, pos);
 		MSG_ReadPos (&net_message, pos2);
-		CL_BubbleTrail2 (pos, pos2, cnt);
+		CL_BubbleTrail2 (pos, pos2, 8);
 		S_StartSound (pos,  0, 0, cl_sfx_lashit, 1, ATTN_NORM, 0);
 		break;
 
@@ -1184,7 +1143,7 @@ void CL_ParseTEnt (void)
 		break;
 
 	case TE_CHAINFIST_SMOKE:
-		dir[0]=0; dir[1]=0; dir[2]=1;
+		VectorSet(dir, 0, 0, 1);
 		MSG_ReadPos(&net_message, pos);
 		CL_ParticleSmokeEffect (pos, dir, 0, 20, 20);
 		break;
@@ -1237,7 +1196,7 @@ CL_AddBeams
 */
 void CL_AddBeams (void)
 {
-	int			i,j;
+	int			i;
 	beam_t		*b;
 	vec3_t		dist, org;
 	float		d;
@@ -1314,10 +1273,9 @@ void CL_AddBeams (void)
 			VectorCopy (b->end, ent.origin);
 			ent.model = b->model;
 			ent.flags = RF_FULLBRIGHT;
-			ent.angles[0] = pitch;
-			ent.angles[1] = yaw;
-			ent.angles[2] = rand()%360;
-			V_AddEntity (&ent);			
+			VectorSet(ent.angles, pitch, yaw, rand()%360);
+			AnglesToAxis(ent.angles, ent.axis);
+			V_AddEntity (&ent);
 			return;
 		}
 		while (d > 0)
@@ -1327,21 +1285,16 @@ void CL_AddBeams (void)
 			if (b->model == cl_mod_lightning)
 			{
 				ent.flags = RF_FULLBRIGHT;
-				ent.angles[0] = -pitch;
-				ent.angles[1] = yaw + 180.0;
-				ent.angles[2] = rand()%360;
+				VectorSet(ent.angles, -pitch, yaw + 180.0, rand()%360);
 			}
 			else
-			{
-				ent.angles[0] = pitch;
-				ent.angles[1] = yaw;
-				ent.angles[2] = rand()%360;
-			}
+				VectorSet(ent.angles, pitch, yaw, rand()%360);
 			
+			AnglesToAxis(ent.angles, ent.axis);
 			V_AddEntity (&ent);
 
-			for (j=0 ; j<3 ; j++)
-				org[j] += dist[j]*len;
+			VectorMA (org, len, dist, org);
+
 			d -= model_length;
 		}
 	}
@@ -1368,9 +1321,9 @@ void CL_AddPlayerBeams (void)
 	int			framenum = 0;
 	float		model_length;
 	
-	float		hand_multiplier;
+	float		hand_multiplier = 1;
 	frame_t		*oldframe;
-	player_state_t	*ps, *ops;
+	player_state_new_t	*ps, *ops;
 
 //PMM
 	if (hand)
@@ -1379,12 +1332,6 @@ void CL_AddPlayerBeams (void)
 			hand_multiplier = 0;
 		else if (hand->integer == 1)
 			hand_multiplier = -1;
-		else
-			hand_multiplier = 1;
-	}
-	else 
-	{
-		hand_multiplier = 1;
 	}
 //PMM
 
@@ -1453,9 +1400,8 @@ void CL_AddPlayerBeams (void)
 			VectorMA (dist, (hand_multiplier * b->offset[0]), r, dist);
 			VectorMA (dist, b->offset[1], f, dist);
 			VectorMA (dist, b->offset[2], u, dist);
-			if ((hand) && (hand->integer == 2)) {
+			if ((hand) && (hand->integer == 2))
 				VectorMA (org, -1, cl.v_up, org);
-			}
 		}
 //PMM
 
@@ -1490,9 +1436,7 @@ void CL_AddPlayerBeams (void)
 			if (b->entity != cl.playernum+1)
 			{
 				framenum = 2;
-				ent.angles[0] = -pitch;
-				ent.angles[1] = yaw + 180.0;
-				ent.angles[2] = 0;
+				VectorSet(ent.angles, -pitch, yaw + 180.0, 0);
 				AngleVectors(ent.angles, f, r, u);
 					
 				// if it's a non-origin offset, it's a player, so use the hardcoded player offset
@@ -1548,9 +1492,8 @@ void CL_AddPlayerBeams (void)
 			VectorCopy (b->end, ent.origin);
 			ent.model = b->model;
 			ent.flags = RF_FULLBRIGHT;
-			ent.angles[0] = pitch;
-			ent.angles[1] = yaw;
-			ent.angles[2] = rand()%360;
+			VectorSet(ent.angles, pitch, yaw, rand()%360);
+			AnglesToAxis(ent.angles, ent.axis);
 			V_AddEntity (&ent);			
 			return;
 		}
@@ -1561,29 +1504,24 @@ void CL_AddPlayerBeams (void)
 			if(cl_mod_heatbeam && (b->model == cl_mod_heatbeam))
 			{
 				ent.flags = RF_FULLBRIGHT;
-				ent.angles[0] = -pitch;
-				ent.angles[1] = yaw + 180.0;
-				ent.angles[2] = (cl.time) % 360;
+				VectorSet(ent.angles, -pitch, yaw + 180.0, (cl.time) % 360);
 				ent.frame = framenum;
 			}
 			else if (b->model == cl_mod_lightning)
 			{
 				ent.flags = RF_FULLBRIGHT;
-				ent.angles[0] = -pitch;
-				ent.angles[1] = yaw + 180.0;
-				ent.angles[2] = rand()%360;
+				VectorSet(ent.angles, -pitch, yaw + 180.0, rand()%360);
 			}
 			else
 			{
-				ent.angles[0] = pitch;
-				ent.angles[1] = yaw;
-				ent.angles[2] = rand()%360;
+				VectorSet(ent.angles, pitch, yaw, rand()%360);
 			}
 			
+			AnglesToAxis(ent.angles, ent.axis);
 			V_AddEntity (&ent);
 
-			for (j=0 ; j<3 ; j++)
-				org[j] += dist[j]*len;
+			VectorMA (org, len, dist, org);
+
 			d -= model_length;
 		}
 	}
@@ -1693,6 +1631,7 @@ void CL_AddExplosions (void)
 		ent->oldframe = ex->baseframe + f;
 		ent->backlerp = 1.0 - cl.lerpfrac;
 
+		AnglesToAxis(ent->angles, ent->axis);
 		V_AddEntity (ent);
 	}
 }

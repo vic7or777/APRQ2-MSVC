@@ -39,11 +39,6 @@ static cvar_t *scr_draw2d;
 #define DSF_UNDERLINE	128
 #define DSF_SELECTED	256
 
-void SCR_ExecuteLayoutString( char *s );
-void SCR_DrawInventory( void );
-void SCR_DrawNet( void );
-void SCR_CheckDrawCenterString( void );
-
 static cvar_t *scr_draw2d;
 
 /*
@@ -58,35 +53,30 @@ void SCR_DrawString( int xpos, int ypos, char *string, int flags ) {
 
 	len = strlen( string );
 
-	if( flags & DSF_CENTERX ) {
+	if( flags & DSF_CENTERX )
 		x = xpos - (len << 2);
-	} else if( flags & DSF_RIGHT ) {
+	else if( flags & DSF_RIGHT )
 		x = xpos - (len << 3);
-	} else {
+	else
 		x = xpos;
-	}
 
-	if( flags & DSF_CENTERY ) {
+	if( flags & DSF_CENTERY )
 		y = ypos - (1 << 2);
-	} else if( flags & DSF_TOP ) {
+	else if( flags & DSF_TOP )
 		y = ypos - (1 << 3);
-	} else {
+	else
 		y = ypos;
-	}
 
-	if( flags & DSF_SELECTED ) {
+	if( flags & DSF_SELECTED )
 		Draw_Fill( x - 1, y, (len << 3) + 2, 10, 16 );
-	}
 
-	if( flags & DSF_HIGHLIGHT ) {
+	if( flags & DSF_HIGHLIGHT )
 		DrawAltString( x, y, string );
-	} else {
+	else
 		DrawString( x, y, string );
-	}
 
-	if( flags & DSF_UNDERLINE ) {
+	if( flags & DSF_UNDERLINE )
 		Draw_Fill( x, y + 9, len << 3, 1, 0xDF );
-	}
 }
 
 /*
@@ -146,12 +136,10 @@ void SCR_AddLagometerPacketInfo( void )
 	} else {
 		i = cls.netchan.incoming_acknowledged & (CMD_BACKUP-1);
 		ping = cls.realtime - cl.cmd_time[i];
-		if( ping > 999 ) {
+		if( ping > 999 )
 			ping = 999;
-		}
-		if( cl.surpressCount ) {
+		if( cl.surpressCount )
 			ping = -ping;
-		}
 	}
 
 	i = scr_lagometer.inPacketNum & LAG_MASK;
@@ -266,18 +254,17 @@ static void SCR_DrawLagometer( void )
 		return;
 
 	i = scr_lagometer.inPacketNum - LAG_SAMPLES/8 + 1;
-	if( i < 0 ) {
+	if( i < 0 )
 		i = 0;
-	}
 
 	startTime = scr_lagometer.inTime[i & LAG_MASK];
 	endTime = scr_lagometer.inTime[(scr_lagometer.inPacketNum - 1) & LAG_MASK];
 
 	size = 0.0f;
-	if( startTime != endTime ) {
-		for( ; i<scr_lagometer.inPacketNum ; i++ ) {
+	if( startTime != endTime )
+	{
+		for( ; i<scr_lagometer.inPacketNum ; i++ )
 			size += scr_lagometer.inSize[i & LAG_MASK];
-		}
 
 		size /= endTime - startTime;
 		size *= 1000.0f / 1024.0f;
@@ -289,18 +276,17 @@ static void SCR_DrawLagometer( void )
 // draw upload speed
 //
 	i = scr_lagometer.outPacketNum - LAG_SAMPLES/8 + 1;
-	if( i < 0 ) {
+	if( i < 0 )
 		i = 0;
-	}
 
 	startTime = scr_lagometer.outTime[i & LAG_MASK];
 	endTime = scr_lagometer.outTime[(scr_lagometer.outPacketNum - 1) & LAG_MASK];
 
 	size = 0.0f;
-	if( startTime != endTime ) {
-		for( ; i<scr_lagometer.outPacketNum ; i++ ) {
+	if( startTime != endTime )
+	{
+		for( ; i<scr_lagometer.outPacketNum ; i++ )
 			size += scr_lagometer.outSize[i & LAG_MASK];
-		}
 
 		size /= endTime - startTime;
 		size *= 1000.0f / 1024.0f;
@@ -319,13 +305,29 @@ CHAT HUD
 
 #define MAX_CHAT_LENGTH		128
 #define MAX_CHAT_LINES		8
+#define CHAT_MASK			(MAX_CHAT_LINES-1)
 
-char chathudtext[MAX_CHAT_LINES][MAX_CHAT_LENGTH];
+typedef struct chatMessage_s {
+	char	text[MAX_CHAT_LENGTH];
+	int		time;
+} chatMessage_t;
+
+static chatMessage_t	chatMsgs[MAX_CHAT_LINES];
+static int		chatMsgsNum = 0;
 
 cvar_t *cl_chathud;
 cvar_t *cl_chathudlines;
+cvar_t *cl_chathudtime;
 cvar_t *cl_chathudx;
 cvar_t *cl_chathudy;
+
+static void OnChange_Chathudlines (cvar_t *self, const char *oldValue)
+{
+	if (cl_chathudlines->integer > MAX_CHAT_LINES)
+		Cvar_SetValue ("cl_chathudlines", MAX_CHAT_LINES);
+	else if (cl_chathudlines->integer < 1)
+		Cvar_SetValue ("cl_chathudlines", 1);
+}
 
 /*
 ==============
@@ -334,7 +336,8 @@ SCR_ClearChatHUD_f
 */
 void SCR_ClearChatHUD_f( void )
 {
-	memset(chathudtext, 0, sizeof(chathudtext));
+	memset(chatMsgs, 0, sizeof(chatMsgs));
+	chatMsgsNum = 0;
 }
 
 /*
@@ -344,18 +347,18 @@ SCR_AddToChatHUD
 */
 void SCR_AddToChatHUD( const char *string, qboolean mm2 )
 {
-	int i;
+	char *p;
+	chatMessage_t *msg;
 
 	if(cl_chathud->integer > 2 && !mm2)
 		return;
-
-	for(i = 0; i < MAX_CHAT_LINES - 1; i++)
-		memcpy(chathudtext[i], chathudtext[i+1], MAX_CHAT_LENGTH);
-
-	memset(chathudtext[MAX_CHAT_LINES -1], 0, MAX_CHAT_LENGTH);
-	strncpy(chathudtext[MAX_CHAT_LINES -1], string, MAX_CHAT_LENGTH-1);
-	// Overwrite some odd character that shouldn't be there
-	chathudtext[MAX_CHAT_LINES -1][strlen(chathudtext[MAX_CHAT_LINES -1]) - 1] = '\0';
+	
+	msg = &chatMsgs[chatMsgsNum++ & CHAT_MASK];
+	Q_strncpyz(msg->text, string, MAX_CHAT_LENGTH);
+	msg->time = cls.realtime;
+	p = strchr(msg->text, '\n' );
+	if( p )
+		*p = 0;
 }
 
 /*
@@ -363,41 +366,37 @@ void SCR_AddToChatHUD( const char *string, qboolean mm2 )
 SCR_DrawChatHUD
 ==============
 */
-void SCR_DrawChatHUD( void )
+static void SCR_DrawChatHUD( void )
 {
-    int i, y, x;
+    int i, y = viddef.height-22, x = 5;
+	float time = cl_chathudtime->value * 1000, alpha = 1;
+	qboolean altColor;
+	chatMessage_t *msg;
 
 	if(!cl_chathud->integer)
 		return;
 
-	if (cl_chathudlines->integer > MAX_CHAT_LINES)
-		Cvar_SetValue ("cl_chathudlines", MAX_CHAT_LINES);
-	else if (cl_chathudlines->integer < 1)
-		Cvar_SetValue ("cl_chathudlines", 1);
-
+	altColor = cl_chathud->integer & 2;
 
 	if(cl_chathudx->integer || cl_chathudy->integer)
 	{
 		x = cl_chathudx->integer;
 		y = cl_chathudy->integer;
 	}
-	else
-	{
-		x = 5;
-		y = viddef.height-22-8*cl_chathudlines->integer;
-	}
 
-    for (i = MAX_CHAT_LINES - cl_chathudlines->integer; i < MAX_CHAT_LINES; i++)
+    for (i = chatMsgsNum-1; i >= 0 && i > chatMsgsNum-1 - cl_chathudlines->integer; i--)
 	{
-		if(chathudtext[i][0])
-		{
-            if (cl_chathud->integer &= 2)
-				DrawAltString(x, y, chathudtext[i]);
-			else
-				DrawString(x, y, chathudtext[i]);
-
-			y += 8;
+		msg = &chatMsgs[i & CHAT_MASK];
+		if( time ) {
+			if(cls.realtime - msg->time > time ) {
+				*msg->text = 0;
+				msg->time = 0;
+				break;
+			}
+			alpha = (msg->time+time-cls.realtime)*(cl_chathudtime->value < 4 ? 0.001f : 0.0005f);
 		}
+		y -= 8;
+		Draw_String(x, y, msg->text, 7, alpha, altColor);
     }
 }
 
@@ -421,21 +420,19 @@ SCR_DrawClock
 */
 static void SCR_DrawClock( void )
 {
-	struct tm *ntime;
-	char stime[32];
-	time_t l_time;
+	char timebuf[32];
+	time_t clock;
 
 	if(!cl_clock->integer)
 		return;
 
-	time( &l_time );
-	ntime = localtime( &l_time ); 
-	strftime( stime, sizeof(stime), cl_clockformat->string, ntime );
+	time( &clock );
+	strftime( timebuf, sizeof(timebuf), cl_clockformat->string, localtime(&clock));
 
 	if(cl_clockx->integer || cl_clocky->integer)
-		DrawColorString(cl_clockx->integer, cl_clocky->integer, stime, cl_clock->integer, 1);
+		DrawColorString(cl_clockx->integer, cl_clocky->integer, timebuf, cl_clock->integer, 1);
 	else
-		DrawColorString(5, viddef.height-10, stime, cl_clock->integer, 1);
+		DrawColorString(5, viddef.height-10, timebuf, cl_clock->integer, 1);
 }
 
 /*
@@ -510,10 +507,14 @@ static void SCR_ShowTIME(void)
 	if(!cl_maptime->integer)
 		return;
 
-	if(cl_maptime->integer >= 11)
+	color = cl_maptime->integer;
+
+	if(cl_maptime->integer > 10) {
 		time = (cl.time - cls.roundtime) / 1000;
-	else
+		color -= 10;
+	} else {
 		time = cl.time / 1000;
+	}
 
 	hour = time/3600;
 	mins = (time%3600) /60;
@@ -523,11 +524,6 @@ static void SCR_ShowTIME(void)
 		Com_sprintf(temp, sizeof(temp), "%i:%02i:%02i", hour, mins, secs);
 	else
 		Com_sprintf(temp, sizeof(temp), "%i:%02i", mins, secs);
-
-	if (cl_maptime->integer > 10)
-		color = cl_maptime->integer - 10;
-	else
-		color = cl_maptime->integer;
 
 	if(cl_maptimex->integer || cl_maptimey->integer)
 		DrawColorString (cl_maptimex->integer, cl_maptimey->integer, temp, color, 1);
@@ -543,6 +539,8 @@ CROSSHAIR
 
 ===============================================================================
 */
+extern	char		crosshair_pic[8];
+extern	int			crosshair_width, crosshair_height;
 
 cvar_t	*crosshair;
 cvar_t	*ch_alpha;
@@ -552,6 +550,11 @@ cvar_t	*ch_red;
 cvar_t	*ch_green;
 cvar_t	*ch_blue;
 
+static void OnChange_Crosshair(cvar_t *self, const char *oldValue)
+{
+	SCR_TouchPics ();
+}
+
 /*
 =================
 SCR_DrawCrosshair
@@ -559,22 +562,18 @@ SCR_DrawCrosshair
 */
 static void SCR_DrawCrosshair (void)
 {
-	float	alpha = ch_alpha->value;
+	float	alpha ;
 
 	if (!crosshair->integer)
 		return;
-
-	if (crosshair->modified)
-	{
-		crosshair->modified = false;
-		SCR_TouchPics ();
-	}
 
 	if (!crosshair_pic[0])
 		return;
 
 	if (ch_pulse->value)
 		alpha = (0.75*ch_alpha->value) + (0.25*ch_alpha->value)*sin(anglemod((cl.time*0.005)*ch_pulse->value));
+	else
+		alpha = ch_alpha->value;
 
 	Draw_ScaledPic (scr_vrect.x + ((scr_vrect.width - crosshair_width)>>1)
 	, scr_vrect.y + ((scr_vrect.height - crosshair_height)>>1), ch_scale->value, crosshair_pic, ch_red->value, ch_green->value, ch_blue->value, alpha);
@@ -622,6 +621,9 @@ void SCR_InitDraw( void )
 	scr_draw2d = Cvar_Get( "scr_draw2d", "1", 0 );
 
 	crosshair = Cvar_Get ("crosshair", "0", CVAR_ARCHIVE);
+	crosshair->OnChange = OnChange_Crosshair;
+	OnChange_Crosshair(crosshair, crosshair->resetString);
+
 	ch_alpha = Cvar_Get ("ch_alpha", "1", CVAR_ARCHIVE);
 	ch_pulse = Cvar_Get ("ch_pulse", "0", CVAR_ARCHIVE);
 	ch_scale = Cvar_Get ("ch_scale", "1", CVAR_ARCHIVE);
@@ -646,6 +648,9 @@ void SCR_InitDraw( void )
 	cl_chathudx = Cvar_Get ("cl_chathudx", "0", 0);
 	cl_chathudy = Cvar_Get ("cl_chathudy", "0", 0);
 	cl_chathudlines = Cvar_Get("cl_chathudlines", "4", CVAR_ARCHIVE);
+	cl_chathudtime = Cvar_Get("cl_chathudtime", "0", 0);
+	cl_chathudlines->OnChange = OnChange_Chathudlines;
+	OnChange_Chathudlines (cl_chathud, cl_chathudlines->resetString);
 
 	scr_drawlagometer = Cvar_Get( "scr_drawlagometer", "0", 0 );
 }

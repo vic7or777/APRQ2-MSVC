@@ -54,8 +54,6 @@ static menulist_s	s_stack_double_box;
 static menulist_s	s_no_spheres_box;
 //ROGUE
 
-int Developer_searchpath( int );
-
 static void DMFlagCallback( void *self )
 {
 	menulist_s *f = ( menulist_s * ) self;
@@ -162,7 +160,7 @@ static void DMFlagCallback( void *self )
 
 //=======
 //ROGUE
-	else if (Developer_searchpath(2) == 2)
+	else if (Developer_searchpath() == 2)
 	{
 		if ( f == &s_no_mines_box)
 		{
@@ -337,7 +335,7 @@ void DMOptions_MenuInit( void )
 
 //============
 //ROGUE
-	if(Developer_searchpath(2) == 2)
+	if(Developer_searchpath() == 2)
 	{
 		s_no_mines_box.generic.type = MTYPE_SPINCONTROL;
 		s_no_mines_box.generic.x	= 0;
@@ -396,7 +394,7 @@ void DMOptions_MenuInit( void )
 
 //=======
 //ROGUE
-	if(Developer_searchpath(2) == 2)
+	if(Developer_searchpath() == 2)
 	{
 		Menu_AddItem( &s_dmoptions_menu, &s_no_mines_box );
 		Menu_AddItem( &s_dmoptions_menu, &s_no_nukes_box );

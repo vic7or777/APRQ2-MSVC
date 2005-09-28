@@ -359,7 +359,7 @@ void SV_WriteServerFile (qboolean autosave)
 		Com_sprintf (comment,sizeof(comment), "%2i:%i%i %2i/%2i  ", newtime->tm_hour
 			, newtime->tm_min/10, newtime->tm_min%10,
 			newtime->tm_mon+1, newtime->tm_mday);
-		strncat (comment, sv.configstrings[CS_NAME], sizeof(comment)-1-strlen(comment) );
+		Q_strncatz (comment, sv.configstrings[CS_NAME], sizeof(comment));
 	}
 	else
 	{	// autosaved
@@ -434,7 +434,7 @@ void SV_ReadServerFile (void)
 			break;
 		FS_Read (string, sizeof(string), f);
 		Com_DPrintf ("Set %s = %s\n", name, string);
-		Cvar_ForceSet (name, string);
+		Cvar_Set (name, string);
 	}
 
 	fclose (f);
@@ -464,13 +464,24 @@ Puts the server in demo mode on a specific map/cinematic
 */
 void SV_DemoMap_f (void)
 {
+	char	demoName[MAX_QPATH];
+
 	if (Cmd_Argc() != 2)
 	{
-		Com_Printf ("USAGE: demomap <demoname.dm2>\n");
+		Com_Printf ("USAGE: demomap <demoname>\n");
 		return;
 	}
 
-	SV_Map (true, Cmd_Argv(1), false );
+	if(strlen(Cmd_Argv(1)) >= sizeof(demoName)-1)
+	{
+		Com_Printf("Demomap: Demo name is too long\n");
+		return;
+	}
+
+	Q_strncpyz(demoName, Cmd_Argv(1), sizeof(demoName));
+	COM_DefaultExtension(demoName, sizeof(demoName), ".dm2");
+
+	SV_Map (true, demoName, false );
 }
 
 /*
@@ -496,7 +507,7 @@ void SV_GameMap_f (void)
 	char		*map;
 	int			i;
 	client_t	*cl;
-	qboolean	*savedInuse;
+	//qboolean	*savedInuse;
 
 	if (Cmd_Argc() != 2)
 	{
@@ -519,10 +530,11 @@ void SV_GameMap_f (void)
 	{	// save the map just exited
 		if (sv.state == ss_game)
 		{
+			qboolean	savedInuse[MAX_CLIENTS];
 			// clear all the client inuse flags before saving so that
 			// when the level is re-entered, the clients will spawn
 			// at spawn points instead of occupying body shells
-			savedInuse = malloc(maxclients->integer * sizeof(qboolean));
+			//savedInuse = malloc(maxclients->integer * sizeof(qboolean));
 			for (i=0,cl=svs.clients ; i<maxclients->integer; i++,cl++)
 			{
 				savedInuse[i] = cl->edict->inuse;
@@ -534,7 +546,7 @@ void SV_GameMap_f (void)
 			// we must restore these for clients to transfer over correctly
 			for (i=0,cl=svs.clients ; i<maxclients->integer; i++,cl++)
 				cl->edict->inuse = savedInuse[i];
-			free (savedInuse);
+			//free (savedInuse);
 		}
 	}
 
@@ -542,7 +554,7 @@ void SV_GameMap_f (void)
 	SV_Map (false, Cmd_Argv(1), false );
 
 	// archive server state
-	strncpy (svs.mapcmd, Cmd_Argv(1), sizeof(svs.mapcmd)-1);
+	Q_strncpyz (svs.mapcmd, Cmd_Argv(1), sizeof(svs.mapcmd));
 
 	// copy off the level to the autosave slot
 	if (!dedicated->integer)

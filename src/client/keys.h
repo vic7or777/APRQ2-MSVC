@@ -55,7 +55,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define	K_PGUP			150
 #define	K_HOME			151
 #define	K_END			152
-#define K_CAPSLOCK		153 //Added capslock -Maniac
 
 #define K_KP_HOME		160
 #define K_KP_UPARROW	161
@@ -73,6 +72,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define K_KP_MINUS		173
 #define K_KP_PLUS		174
 
+#define	K_CAPSLOCK		175
+
 #define K_PAUSE			255
 
 //
@@ -85,56 +86,55 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define	K_MOUSE5		204
 #define	K_MOUSE6		205
 #define	K_MOUSE7		206
+#define	K_MOUSE8		207
 
 //
 // joystick buttons
 //
-#ifdef JOYSTICK
-#define	K_JOY1			205
-#define	K_JOY2			206
-#define	K_JOY3			207
-#define	K_JOY4			208
+#define	K_JOY1			208
+#define	K_JOY2			209
+#define	K_JOY3			210
+#define	K_JOY4			211
 
 //
 // aux keys are for multi-buttoned joysticks to generate so they can use
 // the normal binding process
 //
-#define	K_AUX1			209
-#define	K_AUX2			210
-#define	K_AUX3			211
-#define	K_AUX4			212
-#define	K_AUX5			213
-#define	K_AUX6			214
-#define	K_AUX7			215
-#define	K_AUX8			216
-#define	K_AUX9			217
-#define	K_AUX10			218
-#define	K_AUX11			219
-#define	K_AUX12			220
-#define	K_AUX13			221
-#define	K_AUX14			222
-#define	K_AUX15			223
-#define	K_AUX16			224
-#define	K_AUX17			225
-#define	K_AUX18			226
-#define	K_AUX19			227
-#define	K_AUX20			228
-#define	K_AUX21			229
-#define	K_AUX22			230
-#define	K_AUX23			231
-#define	K_AUX24			232
-#define	K_AUX25			233
-#define	K_AUX26			234
-#define	K_AUX27			235
-#define	K_AUX28			236
-#define	K_AUX29			237
-#define	K_AUX30			238
-#define	K_AUX31			239
-#define	K_AUX32			240
-#endif
+#define	K_AUX1			212
+#define	K_AUX2			213
+#define	K_AUX3			214
+#define	K_AUX4			215
+#define	K_AUX5			216
+#define	K_AUX6			217
+#define	K_AUX7			218
+#define	K_AUX8			219
+#define	K_AUX9			220
+#define	K_AUX10			221
+#define	K_AUX11			222
+#define	K_AUX12			223
+#define	K_AUX13			224
+#define	K_AUX14			225
+#define	K_AUX15			226
+#define	K_AUX16			227
+#define	K_AUX17			228
+#define	K_AUX18			229
+#define	K_AUX19			230
+#define	K_AUX20			231
+#define	K_AUX21			232
+#define	K_AUX22			233
+#define	K_AUX23			234
+#define	K_AUX24			235
+#define	K_AUX25			236
+#define	K_AUX26			237
+#define	K_AUX27			238
+#define	K_AUX28			239
+#define	K_AUX29			240
+#define	K_AUX30			241
+#define	K_AUX31			242
+#define	K_AUX32			243
 
-#define K_MWHEELDOWN	241
-#define K_MWHEELUP		242
+#define K_MWHEELDOWN	244
+#define K_MWHEELUP		245
 
 extern char		*keybindings[256];
 extern	int		key_repeats[256];
@@ -144,10 +144,11 @@ extern	int	anykeydown;
 void Key_Event (int key, qboolean down, unsigned time);
 void Key_Init (void);
 void Key_WriteBindings (FILE *f);
-void Key_SetBinding (int keynum, char *binding);
+void Key_SetBinding (int keynum, const char *binding);
 void Key_ClearStates (void);
 int Key_GetKey (void);
 
 void Key_Message( int key );
 void Key_Console( int key );
 qboolean Key_IsDown( int key );
+

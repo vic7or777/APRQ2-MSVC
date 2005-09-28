@@ -11,71 +11,76 @@
 BUILD_GLX=YES		# X11 GLX client
 BUILD_X11=NO		# X11 software client
 BUILD_EVDEV=NO		# build evdev mouse input support
+BUILD_XMMS=YES		# buildin xmms remote commands
 #--------------------------------------------------------
 
 # Check OS type.
-OSTYPE := $(shell uname -s)
+PLATFORM=$(shell uname -s|tr A-Z a-z)
 
-ifneq ($(OSTYPE),Linux)
-ifneq ($(OSTYPE),FreeBSD)
-$(error OS $(OSTYPE) is currently not supported)
+ifneq ($(PLATFORM),linux)
+ifneq ($(PLATFORM),freebsd)
+  $(error OS $(PLATFORM) is currently not supported)
 endif
 endif
 
-# this nice line comes from the linux kernel makefile
-ARCH := $(shell uname -m | sed -e s/i.86/i386/ -e s/sun4u/sparc/ -e s/sparc64/sparc/ -e s/arm.*/arm/ -e s/sa110/arm/ -e s/alpha/axp/)
+# Check arch type
+ARCH:=$(shell uname -m | sed -e s/i.86/i386/ -e s/sun4u/sparc/ -e s/sparc64/sparc/ -e s/arm.*/arm/ -e s/sa110/arm/ -e s/alpha/axp/)
 
 ifneq ($(ARCH),i386)
 ifneq ($(ARCH),axp)
 ifneq ($(ARCH),ppc)
 ifneq ($(ARCH),sparc)
-$(error arch $(ARCH) is currently not supported)
+  $(error arch $(ARCH) is currently not supported)
 endif
 endif
 endif
 endif
-
+  
+#COMPILATION TOOLS
 CC=gcc
 
 #BASE CFLAGS
-BASE_CFLAGS=-Wall -pipe -Dstricmp=strcasecmp
+BASE_CFLAGS= -funsigned-char -pipe
 ifneq ($(ARCH),i386)
  BASE_CFLAGS+=-DC_ONLY
 endif
 
+ifeq ($(strip $(BUILD_XMMS)),YES)
+ BASE_CFLAGS+=-DWITH_XMMS `glib-config --cflags`
+endif
 ifeq ($(strip $(BUILD_EVDEV)),YES)
  BASE_CFLAGS+=-DWITH_EVDEV
 endif
 
-DEBUG_CFLAGS=$(BASE_CFLAGS) -g
+DEBUG_CFLAGS=$(BASE_CFLAGS) -g -Wall -Wimplicit
+RELEASE_CFLAGS=$(BASE_CFLAGS) -DNDEBUG
 
 ifeq ($(ARCH),axp)
-RELEASE_CFLAGS=$(BASE_CFLAGS) -ffast-math -funroll-loops \
-	-fomit-frame-pointer -fexpensive-optimizations
-endif
+  RELEASE_CFLAGS += -O3 -ffast-math -funroll-loops -fomit-frame-pointer -fexpensive-optimizations
+else
 ifeq ($(ARCH),ppc)
-RELEASE_CFLAGS=$(BASE_CFLAGS) -O2 -ffast-math -funroll-loops \
-	-fomit-frame-pointer -fexpensive-optimizations
+  RELEASE_CFLAGS += -O3 -ffast-math -funroll-loops -fomit-frame-pointer -fno-strict-aliasing -falign-loops=2 -falign-jumps=2 -falign-functions=2 -fexpensive-optimizations
+else
+  RELEASE_CFLAGS += -O3 -ffast-math -funroll-loops -fomit-frame-pointer -fno-strict-aliasing -falign-loops=2 -falign-jumps=2 -falign-functions=2 -fexpensive-optimizations
 endif
-ifeq ($(ARCH),sparc)
-RELEASE_CFLAGS=$(BASE_CFLAGS) -ffast-math -funroll-loops \
-	-fomit-frame-pointer -fexpensive-optimizations
-endif
-ifeq ($(ARCH),i386)
-RELEASE_CFLAGS=$(BASE_CFLAGS) -O2 -fno-strict-aliasing -ffast-math -fexpensive-optimizations
 endif
 
 #BASE LDFLAGS
-ifeq ($(OSTYPE),FreeBSD)
-LDFLAGS=-lm
+ifeq ($(PLATFORM),freebsd)
+  LDFLAGS=-lm
+else
+  ifeq ($(PLATFORM),linux)
+    LDFLAGS=-lm -ldl
+  endif
 endif
-ifeq ($(OSTYPE),Linux)
-LDFLAGS=-lm -ldl
-endif
+
+#ifeq ($(strip $(BUILD_ALSA)),YES)
+#  LDFLAGS+=-lasound
+#endif
 
 #FOR X11 BUILDS
 XCFLAGS=-I/usr/X11R6/include
-XLDFLAGS=-L/usr/X11R6/lib -lX11 -lXext -lXxf86dga -lXxf86vm
+XLDFLAGS=-L/usr/X11R6/lib -lX11 -lXext -lXxf86dga -lXxf86vm -lz
 DO_CC=$(CC) $(CFLAGS) -o $@ -c $<
 DO_AS=$(CC) $(CFLAGS) -DELF -x assembler-with-cpp -o $@ -c $<
 
@@ -88,8 +93,6 @@ DO_GL_AS=$(CC) $(CFLAGS) -DGL_QUAKE -DELF -x assembler-with-cpp -o $@ -c $<
 #############################################################################
 # SETUP AND BUILD
 #############################################################################
-
-VERSION=3.21
 
 MOUNT_DIR=.
 
@@ -104,7 +107,6 @@ LINUX_DIR=$(MOUNT_DIR)/linux
 GAME_DIR=$(MOUNT_DIR)/game
 UI_DIR=$(MOUNT_DIR)/ui
 
-.PHONY : targets build_debug build_release clean clean-debug clean-release clean2
 
 TARGETS=$(BUILDDIR)/aq2 
 
@@ -112,26 +114,25 @@ ifeq ($(strip $(BUILD_X11)),YES)
  TARGETS += $(BUILDDIR)/aq2sw
 endif
 
+.PHONY : targets build_debug build_release makedirs clean clean-debug clean-release clean2
+
 all: build_debug build_release
 
 build_debug:
-	@-mkdir -p $(BUILD_DEBUG_DIR) \
-		$(BUILD_DEBUG_DIR)/q2glx \
-		$(BUILD_DEBUG_DIR)/q2swx \
-		$(BUILD_DEBUG_DIR)/game
-	$(MAKE) targets BUILDDIR=$(BUILD_DEBUG_DIR) CFLAGS="$(DEBUG_CFLAGS) -DLINUX_VERSION='\"$(VERSION) Debug\"'"
+	$(MAKE) targets BUILDDIR=$(BUILD_DEBUG_DIR) CFLAGS="$(DEBUG_CFLAGS)"
 
 build_release:
-	@-mkdir -p $(BUILD_RELEASE_DIR) \
-		$(BUILD_RELEASE_DIR)/q2glx \
-		$(BUILD_RELEASE_DIR)/q2swx \
-		$(BUILD_RELEASE_DIR)/game
-	$(MAKE) targets BUILDDIR=$(BUILD_RELEASE_DIR) CFLAGS="$(RELEASE_CFLAGS) -DLINUX_VERSION='\"$(VERSION)\"'"
+	$(MAKE) targets BUILDDIR=$(BUILD_RELEASE_DIR) CFLAGS="$(RELEASE_CFLAGS)"
 
-targets: $(TARGETS)
+targets: makedirs $(TARGETS)
 
+makedirs:
+	@if [ ! -d $(BUILDDIR) ];then mkdir $(BUILDDIR);fi
+	@if [ ! -d $(BUILDDIR)/q2glx ];then mkdir $(BUILDDIR)/q2glx;fi
+	@if [ ! -d $(BUILDDIR)/q2swx ];then mkdir $(BUILDDIR)/q2swx;fi
+	
 #############################################################################
-# CLIENT/SERVER
+# GLX CLIENT
 #############################################################################
 
 QUAKE2GLX_OBJS = \
@@ -183,7 +184,6 @@ QUAKE2GLX_OBJS = \
 	$(BUILDDIR)/q2glx/glob.o \
 	$(BUILDDIR)/q2glx/net_udp.o \
 	$(BUILDDIR)/q2glx/cd_linux.o \
-	$(BUILDDIR)/q2glx/snd_linux.o \
 	\
 	$(BUILDDIR)/q2glx/qmenu.o \
 	$(BUILDDIR)/q2glx/ui_addressbook.o \
@@ -204,6 +204,7 @@ QUAKE2GLX_OBJS = \
 	$(BUILDDIR)/q2glx/ui_quit.o \
 	$(BUILDDIR)/q2glx/ui_startserver.o \
 	$(BUILDDIR)/q2glx/ui_video.o \
+	$(BUILDDIR)/q2glx/ui_mp3.o \
 	\
 	$(BUILDDIR)/q2glx/gl_draw.o \
 	$(BUILDDIR)/q2glx/gl_image.o \
@@ -215,11 +216,14 @@ QUAKE2GLX_OBJS = \
 	$(BUILDDIR)/q2glx/gl_rsurf.o \
 	$(BUILDDIR)/q2glx/gl_warp.o \
 	$(BUILDDIR)/q2glx/gl_decal.o \
-	$(BUILDDIR)/q2glx/gl_png.o \
 	\
 	$(BUILDDIR)/q2glx/qgl_linux.o \
 	$(BUILDDIR)/q2glx/gl_glx.o \
-	$(BUILDDIR)/q2glx/rw_linux.o
+	$(BUILDDIR)/q2glx/rw_linux.o \
+	$(BUILDDIR)/q2glx/xmms.o \
+	$(BUILDDIR)/q2glx/snd_linux.o \
+	$(BUILDDIR)/q2glx/snd_oss.o \
+	$(BUILDDIR)/q2glx/snd_alsa.o
 	
 ifeq ($(ARCH),i386)
 QUAKE2GLX_OBJS += \
@@ -228,7 +232,7 @@ endif
 
 
 $(BUILDDIR)/aq2 : $(QUAKE2GLX_OBJS)
-	$(CC) $(CFLAGS) -o $@ $(QUAKE2GLX_OBJS) $(LDFLAGS) $(GLXLDFLAGS)
+	$(CC) -o $@ $(QUAKE2GLX_OBJS) $(LDFLAGS) $(GLXLDFLAGS)
 
 $(BUILDDIR)/q2glx/%.o :    $(CLIENT_DIR)/%.c
 	$(DO_GL_CC)
@@ -281,9 +285,17 @@ $(BUILDDIR)/q2glx/qgl_linux.o :  $(LINUX_DIR)/qgl_linux.c
 $(BUILDDIR)/q2glx/gl_glx.o :     $(LINUX_DIR)/gl_glx.c
 	$(DO_GL_CC) $(GLXCFLAGS)
 	
+$(BUILDDIR)/q2glx/snd_oss.o :   $(LINUX_DIR)/snd_oss.c
+	$(DO_GL_CC)
+	
+$(BUILDDIR)/q2glx/snd_alsa.o :   $(LINUX_DIR)/snd_alsa.c
+	$(DO_GL_CC)
+
+$(BUILDDIR)/q2glx/xmms.o :       $(LINUX_DIR)/xmms.c
+	$(DO_GL_CC)
 	
 #############################################################################
-# REF_SOFT
+# X11 CLIENT
 #############################################################################
 
 QUAKE2SWX_OBJS = \
@@ -335,7 +347,6 @@ QUAKE2SWX_OBJS = \
 	$(BUILDDIR)/q2swx/glob.o \
 	$(BUILDDIR)/q2swx/net_udp.o \
 	$(BUILDDIR)/q2swx/cd_linux.o \
-	$(BUILDDIR)/q2swx/snd_linux.o \
 	\
 	$(BUILDDIR)/q2swx/qmenu.o \
 	$(BUILDDIR)/q2swx/ui_addressbook.o \
@@ -356,6 +367,7 @@ QUAKE2SWX_OBJS = \
 	$(BUILDDIR)/q2swx/ui_quit.o \
 	$(BUILDDIR)/q2swx/ui_startserver.o \
 	$(BUILDDIR)/q2swx/ui_video.o \
+	$(BUILDDIR)/q2swx/ui_mp3.o \
 	\
 	$(BUILDDIR)/q2swx/r_aclip.o \
 	$(BUILDDIR)/q2swx/r_alias.o \
@@ -376,8 +388,12 @@ QUAKE2SWX_OBJS = \
 	$(BUILDDIR)/q2swx/r_surf.o \
 	\
 	$(BUILDDIR)/q2swx/rw_x11.o \
-	$(BUILDDIR)/q2swx/rw_linux.o
-
+	$(BUILDDIR)/q2swx/rw_linux.o \
+	$(BUILDDIR)/q2swx/xmms.o \
+	$(BUILDDIR)/q2swx/snd_linux.o \
+	$(BUILDDIR)/q2swx/snd_oss.o \
+	$(BUILDDIR)/q2swx/snd_alsa.o
+	
 ifeq ($(ARCH),i386)
 QUAKE2SWX_OBJS += \
 	$(BUILDDIR)/q2swx/snd_mixa.o \
@@ -396,7 +412,7 @@ endif
 
 
 $(BUILDDIR)/aq2sw :  $(QUAKE2SWX_OBJS)
-	$(CC) $(CFLAGS) -o $@  $(QUAKE2SWX_OBJS) $(LDFLAGS) $(XLDFLAGS)
+	$(CC) -o $@ $(QUAKE2SWX_OBJS) $(LDFLAGS) $(XLDFLAGS)
 
 
 $(BUILDDIR)/q2swx/%.o :    $(CLIENT_DIR)/%.c
@@ -443,7 +459,16 @@ $(BUILDDIR)/q2swx/rw_linux.o :   $(LINUX_DIR)/rw_linux.c
 
 $(BUILDDIR)/q2swx/rw_x11.o :     $(LINUX_DIR)/rw_x11.c
 	$(DO_CC) $(XCFLAGS)
-	
+
+$(BUILDDIR)/q2swx/snd_oss.o :   $(LINUX_DIR)/snd_oss.c
+	$(DO_CC)
+		
+$(BUILDDIR)/q2swx/snd_alsa.o :   $(LINUX_DIR)/snd_alsa.c
+	$(DO_CC)
+
+$(BUILDDIR)/q2swx/xmms.o :       $(LINUX_DIR)/xmms.c
+	$(DO_CC)
+
 $(BUILDDIR)/q2swx/%.o :          $(LINUX_DIR)/%.s
 	$(DO_AS)
 
@@ -461,9 +486,7 @@ clean-release:
 	$(MAKE) clean2 BUILDDIR=$(BUILD_RELEASE_DIR) CFLAGS="$(DEBUG_CFLAGS)"
 
 clean2:
-	rm -f \
-	$(QUAKE2GLX_OBJS) \
-	$(QUAKE2SWX_OBJS)
+	rm -f $(QUAKE2GLX_OBJS)	$(QUAKE2SWX_OBJS)
 
 distclean:
 	@-rm -rf $(BUILD_DEBUG_DIR) $(BUILD_RELEASE_DIR)

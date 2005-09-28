@@ -37,34 +37,6 @@ void CL_ParseInventory (void)
 
 /*
 ================
-Inv_DrawString
-================
-*/
-void Inv_DrawString (int x, int y, char *string)
-{
-	while (*string)
-	{
-		Draw_Char (x, y, *string++, COLOR_WHITE, 1);
-		x+=8;
-	}
-}
-
-/*
-================
-Inv_DrawAltString
-================
-*/
-void Inv_DrawAltString (int x, int y, char *string)
-{
-	while (*string)
-	{
-		Draw_Char (x, y, 128|*string++, COLOR_WHITE, 1);
-		x += 8;
-	}
-}
-
-/*
-================
 CL_DrawInventory
 ================
 */
@@ -73,7 +45,7 @@ CL_DrawInventory
 void CL_DrawInventory (void)
 {
 	int		i, j;
-	int		num, selected_num, item;
+	int		num = 0, selected_num = 0, item;
 	int		index[MAX_ITEMS];
 	char	string[1024];
 	int		x, y;
@@ -84,17 +56,12 @@ void CL_DrawInventory (void)
 
 	selected = cl.frame.playerstate.stats[STAT_SELECTED_ITEM];
 
-	num = 0;
-	selected_num = 0;
 	for (i=0 ; i<MAX_ITEMS ; i++)
 	{
 		if (i==selected)
 			selected_num = num;
 		if (cl.inventory[i])
-		{
-			index[num] = i;
-			num++;
-		}
+			index[num++] = i;
 	}
 
 	// determine scroll point
@@ -114,8 +81,8 @@ void CL_DrawInventory (void)
 
 	y += 24;
 	x += 24;
-	Inv_DrawString (x, y, "hotkey ### item");
-	Inv_DrawString (x, y+8, "------ --- ----");
+	DrawString (x, y, "hotkey ### item");
+	DrawString (x, y+8, "------ --- ----");
 	y += 16;
 	for (i=top ; i<num && i < top+DISPLAY_ITEMS ; i++)
 	{
@@ -133,13 +100,13 @@ void CL_DrawInventory (void)
 		Com_sprintf (string, sizeof(string), "%6s %3i %s", bind, cl.inventory[item],
 			cl.configstrings[CS_ITEMS+item] );
 		if (item != selected)
-			Inv_DrawAltString (x, y, string);
+			DrawAltString (x, y, string);
 		else	// draw a blinky cursor by the selected item
 		{
 			if ( (int)(cls.realtime*10) & 1)
 				Draw_Char (x-8, y, 15, COLOR_WHITE, 1);
 
-			Inv_DrawString (x, y, string);
+			DrawString (x, y, string);
 		}
 		y += 8;
 	}

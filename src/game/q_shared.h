@@ -19,37 +19,38 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 	
 // q_shared.h -- included first by ALL program modules
+#ifndef __SHARED_H__
+#define __SHARED_H__
 
 #include <math.h>
-#include <ctype.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
 #include <stdlib.h>
 #include <time.h>
+#include <ctype.h>
 
+#define R1Q2_PROTOCOL
+#ifdef R1Q2_PROTOCOL
+# include <zlib.h>
+#endif
 //==============================================
 #ifdef _WIN32
 // unknown pragmas are SUPPOSED to be ignored, but....
 #pragma warning(disable : 4244)     // MIPS
 #pragma warning(disable : 4136)     // X86
 #pragma warning(disable : 4051)     // ALPHA
-
 #pragma warning(disable : 4018)     // signed/unsigned mismatch
 #pragma warning(disable : 4305)		// truncation from const double to float
 
-#pragma intrinsic(abs, fabs, memset, memcmp, memcpy, strcmp, strlen, strcat)
-
 # define HAVE___INLINE
-
 # define HAVE__SNPRINTF
-
 # define HAVE__VSNPRINTF
-
 # define HAVE__STRICMP
+# define HAVE___FASTCALL
+# define HAVE__CDECL
 
 # define VID_INITFIRST
-
 # define GL_DRIVERNAME	"opengl32"
 
 # ifdef NDEBUG
@@ -101,6 +102,18 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #endif
 //==============================================
 
+#ifndef HAVE__CDECL
+# ifndef __cdecl
+#  define __cdecl
+# endif
+#endif
+
+#ifndef HAVE___FASTCALL
+# ifndef __fastcall
+#  define __fastcall
+# endif
+#endif
+
 #ifdef HAVE___INLINE
 # ifndef inline
 #  define inline __inline
@@ -119,7 +132,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #ifdef HAVE__VSNPRINTF
 # ifndef vsnprintf 
-#  define vsnprintf _vsnprintf
+#  define vsnprintf(dest, size, src, list) _vsnprintf((dest), (size), (src), (list)), (dest)[(size)-1] = '\0'
 # endif
 #endif
 
@@ -141,6 +154,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 # endif
 #endif
 
+// =========================================================================
+
 #if (defined(_M_IX86) || defined(__i386__) || defined(__ia64__)) && !defined(C_ONLY)
 # define id386 1
 #else
@@ -155,18 +170,17 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 # define CPUSTRING	"NON-WIN32"
 #endif
 
-
 #ifdef GL_QUAKE
 # define R_AppActivate GLimp_AppActivate
 # define R_EndFrame GLimp_EndFrame
-
 # ifdef _WIN32
 #  define AVI_EXPORT
 # endif
-#else
+#else //software
 # define R_AppActivate SWimp_AppActivate
 # define R_EndFrame SWimp_EndFrame
 #endif
+
 //==============================================
 
 typedef unsigned char 		byte;
@@ -253,9 +267,30 @@ typedef	int	fixed4_t;
 typedef	int	fixed8_t;
 typedef	int	fixed16_t;
 
+typedef	vec_t	quat_t[4];
+
+#define ONEDIV64	0.015625
+#define ONEDIV128	0.0078125
+#define ONEDIV255	0.003921568627450980392156862745098
+#define ONEDIV255_5	0.0039138943248532289628180039138943
+#define ONEDIV256	0.00390625
+
 #ifndef M_PI
 #define M_PI		3.14159265358979323846	// matches value in gcc v2 math.h
 #endif
+
+#ifndef M_TWOPI
+# define M_TWOPI	6.28318530717958647692
+#endif
+
+#define	M_PI_DIV_2		1.57079632679489661923
+#define M_PI_DIV_360	0.008726646259971647884611
+
+#define M_PI_DIV_180	0.0174532925199432957692
+#define M_180_DIV_PI	57.295779513082320876798
+
+#define DEG2RAD( a ) (a * M_PI_DIV_180)
+#define RAD2DEG( a ) (a * M_180_DIV_PI)
 
 #ifndef max
 # define max(a,b) ((a) > (b) ? (a) : (b))
@@ -267,7 +302,12 @@ typedef	int	fixed16_t;
 
 #define bound(a,b,c) ((a) >= (c) ? (a) : (b) < (a) ? (a) : (b) > (c) ? (c) : (b))
 
-#define clamp(a,b,c) ((b) >= (c) ? (a)=(b) : (a) < (b) ? (a)=(b) : (a) > (c) ? (a)=(c) : (a))
+#define clamp(a,b,c) ((a) < (b) ? (a)=(b) : (a) > (c) ? (a)=(c) : (a))
+
+#define random()		((rand() & 0x7fff) / ((float)0x7fff))	// 0..1
+#define frand()			random() // 0 to 1
+#define brandom(a,b)	((a)+frand()*((b)-(a)))	// a..b
+#define crand()			(-1+frand()*2) // -1 to 1
 
 struct cplane_s;
 
@@ -288,35 +328,53 @@ extern long Q_ftol( float f );
 #endif
 
 #define DotProduct(x,y)			((x)[0]*(y)[0]+(x)[1]*(y)[1]+(x)[2]*(y)[2])
+#define CrossProduct(v1,v2,c)	((c)[0]=(v1)[1]*(v2)[2]-(v1)[2]*(v2)[1],(c)[1]=(v1)[2]*(v2)[0]-(v1)[0]*(v2)[2],(c)[2]=(v1)[0]*(v2)[1]-(v1)[1]*(v2)[0])
+
+#define PlaneDiff(point,plane) (((plane)->type < 3 ? (point)[(plane)->type] : DotProduct((point), (plane)->normal)) - (plane)->dist)
+
 #define VectorSubtract(a,b,c)   ((c)[0]=(a)[0]-(b)[0],(c)[1]=(a)[1]-(b)[1],(c)[2]=(a)[2]-(b)[2])
 #define VectorAdd(a,b,c)		((c)[0]=(a)[0]+(b)[0],(c)[1]=(a)[1]+(b)[1],(c)[2]=(a)[2]+(b)[2])
 #define VectorCopy(a,b)			((b)[0]=(a)[0],(b)[1]=(a)[1],(b)[2]=(a)[2])
 #define VectorClear(a)			((a)[0]=(a)[1]=(a)[2]=0)
 #define VectorNegate(a,b)		((b)[0]=-(a)[0],(b)[1]=-(a)[1],(b)[2]=-(a)[2])
 #define VectorSet(v, x, y, z)	((v)[0]=(x),(v)[1]=(y),(v)[2]=(z))
-
+#define VectorAvg(a,b,c)		((c)[0]=((a)[0]+(b)[0])*0.5f,(c)[1]=((a)[1]+(b)[1])*0.5f, (c)[2]=((a)[2]+(b)[2])*0.5f)
+#define VectorMA(a,b,c,d)		((d)[0]=(a)[0]+(b)*(c)[0],(d)[1]=(a)[1]+(b)*(c)[1],(d)[2]=(a)[2]+(b)*(c)[2])
 #define VectorCompare(v1,v2)	((v1)[0]==(v2)[0] && (v1)[1]==(v2)[1] && (v1)[2]==(v2)[2])
-#define CrossProduct(v1,v2,c)	((c)[0]=(v1)[1]*(v2)[2]-(v1)[2]*(v2)[1],(c)[1]=(v1)[2]*(v2)[0]-(v1)[0]*(v2)[2],(c)[2]=(v1)[0]*(v2)[1]-(v1)[1]*(v2)[0])
 #define VectorLength(v)			(sqrt(DotProduct((v),(v))))
 #define VectorInverse(v)		((v)[0]=-(v)[0],(v)[1]=-(v)[1],(v)[2]=-(v)[2])
 #define VectorScale(in,s,out)	((out)[0]=(in)[0]*(s),(out)[1]=(in)[1]*(s),(out)[2]=(in)[2]*(s))
-#define VectorMA(a,b,c,d)		((d)[0]=(a)[0]+(b)*(c)[0],(d)[1]=(a)[1]+(b)*(c)[1],(d)[2]=(a)[2]+(b)*(c)[2])
+
+#define DistanceSquared(v1,v2)	(((v1)[0]-(v2)[0])*((v1)[0]-(v2)[0])+((v1)[1]-(v2)[1])*((v1)[1]-(v2)[1])+((v1)[2]-(v2)[2])*((v1)[2]-(v2)[2]))
+#define Distance(v1,v2)			(sqrt(DistanceSquared(v1,v2)))
+
+#define Vector2Copy(a,b)		((b)[0]=(a)[0],(b)[1]=(a)[1])
+#define Vector2Set(v,a, b)		((v)[0]=(a),(v)[1]=(b))
+#define Vector2Avg(a,b,c)		((c)[0]=(((a[0])+(b[0]))*0.5f),(c)[1]=(((a[1])+(b[1]))*0.5f)) 
+
+#define Vector4Set(v, a, b, c, d)	((v)[0]=(a),(v)[1]=(b),(v)[2]=(c),(v)[3]=(d))
+#define Vector4Copy(a,b)			((b)[0]=(a)[0],(b)[1]=(a)[1],(b)[2]=(a)[2],(b)[3]=(a)[3])
+#define Vector4Scale(in,scale,out)	((out)[0]=(in)[0]*scale,(out)[1]=(in)[1]*scale,(out)[2]=(in)[2]*scale,(out)[3]=(in)[3]*scale)
+#define Vector4Add(a,b,c)			((c)[0]=(((a[0])+(b[0]))),(c)[1]=(((a[1])+(b[1]))),(c)[2]=(((a[2])+(b[2]))),(c)[3]=(((a[3])+(b[3])))) 
+#define Vector4Avg(a,b,c)			((c)[0]=((a)[0]+(b)[0])*0.5f,(c)[1]=((a)[1]+(b)[1])*0.5f,(c)[2]=((a)[2]+(b)[2])*0.5f,(c)[3]=((a)[3]+(b)[3])*0.5f) 
+
 #define ClearBounds(mins,maxs)	((mins)[0]=(mins)[1]=(mins)[2]=99999,(maxs)[0]=(maxs)[1]=(maxs)[2]=-99999)
 
-
-#define PlaneDiff(point,plane) (((plane)->type < 3 ? (point)[(plane)->type] : DotProduct((point), (plane)->normal)) - (plane)->dist)
-
-void AddPointToBounds (vec3_t v, vec3_t mins, vec3_t maxs);
+void AddPointToBounds (const vec3_t v, vec3_t mins, vec3_t maxs);
 vec_t VectorNormalize (vec3_t v);		// returns vector length
-vec_t VectorNormalize2 (vec3_t v, vec3_t out);
+vec_t VectorNormalize2 (const vec3_t v, vec3_t out);
+
+void MakeNormalVectors (const vec3_t forward, vec3_t right, vec3_t up);
+
 int Q_log2(int val);
+#define Q_rint(x)	((x) < 0 ? ((int)((x)-0.5f)) : ((int)((x)+0.5f)))
 
 void R_ConcatRotations (float in1[3][3], float in2[3][3], float out[3][3]);
 void R_ConcatTransforms (float in1[3][4], float in2[3][4], float out[3][4]);
 
-void AngleVectors (vec3_t angles, vec3_t forward, vec3_t right, vec3_t up);
-int BoxOnPlaneSide (vec3_t emins, vec3_t emaxs, struct cplane_s *plane);
-float	anglemod(float a);
+void AngleVectors (const vec3_t angles, vec3_t forward, vec3_t right, vec3_t up);
+int BoxOnPlaneSide (const vec3_t emins, const vec3_t emaxs, const struct cplane_s *plane);
+#define anglemod(a) ((360.0/65536) * ((int)((a)*(65536/360.0)) & 65535))
 float LerpAngle (float a1, float a2, float frac);
 
 #define BOX_ON_PLANE_SIDE(emins, emaxs, p)	\
@@ -346,19 +404,21 @@ char *COM_SkipPath (const char *pathname);
 void COM_StripExtension (const char *in, char *out);
 void COM_FileBase (const char *in, char *out);
 void COM_FilePath (const char *in, char *out);
-void COM_DefaultExtension (char *path, char *extension);
+void COM_DefaultExtension (char *path, size_t size, const char *extension);
 
-char *COM_Parse (char **data_p);
+const char *COM_Parse (char **data_p);
 // data is an in/out parm, returns a parsed out token
 
-int Com_WildCmp( const char *filter, const char *string, int ignoreCase );
-unsigned int Com_HashKey (const char *name, int hashsize);
+void COM_MakePrintable (char *s);
 
-#ifndef Q_stricmp
- int Q_stricmp (const char *s1, const char *s2);
-#endif
+int Com_WildCmp( const char *filter, const char *string, qboolean ignoreCase );
+unsigned int Com_HashKey (const char *name, int hashSize);
+
 #ifndef Q_strnicmp
  int Q_strnicmp (const char *s1, const char *s2, size_t size);
+#endif
+#ifndef Q_stricmp
+#  define Q_stricmp(s1, s2) Q_strnicmp((s1), (s2), 99999)
 #endif
 
 // buffer safe operations
@@ -369,6 +429,11 @@ char *Q_strlwr( char *s );
 
 void Com_PageInMemory (byte *buffer, int size);
 
+#ifdef GL_QUAKE
+#define AnglesToAxis(angles, axis) (AngleVectors(angles, axis[0], axis[1], axis[2]),VectorInverse(axis[1]))
+#else
+#define AnglesToAxis(angles, axis) 
+#endif
 
 //=============================================
 #if !defined(ENDIAN_LITTLE) && !defined(ENDIAN_BIG)
@@ -381,7 +446,7 @@ void Com_PageInMemory (byte *buffer, int size);
 
 short ShortSwap (short l);
 int LongSwap (int l);
-float FloatSwap (float f);
+float FloatSwap (const float *f);
 
 #ifdef ENDIAN_LITTLE
 // little endian
@@ -391,6 +456,7 @@ float FloatSwap (float f);
 # define LittleLong(l) (l)
 # define BigFloat(l) FloatSwap(l)
 # define LittleFloat(l) (l)
+# define Swap_Init()
 #elif ENDIAN_BIG
 // big endian
 # define BigShort(l) (l)
@@ -399,18 +465,18 @@ float FloatSwap (float f);
 # define LittleLong(l) LongSwap(l)
 # define BigFloat(l) (l)
 # define LittleFloat(l) FloatSwap(l)
+# define Swap_Init()
 #else
 // figure it out at runtime
-extern	qboolean		bigendien;
 extern short (*BigShort) (short l);
 extern short (*LittleShort) (short l);
 extern int (*BigLong) (int l);
 extern int (*LittleLong) (int l);
-extern float (*BigFloat) (float l);
-extern float (*LittleFloat) (float l);
+extern float (*BigFloat) (const float *l);
+extern float (*LittleFloat) (const float *l);
+void	Swap_Init (void);
 #endif
 
-void	Swap_Init (void);
 char	*va(const char *format, ...);
 
 //=============================================
@@ -426,6 +492,7 @@ char *Info_ValueForKey (const char *s, const char *key);
 void Info_RemoveKey (char *s, const char *key);
 void Info_SetValueForKey (char *s, const char *key, const char *value);
 qboolean Info_Validate (const char *s);
+void Info_NextPair( const char **head, char *key, char *value );
 
 /*
 ==============================================================
@@ -484,7 +551,9 @@ CVARS (console variables)
 							// but can be set from the command line
 #define	CVAR_LATCH		16	// save changes until server restart
 #define CVAR_LATCHVIDEO	32	// save changes until video restart
-#define CVAR_CHEAT		64	// will be reset to default unless cheats are enabled
+#define CVAR_LATCHSOUND 64	// save changes until sound restart
+#define CVAR_CHEAT		128	// will be reset to default unless cheats are enabled
+#define CVAR_USER_CREATED 256 // user own cvars created with set
 
 // nothing outside the Cvar_*() functions should modify these fields!
 typedef struct cvar_s
@@ -497,8 +566,11 @@ typedef struct cvar_s
 	float		value;
 	struct cvar_s *next;
 
+
+	//void		(*OnChange) (const char *oldValue);
+	void		(*OnChange) (struct cvar_s *self, const char *oldValue);
 	int			integer;
-	char		*default_string;
+	char		*resetString;
 	struct cvar_s *hashNext;
 } cvar_t;
 
@@ -610,7 +682,7 @@ typedef struct cplane_s
 #define	PLANE_ANYY		4
 #define	PLANE_ANYZ		5
 
-int	PlaneTypeForNormal ( vec3_t normal );
+int	PlaneTypeForNormal ( const vec3_t normal );
 
 typedef struct cmodel_s
 {
@@ -736,7 +808,6 @@ typedef struct
 	int			(*pointcontents) (vec3_t point);
 } pmove_t;
 
-
 // entity_state_t->effects
 // Effects are things handled on the client side (lights, particles, frame animations)
 // that happen constantly on the given entity.
@@ -792,6 +863,7 @@ typedef struct
 #define RF_SHELL_RED		1024
 #define	RF_SHELL_GREEN		2048
 #define RF_SHELL_BLUE		4096
+#define RF_CULLHACK			8192
 
 //ROGUE
 #define RF_IR_VISIBLE		0x00008000		// 32768
@@ -1080,7 +1152,7 @@ typedef struct
 
 // ROGUE
 
-extern	vec3_t monster_flash_offset [];
+extern const vec3_t monster_flash_offset [];
 
 
 // temp entity events
@@ -1275,6 +1347,8 @@ ROGUE - VERSIONS
 #define	ANGLE2SHORT(x)	((int)((x)*65536/360) & 65535)
 #define	SHORT2ANGLE(x)	((x)*(360.0/65536))
 
+#define	ANGLE2BYTE(x)	((int)((x)*256/360) & 255)
+#define	BYTE2ANGLE(x)	((x)*(360.0/256))
 
 //
 // config strings are a general means of communication from
@@ -1378,4 +1452,35 @@ typedef struct
 
 	short		stats[MAX_STATS];		// fast status bar updates
 } player_state_t;
+
+typedef struct
+{
+	pmove_state_t	pmove;		// for prediction
+
+	// these fields do not need to be communicated bit-precise
+
+	vec3_t		viewangles;		// for fixed views
+	vec3_t		viewoffset;		// add to pmovestate->origin
+	vec3_t		kick_angles;	// add to view direction to get render angles
+								// set by weapon kicks, pain effects, etc
+
+	vec3_t		gunangles;
+	vec3_t		gunoffset;
+
+	int			gunindex;
+	int			gunframe;
+
+	float		blend[4];		// rgba full screen effect
+	
+	float		fov;			// horizontal field of view
+
+	int			rdflags;		// refdef flags
+
+	short		stats[MAX_STATS];		// fast status bar updates
+
+	vec3_t		mins;
+	vec3_t		maxs;
+} player_state_new_t;
+
+#endif
 

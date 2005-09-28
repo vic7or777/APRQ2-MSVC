@@ -30,16 +30,19 @@
 #include "../client/client.h"
 #include "../client/snd_loc.h"
 
-static int  snd_inited;
-static dma_t *shm;
+static qboolean snd_inited = false;
 
-static void paint_audio (void *unused, Uint8 * stream, int len)
+cvar_t *sndbits;
+cvar_t *sndspeed;
+cvar_t *sndchannels;
+
+static void sdl_audio_callback (void *unused, Uint8 * stream, int len)
 {
-	if (shm) {
-		shm->buffer = stream;
-		shm->samplepos += len / (shm->samplebits / 4);
+	if (snd_inited) {
+		dma.buffer = stream;
+		dma.samplepos += len / (dma.samplebits / 4);
 		// Check for samplepos overflow?
-		S_PaintChannels (shm->samplepos);
+		S_PaintChannels (dma.samplepos);
 	}
 }
 
@@ -48,113 +51,106 @@ qboolean SNDDMA_Init (void)
 	SDL_AudioSpec desired, obtained;
 	int desired_bits, freq;
 	
-	if (SDL_WasInit(SDL_INIT_EVERYTHING) == 0) {
+	if(snd_inited)
+		return true;
+
+	if (!sndbits) {
+		sndbits = Cvar_Get("sndbits", "16", CVAR_ARCHIVE);
+		sndspeed = Cvar_Get("sndspeed", "0", CVAR_ARCHIVE);
+		sndchannels = Cvar_Get("sndchannels", "2", CVAR_ARCHIVE);
+		//snddevice = Cvar_Get("snddevice", "/dev/dsp", CVAR_ARCHIVE);
+	}
+
+	if (!SDL_WasInit(SDL_INIT_EVERYTHING)) {
 		if (SDL_Init(SDL_INIT_AUDIO) < 0) {
 			Com_Printf ("Couldn't init SDL audio: %s\n", SDL_GetError ());
-			return 0;
+			return false;
 		}
-	} else if (SDL_WasInit(SDL_INIT_AUDIO) == 0) {
+	} else if (!SDL_WasInit(SDL_INIT_AUDIO)) {
 		if (SDL_InitSubSystem(SDL_INIT_AUDIO) < 0) {
 			Com_Printf ("Couldn't init SDL audio: %s\n", SDL_GetError ());
-			return 0;
+			return false;
 		}
 	}
 	
-	snd_inited = 0;
-	desired_bits = (Cvar_Get("sndbits", "16", CVAR_ARCHIVE))->integer;
 
 	/* Set up the desired format */
-	freq = (Cvar_Get("s_khz", "0", CVAR_ARCHIVE))->integer;
-	if (freq == 44)
-		desired.freq = 44100;
-	else if (freq == 22)
-		desired.freq = 22050;
-	else
-		desired.freq = 11025;
-	
-	switch (desired_bits) {
+	switch (sndbits->integer) {
 		case 8:
 			desired.format = AUDIO_U8;
 			break;
-		case 16:
-			if (SDL_BYTEORDER == SDL_BIG_ENDIAN)
-				desired.format = AUDIO_S16MSB;
-			else
-				desired.format = AUDIO_S16LSB;
-			break;
 		default:
-			Com_Printf ("Unknown number of audio bits: %d\n", desired_bits);
-			return 0;
+			Com_Printf ("Unknown number of audio bits: %i, trying with 16\n", sndbits->integer);
+		case 16:
+			desired.format = AUDIO_S16SYS;
+			break;
 	}
-	desired.channels = (Cvar_Get("sndchannels", "2", CVAR_ARCHIVE))->integer;
 	
-	if (desired.freq == 44100)
-		desired.samples = 2048;
-	else if (desired.freq == 22050)
-		desired.samples = 1024;
+	if(sndspeed->integer)
+		desired.freq = sndspeed->integer;
 	else
-		desired.samples = 512;
+		desired.freg = 22050;
+
+    // just pick a sane default.
+    if (desired.freq <= 11025)
+        desired.samples = 256;
+    else if (desired.freq <= 22050)
+        desired.samples = 512;
+    else if (desired.freq <= 44100)
+        desired.samples = 1024;
+    else
+        desired.samples = 2048;  // (*shrug*)
 	
-	desired.callback = paint_audio;
+	desired.channels = sndchannels->integer;
+	if (desired.channels < 1 || desired.channels > 2)
+		desired.channels = 2;
+
+	desired.callback = sdl_audio_callback;
 	
 	/* Open the audio device */
 	if (SDL_OpenAudio (&desired, &obtained) < 0) {
-		Com_Printf ("Couldn't open SDL audio: %s\n", SDL_GetError ());
-		return 0;
+		Com_Printf ("SDL_OpenAudio() failed: %s\n", SDL_GetError ());
+		if (SDL_WasInit(SDL_INIT_EVERYTHING) == SDL_INIT_AUDIO)
+			SDL_Quit();
+		else
+			SDL_QuitSubSystem(SDL_INIT_AUDIO);
+		return false;
 	}
-
-	/* Make sure we can support the audio format */
-	switch (obtained.format) {
-		case AUDIO_U8:
-			/* Supported */
-			break;
-		case AUDIO_S16LSB:
-		case AUDIO_S16MSB:
-			if (((obtained.format == AUDIO_S16LSB) &&
-				 (SDL_BYTEORDER == SDL_LIL_ENDIAN)) ||
-				((obtained.format == AUDIO_S16MSB) &&
-				 (SDL_BYTEORDER == SDL_BIG_ENDIAN))) {
-				/* Supported */
-				break;
-			}
-			/* Unsupported, fall through */ ;
-		default:
-			/* Not supported -- force SDL to do our bidding */
-			SDL_CloseAudio ();
-			if (SDL_OpenAudio (&desired, NULL) < 0) {
-				Com_Printf ("Couldn't open SDL audio: %s\n", SDL_GetError ());
-				return 0;
-			}
-			memcpy (&obtained, &desired, sizeof (desired));
-			break;
-	}
-	SDL_PauseAudio (0);
 
 	/* Fill the audio DMA information block */
-	shm = &dma;
-	shm->samplebits = (obtained.format & 0xFF);
-	shm->speed = obtained.freq;
-	shm->channels = obtained.channels;
-	shm->samples = obtained.samples * shm->channels;
-	shm->samplepos = 0;
-	shm->submission_chunk = 1;
-	shm->buffer = NULL;
+	dma.samplebits = (obtained.format & 0xFF);
+	dma.speed = obtained.freq;
+	dma.channels = obtained.channels;
+	dma.samples = obtained.samples * dma.channels;
+	dma.samplepos = 0;
+	dma.submission_chunk = 1;
+	dma.buffer = NULL;
 
-	snd_inited = 1;
-	return 1;
+    Com_Printf("Starting SDL audio callback...\n");
+    SDL_PauseAudio(0);  // start callback.
+
+    Com_Printf("SDL audio initialized.\n");
+
+	snd_inited = true;
+	return true;
 }
 
 int SNDDMA_GetDMAPos (void)
 {
-	return shm->samplepos;
+	if(!snd_inited)
+		return 0;
+
+	return dma.samplepos;
 }
 
 void SNDDMA_Shutdown (void)
 {
-	if (snd_inited) {
-		SDL_CloseAudio ();
-		snd_inited = 0;
-	}
+	if (!snd_inited)
+		return;
+
+	SDL_PauseAudio(1);
+	SDL_CloseAudio ();
+	snd_inited = false;
 
 	if (SDL_WasInit(SDL_INIT_EVERYTHING) == SDL_INIT_AUDIO)
 		SDL_Quit();

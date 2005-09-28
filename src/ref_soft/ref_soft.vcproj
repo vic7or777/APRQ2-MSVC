@@ -12,23 +12,25 @@
 	<Configurations>
 		<Configuration
 			Name="Debug|Win32"
-			OutputDirectory=".\..\debug"
+			OutputDirectory=".\debug"
 			IntermediateDirectory=".\debug"
-			ConfigurationType="2"
+			ConfigurationType="1"
 			UseOfMFC="0"
 			ATLMinimizesCRunTimeLibraryUsage="FALSE">
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
 				OptimizeForProcessor="1"
+				AdditionalIncludeDirectories="../win32/lib"
 				PreprocessorDefinitions="_DEBUG;WIN32;_WINDOWS"
-				RuntimeLibrary="1"
+				RuntimeLibrary="4"
 				UsePrecompiledHeader="2"
-				PrecompiledHeaderFile=".\debug/ref_soft.pch"
+				PrecompiledHeaderFile=".\debug/aq2sw.pch"
 				AssemblerListingLocation=".\debug/"
 				ObjectFile=".\debug/"
 				ProgramDataBaseFileName=".\debug/"
 				BrowseInformation="1"
+				BrowseInformationFile=".\debug/"
 				WarningLevel="3"
 				SuppressStartupBanner="TRUE"
 				DebugInformationFormat="4"/>
@@ -36,18 +38,18 @@
 				Name="VCCustomBuildTool"/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="winmm.lib"
-				OutputFile=".\..\debug/ref_soft.dll"
-				LinkIncremental="1"
+				AdditionalDependencies="winmm.lib wsock32.lib zlib.lib"
+				OutputFile="d:\games\quake2\aq2swde.exe"
+				LinkIncremental="2"
 				SuppressStartupBanner="TRUE"
-				IgnoreDefaultLibraryNames="libc"
-				ModuleDefinitionFile=".\ref_soft.def"
+				IgnoreDefaultLibraryNames=""
+				ModuleDefinitionFile=""
 				GenerateDebugInformation="TRUE"
-				ProgramDatabaseFile=".\..\debug/ref_soft.pdb"
+				ProgramDatabaseFile=".\debug/aq2sw.pdb"
 				GenerateMapFile="TRUE"
-				MapFileName=".\debug/ref_soft.map"
+				MapFileName=".\debug/aq2sw.map"
 				SubSystem="2"
-				ImportLibrary=".\..\debug/ref_soft.lib"
+				ImportLibrary=""
 				TargetMachine="1"/>
 			<Tool
 				Name="VCMIDLTool"
@@ -80,7 +82,7 @@
 		</Configuration>
 		<Configuration
 			Name="Release|Win32"
-			OutputDirectory=".\..\release"
+			OutputDirectory=".\release"
 			IntermediateDirectory=".\release"
 			ConfigurationType="1"
 			UseOfMFC="0"
@@ -89,17 +91,18 @@
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="2"
-				GlobalOptimizations="TRUE"
+				GlobalOptimizations="FALSE"
 				InlineFunctionExpansion="2"
-				EnableIntrinsicFunctions="TRUE"
-				FavorSizeOrSpeed="1"
-				OptimizeForProcessor="0"
+				EnableIntrinsicFunctions="FALSE"
+				FavorSizeOrSpeed="0"
+				OptimizeForProcessor="1"
+				AdditionalIncludeDirectories="../win32/lib"
 				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS"
-				StringPooling="FALSE"
-				RuntimeLibrary="0"
-				EnableFunctionLevelLinking="FALSE"
-				UsePrecompiledHeader="0"
-				PrecompiledHeaderFile=""
+				StringPooling="TRUE"
+				RuntimeLibrary="4"
+				EnableFunctionLevelLinking="TRUE"
+				UsePrecompiledHeader="2"
+				PrecompiledHeaderFile=".\release/aq2sw.pch"
 				AssemblerListingLocation=".\release/"
 				ObjectFile=".\release/"
 				ProgramDataBaseFileName=".\release/"
@@ -109,16 +112,15 @@
 				Name="VCCustomBuildTool"/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="vfw32.lib winmm.lib wsock32.lib"
+				AdditionalDependencies="winmm.lib wsock32.lib zlib.lib"
 				OutputFile="d:\games\quake2\aq2sw.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="FALSE"
+				AdditionalLibraryDirectories="../win32/lib"
 				ModuleDefinitionFile=""
 				ProgramDatabaseFile=".\..\release/aq2_soft.pdb"
 				SubSystem="2"
-				OptimizeReferences="2"
-				EnableCOMDATFolding="2"
-				ImportLibrary=".\..\release/aq2_soft.lib"
+				ImportLibrary=""
 				TargetMachine="1"/>
 			<Tool
 				Name="VCMIDLTool"
@@ -698,6 +700,9 @@
 				RelativePath="..\ui\ui_main.c">
 			</File>
 			<File
+				RelativePath="..\ui\ui_mp3.c">
+			</File>
+			<File
 				RelativePath="..\ui\ui_multiplayer.c">
 			</File>
 			<File
@@ -714,9 +719,6 @@
 			</File>
 			<File
 				RelativePath="..\ui\ui_video.c">
-			</File>
-			<File
-				RelativePath="..\ui\ui_winamp.c">
 			</File>
 		</Filter>
 	</Files>

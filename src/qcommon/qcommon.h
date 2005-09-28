@@ -28,8 +28,12 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define	BASEDIRNAME	"baseq2"
 
 
-#define APR_APPNAME "Apr"
-#define APR_VERSION "1.17"
+#ifndef APPLICATION
+# define APPLICATION	"Quake2"
+#endif
+
+#define APR_APPNAME "AprQ2"
+#define APR_VERSION "1.18"
 
 //============================================================================
 
@@ -46,8 +50,8 @@ typedef struct sizebuf_s
 void SZ_Init (sizebuf_t *buf, byte *data, int length);
 void SZ_Clear (sizebuf_t *buf);
 void *SZ_GetSpace (sizebuf_t *buf, int length);
-void SZ_Write (sizebuf_t *buf, void *data, int length);
-void SZ_Print (sizebuf_t *buf, char *data);	// strcats onto the sizebuf
+void SZ_Write (sizebuf_t *buf, const void *data, int length);
+void SZ_Print (sizebuf_t *buf, const char *data);	// strcats onto the sizebuf
 
 //============================================================================
 
@@ -59,14 +63,14 @@ void MSG_WriteByte (sizebuf_t *sb, int c);
 void MSG_WriteShort (sizebuf_t *sb, int c);
 void MSG_WriteLong (sizebuf_t *sb, int c);
 void MSG_WriteFloat (sizebuf_t *sb, float f);
-void MSG_WriteString (sizebuf_t *sb, char *s);
+void MSG_WriteString (sizebuf_t *sb, const char *s);
 void MSG_WriteCoord (sizebuf_t *sb, float f);
-void MSG_WritePos (sizebuf_t *sb, vec3_t pos);
+void MSG_WritePos (sizebuf_t *sb, const vec3_t pos);
 void MSG_WriteAngle (sizebuf_t *sb, float f);
 void MSG_WriteAngle16 (sizebuf_t *sb, float f);
-void MSG_WriteDeltaUsercmd (sizebuf_t *sb, struct usercmd_s *from, struct usercmd_s *cmd);
-void MSG_WriteDeltaEntity (struct entity_state_s *from, struct entity_state_s *to, sizebuf_t *msg, qboolean force, qboolean newentity);
-void MSG_WriteDir (sizebuf_t *sb, vec3_t vector);
+void MSG_WriteDeltaUsercmd (sizebuf_t *sb, const struct usercmd_s *from, const struct usercmd_s *cmd);
+void MSG_WriteDeltaEntity (const struct entity_state_s *from, const struct entity_state_s *to, sizebuf_t *msg, qboolean force, qboolean newentity);
+void MSG_WriteDir (sizebuf_t *sb, const vec3_t vector);
 
 
 void	MSG_BeginReading (sizebuf_t *sb);
@@ -83,12 +87,17 @@ float	MSG_ReadCoord (sizebuf_t *sb);
 void	MSG_ReadPos (sizebuf_t *sb, vec3_t pos);
 float	MSG_ReadAngle (sizebuf_t *sb);
 float	MSG_ReadAngle16 (sizebuf_t *sb);
-void	MSG_ReadDeltaUsercmd (sizebuf_t *sb, struct usercmd_s *from, struct usercmd_s *cmd);
+void	MSG_ReadDeltaUsercmd (sizebuf_t *sb, const struct usercmd_s *from, struct usercmd_s *cmd);
 
 void	MSG_ReadDir (sizebuf_t *sb, vec3_t vector);
 
 void	MSG_ReadData (sizebuf_t *sb, void *buffer, int size);
 
+
+#ifdef R1Q2_PROTOCOL
+int ZLibCompressChunk(byte *in, int len_in, byte *out, int len_out, int method, int wbits);
+int ZLibDecompress (byte *in, int inlen, byte /*@out@*/*out, int outlen, int wbits);
+#endif
 
 //============================================================================
 
@@ -96,17 +105,16 @@ void	MSG_ReadData (sizebuf_t *sb, void *buffer, int size);
 int	COM_Argc (void);
 char *COM_Argv (int arg);	// range and null checked
 void COM_ClearArgv (int arg);
-int COM_CheckParm (char *parm);
+int COM_CheckParm (const char *parm);
 void COM_AddParm (char *parm);
 
 void COM_Init (void);
 void COM_InitArgv (int argc, char **argv);
 
-char *CopyString (const char *in);
 
 //============================================================================
 
-void Info_Print (char *s);
+void Info_Print (const char *s);
 
 
 /* crc.h */
@@ -130,6 +138,11 @@ PROTOCOL
 
 #define	PROTOCOL_VERSION	34
 
+#define	ORIGINAL_PROTOCOL_VERSION	34
+#define	ENHANCED_PROTOCOL_VERSION	35
+
+#define	CURRENT_ENHANCED_COMPATIBILITY_NUMBER	1903
+
 //=========================================
 
 #define	PORT_MASTER	27900
@@ -141,7 +154,9 @@ PROTOCOL
 #define	UPDATE_BACKUP	16	// copies of entity_state_t to keep buffered must be power of two
 #define	UPDATE_MASK		(UPDATE_BACKUP-1)
 
-
+#define NET_NONE		0
+#define NET_CLIENT		1
+#define NET_SERVER		2
 
 //==================
 // the svc_strings[] array in cl_parse.c should mirror this
@@ -176,8 +191,30 @@ enum svc_ops_e
 	svc_playerinfo,				// variable
 	svc_packetentities,			// [...]
 	svc_deltapacketentities,	// [...]
-	svc_frame
+	svc_frame,
+
+	// ********** r1q2 specific ***********
+	svc_zpacket,
+	svc_zdownload
+	// ********** end r1q2 specific *******
 };
+
+typedef enum {
+	ss_dead,			// no map loaded
+	ss_loading,			// spawning level edicts
+	ss_game,			// actively running
+	ss_cinematic,
+	ss_demo,
+	ss_pic
+} server_state_t;
+
+typedef enum
+{
+	CLSET_NOGUN,
+	CLSET_NOBLEND,
+	CLSET_RECORDING,
+	CLSET_MAX
+} clientsetting_t;
 
 //==============================================
 
@@ -190,7 +227,8 @@ enum clc_ops_e
 	clc_nop, 		
 	clc_move,				// [[usercmd_t]
 	clc_userinfo,			// [[userinfo string]
-	clc_stringcmd			// [string] message
+	clc_stringcmd,			// [string] message
+	clc_setting				// [setting][value] R1Q2 settings support.
 };
 
 //==============================================
@@ -214,6 +252,16 @@ enum clc_ops_e
 #define	PS_WEAPONFRAME		(1<<13)
 #define	PS_RDFLAGS			(1<<14)
 
+#define	PS_BBOX				(1<<15)
+
+//r1 extra hacky bits that are hijacked for more bandwidth goodness. 4 bits in surpresscount
+//and 3 in the server message byte (!!!!!!!!)
+#define	EPS_GUNOFFSET		(1<<0)
+#define	EPS_GUNANGLES		(1<<1)
+#define	EPS_PMOVE_VELOCITY2	(1<<2)
+#define	EPS_PMOVE_ORIGIN2	(1<<3)
+#define	EPS_VIEWANGLE2		(1<<4)
+#define	EPS_STATS			(1<<5)
 //==============================================
 
 // user_cmd_t communication
@@ -305,11 +353,11 @@ The game starts with a Cbuf_AddText ("exec quake.rc\n"); Cbuf_Execute ();
 void Cbuf_Init (void);
 // allocates an initial text buffer that will grow as needed
 
-void Cbuf_AddText (char *text);
+void Cbuf_AddText (const char *text);
 // as new commands are generated from the console or keybindings,
 // the text is added to the end of the command buffer.
 
-void Cbuf_InsertText (char *text);
+void Cbuf_InsertText (const char *text);
 // when a command wants to issue other commands immediately, the text is
 // inserted at the beginning of the buffer, before any remaining unexecuted
 // commands.
@@ -349,7 +397,7 @@ typedef void (*xcommand_t) (void);
 
 void	Cmd_Init (void);
 
-void	Cmd_AddCommand (char *cmd_name, xcommand_t function);
+void	Cmd_AddCommand (const char *cmd_name, xcommand_t function);
 // called by the init functions of other parts of the program to
 // register commands and functions to call for them.
 // The cmd_name is referenced later, so it should not be in temp memory
@@ -357,10 +405,12 @@ void	Cmd_AddCommand (char *cmd_name, xcommand_t function);
 // as a clc_stringcmd instead of executed locally
 void	Cmd_RemoveCommand (const char *cmd_name);
 
-qboolean Cmd_Exists (char *cmd_name);
+void	Cmd_CommandCompletion( const char *partial, void(*callback)(const char *name, const char *value) );
+
+//qboolean Cmd_Exists (char *cmd_name);
 // used by the cvar code to check for cvar / command name overlap
 
-char 	*Cmd_CompleteCommand (const char *partial);
+//char 	*Cmd_CompleteCommand (const char *partial);
 // attempts to match a partial command for automatic command line completion
 // returns NULL if nothing fits
 
@@ -385,6 +435,11 @@ void	Cmd_ForwardToServer (void);
 // so when they are typed in at the console, they will need to be forwarded.
 
 void Cmd_WriteAliases (FILE *f);
+
+char *Cmd_ArgsFrom (int arg);
+
+void Cmd_AddMacro( const char *name, void (*function)( char *, int ) );
+void Cmd_ExecTrigger( const char *string );
 
 /*
 ==============================================================
@@ -417,7 +472,7 @@ cvar_t *Cvar_Get (const char *var_name, const char *value, int flags);
 cvar_t 	*Cvar_Set (const char *var_name, const char *value);
 // will create the variable if it doesn't exist
 
-cvar_t *Cvar_ForceSet (const char *var_name, const char *value);
+cvar_t *Cvar_SetLatched (const char *var_name, const char *value);
 // will set the variable even if NOSET or LATCH
 
 cvar_t 	*Cvar_FullSet (const char *var_name, const char *value, int flags);
@@ -431,9 +486,11 @@ float	Cvar_VariableValue (const char *var_name);
 char	*Cvar_VariableString (const char *var_name);
 // returns an empty string if not defined
 
-char 	*Cvar_CompleteVariable (const char *partial);
+void Cvar_CommandCompletion ( const char *partial, void(*callback)(const char *name, const char *value) );
+//char 	*Cvar_CompleteVariable (const char *partial);
 // attempts to match a partial variable name for command line completion
 // returns NULL if nothing fits
+void	Cvar_SetCheatState( void );
 
 void	Cvar_GetLatchedVars (int flags);
 // any CVAR_LATCHED variables that have been set will now take effect
@@ -473,6 +530,7 @@ NET
 
 #define	MAX_MSGLEN		1400		// max length of a message
 #define	PACKET_HEADER	10			// two ints and a short
+#define	MAX_USABLEMSG	MAX_MSGLEN - PACKET_HEADER
 
 //typedef enum {NA_LOOPBACK, NA_BROADCAST, NA_IP, NA_IPX, NA_BROADCAST_IPX} netadrtype_t;
 typedef enum {NA_LOOPBACK, NA_BROADCAST, NA_IP} netadrtype_t;
@@ -495,7 +553,7 @@ void		NET_Shutdown (void);
 void		NET_Config (qboolean multiplayer);
 
 qboolean	NET_GetPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_message);
-void		NET_SendPacket (netsrc_t sock, int length, const void *data, const netadr_t *to);
+int			NET_SendPacket (netsrc_t sock, int length, const void *data, const netadr_t *to);
 
 qboolean	NET_CompareAdr (const netadr_t *a, const netadr_t *b);
 qboolean	NET_CompareBaseAdr (const netadr_t *a, const netadr_t *b);
@@ -523,6 +581,7 @@ typedef struct
 
 	netadr_t	remote_address;
 	int			qport;				// qport value to write when transmitting
+	int			protocol;
 
 // sequencing variables
 	int			incoming_sequence;
@@ -550,11 +609,11 @@ extern	byte		net_message_buffer[MAX_MSGLEN];
 
 
 void Netchan_Init (void);
-void Netchan_Setup (netsrc_t sock, netchan_t *chan, netadr_t *adr, int qport);
+void Netchan_Setup (netsrc_t sock, netchan_t *chan, netadr_t *adr, int protocol, int qport);
 
-qboolean Netchan_NeedReliable (netchan_t *chan);
-void Netchan_Transmit (netchan_t *chan, int length, byte *data);
-void Netchan_OutOfBand (int net_socket, const netadr_t *adr, int length, byte *data);
+//qboolean Netchan_NeedReliable (netchan_t *chan);
+int Netchan_Transmit (netchan_t *chan, int length, const byte *data);
+void Netchan_OutOfBand (int net_socket, const netadr_t *adr, int length, const byte *data);
 void Netchan_OutOfBandPrint (int net_socket, const netadr_t *adr, const char *format, ...);
 qboolean Netchan_Process (netchan_t *chan, sizebuf_t *msg);
 
@@ -580,25 +639,25 @@ int			CM_NumInlineModels (void);
 char		*CM_EntityString (void);
 
 // creates a clipping hull for an arbitrary box
-int			CM_HeadnodeForBox (vec3_t mins, vec3_t maxs);
+int			CM_HeadnodeForBox (const vec3_t mins, const vec3_t maxs);
 
 
 // returns an ORed contents mask
-int			CM_PointContents (vec3_t p, int headnode);
-int			CM_TransformedPointContents (vec3_t p, int headnode, vec3_t origin, vec3_t angles);
+int			CM_PointContents (const vec3_t p, int headnode);
+int			CM_TransformedPointContents (const vec3_t p, int headnode, const vec3_t origin, const vec3_t angles);
 
-trace_t		CM_BoxTrace (vec3_t start, vec3_t end,
-						  vec3_t mins, vec3_t maxs,
+trace_t		CM_BoxTrace (const vec3_t start, const vec3_t end,
+						  const vec3_t mins, const vec3_t maxs,
 						  int headnode, int brushmask);
-trace_t		CM_TransformedBoxTrace (vec3_t start, vec3_t end,
-						  vec3_t mins, vec3_t maxs,
+trace_t		CM_TransformedBoxTrace (const vec3_t start, const vec3_t end,
+						  const vec3_t mins, const vec3_t maxs,
 						  int headnode, int brushmask,
-						  vec3_t origin, vec3_t angles);
+						  const vec3_t origin, const vec3_t angles);
 
 byte		*CM_ClusterPVS (int cluster);
 byte		*CM_ClusterPHS (int cluster);
 
-int			CM_PointLeafnum (vec3_t p);
+int			CM_PointLeafnum (const vec3_t p);
 
 // call with topnode set to the headnode, returns with topnode
 // set to the first node that splits the box
@@ -613,7 +672,7 @@ void		CM_SetAreaPortalState (int portalnum, qboolean open);
 qboolean	CM_AreasConnected (int area1, int area2);
 
 int			CM_WriteAreaBits (byte *buffer, int area);
-qboolean	CM_HeadnodeVisible (int headnode, byte *visbits);
+qboolean	CM_HeadnodeVisible (int headnode, const byte *visbits);
 
 void		CM_WritePortalState (FILE *f);
 void		CM_ReadPortalState (FILE *f);
@@ -629,6 +688,9 @@ Common between server and client so prediction matches
 */
 
 extern float pm_airaccelerate;
+extern float	pm_multiplier;
+extern qboolean	pm_strafehack;
+extern qboolean	pm_enhanced;
 
 void Pmove (pmove_t *pmove);
 
@@ -698,15 +760,10 @@ byte		COM_BlockSequenceCRCByte (byte *base, int length, int sequence);
 
 int SortStrcmp( const void *p1, const void *p2 );
 
-float	frand(void);	// 0 ti 1
-float	crand(void);	// -1 to 1
 
 extern	cvar_t	*developer;
 extern	cvar_t	*dedicated;
 extern	cvar_t	*host_speeds;
-extern	cvar_t	*log_stats;
-
-extern	FILE *log_stats_file;
 
 // host_speeds times
 extern	int		time_before_game;
@@ -714,17 +771,79 @@ extern	int		time_after_game;
 extern	int		time_before_ref;
 extern	int		time_after_ref;
 
+typedef struct tagmalloc_tag_s
+{
+	short		value;
+	char		*name;
+	unsigned int allocs;
+} tagmalloc_tag_t;
+
+//r1: tagmalloc defines
+enum tagmalloc_tags_e
+{
+	TAGMALLOC_NOT_TAGGED,
+	TAGMALLOC_CMDBUFF,
+	TAGMALLOC_CMD,
+	TAGMALLOC_ALIAS,
+	TAGMALLOC_TRIGGER,
+	TAGMALLOC_MACRO,
+	TAGMALLOC_CVAR,
+	TAGMALLOC_FSLOADFILE,
+	TAGMALLOC_FSLOADPAK,
+	TAGMALLOC_FILELIST,
+	TAGMALLOC_SEARCHPATH,
+	TAGMALLOC_CLIENTS,
+	TAGMALLOC_CL_ENTS,
+
+	TAGMALLOC_CLIENT_KEYBIND,
+	TAGMALLOC_CLIENT_SFX,
+	TAGMALLOC_CLIENT_SOUNDCACHE,
+	TAGMALLOC_CLIENT_LOADPCX,
+	TAGMALLOC_CLIENT_CINEMA,
+	TAGMALLOC_CLIENT_LOC,
+	TAGMALLOC_X86,
+	TAGMALLOC_CLIPBOARD,
+
+	TAGMALLOC_MENU,
+	TAGMALLOC_MP3LIST,
+	TAGMALLOC_AVIEXPORT,
+	TAGMALLOC_RENDER_IMAGE,
+	TAGMALLOC_RENDER_IMGRESAMPLE,
+	TAGMALLOC_RENDER_SCRSHOT,
+
+	TAGMALLOC_DLL_GAME,
+	TAGMALLOC_DLL_LEVEL,
+	TAGMALLOC_MAX_TAGS
+};
+
+#ifndef NDEBUG
+void _Z_Free (void *ptr, const char *filename, int fileline);
+void *_Z_TagMalloc (int size, int tag, const char *filename, int fileline);
+void _Z_FreeTags (int tag, const char *filename, int fileline);
+char *_CopyString (const char *in, int tag, const char *filename, int fileline);
+
+#define Z_Free(ptr) _Z_Free(ptr,__FILE__,__LINE__)
+#define Z_TagMalloc(size,tag) _Z_TagMalloc(size,tag,__FILE__,__LINE__)
+#define Z_FreeTags(tag) _Z_FreeTags(tag,__FILE__,__LINE__)
+#define CopyString(in,tag) _CopyString(in,tag,__FILE__,__LINE__)
+#else
+//void *Z_Malloc (int size);			// returns 0 filled memory
 void Z_Free (void *ptr);
-void *Z_Malloc (int size);			// returns 0 filled memory
 void *Z_TagMalloc (int size, int tag);
 void Z_FreeTags (int tag);
+char *CopyString (const char *in, int tag);
+#endif
+
+void Z_FreeGame (void *ptr);
+void *Z_TagMallocGame (int size, int tag);
+void Z_FreeTagsGame (int tag);
 
 void Qcommon_Init (int argc, char **argv);
 void Qcommon_Frame (int msec);
 void Qcommon_Shutdown (void);
 
 #define NUMVERTEXNORMALS	162
-extern	vec3_t	bytedirs[NUMVERTEXNORMALS];
+extern	const vec3_t	bytedirs[NUMVERTEXNORMALS];
 
 // this is in the client code, but can be used for debugging from server
 void SCR_DebugGraph (float value, int color);
@@ -776,18 +895,25 @@ void SV_Frame (int msec);
 char *CL_Mapname (void);
 
 #define Q_COLOR_ESCAPE	'^'
-#define COLOR_BLACK		'0'
-#define COLOR_RED		'1'
-#define COLOR_GREEN		'2'
-#define COLOR_YELLOW	'3'
-#define COLOR_BLUE		'4'
-#define COLOR_CYAN		'5'
-#define COLOR_MAGENTA	'6'
-#define COLOR_WHITE		'7'
+#define Q_IsColorString(p)	( p && *(p) == Q_COLOR_ESCAPE && *((p)+1) >= '0' && *((p)+1) <= '7' )
 
-#define Q_IsColorString(p)	( p && *(p) == Q_COLOR_ESCAPE && *((p) + 1) >= '0' && *((p) + 1) <= '9')
-#define S_DISABLE_COLOR	"^DC"
-#define S_ENABLE_COLOR	"^EC"
+#define COLOR_ENABLE	'\x03'
+#define COLOR_ONE		'\x04'
+#define Q_IsColorEnabled(p)  ( p && *(p) == COLOR_ENABLE)
+#define Q_IsOneColorString(p)( p && *(p) == COLOR_ONE)
+#define S_ENABLE_COLOR	"\x03"
+#define S_ONE_COLOR		"\x04"
+
+#define COLOR_BLACK		0
+#define COLOR_RED		1
+#define COLOR_GREEN		2
+#define COLOR_YELLOW	3
+#define COLOR_BLUE		4
+#define COLOR_CYAN		5
+#define COLOR_MAGENTA	6
+#define COLOR_WHITE		7
+#define ColorIndex(c)	( ( (c) - '0' ) & 7 )
+
 #define S_COLOR_BLACK	"^0"
 #define S_COLOR_RED		"^1"
 #define S_COLOR_GREEN	"^2"
@@ -797,5 +923,4 @@ char *CL_Mapname (void);
 #define S_COLOR_MAGENTA	"^6"
 #define S_COLOR_WHITE	"^7"
 
-#define ColorIndex(c)	( ( (c) - '0' ) & 7 )
 

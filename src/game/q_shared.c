@@ -17,99 +17,76 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 */
-#include <assert.h>
-#include "q_shared.h"
 
-#define DEG2RAD( a ) (( a * M_PI ) / 180.0F)
+#include "q_shared.h"
 
 vec3_t vec3_origin = {0,0,0};
 
 //============================================================================
 
-#ifdef _WIN32
-#pragma optimize( "", off )
-#endif
+void MakeNormalVectors (const vec3_t forward, vec3_t right, vec3_t up)
+{
+	float		d;
+
+	// this rotate and negat guarantees a vector
+	// not colinear with the original
+	right[1] = -forward[0];
+	right[2] = forward[1];
+	right[0] = forward[2];
+
+	d = DotProduct (right, forward);
+	VectorMA (right, -d, forward, right);
+	VectorNormalize (right);
+	CrossProduct (right, forward, up);
+}
 
 void RotatePointAroundVector( vec3_t dst, const vec3_t dir, const vec3_t point, float degrees )
 {
-	float	m[3][3];
-	float	im[3][3];
-	float	zrot[3][3];
-	float	tmpmat[3][3];
-	float	rot[3][3];
-	int	i;
-	vec3_t vr, vup, vf;
+	float		t0, t1, c, s;
+	vec3_t		vr, vu, vf;
 
-	vf[0] = dir[0];
-	vf[1] = dir[1];
-	vf[2] = dir[2];
+	s = DEG2RAD (degrees);
+	c = cos (s);
+	s = sin (s);
 
-	PerpendicularVector( vr, dir );
-	CrossProduct( vr, vf, vup );
+	VectorCopy (dir, vf);
+	MakeNormalVectors (vf, vr, vu);
 
-	m[0][0] = vr[0];
-	m[1][0] = vr[1];
-	m[2][0] = vr[2];
+	t0 = vr[0] * c + vu[0] * -s;
+	t1 = vr[0] * s + vu[0] *  c;
+	dst[0] = (t0 * vr[0] + t1 * vu[0] + vf[0] * vf[0]) * point[0]
+		   + (t0 * vr[1] + t1 * vu[1] + vf[0] * vf[1]) * point[1]
+		   + (t0 * vr[2] + t1 * vu[2] + vf[0] * vf[2]) * point[2];
 
-	m[0][1] = vup[0];
-	m[1][1] = vup[1];
-	m[2][1] = vup[2];
+	t0 = vr[1] * c + vu[1] * -s;
+	t1 = vr[1] * s + vu[1] *  c;
+	dst[1] = (t0 * vr[0] + t1 * vu[0] + vf[1] * vf[0]) * point[0]
+		   + (t0 * vr[1] + t1 * vu[1] + vf[1] * vf[1]) * point[1]
+		   + (t0 * vr[2] + t1 * vu[2] + vf[1] * vf[2]) * point[2];
 
-	m[0][2] = vf[0];
-	m[1][2] = vf[1];
-	m[2][2] = vf[2];
-
-	memcpy( im, m, sizeof( im ) );
-
-	im[0][1] = m[1][0];
-	im[0][2] = m[2][0];
-	im[1][0] = m[0][1];
-	im[1][2] = m[2][1];
-	im[2][0] = m[0][2];
-	im[2][1] = m[1][2];
-
-	memset( zrot, 0, sizeof( zrot ) );
-	zrot[0][0] = zrot[1][1] = zrot[2][2] = 1.0F;
-
-	zrot[0][0] = cos( DEG2RAD( degrees ) );
-	zrot[0][1] = sin( DEG2RAD( degrees ) );
-	zrot[1][0] = -zrot[0][1];
-	zrot[1][1] = zrot[0][0];
-
-	R_ConcatRotations( m, zrot, tmpmat );
-	R_ConcatRotations( tmpmat, im, rot );
-
-	for ( i = 0; i < 3; i++ )
-	{
-		dst[i] = rot[i][0] * point[0] + rot[i][1] * point[1] + rot[i][2] * point[2];
-	}
+	t0 = vr[2] * c + vu[2] * -s;
+	t1 = vr[2] * s + vu[2] *  c;
+	dst[2] = (t0 * vr[0] + t1 * vu[0] + vf[2] * vf[0]) * point[0]
+		   + (t0 * vr[1] + t1 * vu[1] + vf[2] * vf[1]) * point[1]
+		   + (t0 * vr[2] + t1 * vu[2] + vf[2] * vf[2]) * point[2];
 }
 
-#ifdef _WIN32
-#pragma optimize( "", on )
-#endif
 
-
-
-void AngleVectors (vec3_t angles, vec3_t forward, vec3_t right, vec3_t up)
+void AngleVectors (const vec3_t angles, vec3_t forward, vec3_t right, vec3_t up)
 {
 	float		angle;
-	static float		sr, sp, sy, cr, cp, cy;
+	static float		sr, sp, sy, cr, cp, cy, t;
 	// static to help MS compiler fp bugs
 
-	angle = angles[YAW] * (M_PI*2 / 360);
+	angle = DEG2RAD(angles[YAW]);
 	sy = sin(angle);
 	cy = cos(angle);
-	angle = angles[PITCH] * (M_PI*2 / 360);
+	angle = DEG2RAD(angles[PITCH]);
 	sp = sin(angle);
 	cp = cos(angle);
-
-	if (right || up)
-	{
-		angle = angles[ROLL] * (M_PI*2 / 360);
-		sr = sin(angle);
-		cr = cos(angle);
-	}
+	angle = DEG2RAD(angles[ROLL]);
+	sr = sin(angle);
+	cr = cos(angle);
 
 	if (forward)
 	{
@@ -119,36 +96,31 @@ void AngleVectors (vec3_t angles, vec3_t forward, vec3_t right, vec3_t up)
 	}
 	if (right)
 	{
-		right[0] = (-1*sr*sp*cy+-1*cr*-sy);
-		right[1] = (-1*sr*sp*sy+-1*cr*cy);
+		t = sr*sp;
+		right[0] = (-1*t*cy+-1*cr*-sy);
+		right[1] = (-1*t*sy+-1*cr*cy);
 		right[2] = -1*sr*cp;
 	}
 	if (up)
 	{
-		up[0] = (cr*sp*cy+-sr*-sy);
-		up[1] = (cr*sp*sy+-sr*cy);
+		t = cr*sp;
+		up[0] = (t*cy+-sr*-sy);
+		up[1] = (t*sy+-sr*cy);
 		up[2] = cr*cp;
 	}
 }
 
-
 void ProjectPointOnPlane( vec3_t dst, const vec3_t p, const vec3_t normal )
 {
-	float d;
-	vec3_t n;
-	float inv_denom;
+	float d, inv_denom;
 
-	inv_denom = 1.0F / DotProduct( normal, normal );
+	inv_denom = 1.0f / DotProduct( normal, normal );
 
 	d = DotProduct( normal, p ) * inv_denom;
 
-	n[0] = normal[0] * inv_denom;
-	n[1] = normal[1] * inv_denom;
-	n[2] = normal[2] * inv_denom;
-
-	dst[0] = p[0] - d * n[0];
-	dst[1] = p[1] - d * n[1];
-	dst[2] = p[2] - d * n[2];
+	dst[0] = p[0] - d * normal[0] * inv_denom;
+	dst[1] = p[1] - d * normal[1] * inv_denom;
+	dst[2] = p[2] - d * normal[2] * inv_denom;
 }
 
 /*
@@ -156,15 +128,14 @@ void ProjectPointOnPlane( vec3_t dst, const vec3_t p, const vec3_t normal )
 */
 void PerpendicularVector( vec3_t dst, const vec3_t src )
 {
-	int	pos;
-	int i;
+	int i, pos = 0;
 	float minelem = 1.0F;
-	vec3_t tempvec;
+	vec3_t tempvec = {0.0, 0.0, 0.0};
 
 	/*
 	** find the smallest magnitude axially aligned vector
 	*/
-	for ( pos = 0, i = 0; i < 3; i++ )
+	for ( i = 0; i < 3; i++ )
 	{
 		if ( fabs( src[i] ) < minelem )
 		{
@@ -172,7 +143,6 @@ void PerpendicularVector( vec3_t dst, const vec3_t src )
 			minelem = fabs( src[i] );
 		}
 	}
-	tempvec[0] = tempvec[1] = tempvec[2] = 0.0F;
 	tempvec[pos] = 1.0F;
 
 	/*
@@ -195,26 +165,16 @@ R_ConcatRotations
 */
 void R_ConcatRotations (float in1[3][3], float in2[3][3], float out[3][3])
 {
-	out[0][0] = in1[0][0] * in2[0][0] + in1[0][1] * in2[1][0] +
-				in1[0][2] * in2[2][0];
-	out[0][1] = in1[0][0] * in2[0][1] + in1[0][1] * in2[1][1] +
-				in1[0][2] * in2[2][1];
-	out[0][2] = in1[0][0] * in2[0][2] + in1[0][1] * in2[1][2] +
-				in1[0][2] * in2[2][2];
-	out[1][0] = in1[1][0] * in2[0][0] + in1[1][1] * in2[1][0] +
-				in1[1][2] * in2[2][0];
-	out[1][1] = in1[1][0] * in2[0][1] + in1[1][1] * in2[1][1] +
-				in1[1][2] * in2[2][1];
-	out[1][2] = in1[1][0] * in2[0][2] + in1[1][1] * in2[1][2] +
-				in1[1][2] * in2[2][2];
-	out[2][0] = in1[2][0] * in2[0][0] + in1[2][1] * in2[1][0] +
-				in1[2][2] * in2[2][0];
-	out[2][1] = in1[2][0] * in2[0][1] + in1[2][1] * in2[1][1] +
-				in1[2][2] * in2[2][1];
-	out[2][2] = in1[2][0] * in2[0][2] + in1[2][1] * in2[1][2] +
-				in1[2][2] * in2[2][2];
+	out[0][0] = in1[0][0] * in2[0][0] + in1[0][1] * in2[1][0] +	in1[0][2] * in2[2][0];
+	out[0][1] = in1[0][0] * in2[0][1] + in1[0][1] * in2[1][1] +	in1[0][2] * in2[2][1];
+	out[0][2] = in1[0][0] * in2[0][2] + in1[0][1] * in2[1][2] +	in1[0][2] * in2[2][2];
+	out[1][0] = in1[1][0] * in2[0][0] + in1[1][1] * in2[1][0] +	in1[1][2] * in2[2][0];
+	out[1][1] = in1[1][0] * in2[0][1] + in1[1][1] * in2[1][1] +	in1[1][2] * in2[2][1];
+	out[1][2] = in1[1][0] * in2[0][2] + in1[1][1] * in2[1][2] +	in1[1][2] * in2[2][2];
+	out[2][0] = in1[2][0] * in2[0][0] + in1[2][1] * in2[1][0] +	in1[2][2] * in2[2][0];
+	out[2][1] = in1[2][0] * in2[0][1] + in1[2][1] * in2[1][1] +	in1[2][2] * in2[2][1];
+	out[2][2] = in1[2][0] * in2[0][2] + in1[2][1] * in2[1][2] +	in1[2][2] * in2[2][2];
 }
-
 
 /*
 ================
@@ -223,30 +183,18 @@ R_ConcatTransforms
 */
 void R_ConcatTransforms (float in1[3][4], float in2[3][4], float out[3][4])
 {
-	out[0][0] = in1[0][0] * in2[0][0] + in1[0][1] * in2[1][0] +
-				in1[0][2] * in2[2][0];
-	out[0][1] = in1[0][0] * in2[0][1] + in1[0][1] * in2[1][1] +
-				in1[0][2] * in2[2][1];
-	out[0][2] = in1[0][0] * in2[0][2] + in1[0][1] * in2[1][2] +
-				in1[0][2] * in2[2][2];
-	out[0][3] = in1[0][0] * in2[0][3] + in1[0][1] * in2[1][3] +
-				in1[0][2] * in2[2][3] + in1[0][3];
-	out[1][0] = in1[1][0] * in2[0][0] + in1[1][1] * in2[1][0] +
-				in1[1][2] * in2[2][0];
-	out[1][1] = in1[1][0] * in2[0][1] + in1[1][1] * in2[1][1] +
-				in1[1][2] * in2[2][1];
-	out[1][2] = in1[1][0] * in2[0][2] + in1[1][1] * in2[1][2] +
-				in1[1][2] * in2[2][2];
-	out[1][3] = in1[1][0] * in2[0][3] + in1[1][1] * in2[1][3] +
-				in1[1][2] * in2[2][3] + in1[1][3];
-	out[2][0] = in1[2][0] * in2[0][0] + in1[2][1] * in2[1][0] +
-				in1[2][2] * in2[2][0];
-	out[2][1] = in1[2][0] * in2[0][1] + in1[2][1] * in2[1][1] +
-				in1[2][2] * in2[2][1];
-	out[2][2] = in1[2][0] * in2[0][2] + in1[2][1] * in2[1][2] +
-				in1[2][2] * in2[2][2];
-	out[2][3] = in1[2][0] * in2[0][3] + in1[2][1] * in2[1][3] +
-				in1[2][2] * in2[2][3] + in1[2][3];
+	out[0][0] = in1[0][0] * in2[0][0] + in1[0][1] * in2[1][0] +	in1[0][2] * in2[2][0];
+	out[0][1] = in1[0][0] * in2[0][1] + in1[0][1] * in2[1][1] +	in1[0][2] * in2[2][1];
+	out[0][2] = in1[0][0] * in2[0][2] + in1[0][1] * in2[1][2] +	in1[0][2] * in2[2][2];
+	out[0][3] = in1[0][0] * in2[0][3] + in1[0][1] * in2[1][3] +	in1[0][2] * in2[2][3] + in1[0][3];
+	out[1][0] = in1[1][0] * in2[0][0] + in1[1][1] * in2[1][0] +	in1[1][2] * in2[2][0];
+	out[1][1] = in1[1][0] * in2[0][1] + in1[1][1] * in2[1][1] +	in1[1][2] * in2[2][1];
+	out[1][2] = in1[1][0] * in2[0][2] + in1[1][1] * in2[1][2] +	in1[1][2] * in2[2][2];
+	out[1][3] = in1[1][0] * in2[0][3] + in1[1][1] * in2[1][3] +	in1[1][2] * in2[2][3] + in1[1][3];
+	out[2][0] = in1[2][0] * in2[0][0] + in1[2][1] * in2[1][0] +	in1[2][2] * in2[2][0];
+	out[2][1] = in1[2][0] * in2[0][1] + in1[2][1] * in2[1][1] +	in1[2][2] * in2[2][1];
+	out[2][2] = in1[2][0] * in2[0][2] + in1[2][1] * in2[1][2] +	in1[2][2] * in2[2][2];
+	out[2][3] = in1[2][0] * in2[0][3] + in1[2][1] * in2[1][3] +	in1[2][2] * in2[2][3] + in1[2][3];
 }
 
 
@@ -255,15 +203,9 @@ void R_ConcatTransforms (float in1[3][4], float in2[3][4], float out[3][4])
 
 float Q_fabs (float f)
 {
-#if 0
-	if (f >= 0)
-		return f;
-	return -f;
-#else
 	int tmp = * ( int * ) &f;
 	tmp &= 0x7FFFFFFF;
 	return * ( float * ) &tmp;
-#endif
 }
 
 #if defined _M_IX86 && !defined C_ONLY
@@ -279,6 +221,24 @@ __declspec( naked ) long Q_ftol( float f )
 #pragma warning (default:4035)
 #endif
 
+float Q_RSqrt (float number)
+{
+	int i;
+	float x2, y;
+
+	if (number == 0.0)
+		return 0.0;
+
+	x2 = number * 0.5f;
+	y = number;
+	i = * (int *) &y;		// evil floating point bit level hacking
+	i = 0x5f3759df - (i >> 1);		// what the fuck?
+	y = * (float *) &i;
+	y = y * (1.5f - (x2 * y * y));	// this can be done a second time
+
+	return y;
+}
+
 /*
 ===============
 LerpAngle
@@ -289,52 +249,10 @@ float LerpAngle (float a2, float a1, float frac)
 {
 	if (a1 - a2 > 180)
 		a1 -= 360;
-	if (a1 - a2 < -180)
+	else if (a1 - a2 < -180)
 		a1 += 360;
+
 	return a2 + frac * (a1 - a2);
-}
-
-
-float	anglemod(float a)
-{
-	a = (360.0/65536) * ((int)(a*(65536/360.0)) & 65535);
-	return a;
-}
-
-	int		i;
-	vec3_t	corners[2];
-
-
-// this is the slow, general version
-int BoxOnPlaneSide2 (vec3_t emins, vec3_t emaxs, struct cplane_s *p)
-{
-	int		i;
-	float	dist1, dist2;
-	int		sides;
-	vec3_t	corners[2];
-
-	for (i=0 ; i<3 ; i++)
-	{
-		if (p->normal[i] < 0)
-		{
-			corners[0][i] = emins[i];
-			corners[1][i] = emaxs[i];
-		}
-		else
-		{
-			corners[1][i] = emins[i];
-			corners[0][i] = emaxs[i];
-		}
-	}
-	dist1 = DotProduct (p->normal, corners[0]) - p->dist;
-	dist2 = DotProduct (p->normal, corners[1]) - p->dist;
-	sides = 0;
-	if (dist1 >= 0)
-		sides = 1;
-	if (dist2 < 0)
-		sides |= 2;
-
-	return sides;
 }
 
 /*
@@ -344,74 +262,44 @@ BoxOnPlaneSide
 Returns 1, 2, or 1 + 2
 ==================
 */
-#if !id386 || defined __linux__ || defined __FreeBSD__ || defined __sun__
-int BoxOnPlaneSide(vec3_t emins, vec3_t emaxs, struct cplane_s *p)
+#if !id386 || defined(C_ONLY) || defined(__linux__) || defined(__FreeBSD__)
+int BoxOnPlaneSide(const vec3_t emins, const vec3_t emaxs, const struct cplane_s *p)
 {
-	float dist1, dist2;
-	int sides;
-
-// fast axial cases
-	if (p->type < 3) {
-		if (p->dist <= emins[p->type])
-			return 1;
-		if (p->dist >= emaxs[p->type])
-			return 2;
-		return 3;
-	}
-// general case
-	switch (p->signbits) {
-	case 0:
-		dist1 = p->normal[0] * emaxs[0] + p->normal[1] * emaxs[1] + p->normal[2] * emaxs[2];
-		dist2 = p->normal[0] * emins[0] + p->normal[1] * emins[1] + p->normal[2] * emins[2];
-		break;
-	case 1:
-		dist1 = p->normal[0] * emins[0] + p->normal[1] * emaxs[1] + p->normal[2] * emaxs[2];
-		dist2 = p->normal[0] * emaxs[0] + p->normal[1] * emins[1] + p->normal[2] * emins[2];
-		break;
-	case 2:
-		dist1 = p->normal[0] * emaxs[0] + p->normal[1] * emins[1] + p->normal[2] * emaxs[2];
-		dist2 = p->normal[0] * emins[0] + p->normal[1] * emaxs[1] + p->normal[2] * emins[2];
-		break;
-	case 3:
-		dist1 = p->normal[0] * emins[0] + p->normal[1] * emins[1] + p->normal[2] * emaxs[2];
-		dist2 = p->normal[0] * emaxs[0] + p->normal[1] * emaxs[1] + p->normal[2] * emins[2];
-		break;
-	case 4:
-		dist1 = p->normal[0] * emaxs[0] + p->normal[1] * emaxs[1] + p->normal[2] * emins[2];
-		dist2 = p->normal[0] * emins[0] + p->normal[1] * emins[1] + p->normal[2] * emaxs[2];
-		break;
-	case 5:
-		dist1 = p->normal[0] * emins[0] + p->normal[1] * emaxs[1] + p->normal[2] * emins[2];
-		dist2 = p->normal[0] * emaxs[0] + p->normal[1] * emins[1] + p->normal[2] * emaxs[2];
-		break;
-	case 6:
-		dist1 = p->normal[0] * emaxs[0] + p->normal[1] * emins[1] + p->normal[2] * emins[2];
-		dist2 = p->normal[0] * emins[0] + p->normal[1] * emaxs[1] + p->normal[2] * emaxs[2];
-		break;
-	case 7:
-		dist1 = p->normal[0] * emins[0] + p->normal[1] * emins[1] + p->normal[2] * emins[2];
-		dist2 = p->normal[0] * emaxs[0] + p->normal[1] * emaxs[1] + p->normal[2] * emaxs[2];
-		break;
+	//the following optimisation is performed by BOX_ON_PLANE_SIDE macro
+	//if (p->type < 3)
+	//	return ((emaxs[p->type] >= p->dist) | ((emins[p->type] < p->dist) << 1));
+	switch(p->signbits) {
 	default:
-		dist1 = dist2 = 0;	// shut up compiler
-		assert(0);
-		break;
+	case 0:
+		return	(((p->normal[0] * emaxs[0] + p->normal[1] * emaxs[1] + p->normal[2] * emaxs[2]) >= p->dist) |
+				(((p->normal[0] * emins[0] + p->normal[1] * emins[1] + p->normal[2] * emins[2]) < p->dist) << 1));
+	case 1:
+		return	(((p->normal[0] * emins[0] + p->normal[1] * emaxs[1] + p->normal[2] * emaxs[2]) >= p->dist) |
+				(((p->normal[0] * emaxs[0] + p->normal[1] * emins[1] + p->normal[2] * emins[2]) < p->dist) << 1));
+	case 2:
+		return	(((p->normal[0] * emaxs[0] + p->normal[1] * emins[1] + p->normal[2] * emaxs[2]) >= p->dist) |
+				(((p->normal[0] * emins[0] + p->normal[1] * emaxs[1] + p->normal[2] * emins[2]) < p->dist) << 1));
+	case 3:
+		return	(((p->normal[0] * emins[0] + p->normal[1] * emins[1] + p->normal[2] * emaxs[2]) >= p->dist) |
+				(((p->normal[0] * emaxs[0] + p->normal[1] * emaxs[1] + p->normal[2] * emins[2]) < p->dist) << 1));
+	case 4:
+		return	(((p->normal[0] * emaxs[0] + p->normal[1] * emaxs[1] + p->normal[2] * emins[2]) >= p->dist) |
+				(((p->normal[0] * emins[0] + p->normal[1] * emins[1] + p->normal[2] * emaxs[2]) < p->dist) << 1));
+	case 5:
+		return	(((p->normal[0] * emins[0] + p->normal[1] * emaxs[1] + p->normal[2] * emins[2]) >= p->dist) |
+				(((p->normal[0] * emaxs[0] + p->normal[1] * emins[1] + p->normal[2] * emaxs[2]) < p->dist) << 1));
+	case 6:
+		return	(((p->normal[0] * emaxs[0] + p->normal[1] * emins[1] + p->normal[2] * emins[2]) >= p->dist) |
+				(((p->normal[0] * emins[0] + p->normal[1] * emaxs[1] + p->normal[2] * emaxs[2]) < p->dist) << 1));
+	case 7:
+		return	(((p->normal[0] * emins[0] + p->normal[1] * emins[1] + p->normal[2] * emins[2]) >= p->dist) |
+				(((p->normal[0] * emaxs[0] + p->normal[1] * emaxs[1] + p->normal[2] * emaxs[2]) < p->dist) << 1));
 	}
-
-	sides = 0;
-	if (dist1 >= p->dist)
-		sides = 1;
-	if (dist2 < p->dist)
-		sides |= 2;
-
-	assert(sides != 0);
-
-	return sides;
 }
 #else
 #pragma warning( disable: 4035 )
 
-__declspec( naked ) int BoxOnPlaneSide (vec3_t emins, vec3_t emaxs, struct cplane_s *p)
+__declspec( naked ) int BoxOnPlaneSide (const vec3_t emins, const vec3_t emaxs, const struct cplane_s *p)
 {
 	static int bops_initialized;
 	static int Ljmptab[8];
@@ -649,7 +537,7 @@ PlaneTypeForNormal
 =================
 */
 
-int	PlaneTypeForNormal (vec3_t normal)
+int	PlaneTypeForNormal (const vec3_t normal)
 {
 	vec_t	ax, ay, az;
 	
@@ -672,7 +560,7 @@ int	PlaneTypeForNormal (vec3_t normal)
 	return PLANE_ANYZ;
 }
 
-void AddPointToBounds (vec3_t v, vec3_t mins, vec3_t maxs)
+void AddPointToBounds (const vec3_t v, vec3_t mins, vec3_t maxs)
 {
 	int		i;
 	vec_t	val;
@@ -693,10 +581,10 @@ vec_t VectorNormalize (vec3_t v)
 	float	length, ilength;
 
 	length = v[0]*v[0] + v[1]*v[1] + v[2]*v[2];
+	length = sqrt (length);		// FIXME
 
 	if (length)
 	{
-		length = sqrt (length);		// FIXME
 		ilength = 1/length;
 		v[0] *= ilength;
 		v[1] *= ilength;
@@ -704,18 +592,17 @@ vec_t VectorNormalize (vec3_t v)
 	}
 		
 	return length;
-
 }
 
-vec_t VectorNormalize2 (vec3_t v, vec3_t out)
+vec_t VectorNormalize2 (const vec3_t v, vec3_t out)
 {
 	float	length, ilength;
 
 	length = v[0]*v[0] + v[1]*v[1] + v[2]*v[2];
+	length = sqrt (length);		// FIXME
 
 	if (length)
 	{
-		length = sqrt (length);		// FIXME
 		ilength = 1/length;
 		out[0] = v[0]*ilength;
 		out[1] = v[1]*ilength;
@@ -723,7 +610,16 @@ vec_t VectorNormalize2 (vec3_t v, vec3_t out)
 	}
 		
 	return length;
+}
 
+
+void VectorNormalizeFast (vec3_t v)
+{
+	float ilength = Q_RSqrt (DotProduct(v,v));
+
+	v[0] *= ilength;
+	v[1] *= ilength;
+	v[2] *= ilength;
 }
 
 int Q_log2(int val)
@@ -745,16 +641,16 @@ COM_SkipPath
 */
 char *COM_SkipPath (const char *pathname)
 {
-	char	*last;
+	const char	*last;
 	
-	last = (char *)pathname;
+	last = pathname;
 	while (*pathname)
 	{
 		if (*pathname=='/')
-			last = (char *)pathname+1;
+			last = pathname+1;
 		pathname++;
 	}
-	return last;
+	return (char *)last;
 }
 
 /*
@@ -773,54 +669,6 @@ void COM_StripExtension (const char *in, char *out)
 	while (*in && in != dot)
 		*out++ = *in++;
 	*out = 0;
-}
-
-/*
-============
-COM_FileExtension
-============
-*/
-char *COM_FileExtension (const char *in)
-{
-	static char exten[8];
-	int		i;
-
-	while (*in && *in != '.')
-		in++;
-	if (!*in)
-		return "";
-	in++;
-	for (i=0 ; i<7 && *in ; i++,in++)
-		exten[i] = *in;
-	exten[i] = 0;
-	return exten;
-}
-
-/*
-============
-COM_FileBase
-============
-*/
-void COM_FileBase (const char *in, char *out)
-{
-	const char *s, *s2;
-	
-	s = in + strlen(in) - 1;
-	
-	while (s != in && *s != '.')
-		s--;
-	
-	for (s2 = s ; s2 != in && *s2 != '/' ; s2--)
-	;
-	
-	if (s-s2 < 2)
-		out[0] = 0;
-	else
-	{
-		s--;
-		strncpy (out,s2+1, s-s2);
-		out[s-s2] = 0;
-	}
 }
 
 /*
@@ -849,7 +697,7 @@ void COM_FilePath (const char *in, char *out)
 COM_DefaultExtension
 ==================
 */
-void COM_DefaultExtension (char *path, char *extension)
+void COM_DefaultExtension (char *path, size_t size, const char *extension)
 {
 	char    *src;
 //
@@ -865,7 +713,21 @@ void COM_DefaultExtension (char *path, char *extension)
 		src--;
 	}
 
-	strcat (path, extension);
+	Q_strncatz (path, extension, size);
+}
+
+void COM_MakePrintable (char *s)
+{
+	char *string = s;
+	int	c;
+
+	while((c = *string) != 0) {
+		if ( c >= 0x20 && c <= 0x7E )
+			*s++ = c;
+
+		*string++;
+	}
+	*s = '\0';
 }
 
 /*
@@ -875,16 +737,6 @@ void COM_DefaultExtension (char *path, char *extension)
 
 ============================================================================
 */
-#if !defined(ENDIAN_LITTLE) && !defined(ENDIAN_BIG)
-short   (*BigShort) (short l);
-short   (*LittleShort) (short l);
-int     (*BigLong) (int l);
-int     (*LittleLong) (int l);
-float   (*BigFloat) (float l);
-float   (*LittleFloat) (float l);
-qboolean bigendien;
-#endif
-
 short   ShortSwap (short l)
 {
 	byte    b1, b2;
@@ -894,13 +746,6 @@ short   ShortSwap (short l)
 
 	return (b1<<8) + b2;
 }
-
-#if !defined(ENDIAN_LITTLE) && !defined(ENDIAN_BIG)
-short   ShortNoSwap (short l)
-{
-	return l;
-}
-#endif
 
 int    LongSwap (int l)
 {
@@ -914,36 +759,44 @@ int    LongSwap (int l)
 	return ((int)b1<<24) + ((int)b2<<16) + ((int)b3<<8) + b4;
 }
 
+typedef union {
+    float	f;
+    unsigned int i;
+} _FloatByteUnion;
+
+float FloatSwap (const float *f) {
+	const _FloatByteUnion *in;
+	_FloatByteUnion out;
+
+	in = (_FloatByteUnion *)f;
+	out.i = LongSwap(in->i);
+
+	return out.f;
+}
+
 #if !defined(ENDIAN_LITTLE) && !defined(ENDIAN_BIG)
-int     LongNoSwap (int l)
+short   (*BigShort) (short l);
+short   (*LittleShort) (short l);
+int     (*BigLong) (int l);
+int     (*LittleLong) (int l);
+float   (*BigFloat) (const float l);
+float   (*LittleFloat) (const float l);
+qboolean bigendien;
+
+short ShortNoSwap (short l)
 {
 	return l;
 }
-#endif
 
-float FloatSwap (float f)
+int	LongNoSwap (int l)
 {
-	union
-	{
-		float	f;
-		byte	b[4];
-	} dat1, dat2;
-	
-	
-	dat1.f = f;
-	dat2.b[0] = dat1.b[3];
-	dat2.b[1] = dat1.b[2];
-	dat2.b[2] = dat1.b[1];
-	dat2.b[3] = dat1.b[0];
-	return dat2.f;
+	return l;
 }
 
-#if !defined(ENDIAN_LITTLE) && !defined(ENDIAN_BIG)
-float FloatNoSwap (float f)
+float FloatNoSwap (const float *f)
 {
 	return f;
 }
-#endif
 
 /*
 ================
@@ -952,7 +805,6 @@ Swap_Init
 */
 void Swap_Init (void)
 {
-#if !defined(ENDIAN_LITTLE) && !defined(ENDIAN_BIG)
 	byte	swaptest[2] = {1,0};
 
 // set the byte swapping variables in a portable manner	
@@ -976,34 +828,8 @@ void Swap_Init (void)
 		_BigFloat = FloatNoSwap;
 		_LittleFloat = FloatSwap;
 	}
+}
 #endif
-}
-
-
-/*
-============
-va
-
-does a varargs printf into a temp buffer, so I don't need to have
-varargs versions of all text functions.
-============
-*/
-char	*va(const char *format, ...)
-{
-	va_list		argptr;
-	static int  str_index;
-	static char	string[2][2048];
-
-	str_index = !str_index;
-	va_start (argptr, format);
-	vsnprintf (string[str_index], sizeof(string[str_index]), format, argptr);
-	va_end (argptr);
-
-	return string[str_index];
-}
-
-
-char	com_token[MAX_TOKEN_CHARS];
 
 /*
 ==============
@@ -1012,14 +838,13 @@ COM_Parse
 Parse a token out of a string
 ==============
 */
-char *COM_Parse (char **data_p)
+const char *COM_Parse (char **data_p)
 {
-	int		c;
-	int		len;
+	int		c, len = 0;
 	char	*data;
+	static char	com_token[MAX_TOKEN_CHARS];
 
 	data = *data_p;
-	len = 0;
 	com_token[0] = 0;
 	
 	if (!data)
@@ -1041,7 +866,7 @@ skipwhite:
 	}
 	
 // skip // comments
-	if (c=='/' && data[1] == '/')
+	if (c == '/' && data[1] == '/')
 	{
 		data += 2;
 
@@ -1056,13 +881,13 @@ skipwhite:
 		data += 2;
 		while ( *data )
 		{
-			if (*data == '*' && *(data+1) == '/')
-			{
+			if (*data == '*' && *(data+1) == '/') {
 				data += 2;
 				break;
 			}
 			data++;
 		}
+
 		goto skipwhite;
 	}
 
@@ -1075,11 +900,9 @@ skipwhite:
 			c = *data++;
 			if (c=='\"' || !c)
 			{
-				com_token[len] = 0;
-				*data_p = data;
-				return com_token;
+				goto finish;
 			}
-			if (len < MAX_TOKEN_CHARS - 1)
+			if (len < MAX_TOKEN_CHARS)
 			{
 				com_token[len] = c;
 				len++;
@@ -1090,7 +913,7 @@ skipwhite:
 // parse a regular word
 	do
 	{
-		if (len < MAX_TOKEN_CHARS - 1)
+		if (len < MAX_TOKEN_CHARS)
 		{
 			com_token[len] = c;
 			len++;
@@ -1099,6 +922,7 @@ skipwhite:
 		c = *data;
 	} while (c>32);
 
+finish:
 	if (len == MAX_TOKEN_CHARS)
 	{
 //		Com_Printf ("Token exceeded %i chars, discarded.\n", MAX_TOKEN_CHARS);
@@ -1135,21 +959,14 @@ void Com_PageInMemory (byte *buffer, int size)
  Returns non-zero if matches, zero otherwise.
  =================
 */
-int Com_WildCmp (const char *filter, const char *string, int ignoreCase){
-
-        switch (*filter){
-        case '\0':
-                return !*string;
-
-        case '*':
-                return Com_WildCmp(filter + 1, string, ignoreCase) || (*string && Com_WildCmp(filter, string + 1, ignoreCase));
-
-        case '?':
-                return *string && Com_WildCmp(filter + 1, string + 1, ignoreCase);
-
-        default:
-                return ((*filter == *string) || (ignoreCase && (toupper(*filter) == toupper(*string)))) && Com_WildCmp(filter + 1, string + 1, ignoreCase);
-        }
+int Com_WildCmp (const char *filter, const char *string, qboolean ignoreCase)
+{
+	switch (*filter){
+	case '\0':	return !*string;
+	case '*':	return Com_WildCmp(filter + 1, string, ignoreCase) || (*string && Com_WildCmp(filter, string + 1, ignoreCase));
+	case '?':	return *string && Com_WildCmp(filter + 1, string + 1, ignoreCase);
+	default:	return ((*filter == *string) || (ignoreCase && (toupper(*filter) == toupper(*string)))) && Com_WildCmp(filter + 1, string + 1, ignoreCase);
+	}
 }
 
 /*
@@ -1159,21 +976,18 @@ Com_HashKey
 Returns hash key for a string
 ==========
 */
-unsigned int Com_HashKey (const char *name, int hashsize)
+unsigned int Com_HashKey (const char *name, int hashSize)
 {
 	int i;
-	unsigned int v;
-	unsigned int c;
+	unsigned int c, hash = 0;
 
-	v = 0;
 	for( i = 0; name[i]; i++ ) {
-		c = name[i];
+		c = tolower(name[i]);
 		if( c == '\\' )
 			c = '/';
-		v = (v + i) * 37 + tolower( c );// case insensitivity
+		hash += c * (i+119);
 	}
-
-	return v % hashsize;
+	return hash & (hashSize - 1);
 }
 
 /*
@@ -1204,7 +1018,7 @@ int Q_strnicmp (const char *s1, const char *s2, size_t size)
 			if (c2 >= 'a' && c2 <= 'z')
 				c2 -= ('a' - 'A');
 			if (c1 != c2)
-				return -1;		// strings not equal
+				return c1 < c2 ? -1 : 1;	// strings not equal
 		}
 	} while (c1);
 	
@@ -1212,23 +1026,11 @@ int Q_strnicmp (const char *s1, const char *s2, size_t size)
 }
 #endif
 
-#ifndef Q_stricmp
-int Q_stricmp (const char *s1, const char *s2)
-{
-	return Q_strnicmp (s1, s2, 99999);
-}
-#endif
-
 void Q_strncpyz( char *dest, const char *src, size_t size )
 {
-#ifdef HAVE_STRLCPY
-	strlcpy( dest, src, size );
-#else
 	while( --size && (*dest++ = *src++) );
 	*dest = '\0';
-#endif
 }
-
 /*
 ==============
 Q_strncatz
@@ -1236,16 +1038,12 @@ Q_strncatz
 */
 void Q_strncatz( char *dest, const char *src, size_t size )
 {
-#ifdef HAVE_STRLCAT
-	strlcat( dest, src, size );
-#else
 	while( --size && *dest++ );
 	if( size ) {
 		dest--;
 		while( --size && (*dest++ = *src++) );
 	}
 	*dest = '\0';
-#endif
 }
 
 void Com_sprintf (char *dest, size_t size, const char *fmt, ...)
@@ -1255,9 +1053,27 @@ void Com_sprintf (char *dest, size_t size, const char *fmt, ...)
 	va_start( argptr, fmt );
 	vsnprintf( dest, size, fmt, argptr );
 	va_end( argptr );
+}
 
-	dest[size-1] = 0;
+/*
+============
+va
+does a varargs printf into a temp buffer, so I don't need to have
+varargs versions of all text functions.
+============
+*/
+char	*va(const char *format, ...)
+{
+	va_list		argptr;
+	static int  index = 0;
+	static char	string[2][2048];
 
+	index = !index;
+	va_start (argptr, format);
+	vsnprintf (string[index], sizeof(string[index]), format, argptr);
+	va_end (argptr);
+
+	return string[index];
 }
 
 /*
@@ -1269,13 +1085,10 @@ char *Q_strlwr( char *s )
 {
 	char *p;
 
-	if( s ) {
-		for( p = s; *s; s++ )
-			*s = tolower( *s );
-		return p;
-	}
+	for( p = s; *s; s++ )
+		*s = tolower( *s );
 
-	return NULL;
+	return p;
 }
 
 /*
@@ -1296,12 +1109,21 @@ key and returns the associated value, or an empty string.
 */
 char *Info_ValueForKey (const char *s, const char *key)
 {
-	char	pkey[512];
-	static	char value[2][512];	// use two buffers so compares
-								// work without stomping on each other
-	static	int	valueindex;
+	char	pkey[MAX_INFO_STRING];
+	static	char value[2][MAX_INFO_STRING];	// use two buffers so compares
+											// work without stomping on each other
+	static	int	valueindex = 0;
 	char	*o;
 	
+	if ( !s || !key ) {
+		return "";
+	}
+
+	if ( strlen( s ) >= MAX_INFO_STRING ) {
+		Com_Printf ("Info_ValueForKey: oversize infostring" );
+		return "";
+	}
+
 	valueindex ^= 1;
 	if (*s == '\\')
 		s++;
@@ -1331,21 +1153,81 @@ char *Info_ValueForKey (const char *s, const char *key)
 			return value[valueindex];
 
 		if (!*s)
-			return "";
+			break;
 		s++;
 	}
+
+	return "";
 }
 
+/*
+===================
+Info_NextPair
+
+Used to itterate through all the key/value pairs in an info string
+===================
+*/
+void Info_NextPair( const char **head, char *key, char *value ) {
+	char	*o;
+	const char	*s;
+
+	key[0] = 0;
+	value[0] = 0;
+
+	s = *head;
+	if( !s )
+		return;
+
+	if ( *s == '\\' )
+		s++;
+
+	if( !*s ) {
+		*head = s;
+		return;
+	}
+
+	o = key;
+	while( *s && *s != '\\' )
+		*o++ = *s++;
+
+	*o = 0;
+
+	if( !*s ) {
+		*head = s;
+		return;
+	}
+
+	s++;
+	o = value;
+	while( *s && *s != '\\' )
+		*o++ = *s++;
+
+	*o = 0;
+
+	if( *s )
+		s++;
+
+	*head = s;
+}
+
+/*
+===================
+Info_RemoveKey
+===================
+*/
 void Info_RemoveKey (char *s, const char *key)
 {
 	char	*start;
-	char	pkey[512];
-	char	value[512];
+	char	pkey[MAX_INFO_STRING];
+	char	value[MAX_INFO_STRING];
 	char	*o;
 
-	if (strstr (key, "\\"))
-	{
-//		Com_Printf ("Can't use a key with a \\\n");
+	if ( strlen( s ) >= MAX_INFO_STRING ) {
+		Com_Printf ("Info_RemoveKey: oversize infostring" );
+		return;
+	}
+
+	if (strstr (key, "\\")) {
 		return;
 	}
 
@@ -1362,6 +1244,7 @@ void Info_RemoveKey (char *s, const char *key)
 			*o++ = *s++;
 		}
 		*o = 0;
+
 		s++;
 
 		o = value;
@@ -1375,7 +1258,12 @@ void Info_RemoveKey (char *s, const char *key)
 
 		if (!strcmp (key, pkey) )
 		{
-			strcpy (start, s);	// remove this part
+			//strcpy (start, s);	// remove this part
+			size_t memlen;
+
+			memlen = strlen(s);
+			memmove (start, s, memlen);
+			*(start+memlen) = 0;
 			return;
 		}
 
@@ -1407,7 +1295,11 @@ void Info_SetValueForKey (char *s, const char *key, const char *value)
 {
 	char	newi[MAX_INFO_STRING], *v;
 	int		c;
-	int		maxsize = MAX_INFO_STRING;
+
+	if ( strlen( s ) >= MAX_INFO_STRING ) {
+		Com_Printf ("Info_SetValueForKey: oversize infostring" );
+		return;
+	}
 
 	if (strstr (key, "\\") || strstr (value, "\\") )
 	{
@@ -1415,7 +1307,7 @@ void Info_SetValueForKey (char *s, const char *key, const char *value)
 		return;
 	}
 
-	if (strstr (key, ";") )
+	if (strchr (key, ';') || strchr (value, ';'))
 	{
 		Com_Printf ("Can't use keys or values with a semicolon\n");
 		return;
@@ -1427,20 +1319,20 @@ void Info_SetValueForKey (char *s, const char *key, const char *value)
 		return;
 	}
 
-	if (strlen(key) > MAX_INFO_KEY-1 || strlen(value) > MAX_INFO_KEY-1)
+	if (strlen(key) >= MAX_INFO_KEY || strlen(value) >= MAX_INFO_KEY)
 	{
 		Com_Printf ("Keys and values must be < 64 characters.\n");
 		return;
 	}
 	Info_RemoveKey (s, key);
-	if (!value || !strlen(value))
+	if (!value || !value[0])
 		return;
 
 	Com_sprintf (newi, sizeof(newi), "\\%s\\%s", key, value);
 
-	if (strlen(newi) + strlen(s) > maxsize)
+	if (strlen(newi) + strlen(s) >= MAX_INFO_STRING)
 	{
-		Com_Printf ("Info string length exceeded\n");
+		Com_Printf ("Info string length exceeded while trying to set '%s'\n", newi);
 		return;
 	}
 
@@ -1457,4 +1349,3 @@ void Info_SetValueForKey (char *s, const char *key, const char *value)
 	*s = 0;
 }
 
-//====================================================================

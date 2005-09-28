@@ -22,8 +22,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 
 #define	MAX_RIMAGES	1024
-image_t		r_images[MAX_RIMAGES];
-int			numr_images;
+static image_t	r_images[MAX_RIMAGES];
+static int		numr_images;
 
 #define IMAGES_HASH_SIZE	64
 static image_t	*images_hash[IMAGES_HASH_SIZE];
@@ -279,21 +279,15 @@ image_t *R_LoadWal (const char *name)
 }
 
 
-unsigned int IMG_HashKey (const char *name, int hashsize)
+static unsigned int IMG_HashKey (const char *name)
 {
 	int i;
-	unsigned int v;
-	unsigned int c;
+	unsigned int hash = 0;
 
-	v = 0;
-	for( i = 0; name[i]; i++ ) {
-		c = name[i];
-		if( c == '\\' )
-			c = '/';
-		v = (v + i) * 37 + c;
-	}
+	for( i = 0; name[i]; i++ )
+		hash += tolower(name[i]) * (i+119);
 
-	return v % hashsize;
+	return hash & (IMAGES_HASH_SIZE-1);
 }
 
 /*
@@ -319,7 +313,7 @@ image_t	*R_FindImage (const char *name, imagetype_t type)
 		if( name[i] == '\\' ) 
 			pathname[len++] = '/';
 		else
-			pathname[len++] = tolower( name[i] );
+			pathname[len++] = name[i];
 	}
 
 	if (len<5)
@@ -327,7 +321,7 @@ image_t	*R_FindImage (const char *name, imagetype_t type)
 
 	pathname[len] = 0;
 
-	hash = IMG_HashKey(pathname, IMAGES_HASH_SIZE);
+	hash = IMG_HashKey(pathname);
 	// look for it
 	for (image = images_hash[hash]; image; image = image->hashNext)
 	{
@@ -408,7 +402,7 @@ void R_FreeUnusedImages (void)
 		if (image->type == it_pic)
 			continue;		// don't free pics
 
-		hash = IMG_HashKey (image->name, IMAGES_HASH_SIZE);
+		hash = IMG_HashKey(image->name);
 		// delete it from hash table
 		for( back=&images_hash[hash], entry=images_hash[hash]; entry; back=&entry->hashNext, entry=entry->hashNext ) {
 			if( entry == image ) {
@@ -416,9 +410,9 @@ void R_FreeUnusedImages (void)
 				break;
 			}
 		}
-		if( !entry ) {
-			Com_Error (ERR_FATAL, "R_FreeUnusedImages: %s not found in hash array", image->name );
-		}
+		//if( !entry )
+		//	Com_Error (ERR_FATAL, "R_FreeUnusedImages: %s not found in hash array", image->name );
+
 		// free it
 		free (image->pixels[0]);	// the other mip levels just follow
 		memset (image, 0, sizeof(*image));

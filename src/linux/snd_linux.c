@@ -17,289 +17,115 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 */
-#include <unistd.h>
-#include <fcntl.h>
-#include <stdlib.h>
-#include <sys/types.h>
-#include <sys/ioctl.h>
-#include <sys/mman.h>
-#include <sys/shm.h>
-#include <sys/wait.h>
-#if defined(__FreeBSD__)
-#include <sys/soundcard.h>
-#else
-#include <linux/soundcard.h>
-#endif
-#include <stdio.h>
-
 #include "../client/client.h"
 #include "../client/snd_loc.h"
 
-int audio_fd = -1;
-int snd_inited;
+#define SND_NONE	0
+#define SND_ALSA	1
+#define SND_OSS		2
 
+qboolean SNDDMA_Init_ALSA(void);
+qboolean SNDDMA_Init_OSS(void);
+int SNDDMA_GetDMAPos_ALSA(void);
+int SNDDMA_GetDMAPos_OSS(void);
+void SNDDMA_Shutdown_ALSA(void);
+void SNDDMA_Shutdown_OSS(void);
+void SNDDMA_Submit_ALSA(void);
+
+static int snd_inited = SND_NONE;
+
+cvar_t *sndalsa;
 cvar_t *sndbits;
 cvar_t *sndspeed;
 cvar_t *sndchannels;
 cvar_t *snddevice;
 
-static int tryrates[] = { 11025, 22051, 44100, 48000, 8000 };
+qboolean use_custom_memset = false;
+
+void Snd_Memset (void* dest, const int val, const size_t count)
+{
+	int *pDest;
+	int i, iterate;
+
+	if (!use_custom_memset)
+	{
+		memset(dest,val,count);
+		return;
+	}
+	iterate = count / sizeof(int);
+	pDest = (int*)dest;
+	for(i=0; i<iterate; i++)
+	{
+		pDest[i] = val;
+	}
+}
 
 qboolean SNDDMA_Init(void)
 {
-
-	int rc;
-    int fmt;
-	int tmp;
-    int i;
- 	struct audio_buf_info info;
-	int caps;
-	extern uid_t saved_euid;
+	qboolean retval = false;
 
 	if (snd_inited)
-		return 1;
-
-	snd_inited = 0;
+		return true;
 
 	if (!snddevice)
 	{
-		sndbits = Cvar_Get("sndbits", "16", CVAR_ARCHIVE);
-		sndspeed = Cvar_Get("sndspeed", "0", CVAR_ARCHIVE);
-		sndchannels = Cvar_Get("sndchannels", "2", CVAR_ARCHIVE);
-		snddevice = Cvar_Get("snddevice", "/dev/dsp", CVAR_ARCHIVE);
+		sndbits = Cvar_Get("sndbits", "16", CVAR_ARCHIVE|CVAR_LATCHSOUND);
+		sndspeed = Cvar_Get("sndspeed", "0", CVAR_ARCHIVE|CVAR_LATCHSOUND);
+		sndchannels = Cvar_Get("sndchannels", "2", CVAR_ARCHIVE|CVAR_LATCHSOUND);
+		sndalsa = Cvar_Get("sndalsa", "1", CVAR_ARCHIVE|CVAR_LATCHSOUND);
+
+		if(sndalsa->integer)
+			snddevice = Cvar_Get("snddevice", "default", CVAR_ARCHIVE|CVAR_LATCHSOUND);
+		else
+			snddevice = Cvar_Get("snddevice", "/dev/dsp", CVAR_ARCHIVE|CVAR_LATCHSOUND);
 	}
 
-// open /dev/dsp, confirm capability to mmap, and get size of dma buffer
-
-	if (audio_fd < 0)
+	if(sndalsa->integer)
 	{
-		seteuid(saved_euid);
-
-		audio_fd = open(snddevice->string, O_RDWR);
-		if (audio_fd < 0)
+		Com_Printf("Attempting to initialise ALSA sound.\n");
+		retval = SNDDMA_Init_ALSA();
+		if(retval)
 		{
-			perror(snddevice->string);
-			seteuid(getuid());
-			Com_Printf("SNDDMA_Init: Could not open %s.\n", snddevice->string);
-			return 0;
+			snd_inited = SND_ALSA;
 		}
-		seteuid(getuid());
-	}
-
-    rc = ioctl(audio_fd, SNDCTL_DSP_RESET, 0);
-    if (rc < 0)
-	{
-		perror(snddevice->string);
-		Com_Printf("SNDDMA_Init: Could not reset %s.\n", snddevice->string);
-		close(audio_fd);
-		audio_fd = -1;
-		return 0;
-	}
-
-	if (ioctl(audio_fd, SNDCTL_DSP_GETCAPS, &caps)==-1)
-	{
-		perror(snddevice->string);
-		Com_Printf("SNDDMA_Init: Sound driver too old.\n");
-		close(audio_fd);
-		audio_fd = -1;
-		return 0;
-	}
-
-	if (!(caps & DSP_CAP_TRIGGER) || !(caps & DSP_CAP_MMAP))
-	{
-		Com_Printf("SNDDMA_Init: Sorry, but your soundcard doesn't support trigger or mmap. (%08x)\n", caps);
-		close(audio_fd);
-		audio_fd = -1;
-		return 0;
-	}
-
-    if (ioctl(audio_fd, SNDCTL_DSP_GETOSPACE, &info)==-1)
-    {   
-        perror("GETOSPACE");
-		Com_Printf("SNDDMA_Init: GETOSPACE ioctl failed.\n");
-		close(audio_fd);
-		audio_fd = -1;
-		return 0;
-    }
-    
-// set sample bits & speed
-
-    dma.samplebits = sndbits->integer;
-	if (dma.samplebits != 16 && dma.samplebits != 8)
-    {
-        ioctl(audio_fd, SNDCTL_DSP_GETFMTS, &fmt);
-        if (fmt & AFMT_S16_LE) dma.samplebits = 16;
-        else if (fmt & AFMT_U8) dma.samplebits = 8;
-		else dma.samplebits = 16;
-    }
-
-	if (dma.samplebits == 16)
-	{
-        rc = AFMT_S16_LE;
-		rc = ioctl(audio_fd, SNDCTL_DSP_SETFMT, &rc);
-		if (rc < 0)
+		else
 		{
-			perror(snddevice->string);
-			Com_Printf("SNDDMA_Init: Could not support 16-bit data.  Try 8-bit.\n");
-			close(audio_fd);
-			audio_fd = -1;
-			return 0;
-		}
-	}
-	else if (dma.samplebits == 8)
-    {
-		rc = AFMT_U8;
-		rc = ioctl(audio_fd, SNDCTL_DSP_SETFMT, &rc);
-		if (rc < 0)
-		{
-			perror(snddevice->string);
-			Com_Printf("SNDDMA_Init: Could not support 8-bit data.\n");
-			close(audio_fd);
-			audio_fd = -1;
-			return 0;
+			Com_Printf("Falling back to OSS sound.\n");
+			retval = SNDDMA_Init_OSS();
+			if(retval)
+				snd_inited = SND_OSS;
 		}
 	}
 	else
 	{
-		perror(snddevice->string);
-		Com_Printf("SNDDMA_Init: %d-bit sound not supported.", dma.samplebits);
-		close(audio_fd);
-		audio_fd = -1;
-		return 0;
+		Com_Printf("Attempting to initialize OSS sound.\n");
+		retval = SNDDMA_Init_OSS();
+		if(retval)
+			snd_inited = SND_OSS;
 	}
 
-	dma.speed = sndspeed->integer;
-	if (!dma.speed)
-	{
-		for (i=0 ; i<sizeof(tryrates)/4 ; i++) {
-            if (!ioctl(audio_fd, SNDCTL_DSP_SPEED, &tryrates[i]))
-			{
-				dma.speed = tryrates[i];
-				break;
-			}
-		}
-		if (!dma.speed)
-		{
-			perror(snddevice->string);
-			Com_Printf("SNDDMA_Init: Could not set %s speed.", snddevice->string);
-			close(audio_fd);
-			audio_fd = -1;
-			return 0;
-		}
-    }
-	else
-	{
-		rc = ioctl(audio_fd, SNDCTL_DSP_SPEED, &dma.speed);
-		if (rc < 0)
-		{
-			perror(snddevice->string);
-			Com_Printf("SNDDMA_Init: Could not set %s speed to %d.", snddevice->string, dma.speed);
-			close(audio_fd);
-			audio_fd = -1;
-			return 0;
-		}
-	}
-
-	dma.channels = sndchannels->integer;
-	if (dma.channels < 1 || dma.channels > 2)
-		dma.channels = 2;
-	
-	tmp = 0;
-	if (dma.channels == 2)
-		tmp = 1;
-	rc = ioctl(audio_fd, SNDCTL_DSP_STEREO, &tmp); //FP: bugs here.
-    if (rc < 0)
-    {
-		perror(snddevice->string);
-		Com_Printf("SNDDMA_Init: Could not set %s to stereo=%d.", snddevice->string, dma.channels);
-		close(audio_fd);
-		audio_fd = -1;
-		return 0;
-    }
-
-	if (tmp)
-		dma.channels = 2;
-	else
-		dma.channels = 1;
-
-
-	dma.samples = info.fragstotal * info.fragsize / (dma.samplebits/8);
-	dma.submission_chunk = 1;
-
-// memory map the dma buffer
-
-	dma.buffer = (unsigned char *) mmap(NULL, info.fragstotal * info.fragsize, PROT_WRITE, MAP_FILE|MAP_SHARED, audio_fd, 0);
-	if (!dma.buffer || dma.buffer == MAP_FAILED)
-	{
-		perror(snddevice->string);
-		Com_Printf("SNDDMA_Init: Could not mmap %s.\n", snddevice->string);
-		close(audio_fd);
-		audio_fd = -1;
-		return 0;
-	}
-
-// toggle the trigger & start her up
-
-    tmp = 0;
-    rc  = ioctl(audio_fd, SNDCTL_DSP_SETTRIGGER, &tmp);
-	if (rc < 0)
-	{
-		perror(snddevice->string);
-		Com_Printf("SNDDMA_Init: Could not toggle. (1)\n");
-		close(audio_fd);
-		audio_fd = -1;
-		return 0;
-	}
-    tmp = PCM_ENABLE_OUTPUT;
-    rc = ioctl(audio_fd, SNDCTL_DSP_SETTRIGGER, &tmp);
-	if (rc < 0)
-	{
-		perror(snddevice->string);
-		Com_Printf("SNDDMA_Init: Could not toggle. (2)\n");
-		close(audio_fd);
-		audio_fd = -1;
-		return 0;
-	}
-
-	dma.samplepos = 0;
-
-	snd_inited = 1;
-	return 1;
+	return retval;
 }
 
 int SNDDMA_GetDMAPos(void)
 {
-	struct count_info count;
-
-	if (!snd_inited)
+	if (snd_inited == SND_ALSA)
+		return SNDDMA_GetDMAPos_ALSA();
+	else if(snd_inited == SND_OSS)
+		return SNDDMA_GetDMAPos_OSS();
+	else
 		return 0;
-
-	if (ioctl(audio_fd, SNDCTL_DSP_GETOPTR, &count)==-1)
-	{
-		perror(snddevice->string);
-		Com_Printf("SNDDMA_GetDMAPos: GETOPTR failed.\n");
-		close(audio_fd);
-		audio_fd = -1;
-		snd_inited = 0;
-		return 0;
-	}
-//	dma.samplepos = (count.bytes / (dma.samplebits / 8)) & (dma.samples-1);
-//	fprintf(stderr, "%d    \r", count.ptr);
-	dma.samplepos = count.ptr / (dma.samplebits / 8);
-
-	return dma.samplepos;
 }
 
 void SNDDMA_Shutdown(void)
 {
-#if 0
-	if (snd_inited)
-	{
-		close(audio_fd);
-		audio_fd = -1;
-		snd_inited = 0;
-	}
-#endif
+	if (snd_inited == SND_ALSA)
+		SNDDMA_Shutdown_ALSA();
+	else if (snd_inited == SND_OSS)
+		SNDDMA_Shutdown_OSS();
+
+	snd_inited = SND_NONE;
+	use_custom_memset = false;
 }
 
 /*
@@ -311,9 +137,21 @@ Send sound to device if buffer isn't really the dma buffer
 */
 void SNDDMA_Submit(void)
 {
+	if (snd_inited == SND_ALSA)
+		SNDDMA_Submit_ALSA();
+#if 0 //oss doesnt use this
+	else if(snd_inited == SND_OSS)
+		SNDDMA_Submit_OSS();
+#endif
 }
 
 void SNDDMA_BeginPainting (void)
 {
+#if 0 //oss or alsa doesnt use this
+	if (snd_inited == SND_ALSA)
+		SNDDMA_BeginPainting_ALSA();
+	else if(snd_inited == SND_OSS)
+		SNDDMA_BeginPainting_OSS();
+#endif
 }
 

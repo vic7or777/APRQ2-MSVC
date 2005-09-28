@@ -16,7 +16,7 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */                  
-
+//Decals, from egl, orginally from qfusion?
 #include "gl_local.h"
 
 #define DF_SHADE		0x00000400	// 1024
@@ -58,10 +58,10 @@ typedef struct
 	msurface_t	*surf;
 } fragment_t;
 
-cdecal_t	decals[MAX_DECALS];
-cdecal_t	active_decals, *free_decals;
+static cdecal_t	decals[MAX_DECALS];
+static cdecal_t	active_decals, *free_decals;
 
-int R_GetClippedFragments (vec3_t origin, float radius, mat3_t axis, int maxfverts, vec3_t *fverts, int maxfragments, fragment_t *fragments);
+static int R_GetClippedFragments (vec3_t origin, float radius, mat3_t axis, int maxfverts, vec3_t *fverts, int maxfragments, fragment_t *fragments);
 //void R_DrawDecal (int numverts, vec3_t *verts, vec2_t *stcoords, vec4_t color, int type, int flags);
 
 /*
@@ -117,7 +117,7 @@ static cdecal_t *GL_AllocDecal (void)
 CG_FreeDecal
 =================
 */
-void GL_FreeDecal ( cdecal_t *dl )
+static void GL_FreeDecal ( cdecal_t *dl )
 {
 	if (!dl->prev)
 		return;
@@ -153,9 +153,7 @@ void R_AddDecal	(vec3_t origin, vec3_t dir, float red, float green, float blue, 
 
 	// invalid decal
 	if (size <= 0 || VectorCompare (dir, vec3_origin))
-	{
 		return;
-	}
 
 	// calculate orientation matrix
 	VectorNormalize2 (dir, axis[0]);
@@ -176,13 +174,9 @@ void R_AddDecal	(vec3_t origin, vec3_t dir, float red, float green, float blue, 
 	for (i=0, fr=fragments ; i<numfragments ; i++, fr++)
 	{
 		if (fr->numverts > MAX_DECAL_VERTS)
-		{
 			fr->numverts = MAX_DECAL_VERTS;
-		}
 		else if (fr->numverts <= 0)
-		{
 			continue;
-		}
 
 
 		d = GL_AllocDecal ();
@@ -197,12 +191,7 @@ void R_AddDecal	(vec3_t origin, vec3_t dir, float red, float green, float blue, 
 		if (!(fr->surf->flags & SURF_PLANEBACK))
 			VectorNegate(d->direction, d->direction);
 
-		d->color[0] = red;
-		d->color[1] = green;
-		d->color[2] = blue;
-		d->color[3] = alpha;
-
-
+		Vector4Set(d->color, red, green, blue, alpha);
 		VectorCopy (origin, d->org);
 
 		if (flags&DF_SHADE)
@@ -251,12 +240,13 @@ void R_AddDecals (void)
 
 	mindist = DotProduct(r_origin, vpn) + 4.0f; 
 
-	qglDepthMask( 0 );
-	qglEnable( GL_BLEND );
-	GL_TexEnv( GL_MODULATE );
-	qglPolygonOffset (-1, -2);
-	qglEnable ( GL_POLYGON_OFFSET_EXT );
-	GL_Bind (r_bholetexture->texnum);
+	qglEnable(GL_POLYGON_OFFSET_FILL);
+	qglPolygonOffset(-1, -2);
+
+	qglDepthMask(GL_FALSE);
+	qglEnable(GL_BLEND);
+	GL_TexEnv(GL_MODULATE);
+	GL_Bind(r_bholetexture->texnum);
 
 	for (dl = active->next; dl != active; dl = next)
 	{
@@ -279,16 +269,12 @@ void R_AddDecals (void)
 		if (DotProduct(dl->direction, v) < 0)
 			continue;
 
-		if (r_numdecals >= MAX_DECALS)
-			break;
-
-		VectorCopy (dl->color, color);
-		color[3] = dl->color[3];
+		Vector4Copy (dl->color, color);
 
 		time = dl->time + gl_decals_time->value - r_newrefdef.time;
 
 		if (time < 1.5)
-			color[3] *= (float)time / 1.5;
+			color[3] *= time / 1.5;
 
 		//Draw it
 		qglColor4fv (color);
@@ -302,13 +288,15 @@ void R_AddDecals (void)
 		qglEnd ();
 
 		r_numdecals++;
+		if (r_numdecals >= MAX_DECALS)
+			break;
 	}
 
-	qglDisable( GL_POLYGON_OFFSET_EXT );
-	qglDisable( GL_BLEND );
-	qglColor4f (1,1,1,1);
-	qglDepthMask( 1 );
 	GL_TexEnv(GL_REPLACE);
+	qglDisable(GL_BLEND);
+	qglColor4f(1,1,1,1);
+	qglDepthMask(GL_TRUE);
+	qglDisable(GL_POLYGON_OFFSET_FILL);
 }
 
 
@@ -332,7 +320,7 @@ R_ClipPoly
 =================
 */
 
-void R_ClipPoly (int nump, vec4_t vecs, int stage, fragment_t *fr)
+static void R_ClipPoly (int nump, vec4_t vecs, int stage, fragment_t *fr)
 {
 	cplane_t *plane;
 	qboolean	front, back;
@@ -351,14 +339,10 @@ void R_ClipPoly (int nump, vec4_t vecs, int stage, fragment_t *fr)
 			fr->firstvert = numFragmentVerts;
 
 			if (numFragmentVerts+nump >= maxFragmentVerts)
-			{
 				nump = maxFragmentVerts - numFragmentVerts;
-			}
 
 			for (i=0, v=vecs ; i<nump ; i++, v+=4)
-			{
 				VectorCopy (v, fragmentVerts[numFragmentVerts+i]);
-			}
 
 			numFragmentVerts += nump;
 		}
@@ -433,7 +417,7 @@ R_PlanarSurfClipFragment
 =================
 */
 
-void R_PlanarSurfClipFragment (mnode_t *node, msurface_t *surf, vec3_t normal)
+static void R_PlanarSurfClipFragment (mnode_t *node, msurface_t *surf, vec3_t normal)
 {
 	int			i;
 	float		*v, *v2, *v3;
@@ -491,7 +475,7 @@ R_RecursiveFragmentNode
 =================
 */
 
-void R_RecursiveFragmentNode (mnode_t *node, vec3_t origin, float radius, vec3_t normal)
+static void R_RecursiveFragmentNode (mnode_t *node, vec3_t origin, float radius, vec3_t normal)
 {
 	float dist;
 	cplane_t *plane;
@@ -512,9 +496,7 @@ mark0:
 
 		leaf = (mleaf_t *)node;
 		if (!(c = leaf->nummarksurfaces))
-		{
 			return;
-		}
 
 		mark = leaf->firstmarksurface;
 		do
@@ -560,7 +542,7 @@ R_GetClippedFragments
 =================
 */
 
-int R_GetClippedFragments (vec3_t origin, float radius, mat3_t axis, int maxfverts, vec3_t *fverts, int maxfragments, fragment_t *fragments)
+static int R_GetClippedFragments (vec3_t origin, float radius, mat3_t axis, int maxfverts, vec3_t *fverts, int maxfragments, fragment_t *fragments)
 {
 	int i;
 	float d;

@@ -1,5 +1,5 @@
 /*
-Copyright (C) 2003 Andrey Nazarov
+Copyright (C) 1997-2001 Id Software, Inc.
 
 This program is free software; you can redistribute it and/or
 modify it under the terms of the GNU General Public License
@@ -37,13 +37,12 @@ CL_WriteDemoMessage
 Dumps the current net message, prefixed by the length
 ====================
 */
-void CL_WriteDemoMessage( void )
+void CL_WriteDemoMessageFull( void )
 {
 	int		len, swlen;
 
 	// the first eight bytes are just packet sequencing stuff
 	len = net_message.cursize - 8;
-
 	swlen = LittleLong( len );
 
 	if(swlen > 0) // skip bad packets
@@ -52,6 +51,38 @@ void CL_WriteDemoMessage( void )
 		fwrite( net_message.data + 8, len, 1, cls.demofile);
 	}
 }
+
+#ifdef R1Q2_PROTOCOL
+void CL_WriteDemoMessage (byte *buff, int len, qboolean forceFlush)
+{
+	if (forceFlush)
+	{
+		if (!cls.demowaiting)
+		{
+			int	swlen;
+
+			if (cl.demoBuff.overflowed)
+			{
+				Com_DPrintf ("Dropped a demo frame, maximum message size exceeded: %d > %d\n", cl.demoBuff.cursize, cl.demoBuff.maxsize);
+
+				//we write a message regardless to keep in sync time-wise.
+				SZ_Clear (&cl.demoBuff);
+				MSG_WriteByte (&cl.demoBuff, svc_nop);
+			}
+
+			swlen = LittleLong(cl.demoBuff.cursize);
+			fwrite (&swlen, 4, 1, cls.demofile);
+			fwrite (cl.demoFrame, cl.demoBuff.cursize, 1, cls.demofile);
+		}
+		SZ_Clear (&cl.demoBuff);
+	}
+
+	if (len)
+		SZ_Write (&cl.demoBuff, buff, len);
+}
+
+void CL_DemoDeltaEntity (const entity_state_t *from, const entity_state_t *to, sizebuf_t *buf, qboolean force, qboolean newentity);
+#endif
 
 /*
 ====================
@@ -66,6 +97,16 @@ void CL_CloseDemoFile( void )
 	fclose( cls.demofile );
 	 
 	cls.demofile = NULL;
+
+#ifdef R1Q2_PROTOCOL
+	// inform server we are done with extra data
+	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
+	{
+		MSG_WriteByte  (&cls.netchan.message, clc_setting);
+		MSG_WriteShort (&cls.netchan.message, CLSET_RECORDING);
+		MSG_WriteShort (&cls.netchan.message, 0);
+	}
+#endif
 }
 
 
@@ -128,7 +169,7 @@ Begins recording a demo from the current position
 void CL_Record_f( void )
 {
 	char	name[MAX_OSPATH];
-	char	buf_data[MAX_MSGLEN];
+	byte	buf_data[MAX_MSGLEN];
 	sizebuf_t	buf;
 	int		i;
 	int		len;
@@ -201,6 +242,16 @@ void CL_Record_f( void )
 	// don't start saving messages until a non-delta compressed message is received
 	cls.demowaiting = true;
 
+#ifdef R1Q2_PROTOCOL
+	// inform server we need to receive more data
+	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
+	{
+		MSG_WriteByte  (&cls.netchan.message, clc_setting);
+		MSG_WriteShort (&cls.netchan.message, CLSET_RECORDING);
+		MSG_WriteShort (&cls.netchan.message, 1);
+	}
+#endif
+
 	//
 	// write out messages to hold the startup information
 	//
@@ -208,12 +259,11 @@ void CL_Record_f( void )
 
 	// send the serverdata
 	MSG_WriteByte( &buf, svc_serverdata );
-	MSG_WriteLong( &buf, PROTOCOL_VERSION );
+	MSG_WriteLong( &buf, ORIGINAL_PROTOCOL_VERSION );
 	MSG_WriteLong( &buf, 0x10000 + cl.servercount );
 	MSG_WriteByte( &buf, 1 );	// demos are always attract loops
 	MSG_WriteString( &buf, cl.gamedir );
 	MSG_WriteShort( &buf, cl.playernum );
-
 	MSG_WriteString( &buf, cl.configstrings[CS_NAME] );
 
 	// configstrings
@@ -253,8 +303,8 @@ void CL_Record_f( void )
 			buf.cursize = 0;
 		}
 
-		MSG_WriteByte( &buf, svc_spawnbaseline );		
-		MSG_WriteDeltaEntity( &nullstate, &cl_entities[i].baseline, &buf, true, false );
+		MSG_WriteByte( &buf, svc_spawnbaseline );
+		MSG_WriteDeltaEntity(&nullstate, ent, &buf, true, false);
 	}
 
 	MSG_WriteByte( &buf, svc_stufftext );
@@ -271,7 +321,7 @@ void CL_Record_f( void )
 //----------------------------------------------------
 //		AUTO RECORD
 //----------------------------------------------------
-void CL_ParseAutoRecord (char *s)
+void CL_ParseAutoRecord (const char *s)
 {
 	if (!cl_autorecord->integer)
 		return;
@@ -327,28 +377,19 @@ void CL_ParseAutoRecord (char *s)
 
 void SCR_AutoDemo(void)
 {
-	struct          tm *ntime;
-    char            tmpbuf[32], fname[MAX_MSGLEN];
-    time_t          l_time;
+	char	timebuf[32], fname[MAX_MSGLEN];
+	time_t	clock;
 
-
-	if (!cl_autorecord->integer)
+	if (!cl_autorecord->integer || cls.demorecording || cl.attractloop)
 		return;
 
-	if(cls.demorecording)
-		return;
-	
-	if(cl.attractloop)
-		return;
-	
-	time( &l_time );
-	ntime = localtime( &l_time );
-	strftime( tmpbuf, sizeof(tmpbuf), "%Y-%m-%d_%H-%M-%S", ntime );
-	
+	time( &clock );
+	strftime( timebuf, sizeof(timebuf), "%Y-%m-%d_%H-%M-%S", localtime(&clock));
+
 	if(strlen(cl_clan->string) > 2)
-		Com_sprintf(fname, sizeof(fname), "record %s_%s_%s",tmpbuf, cl_clan->string, cls.mapname);
+		Com_sprintf(fname, sizeof(fname), "record %s_%s_%s", timebuf, cl_clan->string, cls.mapname);
 	else
-		Com_sprintf(fname, sizeof(fname), "record %s_%s",tmpbuf, cls.mapname);	
+		Com_sprintf(fname, sizeof(fname), "record %s_%s", timebuf, cls.mapname);	
 
 	Cbuf_AddText(fname);
 }
@@ -386,13 +427,13 @@ void CL_Demo_List_f ( void )
 		for( i = 0; i < ndirs-1; i++ )
 		{
 			if( strrchr( dirnames[i], '/' ) )
-				Com_Printf( "%u %s\n", i, strrchr( dirnames[i], '/' ) + 1 );
+				Com_Printf( "%i %s\n", i, strrchr( dirnames[i], '/' ) + 1 );
 			else
-				Com_Printf( "%u %s\n", i, dirnames[i] );
+				Com_Printf( "%i %s\n", i, dirnames[i] );
 
-			free( dirnames[i] );
+			Z_Free( dirnames[i] );
 		}
-		free( dirnames );
+		Z_Free( dirnames );
 	}
 
 	Com_Printf( "\n" );
@@ -448,17 +489,17 @@ void CL_Demo_Play_f ( void )
 			{
 				if( strrchr( dirnames[i], '/' ) )
 				{
-					Com_Printf( "%u %s\n", i, strrchr( dirnames[i], '/' ) + 1 );
+					Com_Printf( "%i %s\n", i, strrchr( dirnames[i], '/' ) + 1 );
 					found = 1;
-					sprintf(buf, "demomap %s\n", strrchr( dirnames[i], '/' ) + 1);
+					sprintf(buf, "demomap \"%s\"\n", strrchr( dirnames[i], '/' ) + 1);
 				}	
 				else
-					Com_Printf( "%u %s\n", i, dirnames[i] );
+					Com_Printf( "%i %s\n", i, dirnames[i] );
 			}
 
-			free( dirnames[i] );
+			Z_Free( dirnames[i] );
 		}
-		free( dirnames );
+		Z_Free( dirnames );
 	}
 
 	Com_Printf( "\n" );

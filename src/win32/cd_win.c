@@ -510,3 +510,4 @@ void CDAudio_Activate (qboolean active)
 		CDAudio_Pause ();
 }
 #endif
+

@@ -88,14 +88,14 @@ static void FreeFileList( char **list, int n )
 	{
 		if ( list[i] )
 		{
-			free( list[i] );
-			list[i] = 0;
+			Z_Free( list[i] );
+			list[i] = NULL;
 		}
 	}
-	free( list );
+	Z_Free( list );
 }
 
-static qboolean IconOfSkinExists( char *skin, char **pcxfiles, int npcxfiles )
+static qboolean IconOfSkinExists( const char *skin, char **pcxfiles, int npcxfiles )
 {
 	int i;
 	char scratch[1024];
@@ -167,8 +167,6 @@ static qboolean PlayerConfig_ScanDirectories( void )
 		strcat( scratch, "/tris.md2" );
 		if ( !Sys_FindFirst( scratch, 0, SFF_SUBDIR | SFF_HIDDEN | SFF_SYSTEM ) )
 		{
-			free( dirnames[i] );
-			dirnames[i] = 0;
 			Sys_FindClose();
 			continue;
 		}
@@ -178,11 +176,7 @@ static qboolean PlayerConfig_ScanDirectories( void )
 		strcpy( scratch, dirnames[i] );
 		strcat( scratch, "/*.pcx" );
 		pcxnames = FS_ListFiles( scratch, &npcxfiles, 0, SFF_SUBDIR | SFF_HIDDEN | SFF_SYSTEM );
-
-		if ( !pcxnames )
-		{
-			free( dirnames[i] );
-			dirnames[i] = 0;
+		if ( !pcxnames ) {
 			continue;
 		}
 
@@ -198,9 +192,12 @@ static qboolean PlayerConfig_ScanDirectories( void )
 			}
 		}
 		if ( !nskins )
+		{
+			FreeFileList( pcxnames, npcxfiles );
 			continue;
+		}
 
-		skinnames = malloc( sizeof( char * ) * ( nskins + 1 ) );
+		skinnames = Z_TagMalloc( sizeof( char * ) * ( nskins + 1 ), TAGMALLOC_MENU );
 		memset( skinnames, 0, sizeof( char * ) * ( nskins + 1 ) );
 
 		// copy the valid skins
@@ -225,7 +222,7 @@ static qboolean PlayerConfig_ScanDirectories( void )
 					if ( strrchr( scratch, '.' ) )
 						*strrchr( scratch, '.' ) = 0;
 
-					skinnames[s] = strdup( scratch );
+					skinnames[s] = CopyString( scratch, TAGMALLOC_MENU );
 					s++;
 				}
 			}
@@ -251,8 +248,8 @@ static qboolean PlayerConfig_ScanDirectories( void )
 
 		s_numplayermodels++;
 	}
-	if ( dirnames )
-		FreeFileList( dirnames, ndirs );
+
+	FreeFileList( dirnames, ndirs );
 
 	return true;
 }
@@ -278,9 +275,10 @@ static int pmicmpfnc( const void *_a, const void *_b )
 	return strcmp( a->directory, b->directory );
 }
 
+extern float CalcFov( float fov_x, float w, float h );
+
 void PlayerConfig_MenuDraw( menuframework_s *self )
 {
-	extern float CalcFov( float fov_x, float w, float h );
 	refdef_t refdef;
 	char scratch[MAX_QPATH];
 
@@ -296,7 +294,7 @@ void PlayerConfig_MenuDraw( menuframework_s *self )
 
 	if ( s_pmi[s_player_model_box.curvalue].skindisplaynames )
 	{
-		static int yaw;
+		static int yaw = 0;
 		//int maxframe = 29;
 		entity_t entity;
 
@@ -307,9 +305,7 @@ void PlayerConfig_MenuDraw( menuframework_s *self )
 		Com_sprintf( scratch, sizeof( scratch ), "players/%s/%s.pcx", s_pmi[s_player_model_box.curvalue].directory, s_pmi[s_player_model_box.curvalue].skindisplaynames[s_player_skin_box.curvalue] );
 		entity.skin = R_RegisterSkin( scratch );
 		entity.flags = RF_FULLBRIGHT;
-		entity.origin[0] = 80;
-		entity.origin[1] = 0;
-		entity.origin[2] = 0;
+		VectorSet(entity.origin, 80, 0, 0);
 		VectorCopy( entity.origin, entity.oldorigin );
 		entity.frame = 0;
 		entity.oldframe = 0;
@@ -328,6 +324,9 @@ void PlayerConfig_MenuDraw( menuframework_s *self )
 
 		M_DrawTextBox( ( refdef.x ) * ( 320.0F / viddef.width ) - 8, ( viddef.height / 2 ) * ( 240.0F / viddef.height) - 77, refdef.width / 8, refdef.height / 8 );
 		refdef.height += 4;
+#ifdef GL_QUAKE
+		Draw_Fill( refdef.x, refdef.y, refdef.width, refdef.height, 7 );
+#endif
 
 		R_RenderFrame( &refdef );
 
@@ -361,11 +360,11 @@ const char *PlayerConfig_MenuKey (menuframework_s *self, int key)
 			for ( j = 0; j < s_pmi[i].nskins; j++ )
 			{
 				if ( s_pmi[i].skindisplaynames[j] )
-					free( s_pmi[i].skindisplaynames[j] );
-				s_pmi[i].skindisplaynames[j] = 0;
+					Z_Free( s_pmi[i].skindisplaynames[j] );
+				s_pmi[i].skindisplaynames[j] = NULL;
 			}
-			free( s_pmi[i].skindisplaynames );
-			s_pmi[i].skindisplaynames = 0;
+			Z_Free( s_pmi[i].skindisplaynames );
+			s_pmi[i].skindisplaynames = NULL;
 			s_pmi[i].nskins = 0;
 		}
 	}
@@ -392,10 +391,10 @@ qboolean PlayerConfig_MenuInit( void )
 	if (s_numplayermodels == 0)
 		return false;
 
-	if ( hand->value < 0 || hand->value > 2 )
+	if ( hand->integer < 0 || hand->integer > 2 )
 		Cvar_SetValue( "hand", 0 );
 
-	strcpy( currentdirectory, skin->string );
+	Q_strncpyz( currentdirectory, skin->string, sizeof(currentdirectory) );
 
 	if ( strchr( currentdirectory, '/' ) )
 	{

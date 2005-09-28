@@ -28,75 +28,213 @@ JOIN SERVER MENU
 =============================================================================
 */
 static menuframework_s	s_joinserver_menu;
-static menuseparator_s	s_joinserver_server_title;
 static menuaction_s		s_joinserver_search_action;
 static menuaction_s		s_joinserver_address_book_action;
-static menuaction_s		s_joinserver_server_actions[MAX_LOCAL_SERVERS];
+static menulist_s		s_joinserver_server_list;
+static menulist_s		s_joinserver_sort_box;
 
-int		m_num_servers;
-#define	NO_SERVER_STRING	"<no server>"
+#define JOIN_M_TITLE		"-[ Join Server ]-"
+#define ADDRESS_FILE		"addresses.txt"
+#define MAX_MENU_SERVERS	32
 
 // user readable information
-static char local_server_names[MAX_LOCAL_SERVERS][80];
+static serverStatus_t localServers[MAX_MENU_SERVERS];
+static char local_server_names[MAX_MENU_SERVERS][64];
+static char local_server_addresses[MAX_MENU_SERVERS][32];
+static char *server_shit[MAX_MENU_SERVERS];
 
-// network address
-static netadr_t local_server_netadr[MAX_LOCAL_SERVERS];
+static int		m_num_servers = 0;
+static int		m_num_adr_cvar = 0, m_num_adr_file = 0, m_num_addresses = 0;
+static qboolean addressesLoaded = false;
+static qboolean joinMenuInitialized = false;
 
-void M_AddToServerList (netadr_t adr, char *info)
+cvar_t	*menu_serversort;
+
+static void M_LoadServers(void)
 {
-	int		i;
+	char name[32], *adrstring;
+	int  i;
 
-	if (m_num_servers == MAX_LOCAL_SERVERS)
+	if(m_num_adr_file == MAX_MENU_SERVERS)
 		return;
-	while ( *info == ' ' )
-		info++;
+
+	m_num_addresses -= m_num_adr_cvar;
+	m_num_adr_cvar = 0;
+
+	for (i=0 ; i<9 ; i++)
+	{
+		Com_sprintf (name, sizeof(name), "adr%i", i);
+		adrstring = Cvar_VariableString (name);
+		if (!adrstring || !adrstring[0])
+			continue;
+
+		Q_strncpyz(local_server_addresses[m_num_addresses++], adrstring, sizeof(local_server_addresses[0]));
+		m_num_adr_cvar++;
+
+		if(m_num_addresses == MAX_MENU_SERVERS)
+			break;
+	}
+}
+
+static void M_LoadServersFromFile(void)
+{
+	char name[32];
+	char *buffer = NULL;
+	int line = 0;
+	char *s, *p;
+
+	if(addressesLoaded)
+		return;
+
+	FS_LoadFile( ADDRESS_FILE, (void **)&buffer );
+	if (!buffer) {
+		Com_DPrintf ("M_LoadServers: " ADDRESS_FILE  " not found\n");
+		return;
+	}
+
+	s = buffer;
+
+	m_num_adr_file = 0;
+	m_num_addresses = 0;
+
+	while( *s ) {
+		p = s;
+		line++;
+
+		Q_strncpyz (name, COM_Parse( &p ), sizeof(name));
+		if( strlen(name) > 2 )
+			strcpy(local_server_addresses[m_num_adr_file++], name);
+
+		if(m_num_adr_file == MAX_MENU_SERVERS)
+			break;
+
+		s = strchr( s, '\n' );
+		if( !s )
+			break;
+
+		*s = '\0';
+		s++;
+	}
+
+	m_num_addresses = m_num_adr_file;
+
+	addressesLoaded = true;
+
+	FS_FreeFile( buffer );
+}
+
+static void M_PingServers (void)
+{
+	int			i;
+	netadr_t	adr;
+	char		*adrstring;
+	cvar_t		*noudp;
+
+	if(!m_num_addresses)
+		return;
+
+	NET_Config (true);		// allow remote
+
+	noudp = Cvar_Get ("noudp", "0", CVAR_NOSET);
+	if (!noudp->integer)
+	{
+		adr.type = NA_BROADCAST;
+		adr.port = BigShort(PORT_SERVER);
+		Netchan_OutOfBandPrint (NS_CLIENT, &adr, "status");
+	}
+
+	// send a packet to each address book entry
+	for (i=0; i<m_num_addresses; i++)
+	{
+		adrstring = local_server_addresses[i];
+		Com_Printf ("pinging %s...\n", adrstring);
+		if (!NET_StringToAdr (adrstring, &adr))
+		{
+			Com_Printf ("Bad address: %s\n", adrstring);
+			continue;
+		}
+		if (!adr.port)
+			adr.port = BigShort(PORT_SERVER);
+		Netchan_OutOfBandPrint (NS_CLIENT, &adr, "status");
+	}
+}
+
+static int SortServers( const serverStatus_t *a, const serverStatus_t *b )
+{
+	if(a->numPlayers > b->numPlayers)
+		return -1;
+
+	if(a->numPlayers < b->numPlayers)
+		return 1;
+
+	return 0;
+}
+
+void M_AddToServerList (const serverStatus_t *status)
+{
+	serverStatus_t *s;
+	char buffer[64];
+	int		i, clients;
+
+	if(!joinMenuInitialized)
+		return;
+
+	if (m_num_servers >= MAX_MENU_SERVERS)
+		return;
 
 	// ignore if duplicated
-	for (i = 0; i < m_num_servers; i++)
-		if (!strcmp(info, local_server_names[i]))
+	for( i=0, s=localServers ; i<m_num_servers ; i++, s++ )
+		if( !strcmp( status->address, s->address ) )
 			return;
 
-	local_server_netadr[m_num_servers] = adr;
-	strncpy (local_server_names[m_num_servers], info, sizeof(local_server_names[0])-1);
-	m_num_servers++;
+	localServers[m_num_servers++] = *status;
+
+	if(menu_serversort->integer)
+	{
+		qsort( localServers, m_num_servers, sizeof( localServers[0] ), (int (*)(const void *, const void *))SortServers );
+		//need to update whole list after sorting
+		for( i=0, s=localServers ; i<m_num_servers ; i++, s++ )
+		{
+			Q_strncpyz( buffer, Info_ValueForKey( s->infostring, "hostname" ), sizeof( buffer ) );
+			clients = atoi( Info_ValueForKey( s->infostring, "maxclients" ) );
+			Com_sprintf( local_server_names[i], sizeof( local_server_names[0] ), "%-18s %i/%i", buffer, s->numPlayers, clients );
+			server_shit[i] = local_server_names[i];
+
+		}
+	} else {
+		s = &localServers[m_num_servers-1];
+		Q_strncpyz( buffer, Info_ValueForKey( s->infostring, "hostname" ), sizeof( buffer ) );
+		clients = atoi( Info_ValueForKey( s->infostring, "maxclients" ) );
+		Com_sprintf( local_server_names[i], sizeof( local_server_names[0] ), "%-18s %i/%i", buffer, s->numPlayers, clients );
+		server_shit[i] = local_server_names[i];
+	}
+
+	s_joinserver_server_list.count = m_num_servers;
 }
 
 
-void JoinServerFunc( void *self )
+static void JoinServerFunc( void *self )
 {
 	char	buffer[128];
 	int		index;
 
-	index = ( menuaction_s * ) self - s_joinserver_server_actions;
-
-	if ( Q_stricmp( local_server_names[index], NO_SERVER_STRING ) == 0 )
-		return;
+	index = s_joinserver_server_list.curvalue;
 
 	if (index >= m_num_servers)
 		return;
 
-	Com_sprintf (buffer, sizeof(buffer), "connect %s\n", NET_AdrToString (&local_server_netadr[index]));
+	Com_sprintf (buffer, sizeof(buffer), "connect %s\n", localServers[index].address);
 	Cbuf_AddText (buffer);
 	M_ForceMenuOff ();
 }
 
-void AddressBookFunc( void *self )
+static void AddressBookFunc( void *self )
 {
 	M_Menu_AddressBook_f();
 }
 
-void NullCursorDraw( void *self )
+static void SearchLocalGames( void )
 {
-}
-
-void SearchLocalGames( void )
-{
-	int		i;
-
-	m_num_servers = 0;
-	for (i=0 ; i<MAX_LOCAL_SERVERS ; i++)
-		strcpy (local_server_names[i], NO_SERVER_STRING);
-
 	M_DrawTextBox( 8, 120 - 48, 36, 3 );
 	M_Print( 16 + 16, 120 - 48 + 8,  "Searching for local servers, this" );
 	M_Print( 16 + 16, 120 - 48 + 16, "could take up to a minute, so" );
@@ -105,72 +243,167 @@ void SearchLocalGames( void )
 	// the text box won't show up unless we do a buffer swap
 	R_EndFrame();
 
+	m_num_servers = 0;
+	s_joinserver_server_list.count = 0;
+
+	M_LoadServersFromFile();
+	M_LoadServers();
 	// send out info packets
-	CL_PingServers_f();
+	M_PingServers();
 }
 
-void SearchLocalGamesFunc( void *self )
+static void SearchLocalGamesFunc( void *self )
 {
 	SearchLocalGames();
 }
 
-void JoinServer_MenuDraw( menuframework_s *self )
+
+static void JoinServer_InfoDraw( void )
 {
-	M_Banner( "m_banner_join_server" );
+	char key[MAX_INFO_KEY];
+	char value[MAX_INFO_VALUE];
+	const char *info;
+	int x = s_joinserver_server_list.width + 40;
+	int y = 80;
+	int index;
+	serverStatus_t *server;
+	playerStatus_t *player;
+	int i;
+
+	// Never draw on low resolutions
+	if( viddef.width < 512 )
+		return;
+
+	index = s_joinserver_server_list.curvalue;
+	if( index < 0 || index >= MAX_MENU_SERVERS )
+		return;
+
+	server = &localServers[index];
+
+	DrawAltString( x, y, "Name            Score Ping");
+	y += 8;
+	DrawAltString( x, y, "--------------- ----- ----");
+	y += 10;
+
+	if( !server->numPlayers ) {
+		DrawAltString( x, y, "No players");
+		y += 8;
+	}
+	else
+	{
+		for( i=0, player=server->players ; i<server->numPlayers ; i++, player++ ) {
+			DrawString( x, y, va( "%-15s %5i %4i\n", player->name, player->score, player->ping ));
+			y += 8;
+		}
+	}
+
+	y+=8;
+	DrawAltString( x, y, "Server info");
+	y += 8;
+	DrawAltString( x, y, "--------------------------");
+	y += 10;
+
+	info = (const char *)server->infostring;
+	while( *info ) {
+		Info_NextPair( &info, key, value );
+
+		if(!key[0] || !value[0])
+			break;
+
+		if( strlen( key ) > 15 ) {
+			strcpy( key + 12, "..." );
+		}
+
+		DrawString( x, y, va( "%-8s", key ));
+		DrawString( x + 16 * 8, y, va( "%-16s", value ));
+		y += 8;
+	}
+
+}
+
+static void JoinServer_MenuDraw( menuframework_s *self )
+{
+	//M_Banner( "m_banner_join_server" );
+	DrawString((viddef.width - (strlen(JOIN_M_TITLE)*8))>>1, 10, JOIN_M_TITLE);
+	JoinServer_InfoDraw();
 	Menu_Draw( self );
 }
 
-void JoinServer_MenuInit( void )
+static void SortFunc( void *unused )
 {
-	int i;
+	Cvar_SetValue( "menu_serversort", s_joinserver_sort_box.curvalue );
+}
+
+static void JoinServer_MenuInit( void )
+{
+	int y, x;
+
+	static const char *yesno_names[] =
+	{
+		"no",
+		"yes",
+		0
+	};
+
+	menu_serversort = Cvar_Get("menu_serversort", "1", CVAR_ARCHIVE);
 
 	memset(&s_joinserver_menu, 0, sizeof(s_joinserver_menu));
-	s_joinserver_menu.x = viddef.width * 0.50 - 120;
+	s_joinserver_menu.x = 0;
 	s_joinserver_menu.nitems = 0;
+
+	s_joinserver_server_list.generic.type		= MTYPE_LIST;
+	s_joinserver_server_list.generic.flags		= QMF_LEFT_JUSTIFY;
+	s_joinserver_server_list.generic.name		= NULL;
+	s_joinserver_server_list.generic.callback	= JoinServerFunc;
+	s_joinserver_server_list.generic.x			= 20;
+	s_joinserver_server_list.generic.y			= 40;
+	s_joinserver_server_list.width				= (viddef.width - 40) / 2;
+	s_joinserver_server_list.height				= viddef.height - 110;
+	s_joinserver_server_list.generic.statusbar = "press ENTER to connect";
+	s_joinserver_server_list.itemnames			= (const char **)server_shit;
+	s_joinserver_server_list.count				= 0;
+	MenuList_Init(&s_joinserver_server_list);
+
+	x = s_joinserver_server_list.width + 60;
+	y = 40;
 
 	s_joinserver_address_book_action.generic.type	= MTYPE_ACTION;
 	s_joinserver_address_book_action.generic.name	= "address book";
 	s_joinserver_address_book_action.generic.flags	= QMF_LEFT_JUSTIFY;
-	s_joinserver_address_book_action.generic.x		= 0;
-	s_joinserver_address_book_action.generic.y		= 0;
+	s_joinserver_address_book_action.generic.x		= x;
+	s_joinserver_address_book_action.generic.y		= y;
 	s_joinserver_address_book_action.generic.callback = AddressBookFunc;
 
-	s_joinserver_search_action.generic.type = MTYPE_ACTION;
-	s_joinserver_search_action.generic.name	= "refresh server list";
+	s_joinserver_search_action.generic.type		= MTYPE_ACTION;
+	s_joinserver_search_action.generic.name		= "refresh server list";
 	s_joinserver_search_action.generic.flags	= QMF_LEFT_JUSTIFY;
-	s_joinserver_search_action.generic.x	= 0;
-	s_joinserver_search_action.generic.y	= 10;
+	s_joinserver_search_action.generic.x		= x;
+	s_joinserver_search_action.generic.y		= y+10;
 	s_joinserver_search_action.generic.callback = SearchLocalGamesFunc;
 	s_joinserver_search_action.generic.statusbar = "search for servers";
 
-	s_joinserver_server_title.generic.type = MTYPE_SEPARATOR;
-	s_joinserver_server_title.generic.name = "connect to...";
-	s_joinserver_server_title.generic.x    = 80;
-	s_joinserver_server_title.generic.y	   = 30;
-
-	for ( i = 0; i < MAX_LOCAL_SERVERS; i++ )
-	{
-		s_joinserver_server_actions[i].generic.type	= MTYPE_ACTION;
-		strcpy (local_server_names[i], NO_SERVER_STRING);
-		s_joinserver_server_actions[i].generic.name	= local_server_names[i];
-		s_joinserver_server_actions[i].generic.flags	= QMF_LEFT_JUSTIFY;
-		s_joinserver_server_actions[i].generic.x		= 0;
-		s_joinserver_server_actions[i].generic.y		= 40 + i*10;
-		s_joinserver_server_actions[i].generic.callback = JoinServerFunc;
-		s_joinserver_server_actions[i].generic.statusbar = "press ENTER to connect";
-	}
+	s_joinserver_sort_box.generic.type		= MTYPE_SPINCONTROL;
+	s_joinserver_sort_box.generic.flags		= QMF_LEFT_JUSTIFY;
+	s_joinserver_sort_box.generic.cursor_offset = 24;
+	s_joinserver_sort_box.generic.name		= "list sorting";
+	s_joinserver_sort_box.generic.x			= x-10+strlen(s_joinserver_sort_box.generic.name)*8;
+	s_joinserver_sort_box.generic.y			= y+20;
+	s_joinserver_sort_box.generic.callback	= SortFunc;
+	s_joinserver_sort_box.itemnames			= yesno_names;
+	s_joinserver_sort_box.curvalue			= menu_serversort->integer;
 
 	s_joinserver_menu.draw = JoinServer_MenuDraw;
 	s_joinserver_menu.key = NULL;
 
 	Menu_AddItem( &s_joinserver_menu, &s_joinserver_address_book_action );
-	Menu_AddItem( &s_joinserver_menu, &s_joinserver_server_title );
 	Menu_AddItem( &s_joinserver_menu, &s_joinserver_search_action );
+	Menu_AddItem( &s_joinserver_menu, &s_joinserver_sort_box.generic );
 
-	for ( i = 0; i < MAX_LOCAL_SERVERS; i++ )
-		Menu_AddItem( &s_joinserver_menu, &s_joinserver_server_actions[i] );
+	Menu_AddItem( &s_joinserver_menu, &s_joinserver_server_list );
 
-	Menu_Center( &s_joinserver_menu );
+	//Menu_Center( &s_joinserver_menu );
+
+	joinMenuInitialized = true;
 
 	SearchLocalGames();
 }

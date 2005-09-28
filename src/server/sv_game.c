@@ -232,7 +232,7 @@ void PF_WriteByte (int c) {MSG_WriteByte (&sv.multicast, c);}
 void PF_WriteShort (int c) {MSG_WriteShort (&sv.multicast, c);}
 void PF_WriteLong (int c) {MSG_WriteLong (&sv.multicast, c);}
 void PF_WriteFloat (float f) {MSG_WriteFloat (&sv.multicast, f);}
-void PF_WriteString (char *s) {MSG_WriteString (&sv.multicast, s);}
+void PF_WriteString (const char *s) {MSG_WriteString (&sv.multicast, s);}
 void PF_WritePos (vec3_t pos) {MSG_WritePos (&sv.multicast, pos);}
 void PF_WriteDir (vec3_t dir) {MSG_WriteDir (&sv.multicast, dir);}
 void PF_WriteAngle (float f) {MSG_WriteAngle (&sv.multicast, f);}
@@ -383,13 +383,13 @@ void SV_InitGameProgs (void)
 	import.WriteDir = PF_WriteDir;
 	import.WriteAngle = PF_WriteAngle;
 
-	import.TagMalloc = Z_TagMalloc;
-	import.TagFree = Z_Free;
-	import.FreeTags = Z_FreeTags;
+	import.TagMalloc = Z_TagMallocGame;
+	import.TagFree = Z_FreeGame;
+	import.FreeTags = Z_FreeTagsGame;
 
 	import.cvar = Cvar_Get;
-	import.cvar_set = Cvar_Set;
-	import.cvar_forceset = Cvar_ForceSet;
+	import.cvar_set = Cvar_SetLatched;
+	import.cvar_forceset = Cvar_Set;
 
 	import.argc = Cmd_Argc;
 	import.argv = Cmd_Argv;

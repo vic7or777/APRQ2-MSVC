@@ -45,7 +45,7 @@ void M_PushMenu ( menuframework_s *menu )
 	int		i;
 
 	if (Cvar_VariableValue ("maxclients") == 1 
-		&& Com_ServerState ())
+		&& Com_ServerState () && !cl_paused->integer)
 		Cvar_Set ("paused", "1");
 
 	// if this menu is already present, drop back to that level
@@ -79,7 +79,8 @@ void M_ForceMenuOff (void)
 	m_menudepth = 0;
 	m_active = NULL;
 	Key_ClearStates ();
-	Cvar_Set ("paused", "0");
+	if(cl_paused->integer)
+		Cvar_Set ("paused", "0");
 }
 
 void M_PopMenu (void)
@@ -384,12 +385,14 @@ void M_Init (void)
 	Cmd_AddCommand ("menu_multiplayer", M_Menu_Multiplayer_f );
 	Cmd_AddCommand ("menu_video", M_Menu_Video_f);
 	Cmd_AddCommand ("menu_options", M_Menu_Options_f);
-	Cmd_AddCommand ("menu_newoptions", M_Menu_NewOptions_f);
+		Cmd_AddCommand ("menu_newoptions", M_Menu_NewOptions_f);
 		Cmd_AddCommand ("menu_keys", M_Menu_Keys_f);
 	Cmd_AddCommand ("menu_quit", M_Menu_Quit_f);
 	Cmd_AddCommand ("menu_demos", M_Menu_Demos_f);
-#ifdef _WIN32
-	Cmd_AddCommand ("menu_winamp", M_Menu_WA_f);
+#if defined(_WIN32)
+	Cmd_AddCommand ("menu_winamp", M_Menu_MP3_f);
+#elif defined(WITH_XMMS)
+	Cmd_AddCommand ("menu_xmms", M_Menu_MP3_f);
 #endif
 }
 
@@ -399,8 +402,8 @@ void M_MouseMove( int mx, int my ) {
 	m_mouse[0] += mx;
 	m_mouse[1] += my;
 
-	clamp( m_mouse[0], 0, viddef.width - 10 );
-	clamp( m_mouse[1], 0, viddef.height - 10 );
+	clamp( m_mouse[0], 0, viddef.width - 8 );
+	clamp( m_mouse[1], 0, viddef.height - 8 );
 
 }
 void List_MoveB ( menulist_s *l, int moy, int my);
@@ -419,9 +422,8 @@ void M_Draw (void)
 	if (cls.key_dest != key_menu)
 		return;
 
-	if( !m_active ) {
+	if( !m_active )
 		return;
-	}
 
 	// repaint everything next frame
 	SCR_DirtyScreen ();
@@ -446,11 +448,10 @@ void M_Draw (void)
 		prev = index;
 	}
 
-	if( m_active->draw ) {
+	if( m_active->draw )
 		m_active->draw( m_active );
-	} else {
+	else
 		Menu_Draw( m_active );
-	}
 
 	Draw_Pic( m_mouse[0], m_mouse[1], "cursor", 1 );
 
@@ -473,9 +474,8 @@ void M_Keydown (int key, qboolean down)
 {
 	const char *s;
 
-	if( !m_active ) {
+	if( !m_active )
 		return;
-	}
 
 	if(key == K_MOUSE1 && !down && bselected)
 		bselected = false;
@@ -483,14 +483,12 @@ void M_Keydown (int key, qboolean down)
 	if(!down || bselected)
 		return;
 
-	if( m_active->key ) {
+	if( m_active->key )
 		s = m_active->key( m_active, key );
-	} else {
+	else
 		s = Default_MenuKey( m_active, key );
-	}
 
-	if( s ) {
-		S_StartLocalSound( (char *)s );
-	}
+	if( s )
+		S_StartLocalSound( s );
 }
 

@@ -338,21 +338,21 @@ qboolean	NET_GetPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_messag
 NET_SendPacket
 =============
 */
-void NET_SendPacket (netsrc_t sock, int length, const void *data, const netadr_t *to)
+int NET_SendPacket (netsrc_t sock, int length, const void *data, const netadr_t *to)
 {
 	int		ret;
 	struct sockaddr	addr;
 	//int		net_socket;
 
-	if ( to->type == NA_LOOPBACK )
-	{
-		NET_SendLoopPacket (sock, length, data);
-		return;
-	}
-	else if (to->type == NA_BROADCAST || to->type == NA_IP)
+	if (to->type == NA_IP || to->type == NA_BROADCAST)
 	{
 		if (!ip_sockets[sock])
-			return;
+			return 0;
+	}
+	else if ( to->type == NA_LOOPBACK )
+	{
+		NET_SendLoopPacket (sock, length, data);
+		return 1;
 	}
 	else
 		Com_Error (ERR_FATAL, "NET_SendPacket: bad address type");
@@ -364,7 +364,10 @@ void NET_SendPacket (netsrc_t sock, int length, const void *data, const netadr_t
 	{
 		Com_Printf ("NET_SendPacket ERROR: %s to %s\n", NET_ErrorString(),
 				NET_AdrToString (to));
+		return 0;
 	}
+
+	return 1;
 }
 
 
@@ -491,7 +494,7 @@ int NET_Socket (char *net_interface, int port)
 		return 0;
 	}
 
-	if (!net_interface || !net_interface[0] || !stricmp(net_interface, "localhost"))
+	if (!net_interface || !net_interface[0] || !Q_stricmp(net_interface, "localhost"))
 		address.sin_addr.s_addr = INADDR_ANY;
 	else
 		NET_StringToSockaddr (net_interface, (struct sockaddr *)&address);

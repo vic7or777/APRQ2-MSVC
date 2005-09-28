@@ -29,9 +29,12 @@ START SERVER MENU
 
 =============================================================================
 */
+#define MAX_MENU_MAPS	128
 static menuframework_s s_startserver_menu;
-static char **mapnames;
-static int	  nummaps;
+static char *mapnames[MAX_MENU_MAPS];
+//static int	  nummaps;
+static menulist_s	maplist;
+static int			map_count = 0;
 
 static menuaction_s	s_startserver_start_action;
 static menuaction_s	s_startserver_dmoptions_action;
@@ -39,10 +42,62 @@ static menufield_s	s_timelimit_field;
 static menufield_s	s_fraglimit_field;
 static menufield_s	s_maxclients_field;
 static menufield_s	s_hostname_field;
-static menulist_s	s_startmap_list;
+//static menulist_s	s_startmap_list;
 static menulist_s	s_rules_box;
 
-int Developer_searchpath( int );
+static void Maps_Free( void ) {
+	int i;
+
+	if(!map_count)
+		return;
+
+	for( i=0 ; i<map_count; i++ ) {
+		Z_Free( mapnames[i] );
+		mapnames[i] = NULL;
+	}
+	map_count = 0;
+	maplist.itemnames = NULL;
+}
+
+static void Maps_Scan( void)
+{
+	int		numFiles;
+	char	findname[1024];
+	char	**list;
+	int		i;
+
+	Maps_Free();
+
+	sprintf(findname, "%s/maps/*.bsp", FS_Gamedir());
+	list = FS_ListFiles( findname, &numFiles, 0, SFF_SUBDIR | SFF_HIDDEN | SFF_SYSTEM );
+	if( !list ) {
+		return;
+	}
+
+	for( i = 0; i < numFiles - 1; i++ ) {
+		if( map_count < MAX_MENU_MAPS ) {
+			list[i][strlen(list[i]) - 4] = 0;
+			if (strrchr( list[i], '/' ))
+				mapnames[map_count] = CopyString( strrchr( list[i], '/' ) + 1, TAGMALLOC_MENU);
+			else
+				mapnames[map_count] = CopyString( list[i], TAGMALLOC_MENU);
+
+			map_count++;
+		}
+		Z_Free( list[i] );
+	}
+	Z_Free( list );
+
+}
+
+static void Build_MapList(void)
+{
+	Maps_Scan();
+	maplist.curvalue = 0;
+	maplist.prestep = 0;
+	maplist.itemnames = (const char **)mapnames;
+	maplist.count = map_count;
+}
 
 void DMOptionsFunc( void *self )
 {
@@ -69,20 +124,13 @@ void RulesChangeFunc ( void *self )
 //=====
 //PGM
 	// ROGUE GAMES
-	else if(Developer_searchpath(2) == 2)
+	else if(Developer_searchpath() == 2)
 	{
 		if (s_rules_box.curvalue == 2)			// tag	
 		{
 			s_maxclients_field.generic.statusbar = NULL;
 			s_startserver_dmoptions_action.generic.statusbar = NULL;
 		}
-/*
-		else if(s_rules_box.curvalue == 3)		// deathball
-		{
-			s_maxclients_field.generic.statusbar = NULL;
-			s_startserver_dmoptions_action.generic.statusbar = NULL;
-		}
-*/
 	}
 //PGM
 //=====
@@ -98,7 +146,8 @@ void StartServerActionFunc( void *self )
 	int		maxclients;
 	char	*spot;
 
-	strcpy( startmap, strchr( mapnames[s_startmap_list.curvalue], '\n' ) + 1 );
+//	strcpy( startmap, strchr( mapnames[maplist.curvalue], '\n' ) + 1 );
+	strcpy( startmap, mapnames[maplist.curvalue]);
 
 	maxclients  = atoi( s_maxclients_field.buffer );
 	timelimit	= atoi( s_timelimit_field.buffer );
@@ -112,7 +161,7 @@ void StartServerActionFunc( void *self )
 //	Cvar_SetValue ("coop", s_rules_box.curvalue );
 
 //PGM
-	if((s_rules_box.curvalue < 2) || (Developer_searchpath(2) != 2))
+	if((s_rules_box.curvalue < 2) || (Developer_searchpath() != 2))
 	{
 		Cvar_SetValue ("deathmatch", !s_rules_box.curvalue );
 		Cvar_SetValue ("coop", s_rules_box.curvalue );
@@ -165,16 +214,7 @@ const char *StartServer_MenuKey( menuframework_s *self, int key )
 {
 	if ( key == K_ESCAPE )
 	{
-		if ( mapnames )
-		{
-			int i;
-
-			for ( i = 0; i < nummaps; i++ )
-				free( mapnames[i] );
-			free( mapnames );
-		}
-		mapnames = 0;
-		nummaps = 0;
+		Maps_Free();
 	}
 
 	return Default_MenuKey( self, key );
@@ -198,102 +238,47 @@ void StartServer_MenuInit( void )
 //		"deathball",
 		0
 	};
-//PGM
-//=======
-	char *buffer;
-	char  mapsname[1024];
-	char *s;
-	int length;
-	int i;
-	FILE *fp;
 
-	/*
-	** load the list of map names
-	*/
-	Com_sprintf( mapsname, sizeof( mapsname ), "%s/maps.lst", FS_Gamedir() );
-	if ( ( fp = fopen( mapsname, "rb" ) ) == 0 )
-	{
-		if ( ( length = FS_LoadFile( "maps.lst", ( void ** ) &buffer ) ) == -1 )
-			Com_Error( ERR_DROP, "couldn't find maps.lst\n" );
-	}
-	else
-	{
-#ifdef _WIN32
-		length = filelength( fileno( fp  ) );
-#else
-		fseek(fp, 0, SEEK_END);
-		length = ftell(fp);
-		fseek(fp, 0, SEEK_SET);
-#endif
-		buffer = malloc( length );
-		fread( buffer, length, 1, fp );
-	}
-
-	s = buffer;
-
-	i = 0;
-	while ( i < length )
-	{
-		if ( s[i] == '\r' )
-			nummaps++;
-		i++;
-	}
-
-	if ( nummaps == 0 )
-		Com_Error( ERR_DROP, "no maps in maps.lst\n" );
-
-	mapnames = malloc( sizeof( char * ) * ( nummaps + 1 ) );
-	memset( mapnames, 0, sizeof( char * ) * ( nummaps + 1 ) );
-
-	s = buffer;
-
-	for ( i = 0; i < nummaps; i++ )
-	{
-    char  shortname[MAX_TOKEN_CHARS];
-    char  longname[MAX_TOKEN_CHARS];
-		char  scratch[200];
-		int		j, l;
-
-		strcpy( shortname, COM_Parse( &s ) );
-		l = strlen(shortname);
-		for (j=0 ; j<l ; j++)
-			shortname[j] = toupper(shortname[j]);
-		strcpy( longname, COM_Parse( &s ) );
-		Com_sprintf( scratch, sizeof( scratch ), "%s\n%s", longname, shortname );
-
-		mapnames[i] = malloc( strlen( scratch ) + 1 );
-		strcpy( mapnames[i], scratch );
-	}
-	mapnames[nummaps] = 0;
-
-	if ( fp != 0 )
-	{
-		fp = 0;
-		free( buffer );
-	}
-	else
-	{
-		FS_FreeFile( buffer );
-	}
+	int x = 0, y = 0;
 
 	memset(&s_startserver_menu, 0, sizeof(s_startserver_menu));
 	// initialize the menu stuff
-	s_startserver_menu.x = viddef.width * 0.50;
+	//s_startserver_menu.x = viddef.width * 0.50;
+	s_startserver_menu.x = 0;
+	s_startserver_menu.y = 0;
 	s_startserver_menu.nitems = 0;
 
-	s_startmap_list.generic.type = MTYPE_SPINCONTROL;
+	/*s_startmap_list.generic.type = MTYPE_SPINCONTROL;
 	s_startmap_list.generic.x	= 0;
 	s_startmap_list.generic.y	= 0;
 	s_startmap_list.generic.name	= "initial map";
-	s_startmap_list.itemnames = (const char **)mapnames;
+	s_startmap_list.itemnames = (const char **)mapnames;*/
+
+	maplist.generic.type		= MTYPE_LIST;
+	maplist.generic.flags		= QMF_LEFT_JUSTIFY;
+	maplist.generic.name		= NULL;
+	maplist.generic.callback	= NULL;
+	maplist.generic.x			= 20;
+	maplist.generic.y			= 30;
+	//maplist.width				= viddef.width - 40;
+	maplist.width				= (viddef.width - 40) / 2;
+	maplist.height				= viddef.height - 110;
+	MenuList_Init(&maplist);
+
+	x = maplist.width + 20 + ((viddef.width - maplist.width - 20)/ 2);
+	y = 30;
+
+	Build_MapList();
 
 	s_rules_box.generic.type = MTYPE_SPINCONTROL;
-	s_rules_box.generic.x	= 0;
-	s_rules_box.generic.y	= 20;
+	s_rules_box.generic.flags	= QMF_LEFT_JUSTIFY;
+	s_rules_box.generic.cursor_offset = 24;
+	s_rules_box.generic.x	= x;
+	s_rules_box.generic.y	= y+20;
 	s_rules_box.generic.name	= "rules";
 	
 //PGM - rogue games only available with rogue DLL.
-	if(Developer_searchpath(2) == 2)
+	if(Developer_searchpath() == 2)
 		s_rules_box.itemnames = dm_coop_names_rogue;
 	else
 		s_rules_box.itemnames = dm_coop_names;
@@ -308,8 +293,8 @@ void StartServer_MenuInit( void )
 	s_timelimit_field.generic.type = MTYPE_FIELD;
 	s_timelimit_field.generic.name = "time limit";
 	s_timelimit_field.generic.flags = QMF_NUMBERSONLY;
-	s_timelimit_field.generic.x	= 0;
-	s_timelimit_field.generic.y	= 36;
+	s_timelimit_field.generic.x	= x;
+	s_timelimit_field.generic.y	= y+36;
 	s_timelimit_field.generic.statusbar = "0 = no limit";
 	s_timelimit_field.length = 3;
 	s_timelimit_field.visible_length = 3;
@@ -318,8 +303,8 @@ void StartServer_MenuInit( void )
 	s_fraglimit_field.generic.type = MTYPE_FIELD;
 	s_fraglimit_field.generic.name = "frag limit";
 	s_fraglimit_field.generic.flags = QMF_NUMBERSONLY;
-	s_fraglimit_field.generic.x	= 0;
-	s_fraglimit_field.generic.y	= 54;
+	s_fraglimit_field.generic.x	= x;
+	s_fraglimit_field.generic.y	= y+54;
 	s_fraglimit_field.generic.statusbar = "0 = no limit";
 	s_fraglimit_field.length = 3;
 	s_fraglimit_field.visible_length = 3;
@@ -334,8 +319,8 @@ void StartServer_MenuInit( void )
 	s_maxclients_field.generic.type = MTYPE_FIELD;
 	s_maxclients_field.generic.name = "max players";
 	s_maxclients_field.generic.flags = QMF_NUMBERSONLY;
-	s_maxclients_field.generic.x	= 0;
-	s_maxclients_field.generic.y	= 72;
+	s_maxclients_field.generic.x	= x;
+	s_maxclients_field.generic.y	= y+72;
 	s_maxclients_field.generic.statusbar = NULL;
 	s_maxclients_field.length = 3;
 	s_maxclients_field.visible_length = 3;
@@ -347,8 +332,8 @@ void StartServer_MenuInit( void )
 	s_hostname_field.generic.type = MTYPE_FIELD;
 	s_hostname_field.generic.name = "hostname";
 	s_hostname_field.generic.flags = 0;
-	s_hostname_field.generic.x	= 0;
-	s_hostname_field.generic.y	= 90;
+	s_hostname_field.generic.x	= x;
+	s_hostname_field.generic.y	= y+90;
 	s_hostname_field.generic.statusbar = NULL;
 	s_hostname_field.length = 12;
 	s_hostname_field.visible_length = 12;
@@ -357,22 +342,23 @@ void StartServer_MenuInit( void )
 	s_startserver_dmoptions_action.generic.type = MTYPE_ACTION;
 	s_startserver_dmoptions_action.generic.name	= " deathmatch flags";
 	s_startserver_dmoptions_action.generic.flags= QMF_LEFT_JUSTIFY;
-	s_startserver_dmoptions_action.generic.x	= 24;
-	s_startserver_dmoptions_action.generic.y	= 108;
+	s_startserver_dmoptions_action.generic.x	= x+24;
+	s_startserver_dmoptions_action.generic.y	= y+108;
 	s_startserver_dmoptions_action.generic.statusbar = NULL;
 	s_startserver_dmoptions_action.generic.callback = DMOptionsFunc;
 
 	s_startserver_start_action.generic.type = MTYPE_ACTION;
 	s_startserver_start_action.generic.name	= " begin";
 	s_startserver_start_action.generic.flags= QMF_LEFT_JUSTIFY;
-	s_startserver_start_action.generic.x	= 24;
-	s_startserver_start_action.generic.y	= 128;
+	s_startserver_start_action.generic.x	= x+24;
+	s_startserver_start_action.generic.y	= y+128;
 	s_startserver_start_action.generic.callback = StartServerActionFunc;
 
 	s_startserver_menu.draw = NULL;
 	s_startserver_menu.key = StartServer_MenuKey;
 
-	Menu_AddItem( &s_startserver_menu, &s_startmap_list );
+//	Menu_AddItem( &s_startserver_menu, &s_startmap_list );
+	Menu_AddItem( &s_startserver_menu, &maplist );
 	Menu_AddItem( &s_startserver_menu, &s_rules_box );
 	Menu_AddItem( &s_startserver_menu, &s_timelimit_field );
 	Menu_AddItem( &s_startserver_menu, &s_fraglimit_field );
@@ -381,7 +367,7 @@ void StartServer_MenuInit( void )
 	Menu_AddItem( &s_startserver_menu, &s_startserver_dmoptions_action );
 	Menu_AddItem( &s_startserver_menu, &s_startserver_start_action );
 
-	Menu_Center( &s_startserver_menu );
+	//Menu_Center( &s_startserver_menu );
 
 	// call this now to set proper inital state
 	RulesChangeFunc ( NULL );

@@ -17,21 +17,25 @@
 			ConfigurationType="1"
 			UseOfMFC="0"
 			ATLMinimizesCRunTimeLibraryUsage="FALSE"
-			CharacterSet="2">
+			CharacterSet="0">
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				OptimizeForProcessor="0"
-				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS"
-				BasicRuntimeChecks="3"
-				RuntimeLibrary="5"
+				OptimizeForProcessor="1"
+				AdditionalIncludeDirectories="./win32/lib"
+				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;GL_QUAKE"
+				BasicRuntimeChecks="0"
+				RuntimeLibrary="4"
 				BufferSecurityCheck="TRUE"
-				UsePrecompiledHeader="0"
-				PrecompiledHeaderFile=""
+				EnableFunctionLevelLinking="TRUE"
+				UsePrecompiledHeader="2"
+				PrecompiledHeaderThrough="StdAfx.h"
+				PrecompiledHeaderFile=".\debug/aq2.pch"
 				AssemblerListingLocation=".\debug/"
 				ObjectFile=".\debug/"
 				ProgramDataBaseFileName=".\debug/"
-				BrowseInformation="0"
+				BrowseInformation="1"
+				BrowseInformationFile=".\debug/"
 				WarningLevel="3"
 				SuppressStartupBanner="TRUE"
 				DebugInformationFormat="4"/>
@@ -39,14 +43,18 @@
 				Name="VCCustomBuildTool"/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="vfw32.lib winmm.lib wsock32.lib"
-				OutputFile="d:\games\quake2\aq2de.exe"
+				IgnoreImportLibrary="FALSE"
+				AdditionalDependencies="winmm.lib wsock32.lib libjpeg.lib zlib.lib libpng.lib"
+				OutputFile="d:\games\quake2\aq2.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="TRUE"
+				AdditionalLibraryDirectories="./win32/lib"
+				IgnoreDefaultLibraryNames=""
 				GenerateDebugInformation="TRUE"
-				ProgramDatabaseFile=".\debug/aq2.pdb"
-				GenerateMapFile="FALSE"
-				MapFileName=""
+				ProgramDatabaseFile=".\debug/aq2de.pdb"
+				GenerateMapFile="TRUE"
+				MapFileName=".\debug/q2.map"
+				MapLines="FALSE"
 				SubSystem="2"
 				TargetMachine="1"/>
 			<Tool
@@ -65,6 +73,7 @@
 				Name="VCPreLinkEventTool"/>
 			<Tool
 				Name="VCResourceCompilerTool"
+				PreprocessorDefinitions="_DEBUG"
 				Culture="1033"/>
 			<Tool
 				Name="VCWebServiceProxyGeneratorTool"/>
@@ -84,26 +93,28 @@
 			ConfigurationType="1"
 			UseOfMFC="0"
 			ATLMinimizesCRunTimeLibraryUsage="FALSE"
-			CharacterSet="2"
+			CharacterSet="0"
 			WholeProgramOptimization="FALSE">
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="2"
-				GlobalOptimizations="TRUE"
+				GlobalOptimizations="FALSE"
 				InlineFunctionExpansion="2"
-				EnableIntrinsicFunctions="TRUE"
+				EnableIntrinsicFunctions="FALSE"
 				ImproveFloatingPointConsistency="FALSE"
 				FavorSizeOrSpeed="0"
 				OmitFramePointers="FALSE"
 				EnableFiberSafeOptimizations="FALSE"
-				OptimizeForProcessor="0"
+				OptimizeForProcessor="2"
 				OptimizeForWindowsApplication="FALSE"
+				AdditionalIncludeDirectories="./win32/lib"
 				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS;GL_QUAKE"
-				StringPooling="FALSE"
-				RuntimeLibrary="0"
-				EnableFunctionLevelLinking="FALSE"
-				UsePrecompiledHeader="0"
-				PrecompiledHeaderFile=""
+				GeneratePreprocessedFile="0"
+				StringPooling="TRUE"
+				RuntimeLibrary="4"
+				EnableFunctionLevelLinking="TRUE"
+				UsePrecompiledHeader="2"
+				PrecompiledHeaderFile=".\release/aq2.pch"
 				AssemblerListingLocation=".\release/"
 				ObjectFile=".\release/"
 				ProgramDataBaseFileName=".\release/"
@@ -114,14 +125,14 @@
 				Name="VCCustomBuildTool"/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="winmm.lib wsock32.lib vfw32.lib ./lib/libjpeg.lib ./lib/zlibr.lib ./lib/libpngr.lib"
+				AdditionalDependencies="winmm.lib wsock32.lib libjpeg.lib zlib.lib libpng.lib"
 				OutputFile="d:\games\quake2\aq2.exe"
 				LinkIncremental="1"
-				SuppressStartupBanner="FALSE"
+				SuppressStartupBanner="TRUE"
+				AdditionalLibraryDirectories="./win32/lib"
+				IgnoreDefaultLibraryNames=""
 				ProgramDatabaseFile=".\release/aq2.pdb"
 				SubSystem="2"
-				OptimizeReferences="2"
-				EnableCOMDATFolding="2"
 				TargetMachine="1"/>
 			<Tool
 				Name="VCMIDLTool"
@@ -139,7 +150,8 @@
 				Name="VCPreLinkEventTool"/>
 			<Tool
 				Name="VCResourceCompilerTool"
-				Culture="0"/>
+				PreprocessorDefinitions="NDEBUG"
+				Culture="1033"/>
 			<Tool
 				Name="VCWebServiceProxyGeneratorTool"/>
 			<Tool
@@ -395,6 +407,9 @@
 				RelativePath=".\ui\ui_main.c">
 			</File>
 			<File
+				RelativePath=".\ui\ui_mp3.c">
+			</File>
+			<File
 				RelativePath=".\ui\ui_multiplayer.c">
 			</File>
 			<File
@@ -411,9 +426,6 @@
 			</File>
 			<File
 				RelativePath=".\ui\ui_video.c">
-			</File>
-			<File
-				RelativePath=".\ui\ui_winamp.c">
 			</File>
 		</Filter>
 		<Filter
@@ -709,7 +721,37 @@
 				</FileConfiguration>
 			</File>
 			<File
+				RelativePath=".\linux\snd_alsa.c">
+				<FileConfiguration
+					Name="Debug|Win32"
+					ExcludedFromBuild="TRUE">
+					<Tool
+						Name="VCCLCompilerTool"/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|Win32"
+					ExcludedFromBuild="TRUE">
+					<Tool
+						Name="VCCLCompilerTool"/>
+				</FileConfiguration>
+			</File>
+			<File
 				RelativePath=".\linux\snd_linux.c">
+				<FileConfiguration
+					Name="Debug|Win32"
+					ExcludedFromBuild="TRUE">
+					<Tool
+						Name="VCCLCompilerTool"/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|Win32"
+					ExcludedFromBuild="TRUE">
+					<Tool
+						Name="VCCLCompilerTool"/>
+				</FileConfiguration>
+			</File>
+			<File
+				RelativePath=".\linux\snd_oss.c">
 				<FileConfiguration
 					Name="Debug|Win32"
 					ExcludedFromBuild="TRUE">
@@ -768,6 +810,36 @@
 						Name="VCCLCompilerTool"/>
 				</FileConfiguration>
 			</File>
+			<File
+				RelativePath=".\linux\xmms.c">
+				<FileConfiguration
+					Name="Debug|Win32"
+					ExcludedFromBuild="TRUE">
+					<Tool
+						Name="VCCLCompilerTool"/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|Win32"
+					ExcludedFromBuild="TRUE">
+					<Tool
+						Name="VCCLCompilerTool"/>
+				</FileConfiguration>
+			</File>
+			<File
+				RelativePath=".\linux\xmms.h">
+				<FileConfiguration
+					Name="Debug|Win32"
+					ExcludedFromBuild="TRUE">
+					<Tool
+						Name="VCCustomBuildTool"/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|Win32"
+					ExcludedFromBuild="TRUE">
+					<Tool
+						Name="VCCustomBuildTool"/>
+				</FileConfiguration>
+			</File>
 		</Filter>
 		<Filter
 			Name="render"
@@ -804,9 +876,6 @@
 			</File>
 			<File
 				RelativePath=".\ref_gl\gl_model.h">
-			</File>
-			<File
-				RelativePath=".\ref_gl\gl_png.c">
 			</File>
 			<File
 				RelativePath=".\ref_gl\gl_rmain.c">

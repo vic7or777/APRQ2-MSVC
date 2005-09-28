@@ -35,7 +35,8 @@ extern "C" {
 */
 
 #if defined(_WIN32) && !defined(APIENTRY) && !defined(__CYGWIN__)
-#define WIN32_LEAN_AND_MEAN 1
+#define WIN32_LEAN_AND_MEAN
+#define VC_LEANMEAN
 #include <windows.h>
 #endif
 

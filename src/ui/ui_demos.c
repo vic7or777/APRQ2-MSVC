@@ -27,8 +27,6 @@ DEMOS MENU
 
 =======================================================================
 */
-#define MAX_MENU_DEMOS	1024
-
 #define DM_TITLE "-[ Demos Menu ]-"
 
 #define FFILE_UP		1
@@ -40,30 +38,33 @@ typedef struct m_demos_s {
 	menuframework_s		menu;
 	menulist_s		list;
 
-	char			*names[MAX_MENU_DEMOS];
-	int				types[MAX_MENU_DEMOS];
+	char			**names;
+	int				*types;
 } m_demos_t;
 
-char	game_folder[128] = "";
-char	d_folder[1024] = "";
+char	gameFolder[128] = "\0";
+char	demoFolder[1024] = "\0";
 
-static int			demo_count = 0;
+static unsigned int	demo_count = 0;
 static m_demos_t	m_demos;
 
 static void Demos_MenuDraw( menuframework_s *self )
 {
 
 	DrawString((viddef.width - (strlen(DM_TITLE)*8))>>1, 10, DM_TITLE);
-	DrawAltString(20, 20, va("Directory: demos%s/", d_folder));
+	DrawAltString(20, 20, va("Directory: demos%s/", demoFolder));
 
 	Menu_Draw( self );
+
+	if(!m_demos.list.count)
+		return;
 
 	switch(m_demos.types[m_demos.list.curvalue]) {
 	case FFILE_UP:
 		DrawAltString(20, 30+m_demos.list.height, "Go one directory up");
 		break;
 	case FFILE_FOLDER:
-		DrawAltString(20, 30+m_demos.list.height, va("Go to directory demos%s/%s", d_folder, m_demos.names[m_demos.list.curvalue]));
+		DrawAltString(20, 30+m_demos.list.height, va("Go to directory demos%s/%s", demoFolder, m_demos.names[m_demos.list.curvalue]));
 		break;
 	case FFILE_DEMO:
 		DrawAltString(20, 30+m_demos.list.height, va("Selected demo: %s", m_demos.names[m_demos.list.curvalue]));
@@ -74,75 +75,94 @@ static void Demos_MenuDraw( menuframework_s *self )
 static void Demos_Free( void ) {
 	int i;
 
+	if(!demo_count)
+		return;
+
 	for( i=0 ; i<demo_count ; i++ ) {
-		free( m_demos.names[i] );
-		m_demos.types[i] = 0;
+		Z_Free( m_demos.names[i] );
 	}
-	memset(m_demos.names, 0, sizeof(m_demos.names));
+	Z_Free (m_demos.names);
+	Z_Free (m_demos.types);
+	m_demos.names = NULL;
+	m_demos.types = NULL;
 	demo_count = 0;
 	m_demos.list.itemnames = NULL;
 }
 
 static void Demos_Scan( void) {
-	int		numFiles;
 	char	findname[1024];
-	char	**list;
+	int		numFiles = 0, numDirs = 0, numTotal = 0;
+	char	**fileList = NULL, **dirList = NULL;
 	int		i, skip = 0;
 
 	Demos_Free();
+	m_demos.names = NULL;
 
-	if(d_folder[0])
+	if(demoFolder[0])
+		numTotal++;
+
+	Com_sprintf(findname, sizeof(findname), "%s/demos%s/*", gameFolder, demoFolder);
+	dirList = FS_ListFiles( findname, &numDirs, SFF_SUBDIR, SFF_HIDDEN | SFF_SYSTEM );
+
+	if(dirList)
+		numTotal += numDirs - 1;
+
+	Com_sprintf(findname, sizeof(findname), "%s/demos%s/*.dm2", gameFolder, demoFolder);
+	fileList = FS_ListFiles( findname, &numFiles, 0, SFF_SUBDIR | SFF_HIDDEN | SFF_SYSTEM );
+
+	if(fileList)
+		numTotal += numFiles - 1;
+
+	if(!numTotal)
+		return;
+
+	m_demos.names = Z_TagMalloc ( sizeof(char *) * numTotal, TAGMALLOC_MENU );
+	m_demos.types = Z_TagMalloc ( sizeof(int) * numTotal, TAGMALLOC_MENU );
+
+	if(demoFolder[0])
 	{
-		m_demos.names[demo_count] = strdup("..");
-		m_demos.types[demo_count] = FFILE_UP;
-		demo_count++;
+		m_demos.names[demo_count] = CopyString("..", TAGMALLOC_MENU);
+		m_demos.types[demo_count++] = FFILE_UP;
 		skip = 1;
 	}
 
-	sprintf(findname, "%s/demos%s/*", game_folder, d_folder);
-	list = FS_ListFiles( findname, &numFiles, SFF_SUBDIR, SFF_HIDDEN | SFF_SYSTEM );
-	if(list)
+	if( dirList )
 	{
-		for( i=0 ; i<numFiles-1; i++ ) {
-			if( demo_count < MAX_MENU_DEMOS ) {
-				if (strrchr( list[i], '/' ))
-					m_demos.names[demo_count] = strdup( strrchr( list[i], '/' ) + 1 );
-				else
-					m_demos.names[demo_count] = strdup( list[i] );
-				m_demos.types[demo_count] = FFILE_FOLDER;
-				demo_count++;
-			}
-			free( list[i] );
-		}
-		free( list );
+		for( i = 0; i < numDirs - 1; i++ )
+		{
+			if (strrchr( dirList[i], '/' ))
+				m_demos.names[demo_count] = CopyString( strrchr( dirList[i], '/' ) + 1, TAGMALLOC_MENU );
+			else
+				m_demos.names[demo_count] = CopyString( dirList[i], TAGMALLOC_MENU );
 
-		if(demo_count > skip) {
+			m_demos.types[demo_count++] = FFILE_FOLDER;
+			Z_Free( dirList[i] );
+		}
+		Z_Free( dirList );
+
+		if(demo_count - skip > 1) {
 			qsort( m_demos.names + skip, demo_count - skip, sizeof( m_demos.names[0] ), SortStrcmp );
 		}
-		skip = demo_count;
+		skip += demo_count;
 	}
 
-	sprintf(findname, "%s/demos%s/*.dm2", game_folder, d_folder);
-	list = FS_ListFiles( findname, &numFiles, 0, SFF_SUBDIR | SFF_HIDDEN | SFF_SYSTEM );
-	if( !list ) {
-		return;
-	}
-
-	for( i=0 ; i<numFiles-1; i++ ) {
-		if( demo_count < MAX_MENU_DEMOS ) {
-			if (strrchr( list[i], '/' ))
-				m_demos.names[demo_count] = strdup( strrchr( list[i], '/' ) + 1 );
+	if( fileList )
+	{
+		for( i = 0; i < numFiles - 1; i++ )
+		{
+			if (strrchr( fileList[i], '/' ))
+				m_demos.names[demo_count] = CopyString( strrchr( fileList[i], '/' ) + 1, TAGMALLOC_MENU);
 			else
-				m_demos.names[demo_count] = strdup( list[i] );
-			m_demos.types[demo_count] = FFILE_DEMO;
-			demo_count++;
-		}
-		free( list[i] );
-	}
-	free( list );
+				m_demos.names[demo_count] = CopyString( fileList[i], TAGMALLOC_MENU);
 
-	if(demo_count > skip) {
-		qsort( m_demos.names + skip, demo_count - skip, sizeof( m_demos.names[0] ), SortStrcmp );
+			m_demos.types[demo_count++] = FFILE_DEMO;
+			Z_Free( fileList[i] );
+		}
+		Z_Free( fileList );
+
+		if(demo_count - skip > 1) {
+			qsort( m_demos.names + skip, demo_count - skip, sizeof( m_demos.names[0] ), SortStrcmp );
+		}
 	}
 }
 
@@ -151,7 +171,7 @@ static void Build_List(void)
 	Demos_Scan();
 	m_demos.list.curvalue = 0;
 	m_demos.list.prestep = 0;
-	m_demos.list.itemnames = m_demos.names;
+	m_demos.list.itemnames = (const char **)m_demos.names;
 	m_demos.list.count = demo_count;
 }
 
@@ -164,18 +184,18 @@ static void Load_Demo (void *s)
 
 	switch( m_demos.types[m_demos.list.curvalue] ) {
 	case FFILE_UP:
-		if ((p = strrchr(d_folder, '/')) != NULL)
+		if ((p = strrchr(demoFolder, '/')) != NULL)
 			*p = 0;
 		Build_List();
 		break;
 	case FFILE_FOLDER:
-		Q_strncatz (d_folder, "/", sizeof(d_folder) - strlen(d_folder));
-		Q_strncatz (d_folder, m_demos.names[m_demos.list.curvalue], sizeof(d_folder) - strlen(d_folder));
+		Q_strncatz (demoFolder, "/", sizeof(demoFolder));
+		Q_strncatz (demoFolder, m_demos.names[m_demos.list.curvalue], sizeof(demoFolder));
 		Build_List();
 		break;
 	case FFILE_DEMO:
-		if(d_folder[0])
-			Cbuf_AddText( va( "demomap \"%s/%s\"\n", d_folder + 1, m_demos.names[m_demos.list.curvalue] ) );
+		if(demoFolder[0])
+			Cbuf_AddText( va( "demomap \"%s/%s\"\n", demoFolder + 1, m_demos.names[m_demos.list.curvalue] ) );
 		else
 			Cbuf_AddText( va( "demomap \"%s\"\n", m_demos.names[m_demos.list.curvalue] ) );
 		Demos_Free();
@@ -200,9 +220,9 @@ const char *Demos_MenuKey( menuframework_s *self, int key ) {
 void Demos_MenuInit( void ) {
 	memset( &m_demos.menu, 0, sizeof( m_demos.menu ) );
 
-	if(!game_folder[0] || strcmp(FS_Gamedir(), game_folder)) {
-		strcpy(game_folder, FS_Gamedir());
-		d_folder[0] = 0;
+	if(!gameFolder[0] || strcmp(FS_Gamedir(), gameFolder)) {
+		strcpy(gameFolder, FS_Gamedir());
+		demoFolder[0] = 0;
 	}
 
 	m_demos.menu.x = 0;
@@ -216,6 +236,7 @@ void Demos_MenuInit( void ) {
 	m_demos.list.generic.y			= 30;
 	m_demos.list.width				= viddef.width - 40;
 	m_demos.list.height				= viddef.height - 60;
+	MenuList_Init(&m_demos.list);
 
 	Build_List();
 

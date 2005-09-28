@@ -32,7 +32,7 @@ typedef struct
 {
 	qboolean	initialized;
 
-	char	text[CON_TEXTSIZE];
+	short 	text[CON_TEXTSIZE];
 	int		current;		// line where next message will be printed
 	int		x;				// offset in current line for next print
 	int		display;		// bottom of console displays this line
@@ -52,11 +52,8 @@ typedef struct
 
 extern	console_t	con;
 
-void Con_DrawCharacter (int cx, int line, int num);
-
 void Con_CheckResize (void);
 void Con_Init (void);
-//Changed -Maniac
 void Con_DrawConsole (float frac, qboolean ingame);
 void Con_Print (const char *txt);
 void Con_CenteredPrint (const char *text);
@@ -64,3 +61,4 @@ void Con_Clear_f (void);
 void Con_DrawNotify (void);
 void Con_ClearNotify (void);
 void Con_ToggleConsole_f (void);
+

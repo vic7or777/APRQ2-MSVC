@@ -39,7 +39,6 @@ typedef struct
 
 
 static cvar_t	*client_port;
-static cvar_t	*server_port;
 
 static cvar_t	*noudp;
 
@@ -136,9 +135,11 @@ char	*NET_AdrToString (const netadr_t *a)
 	static	char	s[64];
 
 	if (a->type == NA_LOOPBACK)
-		Com_sprintf (s, sizeof(s), "loopback");
+		Q_strncpyz(s, "loopback", sizeof(s));
 	else if (a->type == NA_IP || a->type == NA_BROADCAST)
 		Com_sprintf (s, sizeof(s), "%i.%i.%i.%i:%i", a->ip[0], a->ip[1], a->ip[2], a->ip[3], ntohs(a->port));
+	else
+		s[0] = 0;
 
 	return s;
 }
@@ -166,34 +167,31 @@ qboolean	NET_StringToSockaddr (const char *s, struct sockaddr *sadr)
 	memset (sadr, 0, sizeof(*sadr));
 
 	if ((strlen(s) >= 23) && (s[8] == ':') && (s[21] == ':'))	// check for an IPX address
-	{
 		return false;
+
+	((struct sockaddr_in *)sadr)->sin_family = AF_INET;
+	((struct sockaddr_in *)sadr)->sin_port = 0;
+
+	Q_strncpyz (copy, s, sizeof(copy));
+	// strip off a trailing :port if present
+	for (colon = copy ; *colon ; colon++) {
+		if (*colon == ':')
+		{
+			*colon = 0;
+			((struct sockaddr_in *)sadr)->sin_port = htons((short)atoi(colon+1));	
+			break;
+		}
+	}
+	
+	if (copy[0] >= '0' && copy[0] <= '9')
+	{
+		*(int *)&((struct sockaddr_in *)sadr)->sin_addr = inet_addr(copy);
 	}
 	else
 	{
-		((struct sockaddr_in *)sadr)->sin_family = AF_INET;
-		
-		((struct sockaddr_in *)sadr)->sin_port = 0;
-
-		Q_strncpyz (copy, s, sizeof(copy));
-		// strip off a trailing :port if present
-		for (colon = copy ; *colon ; colon++)
-			if (*colon == ':')
-			{
-				*colon = 0;
-				((struct sockaddr_in *)sadr)->sin_port = htons((short)atoi(colon+1));	
-			}
-		
-		if (copy[0] >= '0' && copy[0] <= '9')
-		{
-			*(int *)&((struct sockaddr_in *)sadr)->sin_addr = inet_addr(copy);
-		}
-		else
-		{
-			if (! (h = gethostbyname(copy)) )
-				return false;
-			*(int *)&((struct sockaddr_in *)sadr)->sin_addr = *(int *)h->h_addr_list[0];
-		}
+		if (! (h = gethostbyname(copy)) )
+			return false;
+		*(int *)&((struct sockaddr_in *)sadr)->sin_addr = *(int *)h->h_addr_list[0];
 	}
 	
 	return true;
@@ -215,7 +213,7 @@ qboolean	NET_StringToAdr (const char *s, netadr_t *a)
 {
 	struct sockaddr sadr;
 	
-	if (!strcmp (s, "localhost"))
+	if (!strcmp(s, "localhost"))
 	{
 		memset (a, 0, sizeof(*a));
 		a->type = NA_LOOPBACK;
@@ -236,7 +234,7 @@ qboolean	NET_StringToAdr (const char *s, netadr_t *a)
 NET_IsLocalAddress
 =============
 */
-qboolean	NET_IsLocalAddress (const netadr_t *adr)
+qboolean NET_IsLocalAddress (const netadr_t *adr)
 {
 	return adr->type == NA_LOOPBACK;
 }
@@ -318,7 +316,7 @@ qboolean	NET_GetPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_messag
 		return false;
 
 	fromlen = sizeof(from);
-	ret = recvfrom (ip_sockets[sock], net_message->data, net_message->maxsize
+	ret = recvfrom (ip_sockets[sock], (char *)net_message->data, net_message->maxsize
 		, 0, (struct sockaddr *)&from, &fromlen);
 
 	SockadrToNetadr (&from, net_from);
@@ -358,21 +356,21 @@ qboolean	NET_GetPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_messag
 NET_SendPacket
 =============
 */
-void NET_SendPacket (netsrc_t sock, int length, const void *data, const netadr_t *to)
+int NET_SendPacket (netsrc_t sock, int length, const void *data, const netadr_t *to)
 {
 	int		ret;
 	struct sockaddr	addr;
 	//int		net_socket;
 
-	if ( to->type == NA_LOOPBACK )
-	{
-		NET_SendLoopPacket (sock, length, data);
-		return;
-	}
-	else if (to->type == NA_BROADCAST || to->type == NA_IP)
+	if (to->type == NA_IP || to->type == NA_BROADCAST)
 	{
 		if (!ip_sockets[sock])
-			return;
+			return 0;
+	}
+	else if ( to->type == NA_LOOPBACK )
+	{
+		NET_SendLoopPacket (sock, length, data);
+		return 0;
 	}
 	else
 		Com_Error (ERR_FATAL, "NET_SendPacket: bad address type");
@@ -385,20 +383,27 @@ void NET_SendPacket (netsrc_t sock, int length, const void *data, const netadr_t
 		int err = WSAGetLastError();
 
 		// wouldblock is silent
-		if (err == WSAEWOULDBLOCK)
-			return;
-
-		if(err == WSAECONNRESET)
-			return;
+		if (err == WSAEWOULDBLOCK || err == WSAEINTR)
+			return 0;
 
 		// some PPP links dont allow broadcasts
 		if (err == WSAEADDRNOTAVAIL && (to->type == NA_BROADCAST))
-			return;
+			return 0;
 
-		// let servers continue after errors
-		Com_Printf ("NET_SendPacket ERROR: %s to %s\n", NET_ErrorString(),
-			NET_AdrToString (to));
+		if(dedicated->integer)
+		{
+			if(err == WSAECONNRESET)
+				return -1;
+		}
+		else
+		{
+			// let servers continue after errors
+			Com_Printf ("NET_SendPacket ERROR: %s to %s\n", NET_ErrorString(),
+				NET_AdrToString (to));
+			return 0;
+		}
 	}
+	return 1;
 }
 
 
@@ -442,7 +447,7 @@ int NET_IPSocket (char *net_interface, int port)
 		return 0;
 	}
 
-	if (!net_interface || !net_interface[0] || !stricmp(net_interface, "localhost"))
+	if (!net_interface || !net_interface[0] || !Q_stricmp(net_interface, "localhost"))
 		address.sin_addr.s_addr = INADDR_ANY;
 	else
 		NET_StringToSockaddr (net_interface, (struct sockaddr *)&address);
@@ -473,6 +478,7 @@ NET_OpenIP
 void NET_OpenIP (void)
 {
 	cvar_t	*ip;
+	int		port;
 	int		dedicated;
 
 	ip = Cvar_Get ("ip", "localhost", CVAR_NOSET);
@@ -480,15 +486,24 @@ void NET_OpenIP (void)
 	dedicated = Cvar_VariableValue ("dedicated");
 
 	if (!ip_sockets[NS_SERVER])
-		ip_sockets[NS_SERVER] = NET_IPSocket (ip->string, server_port->integer);
-
-	if (dedicated) {
-		if (!ip_sockets[NS_SERVER])
-			Com_Error (ERR_FATAL, "Couldn't allocate dedicated server IP port");
-
-		// dedicated servers don't need client ports
-		return;
+	{
+		port = Cvar_Get("ip_hostport", "0", CVAR_NOSET)->integer;
+		if (!port)
+		{
+			port = Cvar_Get("hostport", "0", CVAR_NOSET)->integer;
+			if (!port)
+			{
+				port = Cvar_Get("port", va("%i", PORT_SERVER), CVAR_NOSET)->integer;
+			}
+		}
+		ip_sockets[NS_SERVER] = NET_IPSocket (ip->string, port);
+		if (!ip_sockets[NS_SERVER] && dedicated)
+			Com_Error (ERR_FATAL, "Couldn't allocate dedicated server IP port on %s:%d.", ip->string, port);
 	}
+
+	// dedicated servers don't need client ports
+	if (dedicated)
+		return;
 
 	if (!ip_sockets[NS_CLIENT])
 	{
@@ -579,7 +594,6 @@ void NET_Init (void)
 	noudp = Cvar_Get ("noudp", "0", CVAR_NOSET);
 
 	client_port = Cvar_Get ("net_port", va("%i", PORT_CLIENT), 0);
-	server_port = Cvar_Get ("net_serverport", va("%i", PORT_SERVER), 0);
 }
 
 
@@ -608,19 +622,19 @@ char *NET_ErrorString (void)
 	code = WSAGetLastError ();
 	switch (code)
 	{
-	case WSAEINTR: return "WSAEINTR";
+	case WSAEINTR: return "WSAEINTR: Interrupted function call (your TCP stack is likely broken/corrupt)";
 	case WSAEBADF: return "WSAEBADF";
-	case WSAEACCES: return "WSAEACCES";
+	case WSAEACCES: return "WSAEACCES: Permission denied";
 	case WSAEDISCON: return "WSAEDISCON";
-	case WSAEFAULT: return "WSAEFAULT";
+	case WSAEFAULT: return "WSAEFAULT: Network failure";
 	case WSAEINVAL: return "WSAEINVAL";
 	case WSAEMFILE: return "WSAEMFILE";
-	case WSAEWOULDBLOCK: return "WSAEWOULDBLOCK";
+	case WSAEWOULDBLOCK: return "WSAEWOULDBLOCK: Resource temporarily unavailable";
 	case WSAEINPROGRESS: return "WSAEINPROGRESS";
 	case WSAEALREADY: return "WSAEALREADY";
 	case WSAENOTSOCK: return "WSAENOTSOCK";
 	case WSAEDESTADDRREQ: return "WSAEDESTADDRREQ";
-	case WSAEMSGSIZE: return "WSAEMSGSIZE";
+	case WSAEMSGSIZE: return "WSAEMSGSIZE: Message too long";
 	case WSAEPROTOTYPE: return "WSAEPROTOTYPE";
 	case WSAENOPROTOOPT: return "WSAENOPROTOOPT";
 	case WSAEPROTONOSUPPORT: return "WSAEPROTONOSUPPORT";
@@ -628,24 +642,25 @@ char *NET_ErrorString (void)
 	case WSAEOPNOTSUPP: return "WSAEOPNOTSUPP";
 	case WSAEPFNOSUPPORT: return "WSAEPFNOSUPPORT";
 	case WSAEAFNOSUPPORT: return "WSAEAFNOSUPPORT";
-	case WSAEADDRINUSE: return "WSAEADDRINUSE";
-	case WSAEADDRNOTAVAIL: return "WSAEADDRNOTAVAIL";
-	case WSAENETDOWN: return "WSAENETDOWN";
-	case WSAENETUNREACH: return "WSAENETUNREACH";
+	case WSAEADDRINUSE: return "WSAEADDRINUSE: Address already in use";
+	case WSAEADDRNOTAVAIL: return "WSAEADDRNOTAVAIL: Cannot assign requested address";
+	case WSAENETDOWN: return "WSAENETDOWN: Network is down";
+	case WSAEHOSTUNREACH: return "WSAEHOSTUNREACH: Host is unreachable";
+	case WSAENETUNREACH: return "WSAENETUNREACH: No route to host";
 	case WSAENETRESET: return "WSAENETRESET";
 	case WSAECONNABORTED: return "WSWSAECONNABORTEDAEINTR";
-	case WSAECONNRESET: return "WSAECONNRESET";
+	case WSAECONNRESET: return "WSAECONNRESET: Connection reset by peer";
 	case WSAENOBUFS: return "WSAENOBUFS";
 	case WSAEISCONN: return "WSAEISCONN";
 	case WSAENOTCONN: return "WSAENOTCONN";
 	case WSAESHUTDOWN: return "WSAESHUTDOWN";
 	case WSAETOOMANYREFS: return "WSAETOOMANYREFS";
 	case WSAETIMEDOUT: return "WSAETIMEDOUT";
-	case WSAECONNREFUSED: return "WSAECONNREFUSED";
+	case WSAECONNREFUSED: return "WSAECONNREFUSED: Connection refused";
 	case WSAELOOP: return "WSAELOOP";
 	case WSAENAMETOOLONG: return "WSAENAMETOOLONG";
 	case WSAEHOSTDOWN: return "WSAEHOSTDOWN";
-	case WSASYSNOTREADY: return "WSASYSNOTREADY";
+	case WSASYSNOTREADY: return "WSASYSNOTREADY: Network subsystem is unavailable";
 	case WSAVERNOTSUPPORTED: return "WSAVERNOTSUPPORTED";
 	case WSANOTINITIALISED: return "WSANOTINITIALISED";
 	case WSAHOST_NOT_FOUND: return "WSAHOST_NOT_FOUND";

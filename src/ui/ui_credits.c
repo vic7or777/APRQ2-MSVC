@@ -445,7 +445,6 @@ static void Credits_MenuInit( void ) {
 	m_creditsMenu.key = M_Credits_Key;
 }
 
-extern int Developer_searchpath (int who);
 
 void M_Menu_Credits_f( void )
 {
@@ -483,7 +482,7 @@ void M_Menu_Credits_f( void )
 	}
 	else
 	{
-		isdeveloper = Developer_searchpath (1);
+		isdeveloper = Developer_searchpath ();
 		
 		if (isdeveloper == 1)			// xatrix
 			credits = xatcredits;

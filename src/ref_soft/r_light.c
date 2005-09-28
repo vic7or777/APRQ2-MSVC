@@ -101,22 +101,18 @@ void R_PushDlights (void)
 	int	i;
 	dlight_t *l;
 	vec3_t temp;
-	qboolean rotated = false;
 	vec3_t old_vpn, old_vup, old_vright;
+
+	r_dlightframecount = r_framecount;
 
 	if (currententity->angles[0] || currententity->angles[1] || currententity->angles[2])
 	{
-		rotated = true;
 		VectorCopy (vpn, old_vpn);
 		VectorCopy (vup, old_vup);
 		VectorCopy (vright, old_vright);
 		AngleVectors (currententity->angles, vright, vup, vpn);
 		VectorInverse (vup);
-	}
 
-	r_dlightframecount = r_framecount;
-	if (rotated)
-	{
 		for (i=0, l = r_newrefdef.dlights ; i<r_newrefdef.num_dlights ; i++, l++)
 		{
 			VectorSubtract (l->origin, currententity->origin, temp);
@@ -137,6 +133,19 @@ void R_PushDlights (void)
 			R_MarkLights ( l, 1<<i, currentmodel->nodes + currentmodel->firstnode);
 			VectorAdd (l->origin, currententity->origin, l->origin);
 		}
+	}
+}
+
+void R_PushWorldDlights (model_t *model)
+{
+	int		i;
+	dlight_t	*l;
+
+	r_dlightframecount = r_framecount;
+	for (i=0, l = r_newrefdef.dlights ; i<r_newrefdef.num_dlights ; i++, l++)
+	{
+		R_MarkLights ( l, 1<<i, 
+			model->nodes + model->firstnode);
 	}
 }
 
@@ -233,7 +242,7 @@ int RecursiveLightPoint (mnode_t *node, vec3_t start, vec3_t end)
 			for (maps = 0 ; maps < MAXLIGHTMAPS && surf->styles[maps] != 255 ;
 					maps++)
 			{
-				samp = *lightmap * /* 0.5 * */ (1.0/255);	// adjust for gl scale
+				samp = *lightmap * /* 0.5 * */ ONEDIV255;	// adjust for gl scale
 				scales = r_newrefdef.lightstyles[surf->styles[maps]].rgb;
 				VectorMA (pointcolor, samp, scales, pointcolor);
 				lightmap += ((surf->extents[0]>>4)+1) *
@@ -261,7 +270,6 @@ void R_LightPoint (vec3_t p, vec3_t color)
 	int			lnum;
 	dlight_t	*dl;
 	float		light;
-	vec3_t		dist;
 	float		add;
 	
 	if (!r_worldmodel->lightdata)
@@ -292,13 +300,10 @@ void R_LightPoint (vec3_t p, vec3_t color)
 	for (lnum=0 ; lnum<r_newrefdef.num_dlights ; lnum++)
 	{
 		dl = &r_newrefdef.dlights[lnum];
-		VectorSubtract (currententity->origin,
-						dl->origin,
-						dist);
-		add = dl->intensity - VectorLength(dist);
+		add = dl->intensity - Distance (currententity->origin, dl->origin);
 		if (add > 0)
 		{
-			add *= (1.0/256);
+			add *= ONEDIV256;
 			VectorMA (color, add, dl->color, color);
 		}
 	}

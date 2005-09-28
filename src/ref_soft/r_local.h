@@ -644,6 +644,7 @@ void R_InsertNewEdges (edge_t *edgestoadd, edge_t *edgelist);
 void R_StepActiveU (edge_t *pedge);
 void R_RemoveEdges (edge_t *pedge);
 void R_PushDlights (void);
+void R_PushWorldDlights (model_t *model);
 
 extern void R_Surf8Start (void);
 extern void R_Surf8End (void);
@@ -814,6 +815,7 @@ void R_IMFlatShadedQuad( vec3_t a, vec3_t b, vec3_t c, vec3_t d, int color, floa
 
 extern swstate_t sw_state;
 
+qboolean R_GetModeInfo( int *width, int *height, int mode );
 
 /*
 ====================================================================

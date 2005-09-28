@@ -17,104 +17,160 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 */
-#ifdef _WIN32
+#if defined(_WIN32) || defined(WITH_XMMS)
 #include "ui_local.h"
+
+#ifdef _WIN32
 #include "../win32/winamp.h"
+#endif
+#ifdef WITH_XMMS
+#include "../linux/xmms.h"
+#endif
 /*
 =======================================================================
 
-WINAMP MENU
+MP3 (winamp/xmms) MENU
 
 =======================================================================
 */
-#define WAM_TITLE "-[ Winamp Menu ]-"
+#define MP3MENU_TITLE "-[ " MP3_PLAYERNAME_LEADINGCAP " Menu ]-"
 
 typedef struct m_tracks_s {
 	menuframework_s	menu;
 	menulist_s		list;
 	menufield_s		filter;
 
-	wa_tracks_t		track;
+	mp3_tracks_t	track;
 } m_tracks_t;
 
 static m_tracks_t	m_tracks;
 static int			track_count = 0;
-static char			*m_filter = "";
-static wa_track_t	current;
+static mp3_track_t	currentsong = { -1, -1, "\0"};
 
-static void WA_MenuDraw( menuframework_s *self ) {
-
+static void Update_Current (void)
+{
 	char *songtitle;
-	int track, total;
-	char song_print[WA_TITLE_LENGHT];
+	int track = -1, total = 0;
 
-	DrawString((viddef.width - (strlen(WAM_TITLE)*8))>>1, 10, WAM_TITLE);
-
-	Menu_Draw( self );
-
-	WA_GetPlayListInfo (&track, NULL);
-	if(track != current.track)
+	MP3_GetPlaylistInfo (&track, NULL);
+	if(track != currentsong.track)
 	{
-		if(WA_GetTrackTime(NULL, &total))
+		if(MP3_GetTrackTime(NULL, &total))
 		{
-			songtitle = WA_SongTitle();
+			songtitle = MP3_Menu_SongTitle();
 			if (songtitle)
 			{
-				Q_strncpyz(current.name, songtitle, sizeof(current.name));
-				current.track = track;
-				current.total = total;
+				Q_strncpyz(currentsong.name, songtitle, sizeof(currentsong.name));
+				currentsong.track = track;
+				currentsong.total = total;
 			}
 		}
 	}
-	Com_sprintf (song_print, sizeof(song_print), "Current: %s [%i:%02i]\n", current.name, current.total / 60, current.total % 60);
+}
+
+static void MP3_MenuDraw( menuframework_s *self ) {
+
+	char song_print[MP3_MAXSONGTITLE];
+
+	DrawString((viddef.width - (strlen(MP3MENU_TITLE)*8))>>1, 10, MP3MENU_TITLE);
+
+	Menu_Draw( self );
+
+	Update_Current();
+	if(currentsong.track == -1) {
+		DrawAltString( 20, 20, MP3_PLAYERNAME_LEADINGCAP " not running");
+		return;
+	}
+
+	Com_sprintf (song_print, sizeof(song_print), "Current: %s [%i:%02i]\n", currentsong.name, currentsong.total / 60, currentsong.total % 60);
+
 	DrawAltString (20, 20, song_print);
 }
 
-static void Tracks_Free( void ) {
+static void Tracks_Free( void )
+{
 	int i;
 
-	for( i=0 ; i<track_count; i++ ) {
-		free( m_tracks.track.name[i] );
-	}
-	memset(&m_tracks.track, 0, sizeof(m_tracks.track));
+	if(!track_count)
+		return;
+
+	for( i=0 ; i<track_count; i++ )
+		Z_Free( m_tracks.track.name[i] );
+
+	Z_Free (m_tracks.track.name);
+	Z_Free (m_tracks.track.num);
+	m_tracks.track.name = NULL;
+	m_tracks.track.num = NULL;
 	track_count = 0;
 	m_tracks.list.itemnames = NULL;
 }
 
 static void Tracks_Scan( void)
 {
+#ifdef _WIN32
 	long length;	
 	char *playlist_buf = NULL;
 
 	Tracks_Free();
 
-	if ((length = WA_GetPlaylist(&playlist_buf)) == -1)
+	if ((length = MP3_GetPlaylist(&playlist_buf)) == -1)
 		return;
 
-	track_count = WA_ParsePlaylist_EXTM3U(playlist_buf, length, &m_tracks.track, m_tracks.filter.buffer);
-	free(playlist_buf);
+	track_count = MP3_ParsePlaylist_EXTM3U(playlist_buf, length, &m_tracks.track, m_tracks.filter.buffer);
+	Z_Free(playlist_buf);
+#endif
+#ifdef WITH_XMMS
+	Tracks_Free();
+
+	track_count = MP3_GetPlaylistSongs(&m_tracks.track, m_tracks.filter.buffer);
+#endif
 }
 
+int Current_Track(void)
+{
+	int i;
 
+	Update_Current();
+
+	for( i=0 ; i<track_count; i++ )
+		if(m_tracks.track.num[i] - 1 == currentsong.track)
+			return i;
+
+	return 0;
+}
 static void Build_Tracklist (void)
 {
+	int maxItems = m_tracks.list.maxItems;
+
 	Tracks_Scan();
-	m_tracks.list.curvalue = 0;
-	m_tracks.list.prestep = 0;
-	m_tracks.list.itemnames = m_tracks.track.name;
+	m_tracks.list.itemnames = (const char **)m_tracks.track.name;
 	m_tracks.list.count = track_count;
+	m_tracks.list.curvalue = Current_Track();
+	if(m_tracks.list.count > maxItems)
+	{
+		m_tracks.list.prestep = m_tracks.list.curvalue - (maxItems/2);
+		if(m_tracks.list.prestep < 0)
+			m_tracks.list.prestep = 0;
+		else if(m_tracks.list.prestep > m_tracks.list.count - maxItems)
+			m_tracks.list.prestep = m_tracks.list.count - maxItems;
+	}
+	else
+		m_tracks.list.prestep = 0;
 }
 static void Tracks_Filter( void *s ) {
 	Build_Tracklist();
 }
 
-void Select_Track ( void *s) {
+void Select_Track ( void *s)
+{
 	if(!m_tracks.list.count)
 		return;
 
-	WA_PlayTrack(m_tracks.track.num[m_tracks.list.curvalue]);
+	MP3_PlayTrack(m_tracks.track.num[m_tracks.list.curvalue]);
 }
-const char *WA_MenuKey( menuframework_s *self, int key ) {
+
+const char *MP3_MenuKey( menuframework_s *self, int key )
+{
 	switch( key ) {
 	case K_ESCAPE:
 		Tracks_Free();
@@ -125,7 +181,7 @@ const char *WA_MenuKey( menuframework_s *self, int key ) {
 	return Default_MenuKey( self, key );
 }
 
-void WA_MenuInit( void ) {
+void MP3_MenuInit( void ) {
 	memset( &m_tracks.menu, 0, sizeof( m_tracks.menu ) );
 
 	m_tracks.menu.x = 0;
@@ -139,6 +195,7 @@ void WA_MenuInit( void ) {
 	m_tracks.list.generic.y			= 30;
 	m_tracks.list.width				= viddef.width - 40;
 	m_tracks.list.height			= viddef.height - 110;
+	MenuList_Init(&m_tracks.list);
 
 	m_tracks.filter.generic.type	= MTYPE_FIELD;
 	m_tracks.filter.generic.name	= "Search";
@@ -150,22 +207,23 @@ void WA_MenuInit( void ) {
 	memset(m_tracks.filter.buffer, 0, sizeof(m_tracks.filter.buffer));
 	m_tracks.filter.cursor			= 0;
 
-	Build_Tracklist();
-
-	m_tracks.menu.draw = WA_MenuDraw;
-	m_tracks.menu.key = WA_MenuKey;
+	m_tracks.menu.draw = MP3_MenuDraw;
+	m_tracks.menu.key = MP3_MenuKey;
 	Menu_AddItem( &m_tracks.menu, (void *)&m_tracks.list );
 	Menu_AddItem( &m_tracks.menu, (void *)&m_tracks.filter );
 
 	Menu_SetStatusBar( &m_tracks.menu, NULL );
 	m_tracks.menu.cursor = 1; //cursor default to search box
 	Menu_AdjustCursor( &m_tracks.menu, 1);
+
+	Build_Tracklist();
 }
 
 
 
-void M_Menu_WA_f( void ) {
-	WA_MenuInit();
+void M_Menu_MP3_f( void ) {
+	MP3_MenuInit();
 	M_PushMenu( &m_tracks.menu );
 }
 #endif
+

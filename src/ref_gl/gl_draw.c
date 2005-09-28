@@ -27,11 +27,6 @@ image_t		*draw_chars;
 //extern	qboolean	scrap_dirty;
 //void Scrap_Upload (void);
 
-// vertex arrays
-float	tex_array[MAX_ARRAY][2];
-float	vert_array[MAX_ARRAY][3];
-float	col_array[MAX_ARRAY][4];
-
 extern cvar_t *gl_fontshadow;
 
 /*
@@ -43,12 +38,15 @@ void Draw_InitLocal (void)
 {
 	// load console characters (don't bilerp characters)
 	draw_chars = GL_FindImage ("pics/conchars.pcx", it_pic);
+	if (!draw_chars)
+		Com_Error (ERR_FATAL, "Couldn't load conchars.pcx");
+
 	GL_Bind( draw_chars->texnum );
 	qglTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);
 	qglTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
 }
 
-const vec3_t color_table[8] = {
+static const vec3_t color_table[8] = {
 	{0, 0, 0},	// Black
 	{1, 0, 0},	// Red
 	{0, 1, 0},	// Green
@@ -69,37 +67,41 @@ smoothly scrolled off.
 ================
 */
 
+#define DRAW_CHAR(x, y, frow, fcol) \
+	qglTexCoord2f (fcol, frow); \
+	qglVertex2f (x, y); \
+	qglTexCoord2f (fcol + 0.0625, frow); \
+	qglVertex2f (x+8, y); \
+	qglTexCoord2f (fcol + 0.0625, frow + 0.0625); \
+	qglVertex2f (x+8, y+8); \
+	qglTexCoord2f (fcol, frow + 0.0625); \
+	qglVertex2f (x, y+8)
+
 void Draw_Char (int x, int y, int num, int color, float alpha)
 {
-	int				row, col;
-	float			frow, fcol, size;
-	int				fsize;
+	float			frow, fcol;
 	vec4_t			colors = {1, 1, 1, 1};
 
-	if (color != COLOR_WHITE && num > 127)
-		num &= 127;
-
 	num &= 255;
-	
+
 	if ( (num&127) == 32 )
 		return;		// space
 
 	if (y <= -8)
 		return;			// totally off screen
 
-	if(num < 128)
-		VectorCopy(color_table[(color&7)], colors);
+	if (color != COLOR_WHITE)
+	{
+		if(num > 127)
+			num &= 127;
+
+		VectorCopy(color_table[color&7], colors);
+	}
 
 	colors[3] = alpha;
 
-	row = num>>4;
-	col = num&15;
-
-	frow = row*0.0625;
-	fcol = col*0.0625;
-	size = 0.0625;
-	fsize = 8;
-
+	frow = (num>>4)*0.0625;
+	fcol = (num&15)*0.0625;
 
 	qglDisable(GL_ALPHA_TEST);
 	qglEnable(GL_BLEND);
@@ -107,37 +109,133 @@ void Draw_Char (int x, int y, int num, int color, float alpha)
 
 	GL_Bind (draw_chars->texnum);
 
+	qglBegin (GL_QUADS);
+	
 	if(gl_fontshadow->integer)
 	{
 		qglColor4f (0, 0, 0, alpha);
-		qglBegin (GL_QUADS);
-
-		qglTexCoord2f (fcol, frow);
-		qglVertex2f (x+1, y+1);
-		qglTexCoord2f (fcol + size, frow);
-		qglVertex2f (x+fsize+1, y+1);
-		qglTexCoord2f (fcol + size, frow + size);
-		qglVertex2f (x+fsize+1, y+fsize+1);
-		qglTexCoord2f (fcol, frow + size);
-		qglVertex2f (x+1, y+fsize+1);
-
-		qglEnd ();
+		DRAW_CHAR(x+1, y+1, frow, fcol);
 	}
-
 	qglColor4fv (colors);
 
-	qglBegin (GL_QUADS);
-
-	qglTexCoord2f (fcol, frow);
-	qglVertex2f (x, y);
-	qglTexCoord2f (fcol + size, frow);
-	qglVertex2f (x+fsize, y);
-	qglTexCoord2f (fcol + size, frow + size);
-	qglVertex2f (x+fsize, y+fsize);
-	qglTexCoord2f (fcol, frow + size);
-	qglVertex2f (x, y+fsize);
+	DRAW_CHAR(x, y, frow, fcol);
 	qglEnd ();
 
+	qglColor4f (1,1,1,1);
+
+	GL_TexEnv(GL_REPLACE);
+	qglEnable(GL_ALPHA_TEST);
+	qglDisable(GL_BLEND);
+}
+
+void Draw_String (int x, int y, const char *s, int color, float alpha, qboolean alt)
+{
+	vec4_t	fcolor = {1, 1, 1, 1};
+	float	frow, fcol;
+	int		num;
+
+	if (y <= -8)
+		return;	// totally off screen
+
+	qglDisable(GL_ALPHA_TEST);
+	qglEnable(GL_BLEND);
+	GL_TexEnv (GL_MODULATE);
+
+	GL_Bind (draw_chars->texnum);
+	qglBegin (GL_QUADS);
+
+	if (color != COLOR_WHITE)
+		VectorCopy( color_table[color&7], fcolor );
+
+	fcolor[3] = alpha;
+
+	qglColor4fv (fcolor);
+	while (*s)
+	{
+		if(alt)
+			num = *s ^ 0x80;
+		else
+			num = *s;
+	
+		num &= 0xff;
+
+		if ((num&127) != 32) // not a space
+		{
+			frow = (num>>4)*0.0625;
+			fcol = (num&15)*0.0625;
+
+			if(gl_fontshadow->integer)
+			{
+				qglColor4f (0, 0, 0, alpha);
+				DRAW_CHAR(x+1, y+1, frow, fcol);
+				qglColor4fv (fcolor);
+			}
+
+			DRAW_CHAR(x, y, frow, fcol);
+		}
+		x += 8;
+		s++;
+	}
+
+	qglEnd ();
+	qglColor4f (1,1,1,1);
+
+	GL_TexEnv(GL_REPLACE);
+	qglEnable(GL_ALPHA_TEST);
+	qglDisable(GL_BLEND);
+}
+
+
+void DrawCString (int x, int y, const short *s, float alpha, int enable)
+{
+	float		frow, fcol;
+	int			num;
+	vec4_t		fcolor = {1, 1, 1, 1};
+	int			currentColor = COLOR_WHITE;
+
+	if (y <= -8)
+		return;	// totally off screen
+
+	qglDisable(GL_ALPHA_TEST);
+	qglEnable(GL_BLEND);
+	GL_TexEnv (GL_MODULATE);
+
+	GL_Bind (draw_chars->texnum);
+	qglBegin (GL_QUADS);
+
+	fcolor[3] = alpha;
+
+	qglColor4fv (fcolor);
+	while (*s)
+	{
+		num = *s & 0xff;
+
+		if ((num&127) != 32) // not a space
+		{
+			if ( enable && ( (*s>>8)&7 ) != currentColor)
+			{
+				currentColor = (*s>>8)&7;
+				VectorCopy( color_table[currentColor], fcolor );
+				qglColor4fv (fcolor);
+			}
+
+			frow = (num>>4)*0.0625;
+			fcol = (num&15)*0.0625;
+
+			if(gl_fontshadow->integer)
+			{
+				qglColor4f (0, 0, 0, alpha);
+				DRAW_CHAR(x+1, y+1, frow, fcol);
+				qglColor4fv (fcolor);
+			}
+
+			DRAW_CHAR(x, y, frow, fcol);
+		}
+		x += 8;
+		s++;
+	}
+
+	qglEnd ();
 	qglColor4f (1,1,1,1);
 
 	GL_TexEnv(GL_REPLACE);
@@ -157,7 +255,7 @@ image_t	*Draw_FindPic (const char *name)
 
 	if (name[0] != '/' && name[0] != '\\')
 	{
-		if(!strncmp("../", name, 3)) //gentoo doesnt seems to handle .. path?
+		if(!strncmp("../", name, 3)) //ffs why aq2 uses this?
 			Com_sprintf (fullname, sizeof(fullname), "%s.pcx", name+3);
 		else
 			Com_sprintf (fullname, sizeof(fullname), "pics/%s.pcx", name);
@@ -207,13 +305,11 @@ void Draw_ScaledPic (int x, int y, float scale, const char *pic, float red, floa
 		return;
 	}
 
-
 	if (alpha < 1 || (gl->bits == 32 && gl->has_alpha))
 	{
 		enabled = 1;
 		qglEnable(GL_BLEND);
 		qglDisable(GL_ALPHA_TEST);
-		GL_TexEnv(GL_MODULATE);
 	}
 	else if ( ( ( gl_config.renderer == GL_RENDERER_MCD ) || ( gl_config.renderer & GL_RENDERER_RENDITION ) ) && !gl->has_alpha)
 	{
@@ -221,6 +317,7 @@ void Draw_ScaledPic (int x, int y, float scale, const char *pic, float red, floa
 		qglDisable(GL_ALPHA_TEST);
 	}
 
+	GL_TexEnv(GL_MODULATE);
 	qglColor4f(red, green, blue, alpha);
 
 	GL_Bind (gl->texnum);
@@ -241,12 +338,11 @@ void Draw_ScaledPic (int x, int y, float scale, const char *pic, float red, floa
 
 	qglEnd ();
 
+	GL_TexEnv(GL_REPLACE);
 	if (enabled == 1)
 	{
-		GL_TexEnv(GL_REPLACE);
 		qglEnable(GL_ALPHA_TEST);
 		qglDisable(GL_BLEND);
-
 	}
 	else if (enabled == 2)
 		qglEnable(GL_ALPHA_TEST);
@@ -309,7 +405,6 @@ void Draw_StretchPic (int x, int y, int w, int h, const char *pic, float alpha)
 		qglEnable(GL_ALPHA_TEST);
 
 }
-// End
 
 /*
 =============
@@ -392,13 +487,13 @@ void Draw_TileClear (int x, int y, int w, int h, const char *pic)
 
 	GL_Bind (image->texnum);
 	qglBegin (GL_QUADS);
-	qglTexCoord2f (x * 0.015625, y * 0.015625);
+	qglTexCoord2f (x*ONEDIV64, y*ONEDIV64);
 	qglVertex2f (x, y);
-	qglTexCoord2f ( (x+w) * 0.015625, y * 0.015625);
+	qglTexCoord2f ( (x+w)*ONEDIV64, y*ONEDIV64);
 	qglVertex2f (x+w, y);
-	qglTexCoord2f ( (x+w) * 0.015625, (y+h) * 0.015625);
+	qglTexCoord2f ( (x+w)*ONEDIV64, (y+h)*ONEDIV64);
 	qglVertex2f (x+w, y+h);
-	qglTexCoord2f ( x * 0.015625, (y+h) * 0.015625 );
+	qglTexCoord2f ( x*ONEDIV64, (y+h)*ONEDIV64 );
 	qglVertex2f (x, y+h);
 	qglEnd ();
 
@@ -428,7 +523,7 @@ void Draw_Fill (int x, int y, int w, int h, int c)
 	qglDisable (GL_TEXTURE_2D);
 
 	color.c = d_8to24table[c];
-	qglColor3f (color.v[0]/255.0, color.v[1]/255.0, color.v[2]/255.0);
+	qglColor3f (color.v[0]*ONEDIV255, color.v[1]*ONEDIV255, color.v[2]*ONEDIV255);
 
 	qglBegin (GL_QUADS);
 
@@ -499,11 +594,11 @@ void Draw_StretchRaw (int x, int y, int w, int h, int cols, int rows, byte *data
 	}
 	else
 	{
-		hscale = rows /256.0;
+		hscale = rows * ONEDIV256;
 		trows = 256;
 	}
-	t = rows*hscale / 256.0;
-	fracstep = cols*0x10000 /256.0;
+	t = rows*hscale * ONEDIV256;
+	fracstep = cols*0x10000 * ONEDIV256;
 
 	if ( !qglColorTableEXT )
 	{

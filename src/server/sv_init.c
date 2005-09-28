@@ -167,7 +167,7 @@ clients along with it.
 
 ================
 */
-void SV_SpawnServer (char *server, char *spawnpoint, server_state_t serverstate, qboolean attractloop, qboolean loadgame)
+static void SV_SpawnServer (char *server, char *spawnpoint, server_state_t serverstate, qboolean attractloop, qboolean loadgame)
 {
 	int			i;
 	unsigned	checksum;
@@ -193,7 +193,7 @@ void SV_SpawnServer (char *server, char *spawnpoint, server_state_t serverstate,
 	sv.attractloop = attractloop;
 
 	// save name for levels that don't set message
-	strcpy (sv.configstrings[CS_NAME], server);
+	strcpy(sv.configstrings[CS_NAME], server);
 	if (Cvar_VariableValue ("deathmatch"))
 	{
 		sprintf(sv.configstrings[CS_AIRACCEL], "%g", sv_airaccelerate->value);
@@ -207,7 +207,7 @@ void SV_SpawnServer (char *server, char *spawnpoint, server_state_t serverstate,
 
 	SZ_Init (&sv.multicast, sv.multicast_buf, sizeof(sv.multicast_buf));
 
-	strcpy (sv.name, server);
+	strcpy(sv.name, server);
 
 	// leave slots at start for clients only
 	for (i=0 ; i<maxclients->integer ; i++)
@@ -220,8 +220,8 @@ void SV_SpawnServer (char *server, char *spawnpoint, server_state_t serverstate,
 
 	sv.time = 1000;
 	
-	strcpy (sv.name, server);
-	strcpy (sv.configstrings[CS_NAME], server);
+	//strcpy (sv.name, server);
+	//strcpy (sv.configstrings[CS_NAME], server);
 
 	if (serverstate != ss_game)
 	{
@@ -348,9 +348,12 @@ void SV_InitGame (void)
 	}
 
 	svs.spawncount = rand();
-	svs.clients = Z_Malloc (sizeof(client_t)*maxclients->integer);
+	svs.clients = Z_TagMalloc (sizeof(client_t)*maxclients->integer, TAGMALLOC_CLIENTS);
 	svs.num_client_entities = maxclients->integer*UPDATE_BACKUP*64;
-	svs.client_entities = Z_Malloc (sizeof(entity_state_t)*svs.num_client_entities);
+	svs.client_entities = Z_TagMalloc (sizeof(entity_state_t)*svs.num_client_entities, TAGMALLOC_CL_ENTS);
+
+	memset (svs.clients, 0, sizeof(client_t)*maxclients->integer);
+	memset (svs.client_entities, 0, sizeof(entity_state_t)*svs.num_client_entities);
 
 	// init network stuff
 	NET_Config ( (maxclients->integer > 1) );
@@ -401,21 +404,21 @@ void SV_Map (qboolean attractloop, char *levelstring, qboolean loadgame)
 	if (sv.state == ss_dead && !sv.loadgame)
 		SV_InitGame ();	// the game is just starting
 
-	strcpy (level, levelstring);
+	Q_strncpyz(level, levelstring, sizeof(level));
 
 	// if there is a + in the map, set nextserver to the remainder
 	ch = strstr(level, "+");
 	if (ch)
 	{
 		*ch = 0;
-			Cvar_Set ("nextserver", va("gamemap \"%s\"", ch+1));
+		Cvar_SetLatched("nextserver", va("gamemap \"%s\"", ch+1));
 	}
 	else
-		Cvar_Set ("nextserver", "");
+		Cvar_SetLatched("nextserver", "");
 
 	//ZOID special hack for end game screen in coop mode
 	if (Cvar_VariableValue ("coop") && !Q_stricmp(level, "victory.pcx"))
-		Cvar_Set ("nextserver", "gamemap \"*base1\"");
+		Cvar_SetLatched("nextserver", "gamemap \"*base1\"");
 
 	// if there is a $, use the remainder as a spawnpoint
 	ch = strstr(level, "$");
@@ -429,7 +432,7 @@ void SV_Map (qboolean attractloop, char *levelstring, qboolean loadgame)
 
 	// skip the end-of-unit flag if necessary
 	if (level[0] == '*')
-		strcpy (level, level+1);
+		memmove(level, level+1, strlen(level)+1);
 
 	l = strlen(level);
 	if (l > 4 && !strcmp (level+l-4, ".cin") )

@@ -83,5 +83,46 @@ LClampDone2:
 	ret
 
 
+.globl C(S_WriteSwappedLinearBlastStereo16)
+C(S_WriteSwappedLinearBlastStereo16):
+		pushl	%edi
+		pushl	%ebx
+		movl	C(snd_linear_count),%ecx
+		movl	C(snd_p),%ebx
+		movl	C(snd_out),%edi
+	LWLBLoopTopS:
+		movl	-4(%ebx,%ecx,4),%eax
+		sarl	$8,%eax
+		cmpl	$0x7FFF,%eax
+		jg	LClampHighS
+		cmpl	$0xFFFF8000,%eax
+		jnl	LClampDoneS
+		movl	$0xFFFF8000,%eax
+		jmp	LClampDoneS
+	LClampHighS:
+		movl	$0x7FFF,%eax
+	LClampDoneS:
+		movl	-8(%ebx,%ecx,4),%edx
+		sarl	$8,%edx
+		cmpl	$0x7FFF,%edx
+		jg	LClampHigh2S
+		cmpl	$0xFFFF8000,%edx
+		jnl	LClampDone2S
+		movl	$0xFFFF8000,%edx
+		jmp	LClampDone2S
+	LClampHigh2S:
+		movl	$0x7FFF,%edx
+	LClampDone2S:
+		shll	$16,%edx
+		andl	$0xFFFF,%eax
+		orl	%eax,%edx
+		movl	%edx,-4(%edi,%ecx,2)
+		subl	$2,%ecx
+		jnz	LWLBLoopTopS
+		popl	%ebx
+		popl	%edi
+		
+		ret
+
 #endif	// id386
 
