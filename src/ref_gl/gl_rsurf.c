@@ -353,7 +353,7 @@ static void R_RenderBrushPoly (msurface_t *fa)
 					gl_state.inverse_intensity,
 					1.0F );
 		EmitWaterPolys (fa);
-		qglColor4f (1,1,1,1);
+		qglColor4fv(colorWhite);
 		GL_TexEnv( GL_REPLACE );
 
 		return;
@@ -455,8 +455,8 @@ void R_DrawAlphaSurfaces (void)
 	intens = gl_state.inverse_intensity;
 
 	scroll = -64 * ( (r_newrefdef.time / 40.0) - (int)(r_newrefdef.time / 40.0) );
-	if (scroll == 0.0)
-		scroll = -64.0;
+	if (scroll == 0)
+		scroll = -64;
 
 	for (s=r_alpha_surfaces ; s ; s=s->texturechain)
 	{
@@ -464,9 +464,9 @@ void R_DrawAlphaSurfaces (void)
 		c_brush_polys++;
 
 		if (s->texinfo->flags & SURF_TRANS33)
-			qglColor4f (intens,intens,intens,0.33);
+			qglColor4f (intens,intens,intens,0.33f);
 		else if (s->texinfo->flags & SURF_TRANS66)
-			qglColor4f (intens,intens,intens,0.66);
+			qglColor4f (intens,intens,intens,0.66f);
 		else
 			qglColor4f (intens,intens,intens,1);
 
@@ -477,7 +477,7 @@ void R_DrawAlphaSurfaces (void)
 	}
 
 	GL_TexEnv( GL_REPLACE );
-	qglColor4f (1,1,1,1);
+	qglColor4fv(colorWhite);
 	qglDisable(GL_BLEND);
 
 	r_alpha_surfaces = NULL;
@@ -635,7 +635,7 @@ void GL_DrawPoly(int nv, msurface_t *surf)
 		qglPolygonMode( GL_FRONT_AND_BACK, GL_FILL );
 	}
 
-	qglColor3f (1, 1, 1);
+	qglColor3fv(color_table[COLOR_WHITE]);
 	GL_SelectTexture(QGL_TEXTURE1);
 	qglEnable(GL_TEXTURE_2D);
 	GL_SelectTexture(QGL_TEXTURE0);
@@ -831,7 +831,7 @@ static void R_DrawInlineBModel (void)
 	else
 	{
 		qglDisable(GL_BLEND);
-		qglColor4f (1,1,1,1);
+		qglColor4fv(colorWhite);
 		GL_TexEnv( GL_REPLACE );
 	}
 }
@@ -1122,7 +1122,7 @@ void R_DrawWorld (void)
 
 		qglColor3f (r, g, b);
 		R_DrawSkyBox ();
-		qglColor3f (1, 1, 1);
+		qglColor3fv(color_table[COLOR_WHITE]);
 		GL_SelectTexture(QGL_TEXTURE1);
 		qglEnable(GL_TEXTURE_2D);
 		GL_SelectTexture(QGL_TEXTURE0);
@@ -1232,8 +1232,8 @@ static void LM_UploadBlock( qboolean dynamic )
 		texture = gl_lms.current_lightmap_texture;
 
 	GL_Bind( gl_state.lightmap_textures + texture );
-	qglTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	qglTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 
 	if ( dynamic )
 	{
@@ -1483,8 +1483,8 @@ void GL_BeginBuildingLightmaps (void) //(model_t *m)
 	** initialize the dynamic lightmap texture
 	*/
 	GL_Bind( gl_state.lightmap_textures + 0 );
-	qglTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
-	qglTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 	qglTexImage2D( GL_TEXTURE_2D, 
 				   0, 
 				   gl_lms.internal_format,

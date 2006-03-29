@@ -18,14 +18,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 */
 #if defined(_WIN32) || defined(WITH_XMMS)
+
 #include "ui_local.h"
 
-#ifdef _WIN32
-#include "../win32/winamp.h"
-#endif
-#ifdef WITH_XMMS
-#include "../linux/xmms.h"
-#endif
 /*
 =======================================================================
 

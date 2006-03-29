@@ -122,7 +122,7 @@ static qboolean DS_CreateBuffers( void )
     format.wBitsPerSample = dma.samplebits;
     format.nSamplesPerSec = dma.speed;
     format.nBlockAlign = format.nChannels * format.wBitsPerSample / 8;
-    format.cbSize = 0;
+    format.cbSize = sizeof(WAVEFORMATEX);
     format.nAvgBytesPerSec = format.nSamplesPerSec*format.nBlockAlign; 
 
 // get access to the primary buffer, if possible, so we can set the
@@ -133,8 +133,6 @@ static qboolean DS_CreateBuffers( void )
 	dsbuf.dwBufferBytes = 0;
 	dsbuf.lpwfxFormat = NULL;
 
-	memset(&dsbcaps, 0, sizeof(dsbcaps));
-	dsbcaps.dwSize = sizeof(dsbcaps);
 	primary_format_set = false;
 
 	Com_DPrintf( "...creating primary buffer: " );
@@ -172,9 +170,6 @@ static qboolean DS_CreateBuffers( void )
 		dsbuf.dwFlags = DSBCAPS_CTRLFREQUENCY | DSBCAPS_LOCHARDWARE;
 		dsbuf.dwBufferBytes = SECONDARY_BUFFER_SIZE;
 		dsbuf.lpwfxFormat = &format;
-
-		memset(&dsbcaps, 0, sizeof(dsbcaps));
-		dsbcaps.dwSize = sizeof(dsbcaps);
 
 		Com_DPrintf( "...creating secondary buffer: " );
 		if (s_forcesoft->integer || DS_OK != pDS->lpVtbl->CreateSoundBuffer(pDS, &dsbuf, &pDSBuf, NULL))
@@ -215,6 +210,8 @@ static qboolean DS_CreateBuffers( void )
 		pDSBuf = pDSPBuf;
 	}
 
+	memset(&dsbcaps, 0, sizeof(dsbcaps));
+	dsbcaps.dwSize = sizeof(dsbcaps);
 	if (DS_OK != pDSBuf->lpVtbl->GetCaps (pDSBuf, &dsbcaps))
 	{
 		Com_Printf ("*** GetCaps failed ***\n");
@@ -598,8 +595,11 @@ The window have been destroyed and recreated
 between a deactivate and an activate.
 ===========
 */
+void Snd_Activate (qboolean active);
+
 void S_Activate (qboolean active)
 {
+	Snd_Activate(active);
 	if ( active )
 	{
 		if ( pDS && cl_hwnd && snd_isdirect )

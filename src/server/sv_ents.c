@@ -545,7 +545,7 @@ void SV_BuildClientFrame (client_t *client)
 					float	len;
 
 					VectorSubtract (org, ent->s.origin, delta);
-					len = VectorLength (delta);
+					len = (float)VectorLength (delta);
 					if (len > 400)
 						continue;
 				}

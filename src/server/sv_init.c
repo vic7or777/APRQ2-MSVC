@@ -170,7 +170,7 @@ clients along with it.
 static void SV_SpawnServer (char *server, char *spawnpoint, server_state_t serverstate, qboolean attractloop, qboolean loadgame)
 {
 	int			i;
-	unsigned	checksum;
+	uint32 checksum;
 
 	if (attractloop)
 		Cvar_Set ("paused", "0");
@@ -407,7 +407,7 @@ void SV_Map (qboolean attractloop, char *levelstring, qboolean loadgame)
 	Q_strncpyz(level, levelstring, sizeof(level));
 
 	// if there is a + in the map, set nextserver to the remainder
-	ch = strstr(level, "+");
+	ch = strchr(level, '+');
 	if (ch)
 	{
 		*ch = 0;
@@ -421,7 +421,7 @@ void SV_Map (qboolean attractloop, char *levelstring, qboolean loadgame)
 		Cvar_SetLatched("nextserver", "gamemap \"*base1\"");
 
 	// if there is a $, use the remainder as a spawnpoint
-	ch = strstr(level, "$");
+	ch = strchr(level, '$');
 	if (ch)
 	{
 		*ch = 0;

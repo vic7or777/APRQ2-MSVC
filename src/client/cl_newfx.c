@@ -47,7 +47,7 @@ void vectoangles2 (const vec3_t vec, vec3_t angles)
 	{
 	// PMM - fixed to correct for pitch of 0
 		if (vec[0])
-			yaw = RAD2DEG( atan2(vec[1], vec[0]) );
+			yaw = RAD2DEG( (float)atan2(vec[1], vec[0]) );
 		else if (vec[1] > 0)
 			yaw = 90;
 		else
@@ -56,8 +56,8 @@ void vectoangles2 (const vec3_t vec, vec3_t angles)
 		if (yaw < 0)
 			yaw += 360;
 
-		forward = sqrt (vec[0]*vec[0] + vec[1]*vec[1]);
-		pitch = RAD2DEG( atan2(vec[2], forward) );
+		forward = (float)sqrt (vec[0]*vec[0] + vec[1]*vec[1]);
+		pitch = RAD2DEG( (float)atan2(vec[2], forward) );
 		if (pitch < 0)
 			pitch += 360;
 	}
@@ -149,7 +149,7 @@ void CL_DebugTrail (const vec3_t start, const vec3_t end)
 		VectorClear (p->accel);
 		VectorClear (p->vel);
 		p->alpha = 1.0;
-		p->alphavel = -0.1;
+		p->alphavel = -0.1f;
 		p->color = 0x74 + (rand()&7);
 		VectorCopy (move, p->org);
 
@@ -434,9 +434,9 @@ void CL_Heatbeam (const vec3_t start, const vec3_t end)
 
 	for (i=0 ; i<len ; i+=step)
 	{
-		d = i * 0.1 - fmod(ltime,16.0)*M_PI;
-		c = cos(d)/1.75;
-		s = sin(d)/1.75;
+		d = i * 0.1f - (float)fmod(ltime,16.0)*M_PI;
+		c = (float)cos(d)/1.75;
+		s = (float)sin(d)/1.75;
 #ifdef DOUBLE_SCREW		
 		for (k=-1; k<2; k+=2)
 		{
@@ -512,13 +512,13 @@ void CL_Heatbeam (const vec3_t start, const vec3_t forward)
 	VectorCopy (cl.v_up, up);
 #ifdef GL_QUAKE
 	// GL mode
-	VectorMA (move, -0.5, right, move);
-	VectorMA (move, -0.5, up, move);
+	VectorMA (move, -0.5f, right, move);
+	VectorMA (move, -0.5f, up, move);
 #endif
 	// otherwise assume SOFT
 
 	ltime = (float) cl.time/1000.0;
-	start_pt = fmod(ltime*96.0,step);
+	start_pt = (float)fmod(ltime*96.0,step);
 	VectorMA (move, start_pt, vec, move);
 
 	VectorScale (vec, step, vec);
@@ -543,8 +543,8 @@ void CL_Heatbeam (const vec3_t start, const vec3_t forward)
 			p->time = cl.time;
 			VectorClear (p->accel);
 			variance = 0.5;
-			c = cos(rot)*variance;
-			s = sin(rot)*variance;
+			c = (float)cos(rot)*variance;
+			s = (float)sin(rot)*variance;
 			
 			// trim it so it looks like it's starting at the origin
 			if (i < 10)
@@ -611,8 +611,8 @@ void CL_Heatbeam (const vec3_t start, const vec3_t end)
 		VectorClear (p->accel);
 		
 		d = crand()*M_PI;
-		c = cos(d)*30;
-		s = sin(d)*30;
+		c = (float)cos(d)*30;
+		s = (float)sin(d)*30;
 
 		p->alpha = 1.0;
 		p->alphavel = -5.0 / (1+frand());
@@ -762,9 +762,9 @@ void CL_TrackerTrail (const vec3_t start, const vec3_t end, int particleColor)
 		p->alphavel = -2.0;
 		p->color = particleColor;
 		dist = DotProduct(move, forward);
-		VectorMA(move, 8 * cos(dist), up, p->org);
+		VectorMA(move, 8 * (float)cos(dist), up, p->org);
 
-		p->vel[0] = p->vel[0] = 0;
+		p->vel[0] = p->vel[1] = 0;
 		p->vel[2] = 5;
 
 		VectorAdd (move, vec, move);

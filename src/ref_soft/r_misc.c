@@ -335,22 +335,22 @@ void R_ViewChanged (vrect_t *vr)
 
 	r_refdef.vrect = *vr;
 
-	r_refdef.horizontalFieldOfView = 2*tan((float)r_newrefdef.fov_x/360*M_PI);;
-	verticalFieldOfView = 2*tan((float)r_newrefdef.fov_y/360*M_PI);
+	r_refdef.horizontalFieldOfView = 2*(float)tan(r_newrefdef.fov_x/360*M_PI);
+	verticalFieldOfView = 2*(float)tan(r_newrefdef.fov_y/360*M_PI);
 
 	r_refdef.fvrectx = (float)r_refdef.vrect.x;
-	r_refdef.fvrectx_adj = (float)r_refdef.vrect.x - 0.5;
+	r_refdef.fvrectx_adj = (float)r_refdef.vrect.x - 0.5f;
 	r_refdef.vrect_x_adj_shift20 = (r_refdef.vrect.x<<20) + (1<<19) - 1;
 	r_refdef.fvrecty = (float)r_refdef.vrect.y;
-	r_refdef.fvrecty_adj = (float)r_refdef.vrect.y - 0.5;
+	r_refdef.fvrecty_adj = (float)r_refdef.vrect.y - 0.5f;
 	r_refdef.vrectright = r_refdef.vrect.x + r_refdef.vrect.width;
 	r_refdef.vrectright_adj_shift20 = (r_refdef.vrectright<<20) + (1<<19) - 1;
 	r_refdef.fvrectright = (float)r_refdef.vrectright;
-	r_refdef.fvrectright_adj = (float)r_refdef.vrectright - 0.5;
-	r_refdef.vrectrightedge = (float)r_refdef.vrectright - 0.99;
+	r_refdef.fvrectright_adj = (float)r_refdef.vrectright - 0.5f;
+	r_refdef.vrectrightedge = (float)r_refdef.vrectright - 0.99f;
 	r_refdef.vrectbottom = r_refdef.vrect.y + r_refdef.vrect.height;
 	r_refdef.fvrectbottom = (float)r_refdef.vrectbottom;
-	r_refdef.fvrectbottom_adj = (float)r_refdef.vrectbottom - 0.5;
+	r_refdef.fvrectbottom_adj = (float)r_refdef.vrectbottom - 0.5f;
 
 	r_refdef.aliasvrect.x = (int)(r_refdef.vrect.x * r_aliasuvscale);
 	r_refdef.aliasvrect.y = (int)(r_refdef.vrect.y * r_aliasuvscale);
@@ -554,13 +554,13 @@ qboolean WritePCX (char *filename, byte *data, int width, int height,
 	pcx->bits_per_pixel = 8;		// 256 color
 	pcx->xmin = 0;
 	pcx->ymin = 0;
-	pcx->xmax = LittleShort((short)(width-1));
-	pcx->ymax = LittleShort((short)(height-1));
-	pcx->hres = LittleShort((short)width);
-	pcx->vres = LittleShort((short)height);
+	pcx->xmax = LittleShort((int16)(width-1));
+	pcx->ymax = LittleShort((int16)(height-1));
+	pcx->hres = LittleShort((int16)width);
+	pcx->vres = LittleShort((int16)height);
 	memset (pcx->palette,0,sizeof(pcx->palette));
 	pcx->color_planes = 1;		// chunky image
-	pcx->bytes_per_line = LittleShort((short)width);
+	pcx->bytes_per_line = LittleShort((int16)width);
 	pcx->palette_type = LittleShort(2);		// not a grey scale
 	memset (pcx->filler,0,sizeof(pcx->filler));
 

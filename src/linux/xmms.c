@@ -18,15 +18,14 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 
 #ifdef WITH_XMMS
-#include "../client/client.h"
 
+#include "../client/client.h"
 #include <dlfcn.h>
 #include <sys/wait.h>
 #include <assert.h>
 #include <unistd.h>
 #include <glib.h>
-#include "xmms.h"
-
+#include <xmms/xmmsctrl.h>
 
 #define XMMS_SESSION	(xmms_session->integer)
 
@@ -44,20 +43,20 @@ static ret (*q##func) params;
 #include "xmms_funcs.h"
 #undef XMMS_FUNC
 
-static void (*qg_free)(gpointer);
 
 #define QLIB_FREELIBRARY(lib) (dlclose(lib), lib = NULL)
 
 static void *libxmms_handle = NULL;
-static void *libglib_handle = NULL;
 
 static void XMMS_LoadLibrary(void)
 {
-
 	if( !(libxmms_handle = dlopen("libxmms.so", RTLD_NOW)) )
 	{
-		Com_Printf("Could open 'libxmms.so'\n");
-        return;
+		if( !(libxmms_handle = dlopen("libxmms.so.1", RTLD_NOW)) )
+		{
+			Com_Printf("Could open 'libxmms.so' or 'libxmms.so.1'\n");
+			return;
+		}
 	}
 
 #define XMMS_FUNC(ret, func, params) \
@@ -69,23 +68,11 @@ static void XMMS_LoadLibrary(void)
     }
 #include "xmms_funcs.h"
 #undef XMMS_FUNC
-
-	if ( !(libglib_handle = dlopen("libxmms.so", RTLD_NOW)) ) {
-		QLIB_FREELIBRARY(libxmms_handle);
-		return;
-	}
-
-	if (!(qg_free = dlsym(libglib_handle, "g_free"))) {
-		QLIB_FREELIBRARY(libxmms_handle);
-		QLIB_FREELIBRARY(libglib_handle);
-		return;
-	}
 }
 
 static void XMMS_FreeLibrary(void) {
 	if (libxmms_handle) {
 		QLIB_FREELIBRARY(libxmms_handle);
-		QLIB_FREELIBRARY(libglib_handle);
 	}
 }
 
@@ -249,15 +236,20 @@ char *MP3_Macro_MP3Info(void) {
 	char *s;
 	static char title[MP3_MAXSONGTITLE];
 
+	title[0] = 0;
+
 	if (!MP3_IsPlayerRunning()) {
 		Com_Printf("XMMS not running\n");
-		return NULL;
+		return title;
 	}
 	playlist_pos = qxmms_remote_get_playlist_pos(XMMS_SESSION);
 	s = qxmms_remote_get_playlist_title(XMMS_SESSION, playlist_pos);
-	Q_strncpyz(title, s ? s : "", sizeof(title));
-	COM_MakePrintable(title);
-	qg_free(s);
+	if(s) {
+		Q_strncpyz(title, s, sizeof(title));
+		COM_MakePrintable(title);
+		qg_free(s);
+	}
+
 	return title;
 }
 
@@ -265,16 +257,12 @@ static void MP3_SongTitle_m ( char *buffer, int bufferSize )
 {
 	char *songtitle;
 
-	if (!MP3_IsPlayerRunning()) {
-		Q_strncpyz ( buffer, "", bufferSize );
+	if (!MP3_IsPlayerRunning())
 		return;
-	}
 
 	songtitle = MP3_Macro_MP3Info();
-	if (!songtitle) {
-		Q_strncpyz ( buffer, "", bufferSize );
+	if (!*songtitle)
 		return;
-	}
 
 	Q_strncpyz ( buffer, songtitle, bufferSize );
 }
@@ -376,6 +364,8 @@ void MP3_PrintPlaylist_f(void) {
 	MP3_GetPlaylistInfo(&current, &length);
 	for (i = 0 ; i < length; i ++) {
 		title = qxmms_remote_get_playlist_title(XMMS_SESSION, i);
+		if(!title)
+			continue;
 
 		COM_MakePrintable(title);
 		if (i == current)
@@ -437,7 +427,6 @@ int MP3_GetPlaylistSongs(mp3_tracks_t *songList, char *filter)
 	int current, length, i;
 	int playlist_size = 0, tracknum = 0, songCount = 0;
 	char *s;
-	char track[MP3_MAXSONGTITLE];
 
 	if (!MP3_IsPlayerRunning())
 		return 0;
@@ -445,9 +434,9 @@ int MP3_GetPlaylistSongs(mp3_tracks_t *songList, char *filter)
 	MP3_GetPlaylistInfo(&current, &length);
 	for (i = 0 ; i < length; i ++) {
 		s = qxmms_remote_get_playlist_title(XMMS_SESSION, i);
-		Q_strncpyz (track, s, sizeof (track));
-		Q_strlwr(track);
-		if(!strstr(track, filter)) {
+		if(!s)
+			continue;
+		if(!Q_stristr(s, filter)) {
 			qg_free(s);
 			continue;
 		}
@@ -465,9 +454,9 @@ int MP3_GetPlaylistSongs(mp3_tracks_t *songList, char *filter)
 		s = qxmms_remote_get_playlist_title(XMMS_SESSION, i);
 
 		tracknum++;
-		Q_strncpyz (track, s, sizeof (track));
-		Q_strlwr(track);
-		if(!strstr(track, filter)) {
+		if(!s)
+			continue;
+		if(!Q_stristr(s, filter)) {
 			qg_free(s);
 			continue;
 		}
@@ -546,7 +535,7 @@ void MP3_Frame (void)
 		return;
 
 	songtitle = MP3_Macro_MP3Info();
-	if (!songtitle)
+	if (!*songtitle)
 		return;
 
 	curTrack = track;

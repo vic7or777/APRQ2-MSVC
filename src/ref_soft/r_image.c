@@ -278,18 +278,6 @@ image_t *R_LoadWal (const char *name)
 	return image;
 }
 
-
-static unsigned int IMG_HashKey (const char *name)
-{
-	int i;
-	unsigned int hash = 0;
-
-	for( i = 0; name[i]; i++ )
-		hash += tolower(name[i]) * (i+119);
-
-	return hash & (IMAGES_HASH_SIZE-1);
-}
-
 /*
 ===============
 R_FindImage
@@ -321,7 +309,7 @@ image_t	*R_FindImage (const char *name, imagetype_t type)
 
 	pathname[len] = 0;
 
-	hash = IMG_HashKey(pathname);
+	hash = Com_HashKey(pathname, IMAGES_HASH_SIZE);
 	// look for it
 	for (image = images_hash[hash]; image; image = image->hashNext)
 	{
@@ -402,7 +390,7 @@ void R_FreeUnusedImages (void)
 		if (image->type == it_pic)
 			continue;		// don't free pics
 
-		hash = IMG_HashKey(image->name);
+		hash = Com_HashKey(image->name, IMAGES_HASH_SIZE);
 		// delete it from hash table
 		for( back=&images_hash[hash], entry=images_hash[hash]; entry; back=&entry->hashNext, entry=entry->hashNext ) {
 			if( entry == image ) {

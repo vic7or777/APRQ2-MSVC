@@ -32,6 +32,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "cdaudio.h"
 #endif
 
+#ifdef USE_CURL
+#define CURL_STATICLIB
+#include <curl/curl.h>
+#endif
+
 //=============================================================================
 
 typedef struct
@@ -78,6 +83,43 @@ extern int num_cl_weaponmodels;
 
 #define	CMD_BACKUP		64	// allow a lot of command backups for very fast systems
 
+#ifdef USE_CURL
+void CL_CancelHTTPDownloads (qboolean permKill);
+void CL_InitHTTPDownloads (void);
+qboolean CL_QueueHTTPDownload (const char *quakePath);
+void CL_RunHTTPDownloads (void);
+qboolean CL_PendingHTTPDownloads (void);
+void CL_SetHTTPServer (const char *URL);
+void CL_HTTP_Cleanup (qboolean fullShutdown);
+
+typedef enum
+{
+	DLQ_STATE_NOT_STARTED,
+	DLQ_STATE_RUNNING,
+	DLQ_STATE_DONE
+} dlq_state;
+
+typedef struct dlqueue_s
+{
+	struct dlqueue_s	*next;
+	char				quakePath[MAX_QPATH];
+	dlq_state			state;
+} dlqueue_t;
+
+typedef struct dlhandle_s
+{
+	CURL		*curl;
+	char		filePath[MAX_OSPATH];
+	FILE		*file;
+	dlqueue_t	*queueEntry;
+	size_t		fileSize;
+	size_t		position;
+	double		speed;
+	char		URL[576];
+	char		*tempBuffer;
+} dlhandle_t;
+#endif
+
 //
 // the client_state_t structure is wiped completely at every
 // server map change
@@ -98,7 +140,7 @@ typedef struct
 //	usercmd_t	cmd;
 	usercmd_t	cmds[CMD_BACKUP];	// each mesage will send several old cmds
 	int			cmd_time[CMD_BACKUP];	// time sent, for calculating pings
-	short		predicted_origins[CMD_BACKUP][3];	// for debug comparing against server
+	int16		predicted_origins[CMD_BACKUP][3];	// for debug comparing against server
 
 	float		predicted_step;				// for stair up smoothing
 	unsigned	predicted_step_time;
@@ -149,6 +191,7 @@ typedef struct
 	int			servercount;	// server identification for prespawns
 	char		gamedir[MAX_QPATH];
 	int			playernum;
+	int			maxclients;
 
 	char		configstrings[MAX_CONFIGSTRINGS][MAX_QPATH];
 
@@ -166,7 +209,6 @@ typedef struct
 
 //#ifdef R1Q2_PROTOCOL
 	qboolean		enhancedServer;
-	qboolean		advancedDeltas;
 #ifdef R1Q2_PROTOCOL
 	byte			demoFrame[1400];
 	sizebuf_t		demoBuff;
@@ -207,14 +249,14 @@ typedef enum {
 	ca_active			// game views should be displayed
 } connstate_t;
 
-typedef enum {
+/*typedef enum {
 	dl_none,
 	dl_model,
 	dl_sound,
 	dl_skin,
 	dl_single
 } dltype_t;		// download type
-
+*/
 typedef enum {key_game, key_console, key_message, key_menu} keydest_t;
 
 typedef struct
@@ -248,23 +290,41 @@ typedef struct
 	FILE		*download;			// file transfer from server
 	char		downloadtempname[MAX_OSPATH];
 	char		downloadname[MAX_OSPATH];
-	int			downloadnumber;
-	dltype_t	downloadtype;
+	//int		downloadnumber;
+	//dltype_t	downloadtype;
 	int			downloadpercent;
+
+	qboolean	failed_download;
+	size_t		downloadposition;
 
 // demo recording info must be here, so it isn't cleared on level change
 	qboolean	demorecording;
 	qboolean	demowaiting;	// don't record until a non-delta message is received
 	FILE		*demofile;
 
-	int doscreenshot;  // doscreenshot -Maniac
+	int doscreenshot;
 
-	char mapname[MAX_OSPATH];
+	char mapname[MAX_QPATH];
 
 	int	lastSpamTime; //last client reply time
 	int spamTime;
 	int roundtime; //Hack to show roundtime in aq2 mod
 
+#ifdef USE_CURL
+	dlqueue_t		downloadQueue;			//queue of paths we need
+	
+	dlhandle_t		HTTPHandles[4];			//actual download handles
+	//don't raise this!
+	//i use a hardcoded maximum of 4 simultaneous connections to avoid
+	//overloading the server. i'm all too familiar with assholes who set
+	//their IE or Firefox max connections to 16 and rape my Apache processes
+	//every time they load a page... i'd rather not have my q2 client also
+	//have the ability to do so - especially since we're possibly downloading
+	//large files.
+
+	char			downloadServer[512];	//base url prefix to download from
+	char			downloadReferer[32];	//libcurl requires a static string :(
+#endif
 } client_static_t;
 
 extern client_static_t	cls;
@@ -341,6 +401,13 @@ extern	cvar_t	*scr_conheight;
 extern	cvar_t	*cl_hudalpha;
 extern	cvar_t	*cl_textcolors;
 extern	cvar_t	*cl_autorecord;
+
+#ifdef USE_CURL
+extern	cvar_t	*cl_http_downloads;
+extern	cvar_t	*cl_http_filelists;
+extern	cvar_t	*cl_http_proxy;
+extern	cvar_t	*cl_http_max_connections;
+#endif
 
 typedef struct
 {
@@ -479,7 +546,7 @@ void CL_WidowSplash (const vec3_t org);
 // PGM
 // ========
 
-int CL_ParseEntityBits (unsigned *bits);
+int CL_ParseEntityBits (unsigned int *bits);
 void CL_ParseDelta (const entity_state_t *from, entity_state_t *to, int number, int bits);
 void CL_ParseFrame (int extrabits);
 
@@ -555,7 +622,7 @@ void CL_BaseMove (usercmd_t *cmd);
 void IN_CenterView (void);
 
 float CL_KeyState (kbutton_t *key);
-char *Key_KeynumToString (int keynum);
+const char *Key_KeynumToString (int keynum);
 
 //
 // cl_demo.c
@@ -567,8 +634,8 @@ void CL_WriteDemoMessage (byte *buff, int len, qboolean forceFlush);
 void CL_Stop_f (void);
 void CL_Record_f (void);
 void CL_InitDemos(void);
-void CL_ParseAutoRecord (const char *s);
-void SCR_AutoDemo(void);
+void CL_StartAutoRecord(void);
+void CL_StopAutoRecord (void);
 
 //
 // cl_parse.c
@@ -590,7 +657,7 @@ void V_RenderView( float stereo_separation );
 void V_AddEntity (const entity_t *ent);
 void V_AddParticle (const particle_t *p);
 void V_AddLight (const vec3_t org, float intensity, float r, float g, float b);
-void V_AddStain (const vec3_t org, const vec3_t color, float size); //Stainmaps
+void V_AddStain (const vec3_t org, int color, float size); //Stainmaps
 void V_AddLightStyle (int style, float r, float g, float b);
 
 // cl_tent.c
@@ -643,7 +710,7 @@ unsigned long *x86_TimerGetHistogram( void );
 
 // cl_locs.c
 void CL_FreeLocs(void);
-void CL_LoadLoc(const char *mapName);
+void CL_LoadLoc(void);
 void CL_AddViewLocs(void);
 void CL_InitLocs(void);
 
@@ -651,4 +718,6 @@ void CL_InitLocs(void);
 #ifdef AVI_EXPORT
 #include "avi_export.h"
 #endif
+
+#include "mp3.h"
 

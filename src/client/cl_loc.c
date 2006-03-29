@@ -29,6 +29,8 @@ typedef struct cl_location_s
 static cl_location_t	*cl_locations = NULL;
 
 static cvar_t	*cl_drawlocs;
+static cvar_t	*loc_dir;
+static char locDir[MAX_QPATH];
 
 void CL_FreeLocs(void)
 {
@@ -61,25 +63,26 @@ static void CL_AddLoc (const vec3_t location, const char *name)
 	cl_locations = loc;
 }
 
-void CL_LoadLoc(const char *mapName)
+void CL_LoadLoc(void)
 {
 
-	char path[MAX_QPATH];
+	char fileName[MAX_OSPATH];
 	char *buffer = NULL;
-	int line = 0, fileLen = 0;
+	int line = 0, fileLen = 0, count = 0;
 	char *s, *p;
 	vec3_t	origin;
 
 	CL_FreeLocs();
 
-	if (!mapName || !mapName[0])
+	if (!cls.mapname[0])
 		return;
 
-	// load from main directory
-	Com_sprintf( path, sizeof( path ), "../locs/%s.loc", mapName );
-	fileLen = FS_LoadFile( path, (void **)&buffer );
+	Com_sprintf(fileName, sizeof(fileName), "%s/%s.loc", locDir, cls.mapname);
+	COM_FixPath(fileName);
+
+	fileLen = FS_LoadFile( fileName, (void **)&buffer );
 	if (!buffer) {
-		Com_DPrintf ("CL_LoadLoc: %s not found\n", path);
+		Com_DPrintf ("CL_LoadLoc: %s not found\n", fileName);
 		return;
 	}
 
@@ -93,16 +96,18 @@ void CL_LoadLoc(const char *mapName)
 		Cmd_TokenizeString( s, false );
 		line++;
 
-		if( Cmd_Argc() < 4 )
+		if(Cmd_Argc() < 4)
 		{
-			Com_Printf( "CL_LoadLoc: line %i uncompleted\n", line );
+			if(Cmd_Argc() > 0)
+				Com_Printf( "CL_LoadLoc: line %i uncompleted\n", line );
 		}
 		else
 		{
-			origin[0] = atof(Cmd_Argv(0)) * 0.125f;
-			origin[1] = atof(Cmd_Argv(1)) * 0.125f;
-			origin[2] = atof(Cmd_Argv(2)) * 0.125f;
+			origin[0] = (float)atof(Cmd_Argv(0)) * 0.125f;
+			origin[1] = (float)atof(Cmd_Argv(1)) * 0.125f;
+			origin[2] = (float)atof(Cmd_Argv(2)) * 0.125f;
 			CL_AddLoc(origin, Cmd_ArgsFrom(3));
+			count++;
 		}
 
 		if( !p )
@@ -111,8 +116,8 @@ void CL_LoadLoc(const char *mapName)
 		s = p + 1;
 	}
 
-	if(line)
-		Com_Printf("%s found and loaded\n", path+3);
+	if(count)
+		Com_Printf("Loaded %i locations from '%s'\n", count, fileName);
 
 	FS_FreeFile( buffer );
 }
@@ -167,7 +172,7 @@ void CL_AddViewLocs(void)
 		VectorCopy(loc->location, ent.origin);
 
 		if (loc == nearestLoc)
-			ent.origin[2] += sin(cl.time * 0.01f) * 10.0f;
+			ent.origin[2] += (float)sin(cl.time * 0.01f) * 10.0f;
 
 		//AnglesToAxis(ent.angles, ent.axis);
 		V_AddEntity(&ent);
@@ -189,6 +194,12 @@ static void CL_LocList_f(void)
 		return;
 	}
 
+	if (cls.state != ca_active)
+	{
+		Com_Printf("Must be in level to use this command\n");
+		return;
+	}
+
 	for(loc = cl_locations, i = 1; loc; loc = loc->next, i++)
 		Com_Printf("Location: %2i. at (%d, %d, %d) = %s\n", i, (int)loc->location[0], (int)loc->location[1], (int)loc->location[2], loc->name);
 
@@ -202,6 +213,12 @@ static void CL_LocAdd_f(void)
 		return;
 	}
 
+	if (cls.state != ca_active)
+	{
+		Com_Printf("Must be in level to use this command\n");
+		return;
+	}
+
 	CL_AddLoc(cl.refdef.vieworg, Cmd_Args());
 	Com_Printf("Location '%s' added at (%d, %d, %d).\n", Cmd_Args(), (int)cl.refdef.vieworg[0]*8, (int)cl.refdef.vieworg[1]*8, (int)cl.refdef.vieworg[2]*8);
 }
@@ -212,6 +229,12 @@ static void CL_LocDel_f(void)
 
 	if (!cl_locations) {
 		Com_Printf("No locations found\n");
+		return;
+	}
+
+	if (cls.state != ca_active)
+	{
+		Com_Printf("Must be in level to use this command\n");
 		return;
 	}
 
@@ -240,26 +263,43 @@ static void CL_LocSave_f (void)
 {
 	const cl_location_t	*loc;
 	FILE *f;
+	char fileName[MAX_OSPATH];
+	int count = 0;
 
 	if (!cl_locations) {
 		Com_Printf("No locations what to write\n");
 		return;
 	}
 
-	Sys_Mkdir("locs");
+	if (cls.state != ca_active)
+	{
+		Com_Printf("Must be in level to use this command\n");
+		return;
+	}
 
-	f = fopen(va("locs/%s.loc", cls.mapname), "wb");
+	if(Cmd_Argc() == 2)
+	{
+		Com_sprintf (fileName, sizeof(fileName), "%s/%s/%s", FS_Gamedir(), locDir, Cmd_Argv(1));
+		COM_DefaultExtension(fileName, sizeof(fileName), ".loc");
+	}
+	else
+		Com_sprintf (fileName, sizeof(fileName), "%s/%s/%s.loc", FS_Gamedir(), locDir, cls.mapname);
+
+	FS_CreatePath(fileName);
+
+	f = fopen(fileName, "wb");
 	if (!f) {
-		Com_Printf("Warning: Unable to open locs/%s.loc for writing.\n", cls.mapname);
+		Com_Printf("Warning: Unable to open %s for writing.\n", fileName);
 		return;
 	}
 
 	for(loc = cl_locations; loc; loc = loc->next) {
 		fprintf (f, "%i %i %i %s\n", (int)loc->location[0]*8, (int)loc->location[1]*8, (int)loc->location[2]*8, loc->name);
+		count++;
 	}
 
 	fclose(f);
-	Com_Printf("Locations saved to 'locs/%s.loc'.\n", cls.mapname);
+	Com_Printf("%i locations saved to '%s'.\n", count, fileName);
 }
 
 static void CL_LocHere_m( char *buffer, int bufferSize )
@@ -302,6 +342,14 @@ static void CL_LocThere_m( char *buffer, int bufferSize )
 
 }
 
+static void OnChange_LocDir(cvar_t *self, const char *oldValue)
+{
+	Q_strncpyz(locDir, self->string, sizeof(locDir));
+	COM_FixPath(locDir);
+
+	CL_LoadLoc();
+}
+
 /*
 ==============
 LOC_Init
@@ -310,6 +358,9 @@ LOC_Init
 void CL_InitLocs( void )
 {
 	cl_drawlocs = Cvar_Get("cl_drawlocs", "0", 0);
+	loc_dir = Cvar_Get("loc_dir", "locs", 0);
+	loc_dir->OnChange = OnChange_LocDir;
+	OnChange_LocDir(loc_dir, loc_dir->resetString);
 
 	Cmd_AddCommand ("loc_add", CL_LocAdd_f);
 	Cmd_AddCommand ("loc_list", CL_LocList_f);

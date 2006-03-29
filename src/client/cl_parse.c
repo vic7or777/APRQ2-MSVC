@@ -24,7 +24,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 cvar_t	*cl_timestamps;
 cvar_t	*cl_timestampsformat;
 cvar_t	*cl_highlight;
-cvar_t	*cl_highlightmsg;
+cvar_t	*cl_highlightmode;
 cvar_t	*cl_highlightcolor;
 cvar_t	*cl_highlightnames;
 cvar_t	*ignorewaves;
@@ -33,7 +33,6 @@ cvar_t	*cl_mychatcolor;
 
 cvar_t	*cl_autoscreenshot;
 
-extern cvar_t *cl_customlimitmsg;
 extern cvar_t *name;
 
 void CL_VersionReply (const char *s);
@@ -42,7 +41,8 @@ void CL_HighlightNames( char *s );
 int CL_Highlight ( const char *s, int *color );
 void CL_ParseAutoScreenshot (const char *s);
 char *CL_Timestamp( qboolean chat );
-qboolean CL_Ignore(const char *s);
+qboolean CL_IgnoreText(const char *s);
+qboolean CL_IgnoreNick(const char *s);
 
 void CL_Reconnect_f (void);
 
@@ -101,6 +101,9 @@ void CL_FinishDownload (void)
 	if (r)
 		Com_Printf ("failed to rename.\n");
 
+	cls.failed_download = false;
+	cls.downloadname[0] = 0;
+	cls.downloadposition = 0;
 	cls.download = NULL;
 	cls.downloadpercent = 0;
 }
@@ -116,11 +119,13 @@ to start a download from the server.
 qboolean	CL_CheckOrDownloadFile (const char *filename)
 {
 	FILE *fp;
-	int		length;
-	char	*p;
 	char	name[MAX_OSPATH];
-	static char lastfilename[MAX_OSPATH] = {0};
+	static char lastfilename[MAX_OSPATH] = "\0";
 
+
+	Q_strncpyz(name, filename, sizeof(name));
+	COM_FixPath(name);
+	filename = name;
 
 	//r1: don't attempt same file many times
 	if (!strcmp (filename, lastfilename))
@@ -130,7 +135,7 @@ qboolean	CL_CheckOrDownloadFile (const char *filename)
 
 	if (strstr (filename, ".."))
 	{
-		Com_Printf ("Refusing to download a path with ..\n");
+		Com_Printf ("Refusing to download a path with .. (%s)\n", filename);
 		return true;
 	}
 
@@ -146,40 +151,22 @@ qboolean	CL_CheckOrDownloadFile (const char *filename)
 		return true;
 	}
 
-	if (filename[0] == '/')
-	{
-		Com_Printf ("Refusing to check a path starting with / (%s)\n", filename);
-		return true;
-	}
-
 	if (FS_LoadFile (filename, NULL) != -1)
 	{	// it exists, no need to download
 		return true;
 	}
 
-	strcpy (cls.downloadname, filename);
-
-	//r1: fix \ to /
-	p = cls.downloadname;
-	while ((p = strchr(p, '\\')))
-		*p = '/';
-
-	length = (int)strlen(cls.downloadname);
-
-	//normalize path
-	p = cls.downloadname;
-	while ((p = strstr (p, "./")))
+#ifdef USE_CURL
+	if (CL_QueueHTTPDownload (filename))
 	{
-		memmove (p, p+2, length - (p - cls.downloadname) - 1);
-		length -= 2;
-	}
-
-	//r1: verify we are giving the server a legal path
-	if (cls.downloadname[length-1] == '/')
-	{
-		Com_Printf ("Refusing to download bad path (%s)\n", filename);
+		//we return true so that the precache check keeps feeding us more files.
+		//since we have multiple HTTP connections we want to minimize latency
+		//and be constantly sending requests, not one at a time.
 		return true;
 	}
+#endif
+
+	strcpy (cls.downloadname, filename);
 
 	// download to a temp name, and only rename
 	// to the real name when done, so if interrupted
@@ -227,7 +214,7 @@ qboolean	CL_CheckOrDownloadFile (const char *filename)
 			MSG_WriteString (&cls.netchan.message, va("download \"%s\"", cls.downloadname));
 	}
 
-	cls.downloadnumber++;
+	//cls.downloadnumber++;
 
 	return false;
 }
@@ -254,13 +241,8 @@ void	CL_Download_f (void)
 		return;
 	}
 
-	Com_sprintf(filename, sizeof(filename), "%s", Cmd_Argv(1));
-
-	if (strstr (filename, ".."))
-	{
-		Com_Printf ("Refusing to download a path with ..\n");
-		return;
-	}
+	Q_strncpyz(filename, Cmd_Argv(1), sizeof(filename));
+	COM_FixPath(filename);
 
 	if (FS_LoadFile (filename, NULL) != -1)
 	{	// it exists, no need to download
@@ -268,23 +250,7 @@ void	CL_Download_f (void)
 		return;
 	}
 
-	Q_strncpyz (cls.downloadname, filename, sizeof(cls.downloadname));
-	Com_Printf ("Downloading %s\n", cls.downloadname);
-
-	// download to a temp name, and only rename to the real name when done,
-	// so if interrupted a runt file wont be left
-	COM_StripExtension (cls.downloadname, cls.downloadtempname);
-	strcat (cls.downloadtempname, ".tmp");
-
-	MSG_WriteByte (&cls.netchan.message, clc_stringcmd);
-#ifdef R1Q2_PROTOCOL
-	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
-		MSG_WriteString (&cls.netchan.message, va("download \"%s\" 0 udp-zlib", cls.downloadname));
-	else
-#endif
-		MSG_WriteString (&cls.netchan.message, va("download \"%s\" 0", cls.downloadname));
-
-	cls.downloadnumber++;
+	CL_CheckOrDownloadFile (filename);
 }
 
 /*
@@ -332,7 +298,9 @@ void CL_ParseDownload (qboolean dataIsCompressed)
 		else
 			Com_Printf ("Bad download data from server.\n");
 
-		*cls.downloadtempname = 0;
+		cls.downloadtempname[0] = 0;
+		cls.downloadname[0] = 0;
+		cls.failed_download = true;
 
 		if (cls.download)
 		{
@@ -371,7 +339,7 @@ void CL_ParseDownload (qboolean dataIsCompressed)
 #ifdef R1Q2_PROTOCOL
 	if (dataIsCompressed)
 	{
-		int			uncompressedLen;
+		uint16		uncompressedLen;
 		byte		uncompressed[0xFFFF];
 
 		uncompressedLen = MSG_ReadShort (&net_message);
@@ -466,7 +434,7 @@ qboolean CL_ParseServerData (void)
 
 	// set gamedir
 	if ((*str && (!fs_gamedirvar->string || !*fs_gamedirvar->string || strcmp(fs_gamedirvar->string, str))) || (!*str && (fs_gamedirvar->string || *fs_gamedirvar->string)))
-		Cvar_Set("game", str);
+		Cvar_SetLatched("game", str);
 
 	// parse player entity number
 	cl.playernum = MSG_ReadShort (&net_message);
@@ -474,6 +442,8 @@ qboolean CL_ParseServerData (void)
 	// get the full level name
 	str = MSG_ReadString (&net_message);
 
+	pm_enhanced = false;
+	pm_strafehack = false;
 #ifdef R1Q2_PROTOCOL
 	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
 	{
@@ -493,9 +463,11 @@ qboolean CL_ParseServerData (void)
 
 		if (newVersion >= 1903)
 		{
-			cl.advancedDeltas = MSG_ReadByte (&net_message);
+			qboolean advancedDeltas = false;
+
+			advancedDeltas = MSG_ReadByte (&net_message);
 			pm_strafehack = MSG_ReadByte (&net_message);
-			if(cl.advancedDeltas)
+			if(advancedDeltas)
 			{
 				Com_Printf ("Server have advanced deltas enabled, those arent supported yet. Falling back to 34 protocol.\n");
 				CL_Disconnect();
@@ -504,20 +476,10 @@ qboolean CL_ParseServerData (void)
 				return false;
 			}
 		}
-		else
-		{
-			cl.advancedDeltas = false;
-			pm_strafehack = false;
-		}
 		pm_enhanced = cl.enhancedServer;
 	}
-	else
 #endif
-	{
-		cl.advancedDeltas = false;
-		pm_enhanced = false;
-		pm_strafehack = false;
-	}
+
 
 	if (cl.playernum == -1)
 	{	// playing a cinematic or showing a pic, not a level
@@ -544,7 +506,7 @@ CL_ParseBaseline
 void CL_ParseBaseline (void)
 {
 	entity_state_t	*es;
-	unsigned		bits;
+	unsigned int	bits;
 	int				newnum;
 	entity_state_t	nullstate;
 
@@ -562,8 +524,8 @@ void CL_ParseZPacket (void)
 	byte buff_in[MAX_MSGLEN];
 	byte buff_out[0xFFFF];
 	sizebuf_t sb, old;
-	int compressed_len = MSG_ReadShort (&net_message);
-	int uncompressed_len = MSG_ReadShort (&net_message);
+	uint16 compressed_len = MSG_ReadShort (&net_message);
+	uint16 uncompressed_len = MSG_ReadShort (&net_message);
 	
 	if (uncompressed_len <= 0)
 		Com_Error (ERR_DROP, "CL_ParseZPacket: uncompressed_len <= 0");
@@ -593,7 +555,7 @@ CL_LoadClientinfo
 */
 void CL_LoadClientinfo (clientinfo_t *ci, char *s)
 {
-	int i;
+	int			i = 0;
 	char		*t;
 	char		model_name[MAX_QPATH];
 	char		skin_name[MAX_QPATH];
@@ -606,25 +568,33 @@ void CL_LoadClientinfo (clientinfo_t *ci, char *s)
 	// isolate the player's name
 	Q_strncpyz (ci->name, s, sizeof(ci->name));
 
-	t = strstr (s, "\\");
+	t = strchr(s, '\\');
 	if (t)
 	{
-		ci->name[t-s] = 0;
-		s = t+1;
+		if (t - s >= sizeof(ci->name))
+		{
+			i = -1;
+		}
+		else
+		{
+			ci->name[t-s] = 0;
+			s = t+1;
+		}
 	}
 
 	t = s;
 	while (*t)
 	{
-		if (!isprint (*t))
+		//if (!isprint (*t))
+		if (*t <= 32)
 		{
-			*s = 0;
+			i = -1;
 			break;
 		}
 		t++;
 	}
 
-	if (cl_noskins->integer || *s == 0)
+	if (cl_noskins->integer || *s == 0 || i == -1)
 	{
 		strcpy (model_filename, "players/male/tris.md2");
 		strcpy (weapon_filename, "players/male/weapon.md2");
@@ -640,12 +610,19 @@ void CL_LoadClientinfo (clientinfo_t *ci, char *s)
 	{
 		// isolate the model name
 		Q_strncpyz (model_name, s, sizeof(model_name));
-		t = strstr(model_name, "/");
+		t = strchr(model_name, '/');
 		if (!t)
-			t = strstr(model_name, "\\");
+			t = strchr(model_name, '\\');
+		
 		if (!t)
-			t = model_name;
-		*t = 0;
+		{
+			memcpy (model_name, "male\0grunt\0\0\0\0\0\0", 16);
+			s = "male\\grunt\0";
+		}
+		else
+		{
+			*t = 0;
+		}
 
 		// isolate the skin name
 		Q_strncpyz (skin_name, s + strlen(model_name) + 1, sizeof(skin_name));
@@ -656,7 +633,7 @@ void CL_LoadClientinfo (clientinfo_t *ci, char *s)
 		if (!ci->model)
 		{
 			strcpy(model_name, "male");
-			Com_sprintf (model_filename, sizeof(model_filename), "players/male/tris.md2");
+			strcpy(model_filename, "players/male/tris.md2");
 			ci->model = R_RegisterModel (model_filename);
 		}
 
@@ -670,7 +647,7 @@ void CL_LoadClientinfo (clientinfo_t *ci, char *s)
 		{
 			// change model to male
 			strcpy(model_name, "male");
-			Com_sprintf (model_filename, sizeof(model_filename), "players/male/tris.md2");
+			strcpy(model_filename, "players/male/tris.md2");
 			ci->model = R_RegisterModel (model_filename);
 
 			// see if the skin exists for the male model
@@ -778,7 +755,7 @@ void CL_ParseConfigString (void)
 	// do something apropriate
 	if(i == CS_AIRACCEL)
 	{
-		pm_airaccelerate = atof(cl.configstrings[CS_AIRACCEL]);
+		pm_airaccelerate = (float)atof(cl.configstrings[CS_AIRACCEL]);
 	}
 	else if (i >= CS_LIGHTS && i < CS_LIGHTS+MAX_LIGHTSTYLES)
 	{
@@ -794,7 +771,7 @@ void CL_ParseConfigString (void)
 	else if (i >= CS_MODELS && i < CS_MODELS+MAX_MODELS)
 	{
 		if( i == CS_MODELS + 1 ) {
-			if( strlen( s ) > 9 ) {
+			if( length > 9 ) {
 				Q_strncpyz( cls.mapname, s + 5, sizeof( cls.mapname ) ); // skip "maps/"
 				cls.mapname[strlen( cls.mapname ) - 4] = 0; // cut off ".bsp"
 			}
@@ -818,6 +795,13 @@ void CL_ParseConfigString (void)
 	{
 		if (cl.refresh_prepped)
 			cl.image_precache[i-CS_IMAGES] = Draw_FindPic (cl.configstrings[i]);
+	}
+	else if (i == CS_MAXCLIENTS)
+	{
+		if (!cl.attractloop) {
+			cl.maxclients = atoi(cl.configstrings[CS_MAXCLIENTS]);
+			clamp(cl.maxclients, 0, MAX_CLIENTS);
+		}
 	}
 	else if (i >= CS_PLAYERSKINS && i < CS_PLAYERSKINS+MAX_CLIENTS)
 	{
@@ -862,7 +846,7 @@ void CL_ParseStartSoundPacket(void)
 		attenuation = DEFAULT_SOUND_PACKET_ATTENUATION;	
 
     if (flags & SND_OFFSET)
-		ofs = MSG_ReadByte (&net_message) / 1000.0;
+		ofs = MSG_ReadByte (&net_message) / 1000.0f;
 	else
 		ofs = 0;
 
@@ -905,17 +889,25 @@ void SHOWNET(const char *s)
 
 static void CL_ParsePrint( char *s, int i )
 {
-	char texti[MAX_STRING_CHARS];
-	int color = 0, highlight = 0, skip = 0, client = 0, mm2 = 0;
-	char *timestamp = NULL;
+	char text[MAX_STRING_CHARS], *timestamp = NULL;
+	const char *string;
+	int color = -1, highlight = 0, skip = 0, client = 0, mm2 = 0;
+	int c, l = 0;
 
-	Q_strncpyz(texti, s, sizeof(texti));
-	Q_strlwr(texti);
+	string = s;
+	while(*string && l < sizeof(text)-1) {
+		c = *string++ & 127;
+		if( c > 31 )
+			text[l++] = tolower(c);
+	}
+	text[l] = 0;
 
 	if (i == PRINT_CHAT)
 	{
-		if( CL_ChatParse(s, &client, &skip, &mm2) )
+		if(CL_ChatParse(s, &client, &skip, &mm2))
 		{
+			clamp(skip, 0, l);
+
 			if(!strcmp(cl.clientinfo[client].name, name->string)) //Own chat text
 			{
 				if(cl_mychatcolor->integer && cl_textcolors->integer)
@@ -923,33 +915,46 @@ static void CL_ParsePrint( char *s, int i )
 			}
 			else
 			{
-				if(CL_Ignore(cl.clientinfo[client].name)) //do not show ignored msg
+				if(CL_IgnoreNick(cl.clientinfo[client].name)) //do not show ignored msg
 					return;
 				
-				highlight = CL_Highlight(texti+skip, &color);
+				if(CL_IgnoreText(text))
+					return;
+
+				if(cl_highlightmode->integer)
+					highlight = CL_Highlight(text, &color);
+				else
+					highlight = CL_Highlight(text+skip, &color);
 			}
-			CL_VersionReply(texti+skip);
+			if(!cl.attractloop)
+				CL_VersionReply(text+skip);
 		}
-		else
-			CL_VersionReply(texti);
+		else if (!cl.attractloop)
+		{
+			if(CL_IgnoreText(text))
+				return;
+			
+			highlight = CL_Highlight(text, &color);
+			CL_VersionReply(text);
+		}
 
 		if(highlight & 1)
 			S_StartLocalSound ("misc/talk1.wav");
 		else
 			S_StartLocalSound ("misc/talk.wav");
 
-		SCR_AddToChatHUD(s, mm2 == 1); //Chathud
-
 		timestamp = CL_Timestamp(true);
-		if(color) {
+		if(color > -1) {
+			clamp (color, 0, 7);
+			SCR_AddToChatHUD(s, color, mm2); //Chathud
 			con.ormask = 0;
-			clamp (color, 1, 7);
 			if(timestamp)
 				Com_Printf (S_ONE_COLOR "^%i%s %s", color, timestamp, s);
 			else
 				Com_Printf (S_ONE_COLOR "^%i%s", color, s);
 		}
 		else {
+			SCR_AddToChatHUD(s, 7, mm2); //Chathud
 			con.ormask = 128;
 			if(timestamp)
 				Com_Printf("%s %s", timestamp, s);
@@ -961,17 +966,13 @@ static void CL_ParsePrint( char *s, int i )
 		return;
 	}
 
-	if(!cl.attractloop)
-		Cmd_ExecTrigger( s ); //Triggers
-
 	if (i == PRINT_HIGH)
 	{
-		if (ignorewaves->integer && (!strcmp(texti, "flipoff\n") || !strcmp(texti, "salute\n") || !strcmp(texti, "taunt\n") || !strcmp(texti, "wave\n") || !strcmp(texti, "point\n")))
+		if (ignorewaves->integer && (!strcmp(s, "flipoff\n") || !strcmp(s, "salute\n") || !strcmp(s, "taunt\n") || !strcmp(s, "wave\n") || !strcmp(s, "point\n")))
 			return;
 
-		CL_ParseAutoScreenshot (texti);		
-		CL_ParseAutoRecord (texti);
-
+		if(!cl.attractloop)
+			CL_ParseAutoScreenshot(text);		
 	}
 
 	CL_HighlightNames(s);
@@ -981,6 +982,32 @@ static void CL_ParsePrint( char *s, int i )
 		Com_Printf("%s %s", timestamp, s);
 	else
 		Com_Printf("%s", s);
+
+	if(!cl.attractloop)
+		Cmd_ExecTrigger(text); //Triggers
+}
+
+void CL_ParseCenterPrint(const char *s)
+{
+	char text[MAX_STRING_CHARS];
+	const char *string;
+	int c, l = 0;
+
+	string = s;
+	while(*string && l < sizeof(text)-1) {
+		c = *string++ & 127;
+		if(c > 31)
+			text[l++] = c;
+	}
+	text[l] = 0;
+
+	if (!strcmp(text, "ACTION!")) //Hack to show roundtime in aq2 mod
+		cls.roundtime = cl.time;
+
+	SCR_CenterPrint (s);
+
+	if(!cl.attractloop)
+		Cmd_ExecTrigger(text); //Triggers
 }
 
 /*
@@ -1092,10 +1119,7 @@ void CL_ParseServerMessage (void)
 			
 		case svc_centerprint:
 			s = MSG_ReadString (&net_message);
-			if (!strcmp(s, "ACTION!\n")) //Hack to show roundtime in aq2 mod -Maniac
-				cls.roundtime = cl.time;
-
-			SCR_CenterPrint (s);
+			CL_ParseCenterPrint(s);
 			WRITEDEMOMSG
 			break;
 			
@@ -1166,49 +1190,24 @@ void CL_ParseServerMessage (void)
 				fclose (cls.download);
 				cls.download = NULL;
 			}
-			if(cl_autorecord->integer && cls.demorecording)
-				CL_Stop_f();
 
 			cls.downloadname[0] = 0;
 
 			cls.state = ca_connecting;
 			cls.connect_time = -99999;	// CL_CheckForResend() will fire immediately
 
+			CL_StopAutoRecord();
             SCR_ClearChatHUD_f();
 			break;
 
 		case svc_disconnect:
-#ifdef R1Q2_PROTOCOL
-			//r1 uuuuugly...
-			if (cls.serverProtocol != ORIGINAL_PROTOCOL_VERSION && cls.realtime - cls.connect_time < 30000)
-			{
-				Com_Printf ("Disconnected by server, assuming protocol mismatch. Reconnecting with protocol 34.\nPlease be sure that you and the server are using the latest build of R1Q2.\n");
-				CL_Disconnect();
-				cls.serverProtocol = ORIGINAL_PROTOCOL_VERSION;
-				CL_Reconnect_f ();
-				return;
-			}
-			else
-#endif
-			{
-				Com_Error (ERR_DISCONNECT, "Server disconnected\n");
-			}
+			Com_Error (ERR_DISCONNECT, "Server disconnected\n");
 			WRITEDEMOMSG
 
 			SCR_ClearChatHUD_f();
 			break;
 
 		default:
-#ifdef R1Q2_PROTOCOL
-			if (cls.serverProtocol != ORIGINAL_PROTOCOL_VERSION && cls.realtime - cls.connect_time < 30000)
-			{
-				Com_Printf ("Unknown command byte %d, assuming protocol mismatch. Reconnecting with protocol 34.\nPlease be sure that you and the server are using the latest build of R1Q2.\n", cmd);
-				CL_Disconnect();
-				cls.serverProtocol = ORIGINAL_PROTOCOL_VERSION;
-				CL_Reconnect_f ();
-				return;
-			}
-#endif
 			Com_Error (ERR_DROP,"CL_ParseServerMessage: Unknown command byte %d (0x%.2x)", cmd, cmd);
 			break;
 		}
@@ -1235,12 +1234,12 @@ void CL_VersionReply (const char *s)
 
 qboolean CL_ChatParse (const char *s, int *clinu, int *skip2, int *mm2) //Seperates nick & msg from chat msg
 {
-	int i, client = -1, skip = 0;
+	int i, client = -1, skip = 0, nLen;
 	char *tmp, *start = NULL;
 
-	for( i = 0; i < MAX_CLIENTS; i++ ) 
+	for( i = 0; i < cl.maxclients; i++ ) 
 	{ 
-		if( cl.clientinfo[i].name[0] )
+		if(cl.clientinfo[i].name[0])
 		{
 			tmp = strstr( s, cl.clientinfo[i].name ); 
 
@@ -1252,52 +1251,53 @@ qboolean CL_ChatParse (const char *s, int *clinu, int *skip2, int *mm2) //Sepera
 		}
 	}
 
-	if( start )
-	{
-		skip = strlen(s) - strlen(start);
-		if(skip > 0) {
-			if(s[skip - 1] == '(' && s[skip + strlen(cl.clientinfo[client].name)] == ')') //Hack and only work on aq2?
-				*mm2 = 1;
-		}
+	if(!start)
+		return false;
 
-		// skip the name 
-		start += strlen( cl.clientinfo[client].name );
-		skip = strlen(s) - strlen(start);
+	nLen = strlen(cl.clientinfo[client].name);
 
-		// walk to a space (after the colon) 
-		while( *(start) != ' ' && *(start) != 0 )
-			start++;
-
-		if(*start)
-			skip = strlen(s) - strlen(start);
-
-		*skip2 = skip;
-		*clinu = client;
-
-		return true;
+	skip = start - s;
+	if(skip > 0) {
+		if(s[skip - 1] == '(' && s[skip + nLen] == ')') //Hack and only work on aq2?
+			*mm2 = 1;
 	}
 
-	return false;
+	// skip the name 
+	start += nLen;
+
+	// walk to a space (after the colon) 
+	while(*start && *start != ' ')
+		start++;
+
+	if(!*start)
+		return false;
+
+	skip = start - s;
+
+	*skip2 = skip;
+	*clinu = client;
+
+	return true;
 }
 
 void CL_HighlightNames( char *s )
 {
 	char *t;
-	int i, j, nro = 0, temp = 0;
+	int i, j, nro = 0, temp = 0, len;
 	int ord[MAX_CLIENTS] = { 0 };
 
 	if(!cl_highlightnames->integer)
 		return;
 	
-	for( i = 0; i < MAX_CLIENTS; i++ ) {
-		if(strlen(cl.clientinfo[i].name) > 1)
+	for(i = 0; i < cl.maxclients; i++) {
+		if(cl.clientinfo[i].name[0] && cl.clientinfo[i].name[1])
 			ord[nro++] = i;
 	}
 
 	//Put nick list to order by lenght, longest first
-	for( i = 0; i < nro; i++ ) {
-		for( j = i+1; j < nro; j++) {
-			if( strlen(cl.clientinfo[ord[j]].name) > strlen(cl.clientinfo[ord[i]].name) )
+	for(i = 0; i < nro; i++) {
+		for(j = i+1; j < nro; j++) {
+			if(strlen(cl.clientinfo[ord[j]].name) > strlen(cl.clientinfo[ord[i]].name) )
 			{
 				temp = ord[i];
 				ord[i] = ord[j];
@@ -1307,36 +1307,155 @@ void CL_HighlightNames( char *s )
 	}
 	
 	// highlight peoples names
-	for( i = 0; i < nro; i++ ) 
+	for(i = 0; i < nro; i++)
 	{
 		char *tmp = strstr( s, cl.clientinfo[ord[i]].name );
 
 		if( tmp )
 		{
-			for( t = tmp; t < tmp + strlen( cl.clientinfo[ord[i]].name ); t++ )
+			len = strlen(cl.clientinfo[ord[i]].name);
+			for( t = tmp; t < tmp + len; t++ )
 				*t |= 128;
 		}
 	}
 }
 
-int CL_Highlight ( const char *s, int *color )
+typedef struct highlight_s
 {
-	int highlight = 0;
+	struct highlight_s *next;
+	char *text;
+	int color;
+} highlight_t;
+
+static highlight_t *cl_highlights = NULL;
+
+
+static void CL_Highlight_f( void )
+{
+	highlight_t *entry;
+	char *s;
+	int color = -1;
+
+	if (Cmd_Argc() != 2 && Cmd_Argc() != 3)
+	{
+		Com_Printf("Usage: %s <text> [color]\n", Cmd_Argv(0));
+		Com_Printf("Current text highlights:\n");
+		Com_Printf("------------------------\n");
+		for(entry = cl_highlights; entry; entry = entry->next)
+			Com_Printf("%s\n", entry->text);
+
+		return;
+	}
+	
+	if(Cmd_Argc() > 2)
+		color = atoi(Cmd_Argv(2))&7;
+
+	s = Cmd_Argv(1);
+	if(strlen(s) < 3)
+	{
+		Com_Printf("Text is too short.\n");
+		return;
+	}
+
+	for(entry = cl_highlights; entry; entry = entry->next) {
+		if(!strcmp(entry->text, s))
+		{
+			if(entry->color != color) //Update the color
+				entry->color = color;
+			//else
+				//Com_Printf("Same highlight already exists\n");
+			return;
+		}
+	}
+
+	entry = Z_TagMalloc(sizeof(highlight_t) + strlen(s)+1, TAGMALLOC_CLIENT_IGNORE);
+	entry->text = (char *)((byte *)entry + sizeof(highlight_t));
+	strcpy(entry->text, s);
+	entry->color = color;
+	entry->next = cl_highlights;
+	cl_highlights = entry;
+}
+
+static void CL_UnHighlight_f( void )
+{
+	highlight_t *entry, *next, **back;
+	int count = 0;
+	char *s;
+
+	if(!cl_highlights)
+	{
+		Com_Printf("No text highlights\n");
+		return;
+	}
+
+	if (Cmd_Argc() != 2)
+	{
+		Com_Printf("Usage: %s <text/all>\n", Cmd_Argv(0));
+		Com_Printf("Current text highlights:\n");
+		Com_Printf("------------------------\n");
+		for(entry = cl_highlights; entry; entry = entry->next)
+			Com_Printf("%s\n", entry->text);
+
+		return;
+	}
+
+	s = Cmd_Argv(1);
+	if(!Q_stricmp(s, "all"))
+	{
+		for(entry = cl_highlights; entry; entry = next)
+		{
+			next = entry->next;
+			Z_Free(entry);
+			count++;
+		}
+		cl_highlights = NULL;
+		if(count)
+			Com_Printf("Removed %i highlights\n", count);
+		return;
+	}
+
+	back = &cl_highlights;
+	for(;;)
+	{
+		entry = *back;
+		if(!entry)
+		{
+			Com_Printf ("Highlight '%s' not found.\n", s);
+			return;
+		}
+		if(!Q_stricmp(s, entry->text))
+		{
+			*back = entry->next;
+			Com_Printf ("Removed highlight '%s'\n", entry->text);
+			Z_Free(entry);
+			return;
+		}
+		back = &entry->next;
+	}
+}
+
+
+int CL_Highlight (const char *s, int *color)
+{
+	highlight_t *entry;
+	const char *text;
 
 	if(!cl_highlight->integer)
 		return 0;
 
-	if (strlen(cl_highlightmsg->string) < 2)
-		return 0;
-
-	if (strstr(s, cl_highlightmsg->string))
-	{
-		highlight = cl_highlight->integer;
-
-		if(highlight & 2 && cl_textcolors->integer && cl_highlightcolor->integer)
-			*color = cl_highlightcolor->integer;
-
-		return highlight;
+	for (entry = cl_highlights; entry; entry = entry->next) 
+	{ 
+		text = Cmd_MacroExpandString(entry->text);
+		if(text && Com_WildCmp(text, s)) {
+			if(cl_highlight->integer & 2 && cl_textcolors->integer)
+			{
+				if(entry->color > -1)
+					*color = entry->color;
+				else
+					*color = cl_highlightcolor->integer;
+			}
+			return cl_highlight->integer;
+		}
 	}
 
 	return 0;
@@ -1355,64 +1474,242 @@ char *CL_Timestamp( qboolean chat )
 	return timebuf;
 }
 
-//Ignore and Unignore
-#define MAX_I_NLENGHT	16
-#define MAX_I_NICKS		32
-char ignorelist[MAX_I_NICKS][MAX_I_NLENGHT];
-
-void CL_Ignore_f(void) 
+typedef struct ignore_s
 {
-	int i, c, len;
+	struct ignore_s *next;
+	char *text;
+} ignore_t;
+
+
+void CL_PrintIgnores(ignore_t *list, qboolean num)
+{
+	int count = 0;
+	ignore_t *entry;
+
+	for(entry = list; entry; entry = entry->next)
+	{
+		if(num)
+			Com_Printf("%2i %s\n", ++count, entry->text);
+		else
+			Com_Printf("%s\n", entry->text);
+	}
+}
+
+void CL_AddIgnore(ignore_t **ignoreList, const char *text)
+{
+	ignore_t *entry;
+
+	entry = Z_TagMalloc(sizeof(ignore_t) + strlen(text)+1, TAGMALLOC_CLIENT_IGNORE);
+	entry->text = (char *)((byte *)entry + sizeof(ignore_t));
+	strcpy(entry->text, text);
+	entry->next = *ignoreList;
+	*ignoreList = entry;
+}
+
+void CL_RemoveIgnoreAll(ignore_t **ignoreList)
+{
+	ignore_t *entry, *next;
+	int count = 0;
+
+	for(entry = *ignoreList; entry; entry = next)
+	{
+		next = entry->next;
+		Z_Free(entry);
+		count++;
+	}
+	*ignoreList = NULL;
+
+	if(count)
+		Com_Printf("Removed %i ignores\n", count);
+}
+
+void CL_RemoveIgnoreNum(ignore_t **ignoreList, int num)
+{
+	ignore_t *entry, **back;
+	int count = 0;
+
+	back = ignoreList;
+	for(;;)
+	{
+		entry = *back;
+		if(!entry)
+		{
+			Com_Printf ("Ignore '%i' not found.\n", num);
+			return;
+		}
+		if(++count == num)
+		{
+			*back = entry->next;
+			Com_Printf ("Removed ignore '%s'\n", entry->text);
+			Z_Free(entry);
+			return;
+		}
+		back = &entry->next;
+	}
+}
+
+void CL_RemoveIgnoreText(ignore_t **ignoreList, const char *s)
+{
+	ignore_t *entry, **back;
+
+	back = ignoreList;
+	for(;;)
+	{
+		entry = *back;
+		if(!entry)
+		{
+			Com_Printf ("Ignore '%s' not found.\n", s);
+			return;
+		}
+		if(!strcmp(entry->text, s))
+		{
+			*back = entry->next;
+			Com_Printf ("Removed ignore '%s'\n", entry->text);
+			Z_Free(entry);
+			return;
+		}
+		back = &entry->next;
+	}
+}
+
+static ignore_t *cl_textIgnores = NULL;
+cvar_t *cl_ignoremode;
+
+static void CL_IgnoreText_f(void) 
+{
+	ignore_t *list;
+	char *text;
+
+	if (Cmd_Argc() < 2)
+	{
+		Com_Printf("Usage: %s <text>\n", Cmd_Argv(0));
+		if(!cl_textIgnores)
+			return;
+
+		Com_Printf("Current text ignores:\n");
+		Com_Printf("---------------------\n");
+		CL_PrintIgnores(cl_textIgnores, false);
+
+		if(!cl_ignoremode->integer)
+			Com_Printf("Ignores is now disabled, use cl_ignoremode to enable.\n");
+		else if(cl_ignoremode->integer == 2)
+			Com_Printf("You have set inverse mode, so text which not match any of these is ignored.\n");
+		return; 
+	}
+
+	text = Cmd_ArgsFrom(1);
+	if(strlen(text) < 3)
+	{
+		Com_Printf("Text is too short.\n");
+		return;
+	}
+
+	for (list = cl_textIgnores; list; list = list->next) 
+	{ 
+		if(!strcmp(list->text, text))
+		{
+			//Com_Printf("Exactly same ignore text exists.\n");
+			return;
+		}
+	}
+
+	CL_AddIgnore(&cl_textIgnores, text);
+}
+
+static void CL_UnIgnoreText_f( void )
+{
+	if(!cl_textIgnores)
+	{
+		Com_Printf("Text ignore list is empty\n");
+		return;
+	}
+
+	if (Cmd_Argc() != 2)
+	{
+		Com_Printf("Usage: %s <text/all>\n", Cmd_Argv(0));
+		Com_Printf("Current text ignores:\n");
+		Com_Printf("---------------------\n");
+		CL_PrintIgnores(cl_textIgnores, false);
+
+		if(!cl_ignoremode->integer)
+			Com_Printf("Ignores is now disabled, use cl_ignoremode cvar to enable.\n");
+		else if(cl_ignoremode->integer == 2)
+			Com_Printf("You have set inverse mode, so text which not match any of these is ignored.\n");
+		return;
+	}
+
+	if(!Q_stricmp(Cmd_Argv(1), "all"))
+	{
+		CL_RemoveIgnoreAll(&cl_textIgnores);
+		return;
+	}
+
+	CL_RemoveIgnoreText(&cl_textIgnores, Cmd_Argv(1));
+}
+
+qboolean CL_IgnoreText(const char *s)
+{
+	ignore_t *list;
+	const char *text;
+	qboolean ignore = false;
+
+	if(!cl_ignoremode->integer)
+		return false;
+
+	if(cl_ignoremode->integer == 2)
+		ignore = true;
+
+	for (list = cl_textIgnores; list; list = list->next) 
+	{ 
+		text = Cmd_MacroExpandString(list->text);
+		if(text && Com_WildCmp(text, s))
+			return !ignore;
+	}
+
+	return ignore;
+}
+
+
+//Ignorenick and Unignorenick
+static ignore_t *cl_nickIgnores = NULL;
+
+static void CL_IgnoreNick_f(void) 
+{
+	int num, i;
 	char *nick;
 
 	if (Cmd_Argc() != 2)
 	{
 		Com_Printf("Usage: \"%s <id>\" to ignore player name.\n", Cmd_Argv(0));
 		Com_Printf("Current list of players in server:\n");
-		Com_Printf("ID  Name             Ignored\n");
+		Com_Printf("id  Name             Ignored\n");
 		Com_Printf("--  ---------------  -------\n");
-		for (i=0;i<MAX_CLIENTS;i++) 
+		for (i=0;i<cl.maxclients;i++) 
 		{ 
 			if (cl.clientinfo[i].name[0] && strcmp(cl.clientinfo[i].name, name->string)) 
 			{ 
-				Com_Printf("%2i  %s", i, cl.clientinfo[i].name);
+				Com_Printf("%2i  %-15s", i, cl.clientinfo[i].name);
 
-				for(c=0; c<MAX_I_NICKS; c++)
-				{
-					if(!strcmp(cl.clientinfo[i].name, ignorelist[c]))
-					{
-						len = 15 - strlen(cl.clientinfo[i].name);
-						for(c=0; c<len; c++)
-							Com_Printf(" ");
+				if(CL_IgnoreNick(cl.clientinfo[i].name))
+					Com_Printf("    yes");
 
-						Com_Printf("    yes");
-						break;
-					}
-				}
 				Com_Printf("\n");
 			} 
 		}
 		return; 
 	}
 
-	c = atoi(Cmd_Argv(1));
-	if(c < 0 || c >= MAX_CLIENTS)
+	num = atoi(Cmd_Argv(1));
+	if(num < 0 || num >= cl.maxclients)
 	{
 		Com_Printf("Bad player id\n");
 		return;
 	}
 
-	nick = cl.clientinfo[c].name;
+	nick = cl.clientinfo[num].name;
 	if (!*nick) 
 	{ 
-		// player not found
-		Com_Printf("Cant find player with id number [%i]\n", c);
-		return;
-	}
-
-	if(strlen(nick) >= MAX_I_NLENGHT)
-	{
-		Com_Printf("Ignore: Name is too long\n");
+		Com_Printf("Cant find player with id '%i'\n", num);
 		return;
 	}
 
@@ -1422,173 +1719,109 @@ void CL_Ignore_f(void)
 		return;
 	}
 
-	// see if player is already in ignore list
-	for(i=0; i<MAX_I_NICKS; i++)
+	if(CL_IgnoreNick(nick))
 	{
-		if(!strcmp(nick, ignorelist[i]))
-		{
-			Com_Printf("Player [%s] is already in ignorelist. Type \"unignorenick %i\" to remove it.\n", nick, i);
-			return;
-		}
+		Com_Printf("Player [%s] is already ignored.\n", nick);
+		return;
 	}
 
-	for(i=0; i<MAX_I_NICKS; i++) // find a free slot
-	{
-		if(!ignorelist[i][0])
-		{
-			strcpy(ignorelist[i], nick);
-			Com_Printf("Player [%s] is now ignored!\n", nick);
-			return;
-		}
-	}
-
-	Com_Printf("All ignore slots is full.\n");
+	CL_AddIgnore(&cl_nickIgnores, nick);
+	Com_Printf("Player [%s] is now ignored!\n", nick);
 }
 
-void CL_Unignore_f(void)
+static void CL_UnignoreNick_f(void)
 {
-	int i = 0, c = 0;
+	if(!cl_nickIgnores)
+	{
+		Com_Printf("Ignorelist is empty.\n");
+		return;
+	}
 
 	if (Cmd_Argc() != 2)
 	{
-		Com_Printf("Usage: \"%s <id>\" to unignore player name that match with id.\n",Cmd_Argv(0));
+		Com_Printf("Usage: %s <id/all>\n", Cmd_Argv(0));
 		Com_Printf("Current ignores:\n");
-
-		for(i=0;i<MAX_I_NICKS;i++)
-		{
-			if(ignorelist[i][0])
-			{
-				c = 1;
-				break;
-			}
-		}
-
-		if(c)
-		{
-			Com_Printf("ID  Name\n");
-			Com_Printf("--  ---------------\n");
-			for(i=0; i < MAX_I_NICKS; i++)
-				if(ignorelist[i][0])
-					Com_Printf("%2i  %s\n", i, ignorelist[i]);
-		}
-		else
-			Com_Printf("Ignorelist is empty.\n");
-
+		Com_Printf("id  Name\n");
+		Com_Printf("--  ---------------\n");
+		CL_PrintIgnores(cl_nickIgnores, true);
 		return; 
 	}
 
 	if(!Q_stricmp(Cmd_Argv(1), "all"))
 	{
-		for(i=0; i < MAX_I_NICKS; i++)
-		{
-			if(ignorelist[i][0])
-			{
-				ignorelist[i][0] = 0;
-				c++;
-			}
-		}
-		if(c)
-			Com_Printf("Removed %i nicks from ignorelist.\n", c);
-		else
-			Com_Printf("Ignorelist is already empty.\n");
-
-		return;
-
-	}
-
-	c = atoi(Cmd_Argv(1));
-	if(c < 0 || c >= MAX_CLIENTS)
-	{
-		Com_Printf("Bad player id\n");
+		CL_RemoveIgnoreAll(&cl_nickIgnores);
 		return;
 	}
 
-	if(ignorelist[c][0])
-	{
-		Com_Printf("Player [%s] removed from ignorelist\n", ignorelist[c]);
-		ignorelist[c][0] = 0;
-	}
-	else
-		Com_Printf("Cant find player with id number [%i] in ignore list\n", c);
-
+	CL_RemoveIgnoreNum(&cl_nickIgnores, atoi(Cmd_Argv(1)));
 }
 
-qboolean CL_Ignore(const char *s)
+qboolean CL_IgnoreNick(const char *s)
 {
-	int i;
+	ignore_t *list;
 
-	for(i=0; i<MAX_I_NICKS; i++)
-	{
-		if(ignorelist[i][0])
-		{
-			if(!strcmp(s, ignorelist[i]))
-				return true;
-		}
+	for (list = cl_nickIgnores; list; list = list->next) 
+	{ 
+		if(!strcmp(s, list->text))
+			return true;
 	}
 	return false;
 }
+
+static cvar_t	*cl_customlimitmsg;
 
 void CL_ParseAutoScreenshot (const char *s)
 {
 	if(!cl_autoscreenshot->integer)
 		return;
 
-	if (strstr(s, "timelimit hit")) {
+	if (strstr(s, "timelimit hit") ||
+		strstr(s, "capturelimit hit") ||
+		strstr(s, "fraglimit hit") ||
+		strstr(s, cl_customlimitmsg->string) ) {
 		SCR_ClearChatHUD_f();
 		cls.doscreenshot = 1;
 	}
-	else if (strstr(s, "capturelimit hit")) {
-		SCR_ClearChatHUD_f();
-		cls.doscreenshot = 1;
-	}
-	else if (strstr(s, "fraglimit hit")) {
-		SCR_ClearChatHUD_f();
-		cls.doscreenshot = 1;
-	}
-	else if (strstr(s, cl_customlimitmsg->string) ) {
-		SCR_ClearChatHUD_f();
-		cls.doscreenshot = 1;
-	}
-
 }
 
-static void OnChange_HLColor (cvar_t *self, const char *oldValue)
+static void OnChange_Color (cvar_t *self, const char *oldValue)
 {
-	if(cl_highlightcolor->integer < 0)
-		Cvar_SetValue ("cl_highlightcolor", 0);
-	else if(cl_highlightcolor->integer > 7)
-		Cvar_SetValue ("cl_highlightcolor", 7);
-}
-
-static void OnChange_MyColor (cvar_t *self, const char *oldValue)
-{
-	if(cl_mychatcolor->integer < 0)
-		Cvar_SetValue ("cl_mychatcolor", 0);
-	else if(cl_mychatcolor->integer > 7)
-		Cvar_SetValue ("cl_mychatcolor", 7);
+	if(self->integer < 0)
+		Cvar_Set(self->name, "0");
+	else if(self->integer > 7)
+		Cvar_Set(self->name, "7");
 }
 
 void CL_InitParse( void )
 {
-	cl_timestamps = Cvar_Get("cl_timestamps","0", CVAR_ARCHIVE);
+	cl_timestamps		= Cvar_Get("cl_timestamps","0", CVAR_ARCHIVE);
 	cl_timestampsformat = Cvar_Get("cl_timestampsformat", "[%H:%M:%S]", 0);
 
-	cl_highlight = Cvar_Get ("cl_highlight",  "0", CVAR_ARCHIVE);
-	cl_highlightmsg = Cvar_Get ("cl_highlightmsg",  "", CVAR_ARCHIVE);
+	cl_highlight	  = Cvar_Get ("cl_highlight",  "0", CVAR_ARCHIVE);
+	cl_highlightmode  = Cvar_Get ("cl_highlightmode", "0", CVAR_ARCHIVE);
 	cl_highlightcolor = Cvar_Get ("cl_highlightcolor", "0", CVAR_ARCHIVE);
 	cl_highlightnames = Cvar_Get ("cl_highlightnames",  "0", CVAR_ARCHIVE);
 
-	cl_textcolors = Cvar_Get ("cl_textcolors", "0", CVAR_ARCHIVE);
+	cl_textcolors  = Cvar_Get ("cl_textcolors", "0", CVAR_ARCHIVE);
 	cl_mychatcolor = Cvar_Get ("cl_mychatcolor", "0", CVAR_ARCHIVE);
 
-	cl_highlightcolor->OnChange = OnChange_HLColor;
-	cl_mychatcolor->OnChange = OnChange_MyColor;
-	OnChange_HLColor(cl_highlightcolor, cl_highlightcolor->resetString);
-	OnChange_MyColor(cl_mychatcolor, cl_mychatcolor->resetString);
+	cl_highlightcolor->OnChange = OnChange_Color;
+	cl_mychatcolor->OnChange = OnChange_Color;
+	OnChange_Color(cl_highlightcolor, cl_highlightcolor->resetString);
+	OnChange_Color(cl_mychatcolor, cl_mychatcolor->resetString);
 
+	//hacky shit from q2ace
 	cl_autoscreenshot = Cvar_Get ("cl_autoscreenshot", "0", 0);
+	cl_customlimitmsg = Cvar_Get ("cl_customlimitmsg", "timelimit hit", 0);
 	ignorewaves = Cvar_Get ("ignorewaves", "0", 0);
 
-	Cmd_AddCommand ("ignorenick", CL_Ignore_f);
-	Cmd_AddCommand ("unignorenick", CL_Unignore_f);
+	Cmd_AddCommand ("highlight", CL_Highlight_f);
+	Cmd_AddCommand ("unhighlight", CL_UnHighlight_f);
+
+	cl_ignoremode = Cvar_Get("cl_ignoremode", "1", 0);
+	Cmd_AddCommand ("ignoretext", CL_IgnoreText_f);
+	Cmd_AddCommand ("unignoretext", CL_UnIgnoreText_f);
+
+	Cmd_AddCommand ("ignorenick", CL_IgnoreNick_f);
+	Cmd_AddCommand ("unignorenick", CL_UnignoreNick_f);
 }

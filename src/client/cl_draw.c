@@ -28,6 +28,7 @@ void SCR_DrawNet( void );
 void SCR_CheckDrawCenterString( void );
 
 static cvar_t *scr_draw2d;
+static cvar_t *scr_draw2d;
 
 #define DSF_LEFT		1
 #define DSF_RIGHT		2
@@ -39,33 +40,26 @@ static cvar_t *scr_draw2d;
 #define DSF_UNDERLINE	128
 #define DSF_SELECTED	256
 
-static cvar_t *scr_draw2d;
-
 /*
 ==============
 SCR_DrawString
 ==============
 */
-void SCR_DrawString( int xpos, int ypos, char *string, int flags ) {
-	int x;
-	int y;
+void SCR_DrawString( int x, int y, const char *string, int flags )
+{
 	int len;
 
 	len = strlen( string );
 
 	if( flags & DSF_CENTERX )
-		x = xpos - (len << 2);
+		x -= (len << 2);
 	else if( flags & DSF_RIGHT )
-		x = xpos - (len << 3);
-	else
-		x = xpos;
+		x -= (len << 3);
 
 	if( flags & DSF_CENTERY )
-		y = ypos - (1 << 2);
+		y -= (1 << 2);
 	else if( flags & DSF_TOP )
-		y = ypos - (1 << 3);
-	else
-		y = ypos;
+		y -= (1 << 3);
 
 	if( flags & DSF_SELECTED )
 		Draw_Fill( x - 1, y, (len << 3) + 2, 10, 16 );
@@ -77,6 +71,14 @@ void SCR_DrawString( int xpos, int ypos, char *string, int flags ) {
 
 	if( flags & DSF_UNDERLINE )
 		Draw_Fill( x, y + 9, len << 3, 1, 0xDF );
+}
+
+static void DrawBorder (int x, int y, int w, int h, int c, int s)
+{
+	Draw_Fill( x,		y,		w, s, c );
+	Draw_Fill( x,		y+h-s,	w, s, c );
+	Draw_Fill( x,		y,		s, h, c );
+	Draw_Fill( x+w-s,	y,		s, h, c );
 }
 
 /*
@@ -183,9 +185,6 @@ static void SCR_DrawLagometer( void )
 	int color;
 	int startTime, endTime;
 
-	if( scr_drawlagometer->integer < 1 )
-		return;
-
 	x = viddef.width - LAG_WIDTH - 1;
 	y = viddef.height - 96 - LAG_HEIGHT - 1;
 
@@ -230,12 +229,8 @@ static void SCR_DrawLagometer( void )
 		}
 	}
 
-	//border...
-	Draw_Fill (x-1,				y,				LAG_WIDTH+2,		1,					0);
-	Draw_Fill (x-1,				y+LAG_HEIGHT,	LAG_WIDTH+2,		1,					0);
+	DrawBorder(x-1, y, LAG_WIDTH+2, LAG_HEIGHT+1, 0, 1);
 
-	Draw_Fill (x-1	,			y,				1,					LAG_HEIGHT,			0);
-	Draw_Fill (x+LAG_WIDTH,		y,				1,					LAG_HEIGHT,			0);
 //
 // draw ping
 //
@@ -310,10 +305,11 @@ CHAT HUD
 typedef struct chatMessage_s {
 	char	text[MAX_CHAT_LENGTH];
 	int		time;
+	int		color;
 } chatMessage_t;
 
 static chatMessage_t	chatMsgs[MAX_CHAT_LINES];
-static int		chatMsgsNum = 0;
+static int	chatMsgsNum = 0;
 
 cvar_t *cl_chathud;
 cvar_t *cl_chathudlines;
@@ -323,10 +319,10 @@ cvar_t *cl_chathudy;
 
 static void OnChange_Chathudlines (cvar_t *self, const char *oldValue)
 {
-	if (cl_chathudlines->integer > MAX_CHAT_LINES)
-		Cvar_SetValue ("cl_chathudlines", MAX_CHAT_LINES);
-	else if (cl_chathudlines->integer < 1)
-		Cvar_SetValue ("cl_chathudlines", 1);
+	if (self->integer > MAX_CHAT_LINES)
+		Cvar_SetValue (self->name, MAX_CHAT_LINES);
+	else if (self->integer < 1)
+		Cvar_SetValue (self->name, 1);
 }
 
 /*
@@ -345,7 +341,7 @@ void SCR_ClearChatHUD_f( void )
 SCR_AddToChatHUD
 ==============
 */
-void SCR_AddToChatHUD( const char *string, qboolean mm2 )
+void SCR_AddToChatHUD( const char *string, int color, qboolean mm2 )
 {
 	char *p;
 	chatMessage_t *msg;
@@ -354,8 +350,9 @@ void SCR_AddToChatHUD( const char *string, qboolean mm2 )
 		return;
 	
 	msg = &chatMsgs[chatMsgsNum++ & CHAT_MASK];
-	Q_strncpyz(msg->text, string, MAX_CHAT_LENGTH);
 	msg->time = cls.realtime;
+	msg->color = color;
+	Q_strncpyz(msg->text, string, MAX_CHAT_LENGTH);
 	p = strchr(msg->text, '\n' );
 	if( p )
 		*p = 0;
@@ -373,9 +370,6 @@ static void SCR_DrawChatHUD( void )
 	qboolean altColor;
 	chatMessage_t *msg;
 
-	if(!cl_chathud->integer)
-		return;
-
 	altColor = cl_chathud->integer & 2;
 
 	if(cl_chathudx->integer || cl_chathudy->integer)
@@ -389,14 +383,14 @@ static void SCR_DrawChatHUD( void )
 		msg = &chatMsgs[i & CHAT_MASK];
 		if( time ) {
 			if(cls.realtime - msg->time > time ) {
-				*msg->text = 0;
+				msg->text[0] = 0;
 				msg->time = 0;
 				break;
 			}
-			alpha = (msg->time+time-cls.realtime)*(cl_chathudtime->value < 4 ? 0.001f : 0.0005f);
+			alpha = (msg->time+time-cls.realtime) * (cl_chathudtime->value < 4 ? 0.001f : 0.0005f);
 		}
 		y -= 8;
-		Draw_String(x, y, msg->text, 7, alpha, altColor);
+		Draw_String(x, y, msg->text, msg->color, alpha, msg->color != 7 ? 0 : altColor);
     }
 }
 
@@ -422,9 +416,6 @@ static void SCR_DrawClock( void )
 {
 	char timebuf[32];
 	time_t clock;
-
-	if(!cl_clock->integer)
-		return;
 
 	time( &clock );
 	strftime( timebuf, sizeof(timebuf), cl_clockformat->string, localtime(&clock));
@@ -459,20 +450,17 @@ static void SCR_DrawFPS( void )
 	static int prevTime = 0, index = 0;
 	static char fps[32];
 
-	if(!cl_fps->integer)
-		return;
-
 	index++;
+
+	if (index < FPS_FRAMES)
+		return;
 
 	if ((index % FPS_FRAMES) == 0)
 	{
-		Com_sprintf(fps, 32, "%dfps",
+		Com_sprintf(fps, 32, "%ifps",
 			(int) (1000 / ((float) (Sys_Milliseconds() - prevTime) / FPS_FRAMES)));
 		prevTime = Sys_Milliseconds();
 	}
-
-	if (index <= FPS_FRAMES)
-		return;
 
 	if(cl_fpsx->integer || cl_fpsy->integer)
 		DrawColorString (cl_fpsx->integer, cl_fpsy->integer, fps, cl_fps->integer, 1);
@@ -504,16 +492,12 @@ static void SCR_ShowTIME(void)
 	int		time, hour, mins, secs;
 	int		color;
 
-	if(!cl_maptime->integer)
-		return;
-
-	color = cl_maptime->integer;
-
 	if(cl_maptime->integer > 10) {
 		time = (cl.time - cls.roundtime) / 1000;
-		color -= 10;
+		color = cl_maptime->integer - 10;
 	} else {
 		time = cl.time / 1000;
+		color = cl_maptime->integer;
 	}
 
 	hour = time/3600;
@@ -549,6 +533,9 @@ cvar_t	*ch_scale;
 cvar_t	*ch_red;
 cvar_t	*ch_green;
 cvar_t	*ch_blue;
+cvar_t	*ch_health;
+cvar_t	*ch_x;
+cvar_t	*ch_y;
 
 static void OnChange_Crosshair(cvar_t *self, const char *oldValue)
 {
@@ -562,23 +549,54 @@ SCR_DrawCrosshair
 */
 static void SCR_DrawCrosshair (void)
 {
-	float	alpha ;
-
-	if (!crosshair->integer)
-		return;
+	float	alpha;
 
 	if (!crosshair_pic[0])
 		return;
 
 	if (ch_pulse->value)
-		alpha = (0.75*ch_alpha->value) + (0.25*ch_alpha->value)*sin(anglemod((cl.time*0.005)*ch_pulse->value));
+		alpha = (0.75f*ch_alpha->value) + (0.25f*ch_alpha->value)*(float)sin(anglemod((cl.time*0.005)*ch_pulse->value));
 	else
 		alpha = ch_alpha->value;
 
-	Draw_ScaledPic (scr_vrect.x + ((scr_vrect.width - crosshair_width)>>1)
-	, scr_vrect.y + ((scr_vrect.height - crosshair_height)>>1), ch_scale->value, crosshair_pic, ch_red->value, ch_green->value, ch_blue->value, alpha);
+	if(ch_health->integer)
+	{
+		float red, green, blue;
+		int health = (int)cl.frame.playerstate.stats[STAT_HEALTH];
+	
+		if(health <= 0)
+		{
+			red = 0;
+			green = 0;
+			blue = 0;
+		}
+		else
+		{
+			red = 1.0f;
+			if ( health >= 100 )
+				blue = 1.0;
+			else if ( health < 66 )
+				blue = 0;
+			else
+				blue = ( health - 66 ) / 33.0f;
 
+			if ( health > 60 )
+				green = 1.0f;
+			else if ( health < 30 )
+				green = 0;
+			else
+				green = ( health - 30 ) / 30.0f;
+		}
+		Draw_ScaledPic (scr_vrect.x + ch_x->integer + ((scr_vrect.width - crosshair_width)>>1)
+			, scr_vrect.y + ch_y->integer + ((scr_vrect.height - crosshair_height)>>1), ch_scale->value, crosshair_pic, red, green, blue, alpha);
+	}
+	else
+	{
+		Draw_ScaledPic (scr_vrect.x + ch_x->integer + ((scr_vrect.width - crosshair_width)>>1)
+		, scr_vrect.y + ch_y->integer + ((scr_vrect.height - crosshair_height)>>1), ch_scale->value, crosshair_pic, ch_red->value, ch_green->value, ch_blue->value, alpha);
+	}
 }
+
 
 /*
 ================
@@ -590,7 +608,8 @@ void SCR_Draw2D( void )
 	if(!scr_draw2d->integer)
 		return;
 
-	SCR_DrawCrosshair ();
+	if (crosshair->integer)
+		SCR_DrawCrosshair ();
 
 	// draw status bar
 	SCR_ExecuteLayoutString( cl.configstrings[CS_STATUSBAR] );
@@ -602,14 +621,25 @@ void SCR_Draw2D( void )
 	if (cl.frame.playerstate.stats[STAT_LAYOUTS] & 2)
 		CL_DrawInventory ();
 
-	SCR_DrawLagometer();
 	SCR_DrawNet ();
 	SCR_CheckDrawCenterString ();
-	SCR_DrawFPS ();
-	SCR_ShowTIME ();
-	SCR_DrawChatHUD ();
-	SCR_DrawClock ();
+
+	if(scr_drawlagometer->integer)
+		SCR_DrawLagometer();
+
+	if(cl_fps->integer)
+		SCR_DrawFPS ();
+
+	if(cl_maptime->integer)
+		SCR_ShowTIME ();
+
+	if(cl_chathud->integer)
+		SCR_DrawChatHUD ();
+
+	if(cl_clock->integer)
+		SCR_DrawClock ();
 }
+
 
 /*
 ================
@@ -618,39 +648,43 @@ SCR_InitDraw
 */
 void SCR_InitDraw( void )
 {
-	scr_draw2d = Cvar_Get( "scr_draw2d", "1", 0 );
+	scr_draw2d = Cvar_Get("scr_draw2d", "1", 0);
 
 	crosshair = Cvar_Get ("crosshair", "0", CVAR_ARCHIVE);
 	crosshair->OnChange = OnChange_Crosshair;
-	OnChange_Crosshair(crosshair, crosshair->resetString);
 
-	ch_alpha = Cvar_Get ("ch_alpha", "1", CVAR_ARCHIVE);
-	ch_pulse = Cvar_Get ("ch_pulse", "0", CVAR_ARCHIVE);
-	ch_scale = Cvar_Get ("ch_scale", "1", CVAR_ARCHIVE);
-	ch_red   = Cvar_Get ("ch_red",   "1", CVAR_ARCHIVE);
-	ch_green = Cvar_Get ("ch_green", "1", CVAR_ARCHIVE);
-	ch_blue  = Cvar_Get ("ch_blue",  "1", CVAR_ARCHIVE);
+	ch_alpha  = Cvar_Get("ch_alpha", "1", CVAR_ARCHIVE);
+	ch_pulse  = Cvar_Get("ch_pulse", "0", CVAR_ARCHIVE);
+	ch_scale  = Cvar_Get("ch_scale", "1", CVAR_ARCHIVE);
+	ch_red    = Cvar_Get("ch_red",   "1", CVAR_ARCHIVE);
+	ch_green  = Cvar_Get("ch_green", "1", CVAR_ARCHIVE);
+	ch_blue   = Cvar_Get("ch_blue",  "1", CVAR_ARCHIVE);
+	ch_health = Cvar_Get("ch_health", "0", 0);
+	ch_x	  = Cvar_Get("ch_x", "0", 0);
+	ch_y	  = Cvar_Get("ch_y", "0", 0);
 
-	cl_clock = Cvar_Get ("cl_clock", "0", CVAR_ARCHIVE);
-	cl_clockx = Cvar_Get ("cl_clockx", "0", 0);
-	cl_clocky = Cvar_Get ("cl_clocky", "0", 0);
-	cl_clockformat = Cvar_Get ("cl_clockformat", "%H:%M:%S", 0);
+	cl_clock =  Cvar_Get("cl_clock",  "0", CVAR_ARCHIVE);
+	cl_clockx = Cvar_Get("cl_clockx", "0", 0);
+	cl_clocky = Cvar_Get("cl_clocky", "0", 0);
+	cl_clockformat = Cvar_Get("cl_clockformat", "%H:%M:%S", 0);
 
-	cl_maptime = Cvar_Get ("cl_maptime", "0", CVAR_ARCHIVE);
-	cl_maptimex = Cvar_Get ("cl_maptimex", "0", 0);
-	cl_maptimey = Cvar_Get ("cl_maptimey", "0", 0);
+	cl_maptime =  Cvar_Get("cl_maptime",  "0", CVAR_ARCHIVE);
+	cl_maptimex = Cvar_Get("cl_maptimex", "0", 0);
+	cl_maptimey = Cvar_Get("cl_maptimey", "0", 0);
 
-	cl_fps = Cvar_Get ("cl_fps", "0", CVAR_ARCHIVE);
-	cl_fpsx = Cvar_Get ("cl_fpsx", "0", 0);
-	cl_fpsy = Cvar_Get ("cl_fpsy", "0", 0);
+	cl_fps =  Cvar_Get("cl_fps",  "0", CVAR_ARCHIVE);
+	cl_fpsx = Cvar_Get("cl_fpsx", "0", 0);
+	cl_fpsy = Cvar_Get("cl_fpsy", "0", 0);
 
-	cl_chathud = Cvar_Get ("cl_chathud", "0", CVAR_ARCHIVE);
-	cl_chathudx = Cvar_Get ("cl_chathudx", "0", 0);
-	cl_chathudy = Cvar_Get ("cl_chathudy", "0", 0);
+	cl_chathud =  Cvar_Get("cl_chathud",  "0", CVAR_ARCHIVE);
+	cl_chathudx = Cvar_Get("cl_chathudx", "0", 0);
+	cl_chathudy = Cvar_Get("cl_chathudy", "0", 0);
 	cl_chathudlines = Cvar_Get("cl_chathudlines", "4", CVAR_ARCHIVE);
-	cl_chathudtime = Cvar_Get("cl_chathudtime", "0", 0);
+	cl_chathudtime =  Cvar_Get("cl_chathudtime", "0", 0);
 	cl_chathudlines->OnChange = OnChange_Chathudlines;
-	OnChange_Chathudlines (cl_chathud, cl_chathudlines->resetString);
+	OnChange_Chathudlines(cl_chathudlines, cl_chathudlines->resetString);
 
-	scr_drawlagometer = Cvar_Get( "scr_drawlagometer", "0", 0 );
+	scr_drawlagometer = Cvar_Get("scr_drawlagometer", "0", 0);
+
 }
+

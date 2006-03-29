@@ -266,7 +266,7 @@ Sys_ConsoleInput
 */
 char *Sys_ConsoleInput (void)
 {
-	INPUT_RECORD	recs[1024];
+	INPUT_RECORD	recs[8];
 	int		dummy;
 	int		ch, numread, numevents;
 
@@ -495,6 +495,18 @@ void *Sys_GetGameAPI (void *parms)
 	const char *debugdir = "debugaxp";
 #endif
 
+#elif defined _WIN64
+
+	const char *gamename = "gamex86_64.dll";
+
+#ifdef NDEBUG
+	const char *debugdir = "release";
+#else
+	const char *debugdir = "debug";
+#endif
+
+#else
+#error Don't know what kind of dynamic objects to use for this architecture.
 #endif
 
 	if (game_library)
@@ -587,6 +599,21 @@ void ParseCommandLine (LPSTR lpCmdLine)
 
 }
 
+void FixWorkingDirectory (void)
+{
+	char *p, curDir[MAX_PATH];
+
+	GetModuleFileName (NULL, curDir, sizeof(curDir)-1);
+
+	p = strrchr(curDir, '\\');
+	if(!p)
+		return;
+
+	p[0] = 0;
+
+	SetCurrentDirectory(curDir);
+}
+
 /*
 ==================
 WinMain
@@ -599,7 +626,7 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 {
     MSG				msg;
 	int				time, oldtime, newtime;
-	char			*cddir;
+//	char			*cddir;
 
     /* previous instances do not exist in Win32 */
     if (hPrevInstance)
@@ -609,7 +636,10 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 
 	ParseCommandLine (lpCmdLine);
 
+	FixWorkingDirectory ();
+
 	// if we find the CD, add a +set cddir xxx command line
+#if 0
 	cddir = Sys_ScanForCD ();
 	if (cddir && argc < MAX_NUM_ARGVS - 3)
 	{
@@ -626,7 +656,7 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 			argv[argc++] = cddir;
 		}
 	}
-
+#endif
 	Qcommon_Init (argc, argv);
 	oldtime = Sys_Milliseconds ();
 

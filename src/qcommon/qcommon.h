@@ -29,11 +29,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 
 #ifndef APPLICATION
-# define APPLICATION	"Quake2"
+# define APPLICATION "AprQ2"
 #endif
 
 #define APR_APPNAME "AprQ2"
-#define APR_VERSION "1.18"
+#define APR_VERSION "1.19"
 
 //============================================================================
 
@@ -119,10 +119,10 @@ void Info_Print (const char *s);
 
 /* crc.h */
 
-void CRC_Init(unsigned short *crcvalue);
-void CRC_ProcessByte(unsigned short *crcvalue, byte data);
-unsigned short CRC_Value(unsigned short crcvalue);
-unsigned short CRC_Block (byte *start, int count);
+void CRC_Init(uint16 *crcvalue);
+void CRC_ProcessByte(uint16 *crcvalue, byte data);
+uint16 CRC_Value(uint16 crcvalue);
+uint16 CRC_Block (byte *start, int count);
 
 
 
@@ -362,7 +362,7 @@ void Cbuf_InsertText (const char *text);
 // inserted at the beginning of the buffer, before any remaining unexecuted
 // commands.
 
-void Cbuf_ExecuteText (int exec_when, char *text);
+void Cbuf_ExecuteText (int exec_when, const char *text);
 // this can be used in place of either Cbuf_AddText or Cbuf_InsertText
 
 void Cbuf_AddEarlyCommands (qboolean clear);
@@ -421,11 +421,13 @@ char	*Cmd_Args (void);
 // functions. Cmd_Argv () will return an empty string, not a NULL
 // if arg > argc, so string operations are always safe.
 
-void	Cmd_TokenizeString (char *text, qboolean macroExpand);
+const char *Cmd_MacroExpandString (const char *text);
+
+void	Cmd_TokenizeString (const char *text, qboolean macroExpand);
 // Takes a null terminated string.  Does not need to be /n terminated.
 // breaks the string up into arg tokens.
 
-void	Cmd_ExecuteString (char *text);
+void	Cmd_ExecuteString (const char *text);
 // Parses a single line of text into arguments and tries to execute it
 // as if it was typed at the console
 
@@ -481,6 +483,7 @@ void	Cvar_SetValue (const char *var_name, float value);
 // expands value to a string and calls Cvar_Set
 
 float	Cvar_VariableValue (const char *var_name);
+int		Cvar_VariableIntValue (const char *var_name);
 // returns 0 if not defined or non numeric
 
 char	*Cvar_VariableString (const char *var_name);
@@ -495,7 +498,7 @@ void	Cvar_SetCheatState( void );
 void	Cvar_GetLatchedVars (int flags);
 // any CVAR_LATCHED variables that have been set will now take effect
 
-qboolean Cvar_Command (void);
+qboolean Cvar_Command (char *name, unsigned int hash);
 // called by Cmd_ExecuteString when Cmd_Argv(0) doesn't match a known
 // command.  Returns true if the command was a variable reference that
 // was handled. (print or change)
@@ -544,7 +547,7 @@ typedef struct
 	byte	ip[4];
 	//byte	ipx[10];
 
-	unsigned short	port;
+	uint16	port;
 } netadr_t;
 
 void		NET_Init (void);
@@ -580,7 +583,7 @@ typedef struct
 	int			last_sent;			// for retransmits
 
 	netadr_t	remote_address;
-	int			qport;				// qport value to write when transmitting
+	uint16		qport;				// qport value to write when transmitting
 	int			protocol;
 
 // sequencing variables
@@ -631,7 +634,7 @@ CMODEL
 
 #include "../qcommon/qfiles.h"
 
-cmodel_t	*CM_LoadMap (const char *name, qboolean clientload, unsigned *checksum);
+cmodel_t	*CM_LoadMap (const char *name, qboolean clientload, uint32 *checksum);
 cmodel_t	*CM_InlineModel (const char *name);	// *1, *2, etc
 
 int			CM_NumClusters (void);
@@ -705,8 +708,10 @@ FILESYSTEM
 void	FS_InitFilesystem (void);
 void	FS_SetGamedir (const char *dir);
 char	*FS_Gamedir (void);
-char	*FS_NextPath (char *prevpath);
+char	*FS_NextPath (const char *prevpath);
 void	FS_ExecAutoexec (void);
+void	FS_ReloadPAKs(void);
+qboolean FS_ExistsInGameDir (const char *filename);
 
 int		FS_FOpenFile (const char *filename, FILE **file);
 void	FS_FCloseFile (FILE *f);
@@ -755,7 +760,7 @@ void 		Com_Quit (void);
 int			Com_ServerState (void);		// this should have just been a cvar...
 void		Com_SetServerState (int state);
 
-unsigned	Com_BlockChecksum (void *buffer, int length);
+uint32		Com_BlockChecksum (void *buffer, int length);
 byte		COM_BlockSequenceCRCByte (byte *base, int length, int sequence);
 
 int SortStrcmp( const void *p1, const void *p2 );
@@ -773,8 +778,8 @@ extern	int		time_after_ref;
 
 typedef struct tagmalloc_tag_s
 {
-	short		value;
-	char		*name;
+	int16		value;
+	const char	*name;
 	unsigned int allocs;
 } tagmalloc_tag_t;
 
@@ -801,6 +806,8 @@ enum tagmalloc_tags_e
 	TAGMALLOC_CLIENT_LOADPCX,
 	TAGMALLOC_CLIENT_CINEMA,
 	TAGMALLOC_CLIENT_LOC,
+	TAGMALLOC_CLIENT_IGNORE,
+	TAGMALLOC_CLIENT_DOWNLOAD,
 	TAGMALLOC_X86,
 	TAGMALLOC_CLIPBOARD,
 

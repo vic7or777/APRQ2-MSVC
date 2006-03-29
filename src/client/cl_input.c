@@ -274,23 +274,26 @@ void CL_BaseMove (usercmd_t *cmd)
 	
 	memset (cmd, 0, sizeof(*cmd));
 	
-	VectorCopy (cl.viewangles, cmd->angles);
+	cmd->angles[0] = (int16)cl.viewangles[0];
+	cmd->angles[1] = (int16)cl.viewangles[1];
+	cmd->angles[2] = (int16)cl.viewangles[2];
+
 	if (in_strafe.state & 1)
 	{
-		cmd->sidemove += (int)(cl_sidespeed->value * CL_KeyState (&in_right));
-		cmd->sidemove -= (int)(cl_sidespeed->value * CL_KeyState (&in_left));
+		cmd->sidemove += (int16)(cl_sidespeed->value * CL_KeyState (&in_right));
+		cmd->sidemove -= (int16)(cl_sidespeed->value * CL_KeyState (&in_left));
 	}
 
-	cmd->sidemove += (int)(cl_sidespeed->value * CL_KeyState (&in_moveright));
-	cmd->sidemove -= (int)(cl_sidespeed->value * CL_KeyState (&in_moveleft));
+	cmd->sidemove += (int16)(cl_sidespeed->value * CL_KeyState (&in_moveright));
+	cmd->sidemove -= (int16)(cl_sidespeed->value * CL_KeyState (&in_moveleft));
 
-	cmd->upmove += (int)(cl_upspeed->value * CL_KeyState (&in_up));
-	cmd->upmove -= (int)(cl_upspeed->value * CL_KeyState (&in_down));
+	cmd->upmove += (int16)(cl_upspeed->value * CL_KeyState (&in_up));
+	cmd->upmove -= (int16)(cl_upspeed->value * CL_KeyState (&in_down));
 
 	if (! (in_klook.state & 1) )
 	{	
-		cmd->forwardmove += (int)(cl_forwardspeed->value * CL_KeyState (&in_forward));
-		cmd->forwardmove -= (int)(cl_forwardspeed->value * CL_KeyState (&in_back));
+		cmd->forwardmove += (int16)(cl_forwardspeed->value * CL_KeyState (&in_forward));
+		cmd->forwardmove -= (int16)(cl_forwardspeed->value * CL_KeyState (&in_back));
 	}	
 
 //

@@ -44,7 +44,8 @@ extern cvar_t *sndspeed;
 extern cvar_t *sndchannels;
 extern cvar_t *snddevice;
 
-static int tryrates[] = { 11025, 22051, 44100, 48000, 8000 };
+static int tryrates[] = { 44100, 22051, 11025, 8000 };
+static const int numRates = (sizeof(tryrates)/sizeof(tryrates[0]));
 
 qboolean SNDDMA_Init_OSS (void)
 {
@@ -158,7 +159,7 @@ qboolean SNDDMA_Init_OSS (void)
 	dma.speed = sndspeed->integer;
 	if (!dma.speed)
 	{
-		for (i=0 ; i<sizeof(tryrates)/4 ; i++) {
+		for (i = 0; i < numRates; i++) {
             if (!ioctl(audio_fd, SNDCTL_DSP_SPEED, &tryrates[i])) {
 				dma.speed = tryrates[i];
 				break;

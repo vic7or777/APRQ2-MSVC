@@ -65,6 +65,27 @@ static qboolean VerifyDriver( void )
 	return true;
 }
 
+extern char qglLastError[128];
+
+static void PrintWinError(LPTSTR lpszFunction)
+{ 
+		LPVOID lpMsgBuf;
+		DWORD dw = GetLastError(); 
+
+		FormatMessage(
+			FORMAT_MESSAGE_ALLOCATE_BUFFER | 
+			FORMAT_MESSAGE_FROM_SYSTEM,
+			NULL,
+			dw,
+			MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT),
+			(LPTSTR) &lpMsgBuf,
+			0, NULL );
+
+		Com_sprintf(qglLastError, sizeof(qglLastError), "%s failed with error %d: %s", lpszFunction, dw, (char *)lpMsgBuf);
+		Com_Printf("%s\n", qglLastError); 
+		LocalFree(lpMsgBuf);
+}
+
 /*
 ** VID_CreateWindow
 */
@@ -86,7 +107,7 @@ qboolean VID_CreateWindow( int width, int height, qboolean fullscreen )
     wc.cbWndExtra    = 0;
     wc.hInstance     = glw_state.hInstance;
     wc.hIcon         = LoadIcon(glw_state.hInstance, MAKEINTRESOURCE(IDI_ICON1));
-    wc.hCursor       = LoadCursor (NULL,IDC_ARROW);
+    wc.hCursor       = LoadCursor (NULL, IDC_ARROW);
 	wc.hbrBackground = (HBRUSH)GetStockObject(GRAY_BRUSH);
     wc.lpszMenuName  = 0;
     wc.lpszClassName = WINDOW_CLASS_NAME;
@@ -151,7 +172,8 @@ qboolean VID_CreateWindow( int width, int height, qboolean fullscreen )
 
 static qboolean GLimp_SetFSMode( int width, int height )
 {
-	DEVMODE dm;
+	DEVMODE		dm;
+	HRESULT		hr;
 
 	EnumDisplaySettings (NULL, ENUM_CURRENT_SETTINGS, &originalDesktopMode);
 
@@ -180,9 +202,32 @@ static qboolean GLimp_SetFSMode( int width, int height )
 	}
 
 	Com_Printf ( "...calling CDS: " );
-	if ( ChangeDisplaySettings( &dm, CDS_FULLSCREEN ) != DISP_CHANGE_SUCCESSFUL )
+	hr = ChangeDisplaySettings( &dm, CDS_FULLSCREEN );
+	if (hr != DISP_CHANGE_SUCCESSFUL)
 	{
 		Com_Printf ( "failed\n" );
+
+		switch (hr) {
+		case DISP_CHANGE_BADFLAGS: //Shouldnt hapent
+			Com_Printf("An invalid set of flags was passed in.\n");
+			return false;
+		case DISP_CHANGE_BADPARAM:
+			Com_Printf("An invalid parameter was passed in.\n");
+			Com_Printf("Bad vid_displayfrequency or gl_bitdepth?\n");
+			return false;
+		case DISP_CHANGE_RESTART:
+			Com_Printf("Windows need to restart for that mode.\n");
+			return false;
+		case DISP_CHANGE_FAILED:
+			Com_Printf("The display driver failed the specified graphics mode.\n");
+			break;
+		case DISP_CHANGE_BADMODE:
+			Com_Printf("The graphics mode is not supported.\n");
+			break;
+		default:
+			break;
+		}
+
 		Com_Printf ( "...calling CDS assuming dual monitors: " );
 
 		dm.dmPelsWidth *= 2;
@@ -234,7 +279,7 @@ rserr_t GLimp_SetMode( int *pwidth, int *pheight, int mode, qboolean fullscreen 
 		{
 			gl_state.fullscreen = true;
 
-			if ( !VID_CreateWindow (width, height, true) )
+			if (!VID_CreateWindow (width, height, true))
 				return rserr_invalid_mode;
 
 			EnumDisplaySettings (NULL, ENUM_CURRENT_SETTINGS, &fullScreenMode);
@@ -248,7 +293,7 @@ rserr_t GLimp_SetMode( int *pwidth, int *pheight, int mode, qboolean fullscreen 
 	ChangeDisplaySettings( 0, 0 );
 
 	gl_state.fullscreen = false;
-	if ( !VID_CreateWindow (width, height, false) )
+	if (!VID_CreateWindow (width, height, false))
 		return rserr_invalid_mode;
 
 	return (fullscreen) ? rserr_invalid_fullscreen : rserr_ok;
@@ -377,7 +422,7 @@ qboolean GLimp_InitGL (void)
 	/*
 	** set PFD_STEREO if necessary
 	*/
-	if ( stereo->value != 0 )
+	if (stereo->integer)
 	{
 		Com_Printf ( "...attempting to use stereo\n" );
 		pfd.dwFlags |= PFD_STEREO;
@@ -426,11 +471,13 @@ qboolean GLimp_InitGL (void)
 	{
 		if ( ( pixelformat = ChoosePixelFormat( glw_state.hDC, &pfd)) == 0 )
 		{
+			PrintWinError("ChoosePixelFormat");
 			Com_Printf ("GLimp_Init() - ChoosePixelFormat failed\n");
 			return false;
 		}
 		if ( SetPixelFormat( glw_state.hDC, pixelformat, &pfd) == FALSE )
 		{
+			PrintWinError("SetPixelFormat");
 			Com_Printf ("GLimp_Init() - SetPixelFormat failed\n");
 			return false;
 		}
@@ -457,7 +504,7 @@ qboolean GLimp_InitGL (void)
 	if ( !( pfd.dwFlags & PFD_STEREO ) && ( stereo->value != 0 ) ) 
 	{
 		Com_Printf ( "...failed to select stereo pixel format\n" );
-		Cvar_SetValue( "cl_stereo", 0 );
+		Cvar_Set( "cl_stereo", "0" );
 		gl_state.stereo_enabled = false;
 	}
 
@@ -467,6 +514,7 @@ qboolean GLimp_InitGL (void)
 	*/
 	if ( ( glw_state.hGLRC = qwglCreateContext( glw_state.hDC ) ) == 0 )
 	{
+		PrintWinError("wglCreateContext");
 		Com_Printf ("GLimp_Init() - qwglCreateContext failed\n");
 
 		goto fail;
@@ -474,6 +522,7 @@ qboolean GLimp_InitGL (void)
 
     if ( !qwglMakeCurrent( glw_state.hDC, glw_state.hGLRC ) )
 	{
+		PrintWinError("wglMakeCurrent");
 		Com_Printf ("GLimp_Init() - qwglMakeCurrent failed\n");
 
 		goto fail;
@@ -481,7 +530,7 @@ qboolean GLimp_InitGL (void)
 
 	if ( !VerifyDriver() )
 	{
-		Com_Printf ( "GLimp_Init() - no hardware acceleration detected\n" );
+		Com_Error (ERR_FATAL, "GLimp_Init() - no hardware acceleration detected");
 		goto fail;
 	}
 
@@ -496,7 +545,7 @@ qboolean GLimp_InitGL (void)
 		Q_strlwr( buffer );
 
 		gl_state.stencil = false;
-		if (strstr(buffer, "Voodoo3"))
+		if (strstr(buffer, "voodoo3"))
 		{
 			Com_Printf ( "... Voodoo3 has no stencil buffer\n" );
 		}
@@ -513,6 +562,8 @@ qboolean GLimp_InitGL (void)
 	return true;
 
 fail:
+
+
 	if ( glw_state.hGLRC )
 	{
 		qwglDeleteContext( glw_state.hGLRC );
@@ -537,7 +588,7 @@ void GLimp_BeginFrame( float camera_separation )
 	{
 		if ( gl_bitdepth->integer != 0 && !glw_state.allowdisplaydepthchange )
 		{
-			Cvar_SetValue( "gl_bitdepth", 0 );
+			Cvar_Set( "gl_bitdepth", "0" );
 			Com_Printf ( "gl_bitdepth requires Win95 OSR2.x or WinNT 4.x\n" );
 		}
 		gl_bitdepth->modified = false;
@@ -563,10 +614,17 @@ void GLimp_EndFrame (void)
 {
 	assert( qglGetError() == GL_NO_ERROR );
 
-	if ( Q_stricmp( gl_drawbuffer->string, "GL_BACK" ) == 0 )
+	if ( Q_stricmp( gl_drawbuffer->string, "GL_FRONT" ) != 0 )
 	{
-		if ( !qwglSwapBuffers( glw_state.hDC ) )
-			Com_Error( ERR_FATAL, "GLimp_EndFrame() - SwapBuffers() failed!\n" );
+		if(glw_state.minidriver)
+		{
+			if ( !qwglSwapBuffers( glw_state.hDC ) )
+				Com_Error( ERR_FATAL, "GLimp_EndFrame() - SwapBuffers() failed!\n" );
+		}
+		else
+		{
+			SwapBuffers( glw_state.hDC );
+		}
 	}
 }
 

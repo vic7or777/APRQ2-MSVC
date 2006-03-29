@@ -94,12 +94,6 @@ cvar_t	*cl_gunalpha;
 cvar_t	*cl_protocol;
 #endif
 
-#if defined(_WIN32) || defined(WITH_XMMS)
-void MP3_Init(void);
-void MP3_Shutdown(void);
-void MP3_Frame (void);
-#endif
-
 client_static_t	cls;
 client_state_t	cl;
 
@@ -134,6 +128,7 @@ void Cmd_ForwardToServer (void)
 	}
 
 	MSG_WriteByte (&cls.netchan.message, clc_stringcmd);
+
 	SZ_Print (&cls.netchan.message, cmd);
 	if (Cmd_Argc() > 1)
 	{
@@ -209,9 +204,9 @@ CL_Pause_f
 void CL_Pause_f (void)
 {
 	// never pause in multiplayer
-	if (Cvar_VariableValue ("maxclients") > 1 || !Com_ServerState ())
+	if (Cvar_VariableIntValue("maxclients") > 1 || !Com_ServerState ())
 	{
-		Cvar_SetValue ("paused", 0);
+		Cvar_Set("paused", "0");
 		return;
 	}
 
@@ -238,9 +233,7 @@ Called after an ERR_DROP was thrown
 */
 void CL_Drop (void)
 {
-	if (cls.state == ca_uninitialized)
-		return;
-	if (cls.state == ca_disconnected)
+	if (cls.state <= ca_disconnected)
 		return;
 
 	CL_Disconnect ();
@@ -273,7 +266,7 @@ static void CL_SendConnectPacket (int useProtocol)
 	if (adr.port == 0)
 		adr.port = BigShort (PORT_SERVER);
 
-	port = Cvar_VariableValue ("qport");
+	port = Cvar_VariableIntValue("qport");
 	userinfo_modified = false;
 
 #ifdef R1Q2_PROTOCOL
@@ -362,7 +355,7 @@ CL_Connect_f
 */
 void CL_Connect_f (void)
 {
-	char	*server;
+	char	*server, *p;
 	netadr_t	adr;
 
 	if (Cmd_Argc() != 2)
@@ -381,6 +374,14 @@ void CL_Connect_f (void)
 	}
 
 	server = Cmd_Argv (1);
+
+	// quake2://protocol support
+	if (!Q_strnicmp(server, "quake2://", 9))
+		server += 9;
+
+	p = strchr (server, '/');
+	if (p)
+		p[0] = 0;
 
 	NET_Config (true);		// allow remote
 
@@ -422,7 +423,7 @@ CL_Rcon_f
 */
 void CL_Rcon_f (void)
 {
-	char	message[1024];
+	char	message[1024], *s;
 	netadr_t	to = {0};
 
 	if (!rcon_client_password->string[0])
@@ -431,7 +432,8 @@ void CL_Rcon_f (void)
 		return;
 	}
 
-	if ((strlen(Cmd_ArgsFrom(1)) + strlen(rcon_client_password->string) + 16) >= sizeof(message)) {
+	s = Cmd_ArgsFrom(1);
+	if ((strlen(s) + strlen(rcon_client_password->string) + 16) >= sizeof(message)) {
 		Com_Printf ("Length of password + command exceeds maximum allowed length.\n");
 		return;
 	}
@@ -448,19 +450,13 @@ void CL_Rcon_f (void)
 	strcat (message, rcon_client_password->string);
 	strcat (message, " ");
 
-	strcat (message, Cmd_ArgsFrom(1));
-
-	/*for (i=1 ; i<Cmd_Argc() ; i++)
-	{
-		strcat (message, Cmd_Argv(i));
-		strcat (message, " ");
-	}*/
+	strcat (message, s);
 
 	if (cls.state >= ca_connected)
 		to = cls.netchan.remote_address;
 	else
 	{
-		if (!strlen(rcon_address->string))
+		if (!rcon_address->string[0])
 		{
 			Com_Printf ("You must either be connected,\n"
 						"or set the 'rcon_address' cvar\n"
@@ -493,6 +489,7 @@ void CL_ClearState (void)
 	memset (&cl, 0, sizeof(cl));
 	memset (cl_entities, 0, sizeof(cl_entities));
 
+	cl.maxclients = MAX_CLIENTS;
 	SZ_Clear (&cls.netchan.message);
 
 #ifdef R1Q2_PROTOCOL
@@ -553,6 +550,14 @@ void CL_Disconnect (void)
 		fclose(cls.download);
 		cls.download = NULL;
 	}
+
+#ifdef USE_CURL
+	CL_CancelHTTPDownloads (true);
+	cls.downloadReferer[0] = 0;
+#endif
+
+	cls.downloadname[0] = 0;
+	cls.downloadposition = 0;
 
 	cls.servername[0] = '\0';
 	cls.state = ca_disconnected;
@@ -732,8 +737,10 @@ void CL_Changing_f (void)
 	if (cls.download)
 		return;
 
-	if(cl_autorecord->integer && cls.demorecording)
-		CL_Stop_f();
+	if(!cl.attractloop) {
+		Cmd_ExecTrigger( "#cl_changelevel" );
+		CL_StopAutoRecord();
+	}
 
 	SCR_BeginLoadingPlaque ();
 	cls.state = ca_connected;	// not active anymore, but not disconnected
@@ -909,12 +916,37 @@ void CL_ConnectionlessPacket (void)
 	// server connection
 	if (!strcmp(c, "client_connect"))
 	{
+#ifdef USE_CURL
+		int		i;
+		char	*p;
+#endif
+
 		if (cls.state == ca_connected)
 		{
 			Com_Printf ("Dup connect received.  Ignored.\n");
 			return;
 		}
 		Netchan_Setup (NS_CLIENT, &cls.netchan, &net_from, cls.serverProtocol, cls.quakePort);
+
+#ifdef USE_CURL
+		for (i = 1; i < Cmd_Argc(); i++)
+		{
+			p = Cmd_Argv(i);
+			if (!strncmp (p, "dlserver=", 9))
+			{
+				char	*buff;
+				buff = NET_AdrToString(&cls.netchan.remote_address);
+				p += 9;
+				Com_sprintf (cls.downloadReferer, sizeof(cls.downloadReferer), "quake2://%s", buff);
+				CL_SetHTTPServer (p);
+				if (cls.downloadServer[0])
+					Com_Printf ("HTTP downloading enabled, URL: %s\n", cls.downloadServer);
+
+				break;
+			}
+		}
+#endif
+
 		MSG_WriteByte (&cls.netchan.message, clc_stringcmd);
 		MSG_WriteString (&cls.netchan.message, "new");
 		cls.state = ca_connected;
@@ -992,6 +1024,9 @@ void CL_ConnectionlessPacket (void)
 			if (!strncmp (p, "p=", 2))
 			{
 				p += 2;
+				if (!p[0])
+					continue;
+
 				for (;;)
 				{
 					i = atoi (p);
@@ -1170,14 +1205,14 @@ void CL_Snd_Restart_f (void)
 	CL_RegisterSounds ();
 }
 
-int precache_check; // for autodownload of precache items
-int precache_spawncount;
-int precache_tex;
-int precache_model_skin;
+static int precache_check; // for autodownload of precache items
+static int precache_spawncount;
+static int precache_tex;
+static int precache_model_skin;
 
-byte *precache_model; // used for skin checking in alias models
+static byte *precache_model; // used for skin checking in alias models
 
-#define PLAYER_MULT 5
+//#define PLAYER_MULT 5
 
 // ENV_CNT is map load, ENV_CNT+1 is first env map
 #define ENV_CNT (CS_PLAYERSKINS + MAX_CLIENTS * PLAYER_MULT)
@@ -1185,14 +1220,42 @@ byte *precache_model; // used for skin checking in alias models
 
 static const char *env_suf[6] = {"rt", "bk", "lf", "ft", "up", "dn"};
 
+qboolean isvalidchar (int c)
+{
+	if (!isalnum(c) && c != '_' && c != '-')
+		return false;
+	return true;
+}
+
+void CL_ResetPrecacheCheck (void)
+{
+	precache_check = CS_MODELS;
+	precache_model = 0;
+	precache_model_skin = -1;
+}
+
 void CL_RequestNextDownload (void)
 {
-	unsigned	map_checksum;		// for detecting cheater maps
-	char fn[MAX_OSPATH];
-	dmdl_t *pheader;
+	int			i, PLAYER_MULT;
+	char		*sexedSounds[MAX_SOUNDS];
+	uint32		map_checksum;		// for detecting cheater maps
+	char		fn[MAX_OSPATH];
+	dmdl_t		*pheader;
+	dsprite_t	*spriteheader;
 
 	if (cls.state != ca_connected)
 		return;
+
+
+	PLAYER_MULT = 0;
+
+	for (i = CS_SOUNDS; i < CS_SOUNDS + MAX_SOUNDS; i++)
+	{
+		if (cl.configstrings[i][0] == '*')
+			sexedSounds[PLAYER_MULT++] = cl.configstrings[i] + 1;
+	}
+
+	PLAYER_MULT += 5;
 
 	if (!allow_download->integer && precache_check < ENV_CNT)
 		precache_check = ENV_CNT;
@@ -1202,92 +1265,200 @@ void CL_RequestNextDownload (void)
 	{ // confirm map
 		precache_check = CS_MODELS+2; // 0 isn't used
 		if (allow_download_maps->integer)
+		{
+			if (strlen(cl.configstrings[CS_MODELS+1]) >= MAX_QPATH-1)
+				Com_Error (ERR_DROP, "Bad map configstring '%s'", cl.configstrings[CS_MODELS+1]);
+
 			if (!CL_CheckOrDownloadFile(cl.configstrings[CS_MODELS+1]))
 				return; // started a download
+		}
 	}
+
+
+redoSkins:;
+
 	if (precache_check >= CS_MODELS && precache_check < CS_MODELS+MAX_MODELS)
 	{
 		if (allow_download_models->integer)
 		{
-			while (precache_check < CS_MODELS+MAX_MODELS &&	cl.configstrings[precache_check][0])
+			char *skinname;
+
+			while (precache_check < CS_MODELS+MAX_MODELS &&
+				cl.configstrings[precache_check][0])
 			{
-				if (cl.configstrings[precache_check][0] == '*' ||
-					cl.configstrings[precache_check][0] == '#') {
+				//its a brush/alias model, we don't do those
+				if (cl.configstrings[precache_check][0] == '*' || cl.configstrings[precache_check][0] == '#')
+				{
 					precache_check++;
 					continue;
 				}
-				if (precache_model_skin == 0)
+
+				//new model, try downloading it
+				if (precache_model_skin == -1)
 				{
 					if (!CL_CheckOrDownloadFile(cl.configstrings[precache_check]))
 					{
-						precache_model_skin = 1;
+						precache_check++;
 						return; // started a download
 					}
-					precache_model_skin = 1;
+					precache_check++;
 				}
-
-				// checking for skins in the model
-				if (!precache_model)
+				else
 				{
-					FS_LoadFile (cl.configstrings[precache_check], (void **)&precache_model);
+					//model is ok, now we are checking for skins in the model
 					if (!precache_model)
 					{
-						precache_model_skin = 0;
-						precache_check++;
-						continue; // couldn't load it
+						//load model into buffer
+						precache_model_skin = 1;
+						FS_LoadFile (cl.configstrings[precache_check], (void **)&precache_model);
+						if (!precache_model)
+						{
+							//shouldn't happen?
+							precache_model_skin = 0;
+							precache_check++;
+							continue; // couldn't load it
+						}
+						
+						//is it an alias model
+						if (LittleLong(*(uint32 *)precache_model) != IDALIASHEADER)
+						{
+							//is it a sprite
+							if (LittleLong(*(uint32 *)precache_model) != IDSPRITEHEADER)
+							{
+								//no, free and move onto next model
+								FS_FreeFile(precache_model);
+								precache_model = NULL;
+								precache_model_skin = 0;
+								precache_check++;
+								continue;
+							}
+							else
+							{
+								//get sprite header
+								spriteheader = (dsprite_t *)precache_model;
+								if (LittleLong (spriteheader->version != SPRITE_VERSION))
+								{
+									//this is unknown version! free and move onto next.
+									FS_FreeFile(precache_model);
+									precache_model = NULL;
+									precache_check++;
+									precache_model_skin = 0;
+									continue; // couldn't load it
+								}
+							}
+						}
+						else
+						{
+							//get model header
+							pheader = (dmdl_t *)precache_model;
+							if (LittleLong (pheader->version) != ALIAS_VERSION)
+							{
+								//unknown version! free and move onto next
+								FS_FreeFile(precache_model);
+								precache_model = NULL;
+								precache_check++;
+								precache_model_skin = 0;
+								continue; // couldn't load it
+							}
+						}
 					}
-					if (LittleLong(*(unsigned *)precache_model) != IDALIASHEADER)
+
+					//if its an alias model
+					if (LittleLong(*(uint32 *)precache_model) == IDALIASHEADER)
 					{
-						// not an alias model
+						pheader = (dmdl_t *)precache_model;
+
+						//iterate through number of skins
+						while (precache_model_skin - 1 < LittleLong(pheader->num_skins))
+						{
+							skinname = (char *)precache_model +
+								LittleLong(pheader->ofs_skins) + 
+								(precache_model_skin - 1)*MAX_SKINNAME;
+
+							//r1: spam warning for models that are broken
+							if (strchr (skinname, '\\'))
+							{
+								Com_Printf ("Warning, model %s with incorrectly linked skin: %s\n", cl.configstrings[precache_check], skinname);
+							}
+							else if (strlen(skinname) > MAX_SKINNAME-1)
+							{
+								Com_Error (ERR_DROP, "Model %s has too long a skin path: %s", cl.configstrings[precache_check], skinname);
+							}
+
+							//check if this skin exists
+							if (!CL_CheckOrDownloadFile(skinname))
+							{
+								precache_model_skin++;
+								return; // started a download
+							}
+							precache_model_skin++;
+						}
+					}
+					else
+					{
+						//its a sprite
+						spriteheader = (dsprite_t *)precache_model;
+
+						//iterate through skins
+						while (precache_model_skin - 1 < LittleLong(spriteheader->numframes))
+						{
+							skinname = spriteheader->frames[(precache_model_skin - 1)].name;
+
+							//r1: spam warning for models that are broken
+							if (strchr (skinname, '\\'))
+							{
+								Com_Printf ("Warning, sprite %s with incorrectly linked skin: %s\n", cl.configstrings[precache_check], skinname);
+							}
+							else if (strlen(skinname) > MAX_SKINNAME-1)
+							{
+								Com_Error (ERR_DROP, "Sprite %s has too long a skin path: %s", cl.configstrings[precache_check], skinname);
+							}
+
+							//check if this skin exists
+							if (!CL_CheckOrDownloadFile(skinname))
+							{
+								precache_model_skin++;
+								return; // started a download
+							}
+							precache_model_skin++;
+						}
+					}
+
+					//we're done checking the model and all skins, free
+					if (precache_model)
+					{ 
 						FS_FreeFile(precache_model);
-						precache_model = 0;
-						precache_model_skin = 0;
-						precache_check++;
-						continue;
+						precache_model = NULL;
 					}
-					pheader = (dmdl_t *)precache_model;
-					if (LittleLong (pheader->version) != ALIAS_VERSION)
-					{
-						precache_check++;
-						precache_model_skin = 0;
-						continue; // couldn't load it
-					}
-				}
 
-				pheader = (dmdl_t *)precache_model;
-
-				while (precache_model_skin - 1 < LittleLong(pheader->num_skins))
-				{
-					if (!CL_CheckOrDownloadFile((char *)precache_model +
-						LittleLong(pheader->ofs_skins) + 
-						(precache_model_skin - 1)*MAX_SKINNAME))
-					{
-						precache_model_skin++;
-						return; // started a download
-					}
-					precache_model_skin++;
+					precache_model_skin = 0;
+					precache_check++;
 				}
-				if (precache_model)
-				{ 
-					FS_FreeFile(precache_model);
-					precache_model = 0;
-				}
-				precache_model_skin = 0;
-				precache_check++;
 			}
+		}
+		if (precache_model_skin == -1)
+		{
+			precache_check = CS_MODELS + 2;
+			precache_model_skin = 0;
+
+	//pending downloads (models), let's wait here before we can check skins.
+#ifdef USE_CURL
+		if (CL_PendingHTTPDownloads ())
+			return;
+#endif
+
+			goto redoSkins;
 		}
 		precache_check = CS_SOUNDS;
 	}
-	if (precache_check >= CS_SOUNDS && precache_check < CS_SOUNDS+MAX_SOUNDS)
-	{ 
-		if (allow_download_sounds->integer)
-		{
+
+	if (precache_check >= CS_SOUNDS && precache_check < CS_SOUNDS+MAX_SOUNDS) { 
+		if (allow_download_sounds->integer) {
 			if (precache_check == CS_SOUNDS)
 				precache_check++; // zero is blank
-			while (precache_check < CS_SOUNDS+MAX_SOUNDS &&	cl.configstrings[precache_check][0])
-			{
-				if (cl.configstrings[precache_check][0] == '*')
-				{
+			while (precache_check < CS_SOUNDS+MAX_SOUNDS &&
+				cl.configstrings[precache_check][0]) {
+				if (cl.configstrings[precache_check][0] == '*') {
 					precache_check++;
 					continue;
 				}
@@ -1298,31 +1469,49 @@ void CL_RequestNextDownload (void)
 		}
 		precache_check = CS_IMAGES;
 	}
+
 	if (precache_check >= CS_IMAGES && precache_check < CS_IMAGES+MAX_IMAGES)
 	{
 		if (precache_check == CS_IMAGES)
 			precache_check++; // zero is blank
-		while (precache_check < CS_IMAGES+MAX_IMAGES &&	cl.configstrings[precache_check][0])
+
+		while (precache_check < CS_IMAGES+MAX_IMAGES && cl.configstrings[precache_check][0])
 		{
-			Com_sprintf(fn, sizeof(fn), "pics/%s.pcx", cl.configstrings[precache_check++]);
-			if (!CL_CheckOrDownloadFile(fn))
-				return; // started a download
+			Com_sprintf(fn, sizeof(fn), "pics/%s.pcx", cl.configstrings[precache_check]);
+			if (FS_LoadFile (fn, NULL) == -1)
+			{
+				//Com_sprintf(fn, sizeof(fn), "pics/%s.pcx", cl.configstrings[precache_check]);
+				if (!CL_CheckOrDownloadFile(fn))
+				{
+					precache_check++;
+					return; // started a download
+				}
+			}
+			precache_check++;
 		}
 		precache_check = CS_PLAYERSKINS;
 	}
+
 	// skins are special, since a player has three things to download:
 	// model, weapon model and skin
 	// so precache_check is now *3
 	if (precache_check >= CS_PLAYERSKINS && precache_check < CS_PLAYERSKINS + MAX_CLIENTS * PLAYER_MULT)
 	{
-		if (allow_download_players->integer){
+		if (allow_download_players->integer)
+		{
 			while (precache_check < CS_PLAYERSKINS + MAX_CLIENTS * PLAYER_MULT)
 			{
-				int i, n;
+				int i, n, j, length;
 				char model[MAX_QPATH], skin[MAX_QPATH], *p;
 
 				i = (precache_check - CS_PLAYERSKINS)/PLAYER_MULT;
 				n = (precache_check - CS_PLAYERSKINS)%PLAYER_MULT;
+
+				if (i >= cl.maxclients)
+				{
+					precache_check = ENV_CNT;
+					continue;
+				}
 
 				if (!cl.configstrings[CS_PLAYERSKINS+i][0])
 				{
@@ -1330,90 +1519,161 @@ void CL_RequestNextDownload (void)
 					continue;
 				}
 
+				if (n && cls.failed_download)
+				{
+					cls.failed_download = false;
+					precache_check = CS_PLAYERSKINS + (i + 1) * PLAYER_MULT;
+					continue;
+				}
+
 				if ((p = strchr(cl.configstrings[CS_PLAYERSKINS+i], '\\')) != NULL)
+				{
 					p++;
+				}
 				else
-					p = cl.configstrings[CS_PLAYERSKINS+i];
+				{
+					precache_check = CS_PLAYERSKINS + (i + 1) * PLAYER_MULT;
+					continue;
+				}
+
 				Q_strncpyz(model, p, sizeof(model));
+
 				p = strchr(model, '/');
+
 				if (!p)
 					p = strchr(model, '\\');
+
 				if (p)
 				{
 					*p++ = 0;
-					Q_strncpyz(skin, p, sizeof(skin));
-				} else
-					*skin = 0;
-
-				switch (n) {
-				case 0: // model
-					Com_sprintf(fn, sizeof(fn), "players/%s/tris.md2", model);
-					if (!CL_CheckOrDownloadFile(fn))
+					if (!*p || !model[0])
 					{
-						precache_check = CS_PLAYERSKINS + i * PLAYER_MULT + 1;
-						return; // started a download
+						precache_check = CS_PLAYERSKINS + (i + 1) * PLAYER_MULT;
+						continue;
 					}
-					n++;
-					/*FALL THROUGH*/
-
-				case 1: // weapon model
-					Com_sprintf(fn, sizeof(fn), "players/%s/weapon.md2", model);
-					if (!CL_CheckOrDownloadFile(fn))
+					else
 					{
-						precache_check = CS_PLAYERSKINS + i * PLAYER_MULT + 2;
-						return; // started a download
+						Q_strncpyz (skin, p, sizeof(skin));
 					}
-					n++;
-					/*FALL THROUGH*/
-
-				case 2: // weapon skin
-					Com_sprintf(fn, sizeof(fn), "players/%s/weapon.pcx", model);
-					if (!CL_CheckOrDownloadFile(fn))
-					{
-						precache_check = CS_PLAYERSKINS + i * PLAYER_MULT + 3;
-						return; // started a download
-					}
-					n++;
-					/*FALL THROUGH*/
-
-				case 3: // skin
-					Com_sprintf(fn, sizeof(fn), "players/%s/%s.pcx", model, skin);
-					if (!CL_CheckOrDownloadFile(fn))
-					{
-						precache_check = CS_PLAYERSKINS + i * PLAYER_MULT + 4;
-						return; // started a download
-					}
-					n++;
-					/*FALL THROUGH*/
-
-				case 4: // skin_i
-					Com_sprintf(fn, sizeof(fn), "players/%s/%s_i.pcx", model, skin);
-					if (!CL_CheckOrDownloadFile(fn))
-					{
-						precache_check = CS_PLAYERSKINS + i * PLAYER_MULT + 5;
-						return; // started a download
-					}
-					// move on to next model
-					precache_check = CS_PLAYERSKINS + (i + 1) * PLAYER_MULT;
 				}
+				else
+				{
+					precache_check = CS_PLAYERSKINS + (i + 1) * PLAYER_MULT;
+					continue;
+				}
+					//*skin = 0;
+
+				length = (int)strlen (model);
+				for (j = 0; j < length; j++)
+				{
+					if (!isvalidchar(model[j]))
+					{
+						Com_Printf ("Bad character '%c' in playermodel '%s'\n", model[j], model);
+						precache_check = CS_PLAYERSKINS + (i + 1) * PLAYER_MULT;
+						goto skipplayer;
+					}
+				}
+
+				length = (int)strlen (skin);
+				for (j = 0; j < length; j++)
+				{
+					if (!isvalidchar(skin[j]))
+					{
+						Com_Printf ("Bad character '%c' in playerskin '%s'\n", skin[j], skin);
+						precache_check = CS_PLAYERSKINS + (i + 1) * PLAYER_MULT;
+						goto skipplayer;
+					}
+				}
+
+				switch (n) 
+				{
+					case -1:
+						continue;
+					case 0: // model
+						cls.failed_download = false;
+						Com_sprintf(fn, sizeof(fn), "players/%s/tris.md2", model);
+						if (!CL_CheckOrDownloadFile(fn)) {
+							precache_check = CS_PLAYERSKINS + i * PLAYER_MULT + 1;
+							return; // started a download
+						}
+						//n++;
+						/*FALL THROUGH*/
+
+					case 1: // weapon model
+						Com_sprintf(fn, sizeof(fn), "players/%s/weapon.md2", model);
+						if (!CL_CheckOrDownloadFile(fn)) {
+							precache_check = CS_PLAYERSKINS + i * PLAYER_MULT + 2;
+							return; // started a download
+						}
+						//n++;
+						/*FALL THROUGH*/
+
+					case 2: // weapon skin
+						Com_sprintf(fn, sizeof(fn), "players/%s/weapon.pcx", model);
+						if (!CL_CheckOrDownloadFile(fn)) {
+							precache_check = CS_PLAYERSKINS + i * PLAYER_MULT + 3;
+							return; // started a download
+						}
+						//n++;
+						/*FALL THROUGH*/
+
+					case 3: // skin
+						Com_sprintf(fn, sizeof(fn), "players/%s/%s.pcx", model, skin);
+						if (!CL_CheckOrDownloadFile(fn)) {
+							precache_check = CS_PLAYERSKINS + i * PLAYER_MULT + 4;
+							return; // started a download
+						}
+						//n++;
+						/*FALL THROUGH*/
+
+					case 4: // skin_i
+						Com_sprintf(fn, sizeof(fn), "players/%s/%s_i.pcx", model, skin);
+						if (!CL_CheckOrDownloadFile(fn)) {
+							precache_check = CS_PLAYERSKINS + i * PLAYER_MULT + 5;
+							return; // started a download
+						}
+						n = 5;
+
+					default:
+						while (n < PLAYER_MULT)
+						{
+							Com_sprintf(fn, sizeof(fn), "players/%s/%s", model, sexedSounds[n-5]);
+							n++;
+							if (!CL_CheckOrDownloadFile(fn)) {
+								precache_check = CS_PLAYERSKINS + i * PLAYER_MULT + n;
+								return; // started a download
+							}
+						}
+				}
+				
+				// move on to next model
+				precache_check = CS_PLAYERSKINS + (i + 1) * PLAYER_MULT;
+
+skipplayer:;
 			}
 		}
 		// precache phase completed
 		precache_check = ENV_CNT;
 	}
 
+#ifdef USE_CURL
+	//map might still be downloading?
+	if (CL_PendingHTTPDownloads ())
+		return;
+#endif
+
 	if (precache_check == ENV_CNT)
 	{
 		precache_check = ENV_CNT + 1;
 		
-		CL_LoadLoc(cls.mapname);
+		CL_LoadLoc();
 
 		CM_LoadMap (cl.configstrings[CS_MODELS+1], true, &map_checksum);
 
-		if (map_checksum != atoi(cl.configstrings[CS_MAPCHECKSUM]))
+		if (map_checksum && map_checksum != (uint32)strtoul(cl.configstrings[CS_MAPCHECKSUM], NULL, 10))
 		{
-			Com_Error (ERR_DROP, "Local map version differs from server: %i != '%s'\n",
-				map_checksum, cl.configstrings[CS_MAPCHECKSUM]);
+			Com_Error (ERR_DROP, "Local map version differs from server: 0x%.8x != 0x%.8x",
+				map_checksum, atoi(cl.configstrings[CS_MAPCHECKSUM]));
 			return;
 		}
 	}
@@ -1452,7 +1712,7 @@ void CL_RequestNextDownload (void)
 
 		if (allow_download->integer && allow_download_maps->integer) {
 			while (precache_tex < numtexinfo) {
-				char fn[MAX_OSPATH];
+				//char fn[MAX_OSPATH];
 
 				sprintf(fn, "textures/%s.wal", map_surfaces[precache_tex++].rname);
 				if (!CL_CheckOrDownloadFile(fn))
@@ -1462,14 +1722,30 @@ void CL_RequestNextDownload (void)
 		precache_check = TEXTURE_CNT+999;
 	}
 
+	//pending downloads (possibly textures), let's wait here.
+#ifdef USE_CURL
+	if (CL_PendingHTTPDownloads ())
+		return;
+#endif
+
 //ZOID
 	CL_RegisterSounds ();
 	CL_PrepRefresh ();
 
 	Cvar_SetCheatState();
 
+#ifdef R1Q2_PROTOCOL
+	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
+	{
+		MSG_WriteByte (&cls.netchan.message, clc_setting);
+		MSG_WriteShort(&cls.netchan.message, CLSET_NOGUN);
+		MSG_WriteShort(&cls.netchan.message, cl_gun->integer ? 0 : 1);
+	}
+#endif
+
 	MSG_WriteByte (&cls.netchan.message, clc_stringcmd);
 	MSG_WriteString (&cls.netchan.message, va("begin %i\n", precache_spawncount) );
+
 }
 
 /*
@@ -1485,7 +1761,7 @@ void CL_Precache_f (void)
 	//Yet another hack to let old demos work
 	//the old precache sequence
 	if (Cmd_Argc() < 2) {
-		unsigned	map_checksum;		// for detecting cheater maps
+		uint32 map_checksum;		// for detecting cheater maps
 
 		CM_LoadMap (cl.configstrings[CS_MODELS+1], true, &map_checksum);
 		CL_RegisterSounds ();
@@ -1493,19 +1769,16 @@ void CL_Precache_f (void)
 		return;
 	}
 
-	precache_check = CS_MODELS;
 	precache_spawncount = atoi(Cmd_Argv(1));
-	precache_model = 0;
-	precache_model_skin = 0;
-
+	CL_ResetPrecacheCheck ();
 	CL_RequestNextDownload();
 }
 
 
 static void OnChange_MaxFps(cvar_t *self, const char *oldValue)
 {
-	if (cl_maxfps->integer < 5)
-		Cvar_SetValue("cl_maxfps", 5);
+	if (self->integer < 5)
+		Cvar_Set(self->name, "5");
 }
 
 #ifdef R1Q2_PROTOCOL
@@ -1522,7 +1795,20 @@ static void OnChange_Protocol(cvar_t *self, const char *oldValue)
 	}
 }
 
-void OnChange_Gun(cvar_t *self, const char *oldValue)
+#ifdef USE_CURL
+void OnChange_http_max_connections (cvar_t *self, const char *oldValue)
+{
+	if (self->integer > 4)
+		Cvar_Set (self->name, "4");
+	else if (self->integer < 1)
+		Cvar_Set (self->name, "1");
+
+	if (self->integer > 2)
+		Com_Printf ("WARNING: Changing the maximum connections higher than 2 violates the HTTP specification recommendations. Doing so may result in you being blocked from the remote system and offers no performance benefits unless you are on a very high latency link (ie, satellite)\n");
+}
+#endif
+
+static void OnChange_Gun(cvar_t *self, const char *oldValue)
 {
 	if (cls.state >= ca_connected && cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
 	{
@@ -1538,16 +1824,16 @@ static void OnChange_Name(cvar_t *self, const char *oldValue)
 	if (strlen(self->string) >= 16)
 		self->string[15] = 0;
 	else if (!*self->string)
-		Cvar_Set ("name", "unnamed");
+		Cvar_Set (self->name, "unnamed");
 }
 
 static void OnChange_StereoSeparation (cvar_t *self, const char *oldValue)
 {
 	// range check cl_camera_separation so we don't inadvertently fry someone's brain
-	if ( cl_stereo_separation->value > 1.0 )
-		Cvar_SetValue( "cl_stereo_separation", 1.0 );
-	else if ( cl_stereo_separation->value < 0 )
-		Cvar_SetValue( "cl_stereo_separation", 0.0 );
+	if ( self->value > 1.0f )
+		Cvar_Set( self->name, "1" );
+	else if ( self->value < 0.0f )
+		Cvar_Set( self->name, "0" );
 }
 
 char *CL_Mapname (void)
@@ -1557,7 +1843,50 @@ char *CL_Mapname (void)
 
 static void CL_Mapname_m ( char *buffer, int bufferSize )
 {
-	Q_strncpyz(buffer, cls.mapname, bufferSize);
+	if(cls.mapname[0])
+		Q_strncpyz(buffer, cls.mapname, bufferSize);
+	else
+		Q_strncpyz(buffer, "nomap", bufferSize );
+}
+
+static void CL_Server_m(char *buffer, int bufferSize)
+{
+	char *s;
+
+	if(cls.state < ca_connecting)
+		return;
+
+	s = NET_AdrToString(&cls.netchan.remote_address);
+
+	if(*s)
+		Q_strncpyz(buffer, s, bufferSize);
+}
+
+static void CL_Health_m(char *buffer, int bufferSize)
+{
+	if( cls.state != ca_active )
+		return;
+
+	Com_sprintf(buffer, bufferSize, "%i", (int)cl.frame.playerstate.stats[STAT_HEALTH]);
+}
+
+static void CL_Ammo_m(char *buffer, int bufferSize)
+{
+	if( cls.state != ca_active )
+		return;
+
+	Com_sprintf(buffer, bufferSize, "%i", (int)cl.frame.playerstate.stats[STAT_AMMO]);
+}
+
+static void CL_WeaponModel_m(char *buffer, int bufferSize)
+{
+	int num;
+
+	if( cls.state != ca_active )
+		return;
+
+	num = cl.frame.playerstate.gunindex + CS_MODELS;
+	Q_strncpyz(buffer, cl.configstrings[num], bufferSize);
 }
 
 /*
@@ -1602,8 +1931,8 @@ void CL_InitLocal (void)
 	cl_forwardspeed = Cvar_Get ("cl_forwardspeed", "200", 0);
 	cl_sidespeed = Cvar_Get ("cl_sidespeed", "200", 0);
 	cl_yawspeed = Cvar_Get ("cl_yawspeed", "140", 0);
-	cl_pitchspeed = Cvar_Get ("cl_pitchspeed", "150", CVAR_NOSET);
-	cl_anglespeedkey = Cvar_Get ("cl_anglespeedkey", "1.5", CVAR_NOSET);
+	cl_pitchspeed = Cvar_Get ("cl_pitchspeed", "150", 0);
+	cl_anglespeedkey = Cvar_Get ("cl_anglespeedkey", "1.5", 0);
 
 	cl_run = Cvar_Get ("cl_run", "1", CVAR_ARCHIVE);
 	freelook = Cvar_Get( "freelook", "1", CVAR_ARCHIVE );
@@ -1662,12 +1991,26 @@ void CL_InitLocal (void)
 	OnChange_Protocol(cl_protocol, cl_protocol->resetString);
 	cl_gun->OnChange = OnChange_Gun;
 #endif
+
+#ifdef USE_CURL
+	cl_http_proxy = Cvar_Get ("cl_http_proxy", "", 0);
+	cl_http_filelists = Cvar_Get ("cl_http_filelists", "1", 0);
+	cl_http_downloads = Cvar_Get ("cl_http_downloads", "1", 0);
+	cl_http_max_connections = Cvar_Get ("cl_http_max_connections", "2", 0);
+	cl_http_max_connections->OnChange = OnChange_http_max_connections;
+	OnChange_http_max_connections(cl_http_max_connections, cl_http_max_connections->resetString);
+#endif
+
 	cl_maxfps->OnChange = OnChange_MaxFps;
 	OnChange_MaxFps(cl_maxfps, cl_maxfps->resetString);
 	name->OnChange = OnChange_Name;
 	OnChange_Name(name, name->resetString);
 	cl_stereo_separation->OnChange = OnChange_StereoSeparation;
 	Cmd_AddMacro( "mapname", CL_Mapname_m );
+	Cmd_AddMacro( "serverip", CL_Server_m );
+	Cmd_AddMacro( "cl_health", CL_Health_m );
+	Cmd_AddMacro( "cl_ammo", CL_Ammo_m );
+	Cmd_AddMacro( "cl_weaponmodel", CL_WeaponModel_m );
 	//End
 
 	// register our commands
@@ -1763,7 +2106,7 @@ void CL_WriteConfig_f (void)
 
     if (Cmd_Argc() != 2)
 	{
-        Com_Printf("Usage: cfg_save <filename>\n");
+        Com_Printf("Usage: %s <filename>\n", Cmd_Argv(0));
         return;
     }
 
@@ -1801,11 +2144,11 @@ qboolean CL_CheatsOK(void)
 		return true;
 
 	// single player can cheat
-	if( atoi( cl.configstrings[CS_MAXCLIENTS] ) < 2 )
+	if( cl.maxclients < 2 )
 		return true;
 
 	// developer option
-	if( Com_ServerState() == ss_game && Cvar_VariableValue( "cheats" ) )
+	if( Com_ServerState() == ss_game && Cvar_VariableIntValue( "cheats" ) )
 		return true;
 
 	return false;
@@ -1881,6 +2224,10 @@ void CL_Frame (int msec)
 	// if in the debugger last frame, don't timeout
 	if (msec > 5000)
 		cls.netchan.last_received = Sys_Milliseconds ();
+
+#ifdef USE_CURL
+	CL_RunHTTPDownloads ();
+#endif
 
 	// fetch results from server
 	CL_ReadPackets ();
@@ -1977,8 +2324,12 @@ void CL_Init (void)
 	CL_InitLocal ();
 	IN_Init ();
 
-#if defined(_WIN32) || defined(WITH_XMMS)
+#if defined(_WIN32) || defined(WITH_XMMS) || defined(WITH_MPD)
 	MP3_Init();
+#endif
+
+#ifdef USE_CURL
+	CL_InitHTTPDownloads ();
 #endif
 
 	FS_ExecAutoexec ();
@@ -2006,6 +2357,10 @@ void CL_Shutdown(void)
 	}
 	isdown = true;
 
+#ifdef USE_CURL
+	CL_HTTP_Cleanup (true);
+#endif
+
 	CL_FreeLocs ();
 	CL_WriteConfiguration (); 
 
@@ -2013,7 +2368,7 @@ void CL_Shutdown(void)
 	CDAudio_Shutdown ();
 #endif
 	S_Shutdown();
-#if defined(_WIN32) || defined(WITH_XMMS)
+#if defined(_WIN32) || defined(WITH_XMMS) || defined(WITH_MPD)
 	MP3_Shutdown();
 #endif
 	IN_Shutdown ();

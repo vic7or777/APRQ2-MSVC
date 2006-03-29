@@ -23,8 +23,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../client/client.h"
 #include "winquake.h"
 
-#include "winamp.h"
-
 typedef struct qwinamp_s
 {
 	HWND	 hWnd;
@@ -107,9 +105,9 @@ void MP3_SetVolume_f (void)
 		return;
     }
 
-	percent = atof(Cmd_Args());
+	percent = atoi(Cmd_Args());
 
-	vol = (percent * 0.01) * 255;
+	vol = (percent * 0.01f) * 255;
 	clamp(vol, 0, 255);
 
 	SendMessage(mywinamp.hWnd, WM_USER, vol, 122);
@@ -366,6 +364,8 @@ static char *MP3_SongTitle (qboolean tracknum)
    static char title[MP3_MAXSONGTITLE]; 
    char			*s; 
 
+   title[0] = 0;
+
    GetWindowText(mywinamp.hWnd, title, sizeof(title)); 
    
    if ((s = strrchr(title, '-')) && s > title) 
@@ -373,7 +373,7 @@ static char *MP3_SongTitle (qboolean tracknum)
 
    if(!tracknum)
    {
-		for (s = title; *s && isdigit(*s); s++)
+		for (s = title; *s && isdigit((unsigned char)*s); s++)
 			;
 		if (*s == '.' && s[1] == ' ' && s[2])
 			memmove(title, s + 2, strlen(s + 2) + 1);
@@ -406,7 +406,7 @@ void MP3_Title_f (void)
 		return;
 
 	songtitle = MP3_SongTitle(true);
-	if (!songtitle)
+	if (!*songtitle)
 		return;
 
 	Com_Printf (S_ENABLE_COLOR "%sWinamp Title: %s%s %s[%i:%02i]\n",
@@ -418,23 +418,17 @@ static void MP3_SongTitle_m ( char *buffer, int bufferSize )
 	char *songtitle;
 	int	 total;
 
-	if (!MP3_Status()) {
-		Q_strncpyz ( buffer, "", bufferSize );
+	if (!MP3_Status())
 		return;
-	}
 
-	if(!MP3_GetTrackTime(NULL, &total)) {
-		Q_strncpyz ( buffer, "", bufferSize );
+	if(!MP3_GetTrackTime(NULL, &total))
 		return;
-	}
 
 	songtitle = MP3_SongTitle(false);
-	if (!songtitle) {
-		Q_strncpyz ( buffer, "", bufferSize );
+	if (!*songtitle)
 		return;
-	}
 
-	Q_strncpyz ( buffer, va("%s [%i:%02i]", songtitle, total / 60, total % 60), bufferSize );
+	Com_sprintf(buffer, bufferSize, "%s [%i:%02i]", songtitle, total / 60, total % 60);
 }
 
 /*
@@ -454,7 +448,7 @@ void MP3_SongInfo_f (void)
 		return;
 
 	songtitle = MP3_SongTitle(true);
-	if (!songtitle)
+	if (!*songtitle)
 		return;
 
 	remaining = total - elapsed;
@@ -518,8 +512,7 @@ int MP3_ParsePlaylist_EXTM3U(char *playlist_buf, unsigned int length, mp3_tracks
 {
 	int i, skip = 0, playlist_size = 0;
 	char *s, *t, *buf, *line;
-	char track[MP3_MAXSONGTITLE];
-	int trackNum = 0, songCount = 0, trackNum2 = 0;
+	int trackNum = 0, songCount = 0, trackNum2 = 0, trackNumLen = 0, j;
 	qboolean counted = false;
 
 	for(i = 0; i < 2; i++)
@@ -538,7 +531,7 @@ int MP3_ParsePlaylist_EXTM3U(char *playlist_buf, unsigned int length, mp3_tracks
 				continue;
 			}
 			if (!strncmp(line, "#EXTINF:", 8)) {
-				if (!(s = strstr(line, ",")) || ++s - playlist_buf >= length) 
+				if (!(s = strchr(line, ',')) || ++s - playlist_buf >= length) 
 					break;
 				
 				skip = 1;
@@ -559,9 +552,7 @@ int MP3_ParsePlaylist_EXTM3U(char *playlist_buf, unsigned int length, mp3_tracks
 	print:
 			trackNum++;
 
-			Q_strncpyz (track, s, sizeof (track));
-			Q_strlwr(track);
-			if(!strstr(track, filter))
+			if(!Q_stristr(s, filter))
 				continue;
 
 			if(!counted) {
@@ -575,7 +566,7 @@ int MP3_ParsePlaylist_EXTM3U(char *playlist_buf, unsigned int length, mp3_tracks
 
 			COM_MakePrintable(s);
 			songList->num[playlist_size] = trackNum;
-			songList->name[playlist_size++] = CopyString(va( (trackNum2 < 10) ? "%i. %s" : (trackNum2 < 100) ? "%2i. %s" : (trackNum2 < 1000) ? "%3i. %s" : "%4i. %s", trackNum, s), TAGMALLOC_MP3LIST);
+			songList->name[playlist_size++] = CopyString(va("%*i. %s", trackNumLen, trackNum, s), TAGMALLOC_MP3LIST);
 
 			if(playlist_size >= songCount)
 				break;
@@ -585,6 +576,14 @@ int MP3_ParsePlaylist_EXTM3U(char *playlist_buf, unsigned int length, mp3_tracks
 			if(!songCount)
 				return 0;
 
+			for(j = 1; ; j++)
+			{
+				if(trackNum2 < (int)pow(10, j))
+				{
+					trackNumLen = j;
+					break;
+				}
+			}
 			songList->name = Z_TagMalloc (sizeof(char *) * songCount, TAGMALLOC_MP3LIST);
 			songList->num = Z_TagMalloc (sizeof(int) * songCount, TAGMALLOC_MP3LIST);
 			counted = true;
@@ -620,7 +619,6 @@ void MP3_PrintPlaylist_f (void)
 		return;
 
 	filter = Cmd_Args();
-	Q_strlwr(filter);
 
 	MP3_GetPlaylistInfo (&current, NULL);
 
@@ -729,7 +727,7 @@ void MP3_Frame (void)
 		return;
 
 	songtitle = MP3_SongTitle(true);
-	if (!songtitle)
+	if (!*songtitle)
 		return;
 
 	curTrack = track;

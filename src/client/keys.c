@@ -39,7 +39,7 @@ qboolean	shift_down	= false;
 
 typedef struct
 {
-	char	*name;
+	const char	*name;
 	int		keynum;
 } keyname_t;
 
@@ -178,7 +178,7 @@ the given string.  Single ascii characters return themselves, while
 the K_* names are matched up.
 ===================
 */
-int Key_StringToKeynum (char *str)
+static int Key_StringToKeynum (const char *str)
 {
 	keyname_t	*kn;
 	
@@ -204,7 +204,7 @@ given keynum.
 FIXME: handle quote special (general escape sequence?)
 ===================
 */
-char *Key_KeynumToString (int keynum)
+const char *Key_KeynumToString (int keynum)
 {
 	keyname_t	*kn;	
 	static	char	tinystr[2];
@@ -233,19 +233,16 @@ Key_SetBinding
 */
 void Key_SetBinding (int keynum, const char *binding)
 {
-//	int		l;
 			
 	if (keynum == -1)
 		return;
 
-// free old bindings
-	if (keybindings[keynum])
-	{
-		Z_Free (keybindings[keynum]);
-		keybindings[keynum] = NULL;
+	// free old bindings
+	if (keybindings[keynum]) {
+		Z_Free(keybindings[keynum]);
 	}
 			
-// allocate memory for new binding
+	// allocate memory for new binding
 	keybindings[keynum] = CopyString(binding, TAGMALLOC_CLIENT_KEYBIND);
 }
 
@@ -292,7 +289,6 @@ Key_Bind_f
 void Key_Bind_f (void)
 {
 	int			c, b;
-//	char		cmd[1024];
 	
 	c = Cmd_Argc();
 
@@ -317,15 +313,6 @@ void Key_Bind_f (void)
 		return;
 	}
 	
-// copy the rest of the command line
-/*	cmd[0] = 0;		// start out with a null string
-	for (i=2 ; i< c ; i++)
-	{
-		strcat (cmd, Cmd_Argv(i));
-		if (i != (c-1))
-			strcat (cmd, " ");
-	}*/
-
 	Key_SetBinding (b, Cmd_ArgsFrom(2));
 }
 
@@ -340,9 +327,10 @@ void Key_WriteBindings (FILE *f)
 {
 	int		i;
 
-	for (i=0 ; i<256 ; i++)
+	for (i=0 ; i<256 ; i++) {
 		if (keybindings[i] && keybindings[i][0])
 			fprintf (f, "bind %s \"%s\"\n", Key_KeynumToString(i), keybindings[i]);
+	}
 }
 
 
@@ -356,9 +344,10 @@ void Key_Bindlist_f (void)
 {
 	int		i;
 
-	for (i=0 ; i<256 ; i++)
+	for (i=0 ; i<256 ; i++) {
 		if (keybindings[i] && keybindings[i][0])
 			Com_Printf ("%s \"%s\"\n", Key_KeynumToString(i), keybindings[i]);
+	}
 }
 
 
@@ -406,6 +395,8 @@ void Key_Init (void)
 	consolekeys[K_MWHEELUP] = true;
 	consolekeys[K_MWHEELDOWN] = true;
 	consolekeys[K_DEL] = true;
+
+	consolekeys[K_CTRL] = true;
 
 	consolekeys['`'] = false;
 	consolekeys['~'] = false;
@@ -488,13 +479,35 @@ void Key_Event (int key, qboolean down, unsigned time)
 	if (key == K_SHIFT)
 		shift_down = down;
 
+
+#if defined(__linux__) || defined(__FreeBSD__)
+	if (key == K_ENTER)
+	{
+		if (down && keydown[K_ALT])
+		{
+			Key_ClearStates();
+			if (Cvar_VariableIntValue("vid_fullscreen") == 0)
+			{
+				Com_Printf("Switching to fullscreen rendering\n");
+				Cvar_Set("vid_fullscreen", "1");
+			}
+			else
+			{
+				Com_Printf("Switching to windowed rendering\n");
+				Cvar_Set("vid_fullscreen", "0");
+			}
+			//Cbuf_ExecuteText( EXEC_APPEND, "vid_restart\n");
+			return;
+		}
+	}
+#endif
+
 	// console key is hardcoded, so the user can never unbind it
 	if (key == '`' || key == '~')
 	{
-		if (!down)
-			return;
+		if (down)
+			Con_ToggleConsole_f ();
 
-		Con_ToggleConsole_f ();
 		return;
 	}
 

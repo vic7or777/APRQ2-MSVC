@@ -25,7 +25,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #define WAL_SCALE 1
 #define PCX_SCALE 2
-#define IMAGES_HASH_SIZE	64
+#define IMAGES_HASH_SIZE	128
 
 image_t		gltextures[MAX_GLTEXTURES];
 static image_t	*images_hash[IMAGES_HASH_SIZE];
@@ -50,6 +50,7 @@ int		gl_tex_alpha_format = 4;
 int		gl_filter_min = GL_LINEAR_MIPMAP_NEAREST;
 int		gl_filter_max = GL_LINEAR;
 extern cvar_t *gl_gammapics;
+extern cvar_t *gl_ext_max_anisotropy;
 
 void GL_SetTexturePalette( unsigned palette[256] )
 {
@@ -170,7 +171,8 @@ static const glmode_t modes[] = {
 	{"GL_LINEAR_MIPMAP_LINEAR", GL_LINEAR_MIPMAP_LINEAR, GL_LINEAR}
 };
 
-#define NUM_GL_MODES (sizeof(modes) / sizeof (glmode_t))
+//#define NUM_GL_MODES (sizeof(modes) / sizeof (glmode_t))
+static const int NUM_GL_MODES = (sizeof(modes) / sizeof (glmode_t));
 
 typedef struct
 {
@@ -187,7 +189,8 @@ static const gltmode_t gl_alpha_modes[] = {
 	{"GL_RGBA2", GL_RGBA2},
 };
 
-#define NUM_GL_ALPHA_MODES (sizeof(gl_alpha_modes) / sizeof (gltmode_t))
+//#define NUM_GL_ALPHA_MODES (sizeof(gl_alpha_modes) / sizeof (gltmode_t))
+static const int NUM_GL_ALPHA_MODES = (sizeof(gl_alpha_modes) / sizeof (gltmode_t));
 
 static const gltmode_t gl_solid_modes[] = {
 	{"default", 3},
@@ -201,7 +204,8 @@ static const gltmode_t gl_solid_modes[] = {
 #endif
 };
 
-#define NUM_GL_SOLID_MODES (sizeof(gl_solid_modes) / sizeof (gltmode_t))
+//#define NUM_GL_SOLID_MODES (sizeof(gl_solid_modes) / sizeof (gltmode_t))
+static const int NUM_GL_SOLID_MODES = (sizeof(gl_solid_modes) / sizeof (gltmode_t));
 
 /*
 ===============
@@ -234,8 +238,8 @@ void GL_TextureMode( const char *string )
 		if (glt->type != it_pic && glt->type != it_sky )
 		{
 			GL_Bind (glt->texnum);
-			qglTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, gl_filter_min);
-			qglTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, gl_filter_max);
+			qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, gl_filter_min);
+			qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, gl_filter_max);
 		}
 	}
 }
@@ -310,6 +314,7 @@ void	GL_ImageList_f (void)
 		"RGB",
 		"PAL"
 	};
+
 
 	for (i=0, count = 0, image=gltextures; i<numgltextures ; i++, image++)
 	{
@@ -959,7 +964,7 @@ static void LoadJPG (const char *filename, byte **pic, int *width, int *height)
 	struct jpeg_decompress_struct	cinfo;
 	struct jpeg_error_mgr			jerr;
 	byte							*rawdata, *rgbadata, *scanline, *p, *q;
-	int								rawsize, i;
+	unsigned int					rawsize, i;
 
 	*pic = NULL;
 
@@ -1106,7 +1111,7 @@ static void PngReadFunc(png_struct *Png, png_bytep buf, png_size_t size)
 
 static void LoadPNG (const char *filename, byte **pic, int *width, int *height)
 {
-	int				i, rowptr;
+	unsigned int	i, rowptr;
 	png_structp		png_ptr;
 	png_infop		info_ptr;
 	png_infop		end_info;
@@ -1175,9 +1180,8 @@ static void LoadPNG (const char *filename, byte **pic, int *width, int *height)
 	}
 	else
 	{
-		int j, x;
+		unsigned int j, x = 0;
 		memset (*pic, 255, info_ptr->width * info_ptr->height * sizeof(int));
-		x = 0;
 		for (i = 0; i < info_ptr->height; i++)
 		{
 			for (j = 0; j < info_ptr->rowbytes; j+=info_ptr->channels)
@@ -1455,9 +1459,9 @@ static qboolean GL_Upload32 (unsigned *data, int width, int height,  qboolean mi
 
 	uploaded_paletted = false;
 
-	for (scaled_width = 1 ; scaled_width < width ; scaled_width<<=1)
+	for (scaled_width = 1; scaled_width < width; scaled_width<<=1)
 		;
-	for (scaled_height = 1 ; scaled_height < height ; scaled_height<<=1)
+	for (scaled_height = 1; scaled_height < height; scaled_height<<=1)
 		;
 
 	if (mipmap)
@@ -1479,19 +1483,9 @@ static qboolean GL_Upload32 (unsigned *data, int width, int height,  qboolean mi
 	}
 
 	// don't ever bother with maxtexsize textures
-	if ( qglColorTableEXT && gl_ext_palettedtexture->integer ) //palettedtexture is limited to 256
-	{
-		while ( scaled_width > 256 || scaled_height > 256 ) {
-			scaled_width >>= 1;
-			scaled_height >>= 1;
-		}
-	}
-	else
-	{
-		while ( scaled_width > gl_state.maxtexsize || scaled_height > gl_state.maxtexsize ) {
-			scaled_width >>= 1;
-			scaled_height >>= 1;
-		}
+	while ( scaled_width > gl_state.maxtexsize || scaled_height > gl_state.maxtexsize ) {
+		scaled_width >>= 1;
+		scaled_height >>= 1;
 	}
 
 	if (scaled_width < 1)
@@ -1541,7 +1535,7 @@ static qboolean GL_Upload32 (unsigned *data, int width, int height,  qboolean mi
 	}
 	else
 	{
-		scaled = Z_TagMalloc(scaled_width * scaled_height * 4, TAGMALLOC_RENDER_IMAGE);
+		scaled = Z_TagMalloc(scaled_width * scaled_height * sizeof(unsigned), TAGMALLOC_RENDER_IMAGE);
 		GL_ResampleTexture (data, width, height, scaled, scaled_width, scaled_height);
 	}
 
@@ -1556,20 +1550,19 @@ static qboolean GL_Upload32 (unsigned *data, int width, int height,  qboolean mi
 	}
 	else
 	{
-		if(mipmap && gl_sgis_mipmap->integer && gl_state.sgis_mipmap)
-		{
-			//qglTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_NEAREST);
+		if(gl_state.sgis_mipmap && mipmap)
 			qglTexParameteri (GL_TEXTURE_2D, GL_GENERATE_MIPMAP_SGIS, GL_TRUE);
-		}
+
+		if (gl_config.anisotropic && mipmap)
+			qglTexParameteri (GL_TEXTURE_2D, GL_TEXTURE_MAX_ANISOTROPY_EXT, gl_ext_max_anisotropy->integer);
 
 		qglTexImage2D( GL_TEXTURE_2D, 0, comp, scaled_width, scaled_height, 0, GL_RGBA, GL_UNSIGNED_BYTE, scaled );
 	}
 
-	if (mipmap && !gl_state.sgis_mipmap && !gl_sgis_mipmap->integer)
+	if (mipmap && (!gl_state.sgis_mipmap || uploaded_paletted))
 	{
-		int		miplevel;
+		int	miplevel = 0;
 
-		miplevel = 0;
 		while (scaled_width > 1 || scaled_height > 1)
 		{
 			GL_MipMap ((byte *)scaled, scaled_width, scaled_height);
@@ -1597,8 +1590,8 @@ static qboolean GL_Upload32 (unsigned *data, int width, int height,  qboolean mi
 
 done: ;
 
-	qglTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, (mipmap) ? gl_filter_min : gl_filter_max);
-	qglTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, gl_filter_max);
+	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, (mipmap) ? gl_filter_min : gl_filter_max);
+	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, gl_filter_max);
 
 	return (samples == gl_alpha_format);
 }
@@ -1613,7 +1606,7 @@ Returns has_alpha
 
 static qboolean GL_Upload8 (byte *data, int width, int height,  qboolean mipmap, qboolean is_sky, qboolean is_pic )
 {
-	unsigned	trans[512*256];
+	unsigned int trans[512*256];
 	int			i, s, p;
 
 	s = width*height;
@@ -1624,43 +1617,40 @@ static qboolean GL_Upload8 (byte *data, int width, int height,  qboolean mipmap,
 	if ( qglColorTableEXT && gl_ext_palettedtexture->integer && is_sky )
 	{
 		qglTexImage2D( GL_TEXTURE_2D, 0, GL_COLOR_INDEX8_EXT, width, height, 0, GL_COLOR_INDEX, GL_UNSIGNED_BYTE, data );
-		qglTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, gl_filter_max);
-		qglTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, gl_filter_max);
+		qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, gl_filter_max);
+		qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, gl_filter_max);
 
 		return false;
 	}
-	else
+
+	for (i = 0; i < s; i++)
 	{
-		for (i = 0; i < s; i++)
+		p = data[i];
+		trans[i] = d_8to24table[p];
+
+		if (p == 255)
 		{
-			p = data[i];
-			trans[i] = d_8to24table[p];
-
-			if (p == 255)
-			{
-				// transparent, so scan around for another color
-				// to avoid alpha fringes
-				// FIXME: do a full flood fill so mips work...
-				if (i > width && data[i-width] != 255)
-					p = data[i-width];
-				else if (i < s-width && data[i+width] != 255)
-					p = data[i+width];
-				else if (i > 0 && data[i-1] != 255)
-					p = data[i-1];
-				else if (i < s-1 && data[i+1] != 255)
-					p = data[i+1];
-				else
-					p = 0;
-				// copy rgb components
-				((byte *)&trans[i])[0] = ((byte *)&d_8to24table[p])[0];
-				((byte *)&trans[i])[1] = ((byte *)&d_8to24table[p])[1];
-				((byte *)&trans[i])[2] = ((byte *)&d_8to24table[p])[2];
-			}
+			// transparent, so scan around for another color
+			// to avoid alpha fringes
+			// FIXME: do a full flood fill so mips work...
+			if (i > width && data[i-width] != 255)
+				p = data[i-width];
+			else if (i < s-width && data[i+width] != 255)
+				p = data[i+width];
+			else if (i > 0 && data[i-1] != 255)
+				p = data[i-1];
+			else if (i < s-1 && data[i+1] != 255)
+				p = data[i+1];
+			else
+				p = 0;
+			// copy rgb components
+			((byte *)&trans[i])[0] = ((byte *)&d_8to24table[p])[0];
+			((byte *)&trans[i])[1] = ((byte *)&d_8to24table[p])[1];
+			((byte *)&trans[i])[2] = ((byte *)&d_8to24table[p])[2];
 		}
-
-		return GL_Upload32 (trans, width, height, mipmap, is_pic);
 	}
 
+	return GL_Upload32 (trans, width, height, mipmap, is_pic);
 }
 
 
@@ -1737,7 +1727,7 @@ image_t *GL_LoadPic (const char *name, byte *pic, int width, int height, imagety
 	if (image->type == it_pic && bits == 8 && image->width < 64 && image->height < 64)
 	{
 		int		x, y;
-		int		i, j, k = 0;
+		int		j, k = 0;
 		int		texnum;
 
 		texnum = Scrap_AllocBlock (image->width, image->height, &x, &y);
@@ -1813,17 +1803,6 @@ static image_t *GL_LoadWal (const char *name, const char *uploadName)
 	return image;
 }
 
-static unsigned int IMG_HashKey (const char *name)
-{
-	int i;
-	unsigned int hash = 0;
-
-	for( i = 0; name[i]; i++ )
-		hash += tolower(name[i]) * (i+119);
-
-	return hash & (IMAGES_HASH_SIZE-1);
-}
-
 /*
 ===============
 GL_FindImage
@@ -1878,7 +1857,7 @@ image_t	*GL_FindImage (const char *name, imagetype_t type)
 
 	pathname[len] = 0;
 
-	hash = IMG_HashKey(pathname);
+	hash = Com_HashKey(pathname, IMAGES_HASH_SIZE);
 	// look for it
 	for (image = images_hash[hash]; image; image = image->hashNext)
 	{
@@ -2003,7 +1982,7 @@ void GL_FreeUnusedImages (void)
 			continue;		// don't free pics
 
 		// delete it from hash table
-		hash = IMG_HashKey (image->name);
+		hash = Com_HashKey(image->name, IMAGES_HASH_SIZE);
 		for( back=&images_hash[hash], entry=images_hash[hash]; entry; back=&entry->hashNext, entry=entry->hashNext ) {
 			if( entry == image ) {
 				*back = entry->hashNext;
@@ -2026,11 +2005,11 @@ Draw_GetPalette
 int Draw_GetPalette (void)
 {
 	int			i, r, g, b;	
-	unsigned	v;
+	unsigned int v;
 	byte		*pal;
 	byte	default_pal[] = 
 	{
-	#include "../qcommon/def_pal.dat"
+	#include "def_pal.h"
 	};
 
 	// get the palette
@@ -2140,13 +2119,18 @@ void	GL_ShutdownImages (void)
 		memset (image, 0, sizeof(*image));
 	}
 	numgltextures = 0;
-	memset(images_hash, 0, sizeof(images_hash) );
+	memset(images_hash, 0, sizeof(images_hash));
 	memset(scrap_allocated, 0, sizeof(scrap_allocated));
 
 	if(resampleWidth) {
 		Z_Free (resampleBuffer);
 		resampleWidth = 0;
 		resampleBuffer = NULL;
+	}
+
+	if( gl_state.d_16to8table ) {	
+		FS_FreeFile(gl_state.d_16to8table);
+		gl_state.d_16to8table = NULL;	
 	}
 }
 

@@ -33,7 +33,7 @@ static void ResampleSfx (sfxcache_t *sc, int inwidth, byte *data)
 	int	sample, samplefrac, srcsample;
 	float	stepscale;
 
-	stepscale = (float)sc->speed / (float)dma.speed; // this is usually 0.5, 1, or 2
+	stepscale = (float)sc->speed / dma.speed; // this is usually 0.5, 1, or 2
 
 	outcount = sc->length / stepscale;
 	sc->length = outcount;
@@ -61,11 +61,11 @@ static void ResampleSfx (sfxcache_t *sc, int inwidth, byte *data)
 			srcsample = samplefrac >> 8;
 			samplefrac += fracstep;
 			if (inwidth == 2)
-				sample = LittleShort ( ((short *)data)[srcsample] );
+				sample = LittleShort ( ((int16 *)data)[srcsample] );
 			else
 				sample = (int)( (unsigned char)(data[srcsample]) - 128) << 8;
 			if (sc->width == 2)
-				((short *)sc->data)[i] = sample;
+				((int16 *)sc->data)[i] = sample;
 			else
 				((signed char *)sc->data)[i] = sample >> 8;
 		}
@@ -118,16 +118,24 @@ sfxcache_t *S_LoadSound (sfx_t *s)
 	}
 
 	info = GetWavinfo (s->name, data, size);
-	if (info.channels != 1)
-	{
-		Com_Printf ("%s is a stereo sample\n", s->name);
-		FS_FreeFile (data);
-		return NULL;
-	}
+#ifdef USE_OPENAL
+	if(alSound) {
+			len = 0;
+	} else {
+#endif
+		if (info.channels != 1)
+		{
+			Com_Printf ("%s is a stereo sample\n", s->name);
+			FS_FreeFile (data);
+			return NULL;
+		}
 
-	// calculate resampled length
-	len = (int)((double)info.samples * ((double)dma.speed / (double)info.rate));
-	len = len * info.width * info.channels;
+		// calculate resampled length
+		len = (int)((double)info.samples * ((double)dma.speed / (double)info.rate));
+		len = len * info.width * info.channels;
+#ifdef USE_OPENAL
+	}
+#endif
 
 	sc = s->cache = Z_TagMalloc (len + sizeof(sfxcache_t), TAGMALLOC_CLIENT_SOUNDCACHE);
 	if (!sc)
@@ -142,7 +150,14 @@ sfxcache_t *S_LoadSound (sfx_t *s)
 	sc->width = info.width;
 	sc->channels = info.channels;
 
-	ResampleSfx (sc, sc->width, data + info.dataofs);
+#ifdef USE_OPENAL
+	sc->alBufferNum = 0;
+	sc->alFormat = 0;
+	if(alSound)
+		ALSnd_CreateBuffer (sc, info.width, info.channels, data + info.dataofs, info.samples * info.width * info.channels, info.rate);
+	else
+#endif
+		ResampleSfx (sc, sc->width, data + info.dataofs);
 
 	FS_FreeFile (data);
 
@@ -165,18 +180,18 @@ static byte 	*last_chunk;
 static byte 	*iff_data;
 static int 		iff_chunk_len;
 
-static short GetLittleShort(void)
+static int16 GetLittleShort(void)
 {
-	short val = 0;
+	int16 val = 0;
 	val = *data_p;
 	val = val + (*(data_p+1)<<8);
 	data_p += 2;
 	return val;
 }
 
-static int GetLittleLong(void)
+static int32 GetLittleLong(void)
 {
-	int val = 0;
+	int32 val = 0;
 	val = *data_p;
 	val += (*(data_p+1)<<8);
 	val += (*(data_p+2)<<16);
@@ -191,13 +206,13 @@ static void FindNextChunk(const char *name)
 	{
 		data_p = last_chunk;
 
+		data_p += 4;
+
 		if (data_p >= iff_end)
 		{	// didn't find the chunk
 			data_p = NULL;
 			return;
 		}
-
-		data_p += 4;
 
 		iff_chunk_len = GetLittleLong();
 		if (iff_chunk_len < 0)
@@ -239,7 +254,7 @@ wavinfo_t GetWavinfo (const char *name, byte *wav, int wavlength)
 	FindChunk("RIFF");
 	if (!(data_p && !strncmp((char *)data_p+8, "WAVE", 4)))
 	{
-		Com_Printf("Missing RIFF/WAVE chunks\n");
+		Com_Printf("GetWavinfo: Missing RIFF/WAVE chunks (%s)\n", name);
 		return info;
 	}
 
@@ -249,7 +264,7 @@ wavinfo_t GetWavinfo (const char *name, byte *wav, int wavlength)
 	FindChunk("fmt ");
 	if (!data_p)
 	{
-		Com_Printf("Missing fmt chunk\n");
+		Com_Printf("GetWavinfo: Missing fmt chunk (%s)\n", name);
 		return info;
 	}
 
@@ -257,7 +272,7 @@ wavinfo_t GetWavinfo (const char *name, byte *wav, int wavlength)
 	format = GetLittleShort();
 	if (format != 1)
 	{
-		Com_Printf("Microsoft PCM format only\n");
+		Com_Printf("GetWavinfo: Microsoft PCM format only (%s)\n", name);
 		return info;
 	}
 
@@ -292,7 +307,7 @@ wavinfo_t GetWavinfo (const char *name, byte *wav, int wavlength)
 	FindChunk("data");
 	if (!data_p)
 	{
-		Com_Printf("Missing data chunk\n");
+		Com_Printf("GetWavinfo: Missing data chunk (%s)\n", name);
 		return info;
 	}
 

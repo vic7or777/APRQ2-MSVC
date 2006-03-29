@@ -332,7 +332,7 @@ void FloorDivMod (float numer, float denom, int *quotient,
 	if (numer >= 0.0)
 	{
 
-		x = floor(numer / denom);
+		x = (float)floor(numer / denom);
 		q = (int)x;
 		r = (int)floor(numer - (x * denom));
 	}
@@ -341,7 +341,7 @@ void FloorDivMod (float numer, float denom, int *quotient,
 	//
 	// perform operations with positive values, and fix mod to make floor-based
 	//
-		x = floor(-numer / denom);
+		x = (float)floor(-numer / denom);
 		q = -(int)x;
 		r = (int)floor(-numer - (x * denom));
 		if (r != 0)

@@ -47,7 +47,7 @@ static inputField_t con_inputLines;
 static inputField_t chat_inputLines;
 
 qboolean	key_insert	= true;
-qboolean	chat_team;
+qboolean	chat_team = false;
 
 #ifndef GL_QUAKE
 void DrawString (int x, int y, const char *s)
@@ -140,7 +140,7 @@ void Con_ToggleConsole_f (void)
 		M_ForceMenuOff ();
 		cls.key_dest = key_console;	
 
-		if (Cvar_VariableValue ("maxclients") == 1 && Com_ServerState () && !cl.attractloop && !cl_paused->integer)
+		if (Cvar_VariableIntValue ("maxclients") == 1 && Com_ServerState () && !cl.attractloop && !cl_paused->integer)
 			Cvar_Set ("paused", "1");
 	}
 }
@@ -358,8 +358,8 @@ void Con_CheckResize (void)
 
 static void OnChange_scrlines (cvar_t *self, const char *oldValue)
 {
-	if (con_scrlines->integer < 1)
-		Cvar_SetValue ("con_scrlines", 1);
+	if (self->integer < 1)
+		Cvar_Set(self->name, "1");
 }
 
 /*
@@ -386,7 +386,7 @@ void Con_Init (void)
 	con_scrlines = Cvar_Get("con_scrlines", "2", CVAR_ARCHIVE);
 	con_cmdcomplete = Cvar_Get("con_cmdcomplete", "2", 0);
 	con_scrlines->OnChange = OnChange_scrlines;
-	OnChange_scrlines(NULL, NULL);
+	OnChange_scrlines(con_scrlines, con_scrlines->resetString);
 	con_alpha = Cvar_Get ("con_alpha", "0.6", CVAR_ARCHIVE);
 
 	Cmd_AddCommand ("toggleconsole", Con_ToggleConsole_f);
@@ -680,7 +680,7 @@ void Con_DrawConsole (float frac, qboolean ingame)
 	short			*text;
 	int				row;
 	int				lines;
-	char			version[64], *text2;
+	char			version[32], *text2;
 	char			dlbar[1024];
 
 	lines = viddef.height * frac;
@@ -696,9 +696,7 @@ void Con_DrawConsole (float frac, qboolean ingame)
 	SCR_AddDirtyPoint (viddef.width-1,lines-1);
 
 	Com_sprintf (version, sizeof(version), "%s v%s", APR_APPNAME, APR_VERSION);
-
-	for (x = 0; x < strlen(version); x++)
-		Draw_Char (viddef.width-(strlen(version)*8+4)+x*8, lines-12, version[x] + 128, COLOR_WHITE, 1 );
+	DrawAltString(viddef.width-4-(strlen(version)*8), lines-12, version);
 
 
 // draw the text
@@ -735,14 +733,15 @@ void Con_DrawConsole (float frac, qboolean ingame)
 //ZOID
 	// draw the download bar
 	// figure out width
-	if (cls.download) {
+	if (cls.downloadname[0] && (cls.download || cls.downloadposition))
+	{
 		if ((text2 = strrchr(cls.downloadname, '/')) != NULL)
 			text2++;
 		else
 			text2 = cls.downloadname;
 
 		x = con.linewidth - ((con.linewidth * 7) / 40);
-		y = x - strlen(text2) - 8;
+		y = x - strlen(text2) - 20;
 		i = con.linewidth/3;
 		if (strlen(text2) > i) {
 			y = x - i - 11;
@@ -754,6 +753,7 @@ void Con_DrawConsole (float frac, qboolean ingame)
 		strcat(dlbar, ": ");
 		i = strlen(dlbar);
 		dlbar[i++] = '\x80';
+
 		// where's the dot go?
 		if (cls.downloadpercent == 0)
 			n = 0;
@@ -768,12 +768,13 @@ void Con_DrawConsole (float frac, qboolean ingame)
 		dlbar[i++] = '\x82';
 		dlbar[i] = 0;
 
-		sprintf(dlbar + strlen(dlbar), " %02d%%", cls.downloadpercent);
+		if (cls.download)
+			cls.downloadposition = ftell(cls.download);
+
+		sprintf (dlbar + i, " %02d%% (%.02f KB)", cls.downloadpercent, (float)cls.downloadposition / 1024.0);
 
 		// draw it
-		y = con.vislines-12;
-		for (i = 0; i < strlen(dlbar); i++)
-			Draw_Char ( (i+1)<<3, y, dlbar[i], COLOR_WHITE, 1);
+		DrawString(8, con.vislines-12, dlbar);
 	}
 //ZOID
 
@@ -807,6 +808,10 @@ static char shortestMatch[MAX_TOKEN_CHARS];
 static int matchCount;
 static char *completionString;
 
+#define LIST_CVARS    1
+#define LIST_COMMANDS 2
+#define LIST_ALIASES  4
+
 static int MatchShort (const compMatches_t *a, const compMatches_t *b)
 {
 	return strcmp(a->name, b->name);
@@ -836,7 +841,7 @@ static void AddMatches (const char *name, const char *value)
 	}
 
 	// cut shortestMatch to the amount common with s
-	for ( i = 0; MAX_TOKEN_CHARS; i++ ) {
+	for ( i = 0; i < MAX_TOKEN_CHARS; i++ ) {
 		if ( !name[i] || !shortestMatch[i]) {
 			if(shortestMatch[i])
 				shortestMatch[i] = 0;
@@ -845,13 +850,15 @@ static void AddMatches (const char *name, const char *value)
 		}
 		if ( tolower(shortestMatch[i]) != tolower(name[i]) ) {
 			shortestMatch[i] = 0;
+			break;
 		}
 	}
 }
+void Alias_CommandCompletion( const char *partial, void(*callback)(const char *name, const char *value) );
 
 void CompleteCommand (void)
 {
-	int		i;
+	int		i, offset = 0, listOptions, len;
 	compMatches_t *match;
 
 	completionString = con_inputLines.text[con_inputLines.editLine];
@@ -864,25 +871,100 @@ void CompleteCommand (void)
 	matchCount = 0;
 	shortestMatch[0] = 0;
 
+	if(Key_IsDown(K_CTRL) && cls.state == ca_active) //Hacky nick completion
+	{
+		qboolean skipWhite = false;
+
+		len = strlen(completionString);
+		if(!len)
+			return;
+
+		if(len > 15) {
+			if(completionString[len-16] != ' ')
+				skipWhite = true;
+
+			completionString += len - 15;
+		}
+			
+		do
+		{
+			if(skipWhite) {
+				while(*completionString && *completionString != ' ')
+					completionString++;
+			}
+
+			while(*completionString && *completionString == ' ')
+				completionString++;
+
+			len = strlen(completionString);
+			if(!len)
+				return;
+
+			for(i = 0; i < cl.maxclients; i++) {
+				if(cl.clientinfo[i].name[0] && !Q_strnicmp(cl.clientinfo[i].name, completionString, len)) {
+					AddMatches(cl.clientinfo[i].name, NULL);
+				}
+			}
+			skipWhite = true;
+		} while(!matchCount);
+		offset = 1;
+		listOptions = 0;
+	}
+	else if (!Q_strnicmp(completionString, "set ", 4)) { //Hacky
+		offset = 1;
+		completionString += 4;
+		listOptions = LIST_CVARS;
+	}
+	else if (!Q_strnicmp(completionString, "reset ", 6)) {
+		offset = 1;
+		completionString += 6;
+		listOptions = LIST_CVARS;
+	}
+	else if (!Q_strnicmp(completionString, "alias ", 6)) {
+		offset = 1;
+		completionString += 6;
+		listOptions = LIST_ALIASES;
+	}
+	else if (!Q_strnicmp(completionString, "unalias ", 8)) {
+		offset = 1;
+		completionString += 8;
+		listOptions = LIST_ALIASES;
+	}
+	else {
+		listOptions = LIST_CVARS|LIST_COMMANDS|LIST_ALIASES;
+	}
+
 	if ( strlen( completionString ) == 0 ) {
 		return;
 	}
 
-	Cmd_CommandCompletion(completionString, AddMatches);
-	Cvar_CommandCompletion(completionString, AddMatches);
+	if(listOptions & LIST_COMMANDS)
+		Cmd_CommandCompletion(completionString, AddMatches);
+	
+	if(listOptions & LIST_ALIASES)
+		Alias_CommandCompletion(completionString, AddMatches);
 
-	if ( matchCount == 0 ) {
+	if(listOptions & LIST_CVARS)
+		Cvar_CommandCompletion(completionString, AddMatches);
+
+	if ( matchCount == 0 )
 		return;	// no matches
+
+	if(offset) {
+		*completionString = '\0';
+		Q_strncatz(con_inputLines.text[con_inputLines.editLine], shortestMatch, MAX_FIELD_TEXT - 1);
 	}
-
-	IF_Init(&con_inputLines);
-
-	con_inputLines.text[con_inputLines.editLine][0] = '/';
-	strcpy (con_inputLines.text[con_inputLines.editLine]+1, shortestMatch);
+	else
+	{
+		IF_Init(&con_inputLines);
+		con_inputLines.text[con_inputLines.editLine][0] = '/';
+		strcpy (con_inputLines.text[con_inputLines.editLine]+1, shortestMatch);
+	}
 	con_inputLines.cursorPos = strlen(con_inputLines.text[con_inputLines.editLine]);
 
 	if ( matchCount == 1 || con_cmdcomplete->integer <= 1) {
 		con_inputLines.text[con_inputLines.editLine][con_inputLines.cursorPos] = ' ';
+		con_inputLines.text[con_inputLines.editLine][con_inputLines.cursorPos+1] = '\0';
 		con_inputLines.cursorPos++;
 		if(matchCount == 1 || con_cmdcomplete->integer < 1)
 			return;
@@ -909,18 +991,27 @@ void CompleteCommand (void)
 
 void IF_CharEvent( inputField_t *field, int key )
 {
-	if( key < 32 || key > 127 )
+	int len;
+
+	if (key < 32 || key > 127)
 		return;	// non printable
 
-	if( field->cursorPos >= MAX_FIELD_TEXT - 1 )
+	if (field->cursorPos >= MAX_FIELD_TEXT-1)
 		return;
 
-	if( key_insert )
-		memmove( field->text[field->editLine] + field->cursorPos + 1, field->text[field->editLine] + field->cursorPos, sizeof(field->text[field->editLine]) - field->cursorPos - 1 );
+	len = strlen(field->text[field->editLine]);
+	if (key_insert) {
+		if(len >= MAX_FIELD_TEXT-1)
+			return;
+		memmove( field->text[field->editLine] + field->cursorPos + 1, field->text[field->editLine] + field->cursorPos, len - field->cursorPos + 1 );
+	}
 
 
 	field->text[field->editLine][field->cursorPos] = key;
 	field->cursorPos++;
+
+	if (field->cursorPos == len + 1)
+		field->text[field->editLine][field->cursorPos] = 0;
 }
 
 
@@ -1014,7 +1105,7 @@ void IF_KeyEvent( inputField_t *field, int key )
 	{
 		if (field->cursorPos > 0)
 		{
-			memmove(field->text[field->editLine] + field->cursorPos - 1, field->text[field->editLine] + field->cursorPos, sizeof( field->text[field->editLine] ) - field->cursorPos );
+			memmove(field->text[field->editLine] + field->cursorPos - 1, field->text[field->editLine] + field->cursorPos, sizeof( field->text[field->editLine] ) - field->cursorPos);
 			field->cursorPos--;
 		}
 		return;
@@ -1136,6 +1227,8 @@ void Key_Console (int key)
 	if (key == K_PGUP || key == K_KP_PGUP || key == K_MWHEELUP)
 	{
 		con.display -= con_scrlines->integer;
+		if (con.display < con.current - con.totallines + 1)
+			con.display = con.current - con.totallines + 1;
 		return;
 	}
 
@@ -1151,7 +1244,78 @@ void Key_Console (int key)
 	{
 		if (Key_IsDown(K_CTRL) || !con_inputLines.text[con_inputLines.editLine][0])
 		{
-			con.display = con.current - con.totallines + 10;
+			int row, i;
+			short *text;
+			qboolean findText = false;
+
+			//Find first line with text
+			for (row = con.current - con.totallines + 1; row < con.current; row++)
+			{				
+				text = con.text + (row % con.totallines)*con.linewidth;
+				for(i=0; i<con.linewidth; i++)
+				{
+					if(text[i] != ((COLOR_WHITE<<8) | ' ')) {
+						findText = true;
+						break;
+					}
+				}
+				if(findText)
+					break;
+			}
+			
+			if(findText && row < con.display - ((con.vislines-30)>>3)+5)
+			{
+				row += ((con.vislines-30)>>3)-5;
+				if(row < con.current)
+					con.display = row;
+			}
+			return;
+		}
+	}
+
+	if(key == K_UPARROW || key == K_DOWNARROW)
+	{
+		//console buffer find
+		char *s = con_inputLines.text[con_inputLines.editLine];
+		if(Key_IsDown(K_CTRL) && *s && *s != ' ')
+		{
+			int row, i, j, len;
+			short *text;
+			qboolean findText = false;
+
+			if(key == K_DOWNARROW && con.display == con.current)
+				return;
+
+			len = strlen(s);
+			row = con.display;
+			for (;;)
+			{
+				if(key == K_UPARROW) {
+					if(--row < con.current - con.totallines+1)
+						break;
+				}
+				else if(++row > con.current)
+					break;
+
+				text = con.text + (row % con.totallines)*con.linewidth;
+				for(i=0; i<con.linewidth-len; i++) {
+					for(j = 0; j < len; j++)
+					{
+						if(toupper(text[i+j] & 127) != toupper(s[j]))
+							break;
+					}
+					if(j==len) {
+						findText = true;
+						break;
+					}
+				}
+				if(findText)
+					break;
+			}
+			
+			if(findText && row <= con.current)
+				con.display = row;
+
 			return;
 		}
 	}

@@ -50,7 +50,7 @@ void CL_DrawInventory (void)
 	char	string[1024];
 	int		x, y;
 	char	binding[1024];
-	char	*bind;
+	const char	*bind;
 	int		selected;
 	int		top;
 
@@ -90,21 +90,24 @@ void CL_DrawInventory (void)
 		// search for a binding
 		Com_sprintf (binding, sizeof(binding), "use %s", cl.configstrings[CS_ITEMS+item]);
 		bind = "";
-		for (j=0 ; j<256 ; j++)
+		for (j=0 ; j<256 ; j++) {
 			if (keybindings[j] && !Q_stricmp (keybindings[j], binding))
 			{
 				bind = Key_KeynumToString(j);
 				break;
 			}
+		}
 
 		Com_sprintf (string, sizeof(string), "%6s %3i %s", bind, cl.inventory[item],
 			cl.configstrings[CS_ITEMS+item] );
 		if (item != selected)
+		{
 			DrawAltString (x, y, string);
+		}
 		else	// draw a blinky cursor by the selected item
 		{
-			if ( (int)(cls.realtime*10) & 1)
-				Draw_Char (x-8, y, 15, COLOR_WHITE, 1);
+			if ((int)(cls.realtime>>8)&1)
+				Draw_Char (x-8, y, 13, COLOR_WHITE, 1);
 
 			DrawString (x, y, string);
 		}

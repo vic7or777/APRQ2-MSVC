@@ -34,6 +34,10 @@ extern int Developer_searchpath( void );
 #define MTYPE_FIELD			5
 #define MTYPE_BITMAP		6
 
+#define MLIST_SPACING	10
+#define MLIST_BSIZE 3
+#define MLIST_SSIZE 16
+
 #define	K_TAB			9
 #define	K_ENTER			13
 #define	K_ESCAPE		27

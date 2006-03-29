@@ -68,7 +68,7 @@ static void GL_LerpShellVerts( int nverts, const dtrivertx_t *v, const dtrivertx
 	int i;
 	float scale;
 
-	if (currententity->flags & (RF_WEAPONMODEL))
+	if (currententity->flags & RF_WEAPONMODEL)
 	{
 		if(gl_shelleffect->integer)
 			scale = 0.5f;
@@ -99,14 +99,14 @@ static void GL_DrawOutLine (const dmdl_t *paliashdr)
 	float	scale;
 	int		count;
  
-	scale = Distance( r_newrefdef.vieworg, currententity->origin)*(r_newrefdef.fov_y/90.0);
+	scale = (float)Distance( r_newrefdef.vieworg, currententity->origin)*(r_newrefdef.fov_y/90.0);
 	scale = (OUTLINEDROPOFF-scale) / OUTLINEDROPOFF;
 
 	if( scale <= 0 || scale >= 1)
 		return;
 
 	if( gl_celshading_width->value > 10)
-		Cvar_SetValue ("gl_celshading_width", 10);
+		Cvar_Set("gl_celshading_width", "10");
 
 	order = (int *)((byte *)paliashdr + paliashdr->ofs_glcmds);
 
@@ -209,8 +209,8 @@ static void GL_DrawAliasFrameLerp (const dmdl_t *paliashdr, float backlerp)
 				{
 					index_xyz = order[2];
 					order += 3;
-					qglTexCoord2f ((s_lerped[index_xyz][1] + s_lerped[index_xyz][0]) / 23.0 - cos(r_newrefdef.time*0.3),
-									s_lerped[index_xyz][2] / 23.0 - sin(r_newrefdef.time*0.3));
+					qglTexCoord2f ((s_lerped[index_xyz][1] + s_lerped[index_xyz][0]) / 23.0 - (float)cos(r_newrefdef.time*0.3f),
+									s_lerped[index_xyz][2] / 23.0 - (float)sin(r_newrefdef.time*0.3f));
 					qglVertex3fv (s_lerped[index_xyz]);
 				} while (--count);
 
@@ -398,18 +398,6 @@ static qboolean R_CullAliasModel( vec3_t bbox[8] )
 	daliasframe_t *pframe, *poldframe;
 
 	paliashdr = (dmdl_t *)currentmodel->extradata;
-
-	if ( ( currententity->frame >= paliashdr->num_frames ) || ( currententity->frame < 0 ) )
-	{
-		Com_DPrintf ( "R_CullAliasModel %s: no such frame %d\n", currentmodel->name, currententity->frame);
-		currententity->frame = 0;
-	}
-	if ( ( currententity->oldframe >= paliashdr->num_frames ) || ( currententity->oldframe < 0 ) )
-	{
-		Com_DPrintf ( "R_CullAliasModel %s: no such oldframe %d\n", currentmodel->name, currententity->oldframe);
-		currententity->oldframe = 0;
-	}
-
 	pframe = ( daliasframe_t * ) ( ( byte * ) paliashdr + paliashdr->ofs_frames +
 									  currententity->frame * paliashdr->framesize);
 
@@ -478,17 +466,17 @@ static void GL_SetShadeLight(void)
 	{
 		VectorClear (shadelight);
 		if (currententity->flags & RF_SHELL_HALF_DAM)
-			VectorSet(shadelight, 0.56, 0.59, 0.45);
+			VectorSet(shadelight, 0.56f, 0.59f, 0.45f);
 
 		if ( currententity->flags & RF_SHELL_DOUBLE )
-			shadelight[0] = 0.9, shadelight[1] = 0.7;
+			shadelight[0] = 0.9f, shadelight[1] = 0.7f;
 
 		if ( currententity->flags & RF_SHELL_RED )
-			shadelight[0] = 1.0;
+			shadelight[0] = 1.0f;
 		if ( currententity->flags & RF_SHELL_GREEN )
-			shadelight[1] = 1.0;
+			shadelight[1] = 1.0f;
 		if ( currententity->flags & RF_SHELL_BLUE )
-			shadelight[2] = 1.0;
+			shadelight[2] = 1.0f;
 	}
 	else if ( currententity->flags & RF_FULLBRIGHT )
 	{
@@ -545,7 +533,7 @@ static void GL_SetShadeLight(void)
 	{	// bonus items will pulse with time
 		float	scale, min;
 
-		scale = 0.1 * sin(r_newrefdef.time*7);
+		scale = 0.1f * (float)sin(r_newrefdef.time*7);
 		for (i=0 ; i<3 ; i++)
 		{
 			min = shadelight[i] * 0.8f;
@@ -576,6 +564,18 @@ void R_DrawAliasModel (void)
 	vec3_t		bbox[8];
 	image_t		*skin;
 
+	paliashdr = (dmdl_t *)currentmodel->extradata;
+	if ( ( currententity->frame >= paliashdr->num_frames ) || ( currententity->frame < 0 ) )
+	{
+		Com_DPrintf ( "R_DrawAliasModel %s: no such frame %d\n", currentmodel->name, currententity->frame);
+		currententity->frame = 0;
+	}
+	if ( ( currententity->oldframe >= paliashdr->num_frames ) || ( currententity->oldframe < 0 ) )
+	{
+		Com_DPrintf ( "R_DrawAliasModel %s: no such oldframe %d\n", currentmodel->name, currententity->oldframe);
+		currententity->oldframe = 0;
+	}
+
 	if (currententity->flags & RF_WEAPONMODEL)
 	{
 		if ( r_lefthand->integer == 2 )
@@ -585,7 +585,6 @@ void R_DrawAliasModel (void)
 		return;
 
 
-	paliashdr = (dmdl_t *)currentmodel->extradata;
 	c_alias_polys += paliashdr->num_tris;
 
 	GL_SetShadeLight();
@@ -652,7 +651,7 @@ void R_DrawAliasModel (void)
 	if (gl_shadows->integer && !(currententity->flags & (RF_TRANSLUCENT | RF_WEAPONMODEL)))
 	{
 		float an = currententity->angles[1]/180*M_PI;
-		VectorSet(shadevector, cos(-an), sin(-an), 1);
+		VectorSet(shadevector, (float)cos(-an), (float)sin(-an), 1);
 		VectorNormalize (shadevector);
 
 		qglRotatef (currententity->angles[2],  1, 0, 0);
@@ -668,7 +667,7 @@ void R_DrawAliasModel (void)
 
 	qglPopMatrix ();
 
-	qglColor4f (1,1,1,1);
+	qglColor4fv(colorWhite);
  
 }
 

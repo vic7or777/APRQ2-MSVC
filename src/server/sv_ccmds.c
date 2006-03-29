@@ -583,7 +583,7 @@ void SV_Map_f (void)
 	}
 	// if not a pcx, demo, or cinematic, check to make sure the level exists
 	map = Cmd_Argv(1);
-	if (!strstr (map, "."))
+	if (!strchr(map, '.'))
 	{
 		Com_sprintf (expanded, sizeof(expanded), "maps/%s.bsp", map);
 		if (FS_LoadFile (expanded, NULL) == -1)
@@ -626,7 +626,7 @@ void SV_Loadgame_f (void)
 	}
 
 	dir = Cmd_Argv(1);
-	if (strstr (dir, "..") || strstr (dir, "/") || strstr (dir, "\\") )
+	if (strstr(dir, "..") || strchr(dir, '/') || strchr(dir, '\\'))
 	{
 		Com_Printf ("Bad savedir.\n");
 	}
@@ -695,7 +695,7 @@ void SV_Savegame_f (void)
 	}
 
 	dir = Cmd_Argv(1);
-	if (strstr (dir, "..") || strstr (dir, "/") || strstr (dir, "\\") )
+	if (strstr(dir, "..") || strchr(dir, '/') || strchr(dir, '\\'))
 	{
 		Com_Printf ("Bad savedir.\n");
 	}

@@ -46,8 +46,8 @@ void RotatePointAroundVector( vec3_t dst, const vec3_t dir, const vec3_t point, 
 	vec3_t		vr, vu, vf;
 
 	s = DEG2RAD (degrees);
-	c = cos (s);
-	s = sin (s);
+	c = (float)cos(s);
+	s = (float)sin(s);
 
 	VectorCopy (dir, vf);
 	MakeNormalVectors (vf, vr, vu);
@@ -79,34 +79,37 @@ void AngleVectors (const vec3_t angles, vec3_t forward, vec3_t right, vec3_t up)
 	// static to help MS compiler fp bugs
 
 	angle = DEG2RAD(angles[YAW]);
-	sy = sin(angle);
-	cy = cos(angle);
+	sy = (float)sin(angle);
+	cy = (float)cos(angle);
 	angle = DEG2RAD(angles[PITCH]);
-	sp = sin(angle);
-	cp = cos(angle);
-	angle = DEG2RAD(angles[ROLL]);
-	sr = sin(angle);
-	cr = cos(angle);
+	sp = (float)sin(angle);
+	cp = (float)cos(angle);
 
 	if (forward)
 	{
-		forward[0] = cp*cy;
-		forward[1] = cp*sy;
+		forward[0] = cp * cy;
+		forward[1] = cp * sy;
 		forward[2] = -sp;
 	}
-	if (right)
+
+	if (right || up)
 	{
-		t = sr*sp;
-		right[0] = (-1*t*cy+-1*cr*-sy);
-		right[1] = (-1*t*sy+-1*cr*cy);
-		right[2] = -1*sr*cp;
-	}
-	if (up)
-	{
-		t = cr*sp;
-		up[0] = (t*cy+-sr*-sy);
-		up[1] = (t*sy+-sr*cy);
-		up[2] = cr*cp;
+		angle = DEG2RAD(angles[ROLL]);
+		sr = (float)sin(angle);
+		cr = (float)cos(angle);
+
+		if (right) {
+			t = sr*sp;
+			right[0] = -1*t*cy+cr*sy;
+			right[1] = -1*t*sy-cr*cy;
+			right[2] = -1*sr*cp;
+		}
+		if (up) {
+			t = cr*sp;
+			up[0] = t*cy+sr*sy;
+			up[1] = t*sy-sr*cy;
+			up[2] = cr*cp;
+		}
 	}
 }
 
@@ -140,7 +143,7 @@ void PerpendicularVector( vec3_t dst, const vec3_t src )
 		if ( fabs( src[i] ) < minelem )
 		{
 			pos = i;
-			minelem = fabs( src[i] );
+			minelem = (float)fabs( src[i] );
 		}
 	}
 	tempvec[pos] = 1.0F;
@@ -213,30 +216,24 @@ float Q_fabs (float f)
 __declspec( naked ) long Q_ftol( float f )
 {
 	static int tmp;
-	__asm fld dword ptr [esp+4]
-	__asm fistp tmp
-	__asm mov eax, tmp
-	__asm ret
+	__asm {
+		fld dword ptr [esp+4]
+		fistp tmp
+		mov eax, tmp
+		ret
+	}
 }
 #pragma warning (default:4035)
 #endif
 
 float Q_RSqrt (float number)
 {
-	int i;
-	float x2, y;
+	float	y;
 
-	if (number == 0.0)
-		return 0.0;
-
-	x2 = number * 0.5f;
-	y = number;
-	i = * (int *) &y;		// evil floating point bit level hacking
-	i = 0x5f3759df - (i >> 1);		// what the fuck?
-	y = * (float *) &i;
-	y = y * (1.5f - (x2 * y * y));	// this can be done a second time
-
-	return y;
+	if (number == 0.0f)
+		return 0.0f;
+	*((int *)&y) = 0x5f3759df - ((* (int *) &number) >> 1);
+	return y * (1.5f - (number * 0.5f * y * y));
 }
 
 /*
@@ -549,9 +546,9 @@ int	PlaneTypeForNormal (const vec3_t normal)
 	if (normal[2] >= 1.0)
 		return PLANE_Z;
 		
-	ax = fabs( normal[0] );
-	ay = fabs( normal[1] );
-	az = fabs( normal[2] );
+	ax = (float)fabs( normal[0] );
+	ay = (float)fabs( normal[1] );
+	az = (float)fabs( normal[2] );
 
 	if (ax >= ay && ax >= az)
 		return PLANE_ANYX;
@@ -581,7 +578,7 @@ vec_t VectorNormalize (vec3_t v)
 	float	length, ilength;
 
 	length = v[0]*v[0] + v[1]*v[1] + v[2]*v[2];
-	length = sqrt (length);		// FIXME
+	length = (float)sqrt (length);		// FIXME
 
 	if (length)
 	{
@@ -599,7 +596,7 @@ vec_t VectorNormalize2 (const vec3_t v, vec3_t out)
 	float	length, ilength;
 
 	length = v[0]*v[0] + v[1]*v[1] + v[2]*v[2];
-	length = sqrt (length);		// FIXME
+	length = (float)sqrt (length);		// FIXME
 
 	if (length)
 	{
@@ -633,6 +630,69 @@ int Q_log2(int val)
 
 
 //====================================================================================
+/*
+============
+COM_FixPath
+
+Change '\\' to '/', removes ./ and leading/ending '/'
+"something/a/../b" -> "something/b"
+============
+*/
+void COM_FixPath (char *path)
+{
+	int	i, j, len = 0, lastLash = -1;
+
+	for (i = 0; path[i]; i++) {
+		switch (path[i]) {
+		case '\\':
+		case '/':
+			if(!len)
+				break;
+
+			if (path[len-1] == '/') //remove multiple /
+				break;
+
+			if(path[len-1] == '.')
+			{
+				if(len == 1 || (len >= 2 && path[len-2] != '.'))
+				{	//remove "./"
+					len--;
+					break;
+				}
+			}
+
+			lastLash = len;
+			path[len++] = '/';
+			break;
+		case '.':
+			if(len >= 2 && path[len-1] == '.')
+			{
+				if(lastLash > 0 && path[lastLash-1] != '.')
+				{	//theres lastlash and its not "../"
+					for (j = lastLash-1; j >= 0; j--)
+					{
+						if(path[j] == '/')
+							break;
+					}
+					lastLash = j;
+					len = lastLash+1;			
+					break;
+				}
+				if(path[len-2] == '.')
+					break;
+			}
+			//fallthrough
+		default:
+			path[len++] = path[i];
+			break;
+		}
+	}
+	path[len] = '\0';
+
+	if (len && path[len-1] == '/')
+		path[len-1] = '\0';
+
+}
 
 /*
 ============
@@ -663,7 +723,7 @@ void COM_StripExtension (const char *in, char *out)
 	char *dot;
 
 	if (!(dot = strrchr(in, '.'))) {
-		Q_strncpyz(out, in, strlen(in) + 1);
+		strcpy(out, in);
 		return;
 	}
 	while (*in && in != dot)
@@ -721,11 +781,22 @@ void COM_MakePrintable (char *s)
 	char *string = s;
 	int	c;
 
-	while((c = *string) != 0) {
-		if ( c >= 0x20 && c <= 0x7E )
-			*s++ = c;
-
-		*string++;
+	while((c = *string++) != 0)
+	{
+		switch (c) {
+		case 'å':
+		case 'ä': *s++ = 'a'; break;
+		case 'Å':
+		case 'Ä': *s++ = 'A'; break;
+		case 'ö': *s++ = 'o'; break;
+		case 'Ö': *s++ = 'O'; break;
+		case '`':
+		case '´': *s++ = '\''; break;
+		default:	
+			if ( c >= 0x20 && c <= 0x7E )
+				*s++ = c;
+			break;
+		}
 	}
 	*s = '\0';
 }
@@ -737,7 +808,7 @@ void COM_MakePrintable (char *s)
 
 ============================================================================
 */
-short   ShortSwap (short l)
+int16 ShortSwap (int16 l)
 {
 	byte    b1, b2;
 
@@ -747,7 +818,7 @@ short   ShortSwap (short l)
 	return (b1<<8) + b2;
 }
 
-int    LongSwap (int l)
+int32 LongSwap (int32 l)
 {
 	byte    b1,b2,b3,b4;
 
@@ -756,39 +827,41 @@ int    LongSwap (int l)
 	b3 = (l>>16)&255;
 	b4 = (l>>24)&255;
 
-	return ((int)b1<<24) + ((int)b2<<16) + ((int)b3<<8) + b4;
+	return ((int32)b1<<24) + ((int32)b2<<16) + ((int32)b3<<8) + b4;
 }
 
-typedef union {
-    float	f;
-    unsigned int i;
-} _FloatByteUnion;
-
-float FloatSwap (const float *f) {
-	const _FloatByteUnion *in;
-	_FloatByteUnion out;
-
-	in = (_FloatByteUnion *)f;
-	out.i = LongSwap(in->i);
-
-	return out.f;
+float FloatSwap (float f)
+{
+	union
+	{
+		float	f;
+		byte	b[4];
+	} dat1, dat2;
+	
+	
+	dat1.f = f;
+	dat2.b[0] = dat1.b[3];
+	dat2.b[1] = dat1.b[2];
+	dat2.b[2] = dat1.b[1];
+	dat2.b[3] = dat1.b[0];
+	return dat2.f;
 }
 
 #if !defined(ENDIAN_LITTLE) && !defined(ENDIAN_BIG)
-short   (*BigShort) (short l);
-short   (*LittleShort) (short l);
-int     (*BigLong) (int l);
-int     (*LittleLong) (int l);
+int16   (*BigShort) (int16 l);
+int16   (*LittleShort) (int16 l);
+int32   (*BigLong) (int l);
+int32   (*LittleLong) (int l);
 float   (*BigFloat) (const float l);
 float   (*LittleFloat) (const float l);
 qboolean bigendien;
 
-short ShortNoSwap (short l)
+int16 ShortNoSwap (short l)
 {
 	return l;
 }
 
-int	LongNoSwap (int l)
+int32	LongNoSwap (int l)
 {
 	return l;
 }
@@ -808,7 +881,7 @@ void Swap_Init (void)
 	byte	swaptest[2] = {1,0};
 
 // set the byte swapping variables in a portable manner	
-	if ( *(short *)swaptest == 1)
+	if ( *(int16 *)swaptest == 1)
 	{
 		bigendien = false;
 		_BigShort = ShortSwap;
@@ -854,80 +927,61 @@ const char *COM_Parse (char **data_p)
 	}
 		
 // skip whitespace
-skipwhite:
-	while ( (c = *data) <= ' ')
+	do
 	{
-		if (c == 0)
+		while ((c = *data) <= ' ')
 		{
-			*data_p = NULL;
-			return com_token;
-		}
-		data++;
-	}
-	
-// skip // comments
-	if (c == '/' && data[1] == '/')
-	{
-		data += 2;
-
-		while (*data && *data != '\n')
-			data++;
-		goto skipwhite;
-	}
-
-	// skip /* */ comments
-	if (c == '/' && data[1] == '*')
-	{
-		data += 2;
-		while ( *data )
-		{
-			if (*data == '*' && *(data+1) == '/') {
-				data += 2;
-				break;
+			if (c == 0)
+			{
+				*data_p = NULL;
+				return com_token;
 			}
 			data++;
 		}
+		
+		// skip // comments
+		if (c == '/' && data[1] == '/')
+		{
+			data += 2;
 
-		goto skipwhite;
-	}
+			while (*data && *data != '\n')
+				data++;
+		}
+		else
+			break;
+	} while(1);
 
-// handle quoted strings specially
+
+	// handle quoted strings specially
 	if (c == '\"')
 	{
 		data++;
 		while (1)
 		{
 			c = *data++;
-			if (c=='\"' || !c)
-			{
-				goto finish;
-			}
+			if (c == '\"' || !c)
+				break;
+
 			if (len < MAX_TOKEN_CHARS)
-			{
-				com_token[len] = c;
-				len++;
-			}
+				com_token[len++] = c;
 		}
 	}
-
-// parse a regular word
-	do
+	else
 	{
-		if (len < MAX_TOKEN_CHARS)
+		// parse a regular word
+		do
 		{
-			com_token[len] = c;
-			len++;
-		}
-		data++;
-		c = *data;
-	} while (c>32);
+			if (len < MAX_TOKEN_CHARS)
+				com_token[len++] = c;
 
-finish:
-	if (len == MAX_TOKEN_CHARS)
-	{
-//		Com_Printf ("Token exceeded %i chars, discarded.\n", MAX_TOKEN_CHARS);
-		len = 0;
+			data++;
+			c = *data;
+		} while (c>32);
 	}
+
+	if (len == MAX_TOKEN_CHARS)
+		len = 0;
+
 	com_token[len] = 0;
 
 	*data_p = data;
@@ -941,9 +995,9 @@ Com_PageInMemory
 
 ===============
 */
-int	paged_total;
+static int	paged_total = 0;
 
-void Com_PageInMemory (byte *buffer, int size)
+void Com_PageInMemory (const byte *buffer, int size)
 {
 	int		i;
 
@@ -959,14 +1013,60 @@ void Com_PageInMemory (byte *buffer, int size)
  Returns non-zero if matches, zero otherwise.
  =================
 */
-int Com_WildCmp (const char *filter, const char *string, qboolean ignoreCase)
+int Com_WildCmp (const char *filter, const char *text)
 {
-	switch (*filter){
-	case '\0':	return !*string;
-	case '*':	return Com_WildCmp(filter + 1, string, ignoreCase) || (*string && Com_WildCmp(filter, string + 1, ignoreCase));
-	case '?':	return *string && Com_WildCmp(filter + 1, string + 1, ignoreCase);
-	default:	return ((*filter == *string) || (ignoreCase && (toupper(*filter) == toupper(*string)))) && Com_WildCmp(filter + 1, string + 1, ignoreCase);
+	int fLen, len, i, j;
+
+	while(*filter) {
+		if (*filter == '*') {
+			filter++;
+			while(*filter == '*' || *filter == '?') {
+				if(*filter++ == '?' && *text++ == '\0')
+					return false;
+			}
+			if(!*filter)
+				return true;
+		
+			for (fLen = 0; filter[fLen]; fLen++) {
+				if (filter[fLen] == '*' || filter[fLen] == '?')
+					break;
+			}
+
+			len = strlen(text) - fLen;
+			if(len < 0)
+				return false;
+
+			if(!filter[fLen]) {
+				for (text += len, j = 0; j < fLen; j++) {
+					if (toupper(text[j]) != toupper(filter[j]))
+						return false;
+				}
+				return true;
+			}
+			for (i = 0; i <= len; i++, text++) {
+				for (j = 0; j < fLen; j++) {
+					if (toupper(text[j]) != toupper(filter[j]))
+						break;
+				}
+				if (j == fLen && Com_WildCmp(filter+fLen, text+fLen))
+					return true;
+			}
+			return false;
+		}
+		else if (*filter == '?') {
+			if(*text++ == '\0')
+				return false;
+			filter++;
+		}
+		else {
+			if (toupper(*filter) != toupper(*text))
+				return false;
+
+			filter++;
+			text++;
+		}
 	}
+	return !*text;
 }
 
 /*
@@ -976,18 +1076,28 @@ Com_HashKey
 Returns hash key for a string
 ==========
 */
-unsigned int Com_HashKey (const char *name, int hashSize)
+
+unsigned int Com_HashValue (const char *name)
 {
-	int i;
+	unsigned int hash = 0;
+
+	while(*name)
+		hash = hash * 33 + tolower(*name++);
+
+	return hash + (hash >> 5);
+}
+
+unsigned int Com_HashValuePath (const char *name)
+{
 	unsigned int c, hash = 0;
 
-	for( i = 0; name[i]; i++ ) {
-		c = tolower(name[i]);
+	while(*name) {
+		c = tolower(*name++);
 		if( c == '\\' )
 			c = '/';
-		hash += c * (i+119);
+		hash = hash * 33 + c;
 	}
-	return hash & (hashSize - 1);
+	return hash + (hash >> 5);
 }
 
 /*
@@ -1026,8 +1136,44 @@ int Q_strnicmp (const char *s1, const char *s2, size_t size)
 }
 #endif
 
+/*
+============
+Q_stristr
+============
+*/
+char *Q_stristr(const char *str1, const char *str2)
+{
+	int len, i, j;
+
+	len = strlen(str1) - strlen(str2);
+	for (i = 0; i <= len; i++, str1++) {
+		for (j = 0; str2[j]; j++) {
+			if (toupper(str1[j]) != toupper(str2[j]))
+				break;
+		}
+		if (!str2[j])
+			return (char *)str1;
+	}
+	return NULL;
+}
+
+#ifndef NDEBUG
+void Com_Error (int code, const char *fmt, ...);
+#endif
+
 void Q_strncpyz( char *dest, const char *src, size_t size )
 {
+#ifndef NDEBUG
+	if ( !dest )
+		Com_Error(ERR_FATAL, "Q_strncpyz: NULL dest" );
+
+	if ( !src )
+		Com_Error(ERR_FATAL, "Q_strncpyz: NULL src" );
+
+	if ( size < 1 )
+		Com_Error(ERR_FATAL, "Q_strncpyz: size < 1" ); 
+#endif
+
 	while( --size && (*dest++ = *src++) );
 	*dest = '\0';
 }
@@ -1038,6 +1184,16 @@ Q_strncatz
 */
 void Q_strncatz( char *dest, const char *src, size_t size )
 {
+#ifndef NDEBUG
+	if ( !dest )
+		Com_Error(ERR_FATAL, "Q_strncatz: NULL dest" );
+
+	if ( !src )
+		Com_Error(ERR_FATAL, "Q_strncatz: NULL src" );
+
+	if ( size < 1 )
+		Com_Error(ERR_FATAL, "Q_strncatz: size < 1" ); 
+#endif
 	while( --size && *dest++ );
 	if( size ) {
 		dest--;
@@ -1068,7 +1224,7 @@ char	*va(const char *format, ...)
 	static int  index = 0;
 	static char	string[2][2048];
 
-	index = !index;
+	index  ^= 1;
 	va_start (argptr, format);
 	vsnprintf (string[index], sizeof(string[index]), format, argptr);
 	va_end (argptr);
@@ -1085,8 +1241,10 @@ char *Q_strlwr( char *s )
 {
 	char *p;
 
-	for( p = s; *s; s++ )
-		*s = tolower( *s );
+	for( p = s; *s; s++ ) {
+		if(isupper(*s))
+			*s += 'a' - 'A';
+	}
 
 	return p;
 }
@@ -1115,14 +1273,8 @@ char *Info_ValueForKey (const char *s, const char *key)
 	static	int	valueindex = 0;
 	char	*o;
 	
-	if ( !s || !key ) {
+	if ( !s || !key )
 		return "";
-	}
-
-	if ( strlen( s ) >= MAX_INFO_STRING ) {
-		Com_Printf ("Info_ValueForKey: oversize infostring" );
-		return "";
-	}
 
 	valueindex ^= 1;
 	if (*s == '\\')
@@ -1143,8 +1295,6 @@ char *Info_ValueForKey (const char *s, const char *key)
 
 		while (*s != '\\' && *s)
 		{
-			if (!*s)
-				return "";
 			*o++ = *s++;
 		}
 		*o = 0;
@@ -1181,11 +1331,6 @@ void Info_NextPair( const char **head, char *key, char *value ) {
 	if ( *s == '\\' )
 		s++;
 
-	if( !*s ) {
-		*head = s;
-		return;
-	}
-
 	o = key;
 	while( *s && *s != '\\' )
 		*o++ = *s++;
@@ -1204,9 +1349,6 @@ void Info_NextPair( const char **head, char *key, char *value ) {
 
 	*o = 0;
 
-	if( *s )
-		s++;
-
 	*head = s;
 }
 
@@ -1218,16 +1360,13 @@ Info_RemoveKey
 void Info_RemoveKey (char *s, const char *key)
 {
 	char	*start;
-	char	pkey[MAX_INFO_STRING];
-	char	value[MAX_INFO_STRING];
+	char	pkey[MAX_INFO_KEY];
+	char	value[MAX_INFO_VALUE];
 	char	*o;
 
-	if ( strlen( s ) >= MAX_INFO_STRING ) {
-		Com_Printf ("Info_RemoveKey: oversize infostring" );
-		return;
-	}
-
-	if (strstr (key, "\\")) {
+	if (strchr (key, '\\'))
+	{
+		Com_Printf ("Info_RemoveKey: Tried to remove illegal key '%s'\n", key);
 		return;
 	}
 
@@ -1250,27 +1389,19 @@ void Info_RemoveKey (char *s, const char *key)
 		o = value;
 		while (*s != '\\' && *s)
 		{
-			if (!*s)
-				return;
 			*o++ = *s++;
 		}
 		*o = 0;
 
 		if (!strcmp (key, pkey) )
 		{
-			//strcpy (start, s);	// remove this part
-			size_t memlen;
-
-			memlen = strlen(s);
-			memmove (start, s, memlen);
-			*(start+memlen) = 0;
+			strcpy (start, s);	// remove this part
 			return;
 		}
 
 		if (!*s)
 			return;
 	}
-
 }
 
 
@@ -1284,11 +1415,11 @@ can mess up the server's parsing
 */
 qboolean Info_Validate (const char *s)
 {
-	if (strstr (s, "\""))
-		return false;
-	if (strstr (s, ";"))
-		return false;
-	return true;
+  if (strchr(s, '"'))
+    return false;
+  if (strchr(s, ';'))
+    return false;
+  return true;
 }
 
 void Info_SetValueForKey (char *s, const char *key, const char *value)
@@ -1296,36 +1427,36 @@ void Info_SetValueForKey (char *s, const char *key, const char *value)
 	char	newi[MAX_INFO_STRING], *v;
 	int		c;
 
-	if ( strlen( s ) >= MAX_INFO_STRING ) {
-		Com_Printf ("Info_SetValueForKey: oversize infostring" );
+	if (!key || !value)
+		return;
+
+	if (strchr (key, '\\') || strchr (value, '\\') )
+	{
+		Com_Printf ("Can't use keys or values with a \\ (attempted to set key '%s')\n", key);
 		return;
 	}
 
-	if (strstr (key, "\\") || strstr (value, "\\") )
+	if (strchr (key, ';') || strchr (value, ';') )
 	{
-		Com_Printf ("Can't use keys or values with a \\\n");
+		Com_Printf ("Can't use keys or values with a semicolon (attempted to set key '%s')\n", key);
 		return;
 	}
 
-	if (strchr (key, ';') || strchr (value, ';'))
+	if (strchr (key, '"') || strchr (value, '"') )
 	{
-		Com_Printf ("Can't use keys or values with a semicolon\n");
+		Com_Printf ("Can't use keys or values with a \" (attempted to set key '%s')\n", key);
 		return;
 	}
 
-	if (strstr (key, "\"") || strstr (value, "\"") )
+	if (strlen(key) > MAX_INFO_KEY-1 || strlen(value) > MAX_INFO_KEY-1)
 	{
-		Com_Printf ("Can't use keys or values with a \"\n");
+		Com_Printf ("Keys and values must be < 64 characters (attempted to set key '%s')\n", key);
 		return;
 	}
 
-	if (strlen(key) >= MAX_INFO_KEY || strlen(value) >= MAX_INFO_KEY)
-	{
-		Com_Printf ("Keys and values must be < 64 characters.\n");
-		return;
-	}
 	Info_RemoveKey (s, key);
-	if (!value || !value[0])
+
+	if (!value[0])
 		return;
 
 	Com_sprintf (newi, sizeof(newi), "\\%s\\%s", key, value);
@@ -1348,4 +1479,3 @@ void Info_SetValueForKey (char *s, const char *key, const char *value)
 	}
 	*s = 0;
 }
-

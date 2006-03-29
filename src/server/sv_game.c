@@ -67,7 +67,7 @@ void PF_dprintf (char *fmt, ...)
 	va_list		argptr;
 	
 	va_start (argptr,fmt);
-	vsprintf (msg, fmt, argptr);
+	vsnprintf (msg, sizeof(msg), fmt, argptr);
 	va_end (argptr);
 
 	Com_Printf ("%s", msg);

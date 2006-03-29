@@ -18,7 +18,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 */
 #include "../ui/ui_local.h"
-
+#ifdef _WIN32
+#define WIN32_LEAN_AND_MEAN
+#define VC_LEANMEAN
+#include <windows.h>
+#endif
 #define REF_OPENGL	0
 #define REF_3DFX	1
 #define REF_POWERVR	2
@@ -156,14 +160,13 @@ static void ApplyChanges( void *unused )
 		{
 			if ( Q_stricmp( gl_driver->string, "3dfxgl" ) == 0 )
 			{
-				char envbuffer[1024];
+				char envbuffer[16];
 				float g;
 
-				g = 2.00 * ( 0.8 - ( vid_gamma->value - 0.5 ) ) + 1.0F;
-				Com_sprintf( envbuffer, sizeof(envbuffer), "SSTV2_GAMMA=%f", g );
-				putenv( envbuffer );
-				Com_sprintf( envbuffer, sizeof(envbuffer), "SST_GAMMA=%f", g );
-				putenv( envbuffer );
+				g = 2.00f * ( 0.8f - ( vid_gamma->value - 0.5f ) ) + 1.0F;
+				Com_sprintf( envbuffer, sizeof(envbuffer), "%g", g );
+				SetEnvironmentVariable ("SSTV2_GAMMA", envbuffer);
+				SetEnvironmentVariable ("SST_GAMMA", envbuffer);
 
 				vid_gamma->modified = false;
 			}

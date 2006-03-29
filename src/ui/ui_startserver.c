@@ -284,7 +284,7 @@ void StartServer_MenuInit( void )
 		s_rules_box.itemnames = dm_coop_names;
 //PGM
 
-	if (Cvar_VariableValue("coop"))
+	if (Cvar_VariableIntValue("coop"))
 		s_rules_box.curvalue = 1;
 	else
 		s_rules_box.curvalue = 0;
@@ -324,7 +324,7 @@ void StartServer_MenuInit( void )
 	s_maxclients_field.generic.statusbar = NULL;
 	s_maxclients_field.length = 3;
 	s_maxclients_field.visible_length = 3;
-	if ( Cvar_VariableValue( "maxclients" ) == 1 )
+	if (Cvar_VariableIntValue( "maxclients" ) == 1)
 		strcpy( s_maxclients_field.buffer, "8" );
 	else 
 		strcpy( s_maxclients_field.buffer, Cvar_VariableString("maxclients") );

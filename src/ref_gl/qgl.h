@@ -450,6 +450,18 @@ void Fake_glColorTableEXT( GLenum target, GLenum internalformat,
 
 #endif // linux
 
+#ifndef GL_NV_texture_rectangle
+#define GL_TEXTURE_RECTANGLE_NV           0x84F5
+#define GL_TEXTURE_BINDING_RECTANGLE_NV   0x84F6
+#define GL_PROXY_TEXTURE_RECTANGLE_NV     0x84F7
+#define GL_MAX_RECTANGLE_TEXTURE_SIZE_NV  0x84F8
+#endif
+
+#ifndef GL_EXT_texture_filter_anisotropic
+#define GL_TEXTURE_MAX_ANISOTROPY_EXT     0x84FE
+#define GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT 0x84FF
+#endif
+
 #ifndef __linux__
 /*
 ** extension constants
@@ -472,13 +484,6 @@ void Fake_glColorTableEXT( GLenum target, GLenum internalformat,
 #define GL_TEXTURE0_SGIS					0x835E
 #define GL_TEXTURE1_SGIS					0x835F
 extern unsigned int QGL_TEXTURE0, QGL_TEXTURE1;
-
-#ifndef GL_NV_texture_rectangle
-#define GL_TEXTURE_RECTANGLE_NV           0x84F5
-#define GL_TEXTURE_BINDING_RECTANGLE_NV   0x84F6
-#define GL_PROXY_TEXTURE_RECTANGLE_NV     0x84F7
-#define GL_MAX_RECTANGLE_TEXTURE_SIZE_NV  0x84F8
-#endif
 
 /* GL_ARB_texture_compression */
 #ifndef GL_ARB_texture_compression

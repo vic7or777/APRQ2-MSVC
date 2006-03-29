@@ -42,6 +42,7 @@ static serverStatus_t localServers[MAX_MENU_SERVERS];
 static char local_server_names[MAX_MENU_SERVERS][64];
 static char local_server_addresses[MAX_MENU_SERVERS][32];
 static char *server_shit[MAX_MENU_SERVERS];
+static int	sortedSList[MAX_MENU_SERVERS];
 
 static int		m_num_servers = 0;
 static int		m_num_adr_cvar = 0, m_num_adr_file = 0, m_num_addresses = 0;
@@ -159,22 +160,62 @@ static void M_PingServers (void)
 	}
 }
 
-static int SortServers( const serverStatus_t *a, const serverStatus_t *b )
+static int SortServers( void const *a, void const *b )
 {
-	if(a->numPlayers > b->numPlayers)
+	int anum, bnum;
+
+	anum = *(int *) a;
+	bnum = *(int *) b;
+
+	if(localServers[anum].numPlayers > localServers[bnum].numPlayers)
 		return -1;
 
-	if(a->numPlayers < b->numPlayers)
+	if(localServers[anum].numPlayers < localServers[bnum].numPlayers)
 		return 1;
 
 	return 0;
 }
 
+static int titleMax = 0;
+
+void CopyServerTitle(char *buf, int size, const serverStatus_t *status)
+{
+	char map[64], *s;
+	int clients, len, mlen, i, maxLen;
+
+	s = Info_ValueForKey(status->infostring, "hostname");
+	Q_strncpyz(buf, s, size);
+
+	s = Info_ValueForKey(status->infostring, "mapname");
+	clients = atoi(Info_ValueForKey(status->infostring, "maxclients"));
+	Com_sprintf(map, sizeof(map), " %-10s %2i/%2i", s, status->numPlayers, clients );
+
+	len = strlen(buf);
+	mlen = strlen(map);
+	maxLen = min(titleMax, size);
+
+	if(len + mlen > maxLen) {
+		if(maxLen < mlen-3)
+			buf[0] = 0;
+		else
+			buf[maxLen-mlen-3] = 0;
+		Q_strncatz(buf, "...", size);
+	}
+	else
+	{
+		for(i = len; i < maxLen-mlen; i++)
+			buf[i] = ' ';
+
+		buf[i] = 0;
+	}
+
+	Q_strncatz(buf, map, size);
+}
+
 void M_AddToServerList (const serverStatus_t *status)
 {
 	serverStatus_t *s;
-	char buffer[64];
-	int		i, clients;
+	int		i;
 
 	if(!joinMenuInitialized)
 		return;
@@ -189,24 +230,25 @@ void M_AddToServerList (const serverStatus_t *status)
 
 	localServers[m_num_servers++] = *status;
 
-	if(menu_serversort->integer)
-	{
-		qsort( localServers, m_num_servers, sizeof( localServers[0] ), (int (*)(const void *, const void *))SortServers );
-		//need to update whole list after sorting
-		for( i=0, s=localServers ; i<m_num_servers ; i++, s++ )
-		{
-			Q_strncpyz( buffer, Info_ValueForKey( s->infostring, "hostname" ), sizeof( buffer ) );
-			clients = atoi( Info_ValueForKey( s->infostring, "maxclients" ) );
-			Com_sprintf( local_server_names[i], sizeof( local_server_names[0] ), "%-18s %i/%i", buffer, s->numPlayers, clients );
-			server_shit[i] = local_server_names[i];
+	titleMax = s_joinserver_server_list.width - (MLIST_BSIZE*2);
+	if(m_num_servers > s_joinserver_server_list.maxItems)
+		titleMax -= MLIST_SSIZE;
 
+	titleMax /= 8;
+		
+
+	s = &localServers[m_num_servers-1];
+	CopyServerTitle(local_server_names[i], sizeof(local_server_names[i]), s);
+	server_shit[i] = local_server_names[i];
+	sortedSList[i] = i;
+
+	if(menu_serversort->integer) {
+		qsort(sortedSList, m_num_servers, sizeof(sortedSList[0]), SortServers);
+
+		for(i = 0; i < m_num_servers; i++)
+		{
+			server_shit[i] = local_server_names[sortedSList[i]];
 		}
-	} else {
-		s = &localServers[m_num_servers-1];
-		Q_strncpyz( buffer, Info_ValueForKey( s->infostring, "hostname" ), sizeof( buffer ) );
-		clients = atoi( Info_ValueForKey( s->infostring, "maxclients" ) );
-		Com_sprintf( local_server_names[i], sizeof( local_server_names[0] ), "%-18s %i/%i", buffer, s->numPlayers, clients );
-		server_shit[i] = local_server_names[i];
 	}
 
 	s_joinserver_server_list.count = m_num_servers;
@@ -223,7 +265,7 @@ static void JoinServerFunc( void *self )
 	if (index >= m_num_servers)
 		return;
 
-	Com_sprintf (buffer, sizeof(buffer), "connect %s\n", localServers[index].address);
+	Com_sprintf (buffer, sizeof(buffer), "connect %s\n", localServers[sortedSList[index]].address);
 	Cbuf_AddText (buffer);
 	M_ForceMenuOff ();
 }
@@ -278,7 +320,7 @@ static void JoinServer_InfoDraw( void )
 	if( index < 0 || index >= MAX_MENU_SERVERS )
 		return;
 
-	server = &localServers[index];
+	server = &localServers[sortedSList[index]];
 
 	DrawAltString( x, y, "Name            Score Ping");
 	y += 8;

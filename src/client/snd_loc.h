@@ -34,6 +34,11 @@ typedef struct
 	int 		width;
 	int 		channels;
 	byte		data[1];		// variable sized
+
+#ifdef USE_OPENAL
+	int					alFormat;
+	unsigned			alBufferNum;
+#endif
 } sfxcache_t;
 
 typedef struct sfx_s
@@ -90,6 +95,32 @@ typedef struct
 	qboolean	fixed_origin;	// use origin instead of fetching entnum's origin
 	qboolean	autosound;		// from an entity->sound, cleared each frame
 } channel_t;
+
+#ifdef USE_OPENAL
+typedef enum psndType_s {
+	PSND_ENTITY,
+	PSND_FIXED,
+	PSND_LOCAL,
+} psndType_t;
+
+typedef struct openal_channel_s
+{
+	qboolean			alRawStream;
+	qboolean			alRawPlaying;
+	psndType_t			psType;
+	sfx_t				*sfx;			// NULL if unused
+	int					entNum;			// To allow overriding a specific sound
+	int					entChannel;
+	int					startTime;		// For overriding oldest sounds
+	qboolean			alLooping;		// Looping sound
+	int					alLoopEntNum;	// Looping entity number
+	int					alLoopFrame;	// For stopping looping sounds
+	vec3_t				origin;		// Only use if fixedPosition is set
+	float				volume;
+	float				distanceMult;
+	unsigned			sourceNum;		// OpenAL source
+} openal_channel_t;
+#endif
 
 typedef struct
 {
@@ -169,7 +200,20 @@ void S_IssuePlaysound (playsound_t *ps);
 void S_PaintChannels(int endtime);
 
 // picks a channel based on priorities, empty slots, number of channels
-channel_t *S_PickChannel(int entnum, int entchannel);
+//channel_t *S_PickChannel(int entnum, int entchannel);
 
 // spatializes a channel
 //void S_Spatialize(channel_t *ch);
+
+#ifdef USE_OPENAL
+extern qboolean alSound;
+qboolean ALSnd_Init (void);
+void ALSnd_Shutdown (void);
+void ALSnd_CreateBuffer (sfxcache_t *sc, int width, int channels, byte *data, int size, int frequency);
+void ALSnd_DeleteBuffer (sfxcache_t *sc);
+void ALSnd_StopAllSounds (void);
+void ALSnd_Update (const vec3_t position, const vec3_t velocity, const vec3_t at, const vec3_t up);
+void ALSnd_Activate (qboolean active);
+void ALSnd_SoundInfo(void);
+#endif
+

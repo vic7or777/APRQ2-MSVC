@@ -45,8 +45,13 @@ typedef struct
 } mp3_track_t;
 
 void MP3_GetPlaylistInfo (int *current, int *length);
+#if defined(WITH_MPD)
+#elif defined(WITH_XMMS)
+int MP3_GetPlaylistSongs(mp3_tracks_t *songList, char *filter);
+#else
 int MP3_GetPlaylist (char **buf);
 int MP3_ParsePlaylist_EXTM3U(char *playlist_buf, unsigned int length, mp3_tracks_t *songList, const char *filter);
+#endif
 qboolean MP3_GetTrackTime(int *elapsed, int *total);
 qboolean MP3_PlayTrack (int num);
 char *MP3_Menu_SongTitle (void);

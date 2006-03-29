@@ -309,7 +309,7 @@ BOOL WriteText (LPCTSTR szText)
 		rec.Event.KeyEvent.wVirtualScanCode = CharToCode (*sz);
 		rec.Event.KeyEvent.uChar.AsciiChar = *sz;
 		rec.Event.KeyEvent.uChar.UnicodeChar = *sz;
-		rec.Event.KeyEvent.dwControlKeyState = isupper(*sz) ? 0x80 : 0x0; 
+		rec.Event.KeyEvent.dwControlKeyState = isupper((unsigned char)*sz) ? 0x80 : 0x0; 
 
 		WriteConsoleInput(
 			hStdin,
@@ -347,10 +347,10 @@ int CharToCode (char c)
 			break;
 	}
 
-	if (isalpha(c))
+	if (isalpha((unsigned char)c))
 		return (30 + upper - 65); 
 
-	if (isdigit(c))
+	if (isdigit((unsigned char)c))
 		return (1 + upper - 47);
 
 	return c;

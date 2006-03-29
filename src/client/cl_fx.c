@@ -271,7 +271,7 @@ void CL_ParseMuzzleFlash (void)
 	dl->decay = 0;
 
 	if (silenced)
-		volume = 0.2;
+		volume = 0.2f;
 	else
 		volume = 1;
 
@@ -297,7 +297,7 @@ void CL_ParseMuzzleFlash (void)
 	case MZ_SHOTGUN:
 		VectorSet(dl->color, 1, 1, 0);
 		S_StartSound (NULL, i, CHAN_WEAPON, S_RegisterSound("weapons/shotgf1b.wav"), volume, ATTN_NORM, 0);
-		S_StartSound (NULL, i, CHAN_AUTO,   S_RegisterSound("weapons/shotgr1b.wav"), volume, ATTN_NORM, 0.1);
+		S_StartSound (NULL, i, CHAN_AUTO,   S_RegisterSound("weapons/shotgr1b.wav"), volume, ATTN_NORM, 0.1f);
 		break;
 	case MZ_SSHOTGUN:
 		VectorSet(dl->color, 1, 1, 0);
@@ -316,32 +316,32 @@ void CL_ParseMuzzleFlash (void)
 		Com_sprintf(soundname, sizeof(soundname), "weapons/machgf%ib.wav", (rand() % 5) + 1);
 		S_StartSound (NULL, i, CHAN_WEAPON, S_RegisterSound(soundname), volume, ATTN_NORM, 0);
 		Com_sprintf(soundname, sizeof(soundname), "weapons/machgf%ib.wav", (rand() % 5) + 1);
-		S_StartSound (NULL, i, CHAN_WEAPON, S_RegisterSound(soundname), volume, ATTN_NORM, 0.05);
+		S_StartSound (NULL, i, CHAN_WEAPON, S_RegisterSound(soundname), volume, ATTN_NORM, 0.05f);
 		break;
 	case MZ_CHAINGUN3:
 		dl->radius = 250 + (rand()&31);
 		VectorSet(dl->color, 1, 1, 0);
-		dl->die = cl.time  + 0.1;	// long delay
+		dl->die = cl.time  + 0.1f;	// long delay
 		Com_sprintf(soundname, sizeof(soundname), "weapons/machgf%ib.wav", (rand() % 5) + 1);
 		S_StartSound (NULL, i, CHAN_WEAPON, S_RegisterSound(soundname), volume, ATTN_NORM, 0);
 		Com_sprintf(soundname, sizeof(soundname), "weapons/machgf%ib.wav", (rand() % 5) + 1);
-		S_StartSound (NULL, i, CHAN_WEAPON, S_RegisterSound(soundname), volume, ATTN_NORM, 0.033);
+		S_StartSound (NULL, i, CHAN_WEAPON, S_RegisterSound(soundname), volume, ATTN_NORM, 0.033f);
 		Com_sprintf(soundname, sizeof(soundname), "weapons/machgf%ib.wav", (rand() % 5) + 1);
-		S_StartSound (NULL, i, CHAN_WEAPON, S_RegisterSound(soundname), volume, ATTN_NORM, 0.066);
+		S_StartSound (NULL, i, CHAN_WEAPON, S_RegisterSound(soundname), volume, ATTN_NORM, 0.066f);
 		break;
 	case MZ_RAILGUN:
-		VectorSet(dl->color, 0.5, 0.5, 1.0);
+		VectorSet(dl->color, 0.5f, 0.5f, 1.0f);
 		S_StartSound (NULL, i, CHAN_WEAPON, S_RegisterSound("weapons/railgf1a.wav"), volume, ATTN_NORM, 0);
 		break;
 	case MZ_ROCKET:
-		VectorSet(dl->color, 1, 0.5, 0.2);
+		VectorSet(dl->color, 1, 0.5f, 0.2f);
 		S_StartSound (NULL, i, CHAN_WEAPON, S_RegisterSound("weapons/rocklf1a.wav"), volume, ATTN_NORM, 0);
-		S_StartSound (NULL, i, CHAN_AUTO,   S_RegisterSound("weapons/rocklr1b.wav"), volume, ATTN_NORM, 0.1);
+		S_StartSound (NULL, i, CHAN_AUTO,   S_RegisterSound("weapons/rocklr1b.wav"), volume, ATTN_NORM, 0.1f);
 		break;
 	case MZ_GRENADE:
-		VectorSet(dl->color, 1, 0.5, 0);
+		VectorSet(dl->color, 1, 0.5f, 0);
 		S_StartSound (NULL, i, CHAN_WEAPON, S_RegisterSound("weapons/grenlf1a.wav"), volume, ATTN_NORM, 0);
-		S_StartSound (NULL, i, CHAN_AUTO,   S_RegisterSound("weapons/grenlr1b.wav"), volume, ATTN_NORM, 0.1);
+		S_StartSound (NULL, i, CHAN_AUTO,   S_RegisterSound("weapons/grenlr1b.wav"), volume, ATTN_NORM, 0.1f);
 		break;
 	case MZ_BFG:
 		VectorSet(dl->color, 0, 1, 0);
@@ -368,19 +368,19 @@ void CL_ParseMuzzleFlash (void)
 		break;
 	// RAFAEL
 	case MZ_PHALANX:
-		VectorSet(dl->color, 1, 0.5, 0.5);
+		VectorSet(dl->color, 1, 0.5f, 0.5f);
 		S_StartSound (NULL, i, CHAN_WEAPON, S_RegisterSound("weapons/plasshot.wav"), volume, ATTN_NORM, 0);
 		break;
 	// RAFAEL
 	case MZ_IONRIPPER:
-		VectorSet(dl->color, 1, 0.5, 0.5);
+		VectorSet(dl->color, 1, 0.5f, 0.5f);
 		S_StartSound (NULL, i, CHAN_WEAPON, S_RegisterSound("weapons/rippfire.wav"), volume, ATTN_NORM, 0);
 		break;
 
 // ======================
 // PGM
 	case MZ_ETF_RIFLE:
-		VectorSet(dl->color, 0.9, 0.7, 0);
+		VectorSet(dl->color, 0.9f, 0.7f, 0);
 		S_StartSound (NULL, i, CHAN_WEAPON, S_RegisterSound("weapons/nail1.wav"), volume, ATTN_NORM, 0);
 		break;
 	case MZ_SHOTGUN2:
@@ -616,14 +616,14 @@ void CL_ParseMuzzleFlash2 (void)
 
 	case MZ2_CHICK_ROCKET_1:
 	case MZ2_TURRET_ROCKET:			// PGM
-		VectorSet(dl->color, 1, 0.5, 0.2);
+		VectorSet(dl->color, 1, 0.5f, 0.2f);
 		S_StartSound (NULL, ent, CHAN_WEAPON, S_RegisterSound("chick/chkatck2.wav"), 1, ATTN_NORM, 0);
 		break;
 
 	case MZ2_TANK_ROCKET_1:
 	case MZ2_TANK_ROCKET_2:
 	case MZ2_TANK_ROCKET_3:
-		VectorSet(dl->color, 1, 0.5, 0.2);
+		VectorSet(dl->color, 1, 0.5f, 0.2f);
 		S_StartSound (NULL, ent, CHAN_WEAPON, S_RegisterSound("tank/tnkatck1.wav"), 1, ATTN_NORM, 0);
 		break;
 
@@ -638,7 +638,7 @@ void CL_ParseMuzzleFlash2 (void)
 //	case MZ2_CARRIER_ROCKET_2:
 //	case MZ2_CARRIER_ROCKET_3:
 //	case MZ2_CARRIER_ROCKET_4:
-		VectorSet(dl->color, 1, 0.5, 0.2);
+		VectorSet(dl->color, 1, 0.5f, 0.2f);
 		S_StartSound (NULL, ent, CHAN_WEAPON, S_RegisterSound("tank/rocket.wav"), 1, ATTN_NORM, 0);
 		break;
 
@@ -646,7 +646,7 @@ void CL_ParseMuzzleFlash2 (void)
 	case MZ2_GUNNER_GRENADE_2:
 	case MZ2_GUNNER_GRENADE_3:
 	case MZ2_GUNNER_GRENADE_4:
-		VectorSet(dl->color, 1, 0.5, 0);
+		VectorSet(dl->color, 1, 0.5f, 0);
 		S_StartSound (NULL, ent, CHAN_WEAPON, S_RegisterSound("gunner/gunatck3.wav"), 1, ATTN_NORM, 0);
 		break;
 
@@ -655,12 +655,12 @@ void CL_ParseMuzzleFlash2 (void)
 	case MZ2_CARRIER_RAILGUN:
 	case MZ2_WIDOW_RAIL:
 	// pmm
-		VectorSet(dl->color, 0.5, 0.5, 1.0);
+		VectorSet(dl->color, 0.5f, 0.5f, 1.0f);
 		break;
 
 // --- Xian's shit starts ---
 	case MZ2_MAKRON_BFG:
-		VectorSet(dl->color, 0.5, 1, 0.5);
+		VectorSet(dl->color, 0.5f, 1, 0.5f);
 		//S_StartSound (NULL, ent, CHAN_WEAPON, S_RegisterSound("makron/bfg_fire.wav"), 1, ATTN_NORM, 0);
 		break;
 
@@ -709,7 +709,7 @@ void CL_ParseMuzzleFlash2 (void)
 		break;
 
 	case MZ2_JORG_BFG_1:
-		VectorSet(dl->color, 0.5, 1, 0.5);
+		VectorSet(dl->color, 0.5f, 1, 0.5f);
 		break;
 
 	case MZ2_BOSS2_MACHINEGUN_R1:
@@ -864,14 +864,14 @@ int			cl_numparticles = MAX_PARTICLES;
 CL_ClearParticles
 ===============
 */
-void CL_ClearParticles (void)
+static void CL_ClearParticles (void)
 {
 	int		i;
 	
 	free_particles = &particles[0];
 	active_particles = NULL;
 
-	for (i=0 ;i<cl_numparticles ; i++)
+	for (i=0 ;i<cl_numparticles-1 ; i++)
 		particles[i].next = &particles[i+1];
 
 	particles[cl_numparticles-1].next = NULL;
@@ -1186,13 +1186,13 @@ void CL_BigTeleportParticles (const vec3_t org)
 
 		angle = M_TWOPI*(rand()&1023)/1023.0;
 		dist = rand()&31;
-		p->org[0] = org[0] + cos(angle)*dist;
-		p->vel[0] = cos(angle)*(70+(rand()&63));
-		p->accel[0] = -cos(angle)*100;
+		p->org[0] = org[0] + (float)cos(angle)*dist;
+		p->vel[0] = (float)cos(angle)*(70+(rand()&63));
+		p->accel[0] = -(float)cos(angle)*100;
 
-		p->org[1] = org[1] + sin(angle)*dist;
-		p->vel[1] = sin(angle)*(70+(rand()&63));
-		p->accel[1] = -sin(angle)*100;
+		p->org[1] = org[1] + (float)sin(angle)*dist;
+		p->vel[1] = (float)sin(angle)*(70+(rand()&63));
+		p->accel[1] = -(float)sin(angle)*100;
 
 		p->org[2] = org[2] + 8 + (rand()%90);
 		p->vel[2] = -100 + (rand()&31);
@@ -1511,7 +1511,7 @@ void CL_RocketTrail (const vec3_t start, const vec3_t end, centity_t *old)
 	VectorSubtract (end, start, vec);
 	len = VectorNormalize (vec);
 
-	VectorScale (vec, dec, vec);
+	//VectorScale (vec, dec, vec);
 
 	while (len > 0)
 	{
@@ -1582,15 +1582,15 @@ void CL_RailTrail (const vec3_t start, const vec3_t end)
 		p->time = cl.time;
 		VectorClear (p->accel);
 
-		d = i * 0.1;
-		c = cos(d);
-		s = sin(d);
+		d = i * 0.1f;
+		c = (float)cos(d);
+		s = (float)sin(d);
 
 		VectorScale (right, c, dir);
 		VectorMA (dir, s, up, dir);
 
 		p->alpha = 1.0;
-		p->alphavel = -1.0 / (1+frand()*0.2);
+		p->alphavel = -1.0 / (1+frand()*0.2f);
 		p->color = clr + (rand()&7);
 		for (j=0 ; j<3 ; j++)
 		{
@@ -1601,7 +1601,7 @@ void CL_RailTrail (const vec3_t start, const vec3_t end)
 		VectorAdd (move, vec, move);
 	}
 
-	dec = 0.75;
+	dec = 0.75f;
 	VectorScale (vec, dec, vec);
 	VectorCopy (start, move);
 
@@ -1620,7 +1620,7 @@ void CL_RailTrail (const vec3_t start, const vec3_t end)
 		VectorClear (p->accel);
 
 		p->alpha = 1.0;
-		p->alphavel = -1.0 / (0.6+frand()*0.2);
+		p->alphavel = -1.0 / (0.6f+frand()*0.2f);
 		p->color = 0x0 + (rand()&15);
 
 		for (j=0 ; j<3 ; j++)
@@ -1770,14 +1770,14 @@ void CL_FlyParticles (const vec3_t origin, int count)
 	for (i=0 ; i<count ; i+=2)
 	{
 		angle = ltime * avelocities[i][0];
-		sy = sin(angle);
-		cy = cos(angle);
+		sy = (float)sin(angle);
+		cy = (float)cos(angle);
 		angle = ltime * avelocities[i][1];
-		sp = sin(angle);
-		cp = cos(angle);
+		sp = (float)sin(angle);
+		cp = (float)cos(angle);
 		//angle = ltime * avelocities[i][2];
-		//sr = sin(angle);
-		//cr = cos(angle);
+		//sr = (float)sin(angle);
+		//cr = (float)cos(angle);
 	
 		forward[0] = cp*cy;
 		forward[1] = cp*sy;
@@ -1792,7 +1792,7 @@ void CL_FlyParticles (const vec3_t origin, int count)
 
 		p->time = cl.time;
 
-		dist = sin(ltime + i)*64;
+		dist = (float)sin(ltime + i)*64;
 		p->org[0] = origin[0] + bytedirs[i][0]*dist + forward[0]*BEAMLENGTH;
 		p->org[1] = origin[1] + bytedirs[i][1]*dist + forward[1]*BEAMLENGTH;
 		p->org[2] = origin[2] + bytedirs[i][2]*dist + forward[2]*BEAMLENGTH;
@@ -1868,14 +1868,14 @@ void CL_BfgParticles (const entity_t *ent)
 	for (i=0 ; i<NUMVERTEXNORMALS ; i++)
 	{
 		angle = ltime * avelocities[i][0];
-		sy = sin(angle);
-		cy = cos(angle);
+		sy = (float)sin(angle);
+		cy = (float)cos(angle);
 		angle = ltime * avelocities[i][1];
-		sp = sin(angle);
-		cp = cos(angle);
+		sp = (float)sin(angle);
+		cp = (float)cos(angle);
 		//angle = ltime * avelocities[i][2];
-		//sr = sin(angle);
-		//cr = cos(angle);
+		//sr = (float)sin(angle);
+		//cr = (float)cos(angle);
 	
 		forward[0] = cp*cy;
 		forward[1] = cp*sy;
@@ -1898,8 +1898,8 @@ void CL_BfgParticles (const entity_t *ent)
 		VectorClear (p->vel);
 		VectorClear (p->accel);
 
-		dist = Distance (p->org, ent->origin) / 90.0;
-		p->color = floor (0xd0 + dist * 7);
+		dist = (float)Distance (p->org, ent->origin) / 90.0;
+		p->color = (float)floor(0xd0 + dist * 7);
 		p->colorvel = 0;
 
 		p->alpha = 1.0 - dist;
@@ -1919,9 +1919,11 @@ void CL_TrapParticles (entity_t *ent)
 	vec3_t		move, vec;
 	vec3_t		start, end;
 	float		len;
-	int			j;
+	int			j, i, k;
 	cparticle_t	*p;
 	int			dec = 5;
+	float		vel;
+	vec3_t		dir, org;
 
 	ent->origin[2]-=14;
 	VectorCopy (ent->origin, start);
@@ -1962,22 +1964,10 @@ void CL_TrapParticles (entity_t *ent)
 		VectorAdd (move, vec, move);
 	}
 
-	{
-
-	
-	int			i, j, k;
-	cparticle_t	*p;
-	float		vel;
-	vec3_t		dir;
-	vec3_t		org;
-
-	
 	ent->origin[2]+=14;
 	VectorCopy (ent->origin, org);
-
-
-	for (i=-2 ; i<=2 ; i+=4)
-		for (j=-2 ; j<=2 ; j+=4)
+	for (i=-2 ; i<=2 ; i+=4) {
+		for (j=-2 ; j<=2 ; j+=4) {
 			for (k=-2 ; k<=4 ; k+=4)
 			{
 				if (!free_particles)
@@ -2008,6 +1998,7 @@ void CL_TrapParticles (entity_t *ent)
 				p->accel[0] = p->accel[1] = 0;
 				p->accel[2] = -PARTICLE_GRAVITY;
 			}
+		}
 	}
 }
 
@@ -2106,12 +2097,13 @@ CL_AddParticles
 void CL_AddParticles (void)
 {
 	cparticle_t		*p, *next;
-	float			alpha;
+	//float			alpha;
+	float			cltime;
 	float			time = 0, time2 = 0;
-	vec3_t			org;
 	cparticle_t		*active = NULL, *tail = NULL;
-	vec3_t			rgbcolor;
 	particle_t		part;
+
+	cltime = (float)cl.time;
 
 	for (p=active_particles ; p ; p=next)
 	{
@@ -2120,23 +2112,36 @@ void CL_AddParticles (void)
 		// PMM - added INSTANT_PARTICLE handling for heat beam
 		if (p->alphavel != INSTANT_PARTICLE)
 		{
-			time = (cl.time - p->time)*0.001;
-			alpha = p->alpha + time*p->alphavel;
-			if (alpha <= 0)
+			time = (cltime - p->time)*0.001f;
+			part.alpha = p->alpha + time*p->alphavel;
+			if (part.alpha <= 0)
 			{	// faded out
 				p->next = free_particles;
 				free_particles = p;
 				continue;
 			}
-			else if(alpha <= 0.3 && p->color == 0xe8)
+			else if(part.alpha <= 0.3 && p->color == 0xe8)
 			{
-				VectorSet(rgbcolor, 1.0f, 0.8f, 0.8f);
- 				V_AddStain(p->org, rgbcolor, 18);
+#if 0
+				if(rand() & 4) {
+					trace_t		tr;
+					time2 = time*time;
+					part.origin[0] = p->org[0] + p->vel[0]*time + p->accel[0]*time2;
+					part.origin[1] = p->org[1] + p->vel[1]*time + p->accel[1]*time2;
+					part.origin[2] = p->org[2] + p->vel[2]*time + p->accel[2]*time2;
+					tr = CM_BoxTrace(p->org, part.origin, vec3_origin, vec3_origin, 0, MASK_SOLID);
+					if (tr.fraction != 1.0) {
+						R_AddDecal(tr.endpos, tr.plane.normal, 0, 0, 0, 1.0f, 2 + ((rand()%21*0.05) - 0.5), 1, 0, rand()%361);
+					}
+				}
+#endif
+ 				V_AddStain(p->org, 0, 18);
  			}
 		}
 		else
 		{
-			alpha = p->alpha;
+			part.alpha = p->alpha;
+			p->alphavel = p->alpha = 0.0;
 		}
 
 		p->next = NULL;
@@ -2148,23 +2153,21 @@ void CL_AddParticles (void)
 			tail = p;
 		}
 
-		if (alpha > 1.0)
-			alpha = 1;
+		if (part.alpha > 1.0f)
+			part.alpha = 1.0f;
 
 		time2 = time*time;
 
-		org[0] = p->org[0] + p->vel[0]*time + p->accel[0]*time2;
-		org[1] = p->org[1] + p->vel[1]*time + p->accel[1]*time2;
-		org[2] = p->org[2] + p->vel[2]*time + p->accel[2]*time2;
-
-		VectorCopy (org, part.origin);
+		part.origin[0] = p->org[0] + p->vel[0]*time + p->accel[0]*time2;
+		part.origin[1] = p->org[1] + p->vel[1]*time + p->accel[1]*time2;
+		part.origin[2] = p->org[2] + p->vel[2]*time + p->accel[2]*time2;
 		part.color = p->color;
-		part.alpha = alpha;
+
 		V_AddParticle (&part);
 
 		// PMM
-		if (p->alphavel == INSTANT_PARTICLE)
-			p->alphavel = p->alpha = 0.0;
+		//if (p->alphavel == INSTANT_PARTICLE)
+		//	p->alphavel = p->alpha = 0.0;
 	}
 
 	active_particles = active;

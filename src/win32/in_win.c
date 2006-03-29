@@ -118,6 +118,7 @@ qboolean	in_appactive;
 cvar_t	*m_filter;
 cvar_t	*m_xpfix;
 cvar_t	*m_autosens;
+cvar_t	*m_accel;
 
 qboolean	mlooking;
 
@@ -610,8 +611,15 @@ void IN_MouseMove (usercmd_t *cmd)
 	old_mouse_x = mx;
 	old_mouse_y = my;
 
-	mouse_x *= sensitivity->value;
-	mouse_y *= sensitivity->value;
+	if (m_accel->value) {
+		float speed = (float)sqrt(mx * mx + my * my);
+		speed = sensitivity->value + speed * m_accel->value;
+		mouse_x *= speed;
+		mouse_y *= speed;
+	} else {
+		mouse_x *= sensitivity->value;
+		mouse_y *= sensitivity->value;
+	}
 
 	if (m_autosens->integer)
 	{
@@ -654,6 +662,13 @@ static void OnChange_IN_Restart (cvar_t *self, const char *oldValue)
 		IN_Restart_f();
 }
 
+static void OnChange_IN_MAccel (cvar_t *self, const char *oldValue)
+{
+	if(self->value < 0)
+		Cvar_Set(self->name, "0");
+	else if(self->value > 1)
+		Cvar_Set(self->name, "1" );
+}
 
 /*
 ===========
@@ -668,11 +683,14 @@ void IN_Init (void)
 
 	m_xpfix					= Cvar_Get ("m_xpfix",					"0",		CVAR_ARCHIVE);
 	m_autosens				= Cvar_Get ("m_autosens",				"0",		0);
+	m_accel					= Cvar_Get ("m_accel",					"0",		0);
 
 	m_directinput			= Cvar_Get ("m_directinput",			"0",		0);
 
 	m_xpfix->OnChange = OnChange_IN_Restart;
 	m_directinput->OnChange = OnChange_IN_Restart;
+	m_accel->OnChange = OnChange_IN_MAccel;
+	OnChange_IN_MAccel(m_accel, m_accel->resetString);
 
 #ifdef JOYSTICK
 	// joystick variables
@@ -768,7 +786,7 @@ void IN_Frame (void)
 	if ( !cl.refresh_prepped || cls.key_dest == key_console || cls.key_dest == key_menu)
 	{
 		// temporarily deactivate if in fullscreen
-		if (Cvar_VariableValue ("vid_fullscreen") == 0)
+		if (Cvar_VariableIntValue ("vid_fullscreen") == 0)
 		{
 			IN_DeactivateMouse ();
 			return;
@@ -1126,7 +1144,7 @@ void IN_JoyMove (usercmd_t *cmd)
 			if ((joy_advanced->value == 0.0) && mlooking)
 			{
 				// user wants forward control to become look control
-				if (fabs(fAxisValue) > joy_pitchthreshold->value)
+				if ((float)fabs(fAxisValue) > joy_pitchthreshold->value)
 				{		
 					// if mouse invert is on, invert the joystick pitch value
 					// only absolute control support here (joy_advanced is false)
@@ -1143,7 +1161,7 @@ void IN_JoyMove (usercmd_t *cmd)
 			else
 			{
 				// user wants forward control to be forward control
-				if (fabs(fAxisValue) > joy_forwardthreshold->value)
+				if ((float)fabs(fAxisValue) > joy_forwardthreshold->value)
 				{
 					cmd->forwardmove += (fAxisValue * joy_forwardsensitivity->value) * speed * cl_forwardspeed->value;
 				}
@@ -1151,14 +1169,14 @@ void IN_JoyMove (usercmd_t *cmd)
 			break;
 
 		case AxisSide:
-			if (fabs(fAxisValue) > joy_sidethreshold->value)
+			if ((float)fabs(fAxisValue) > joy_sidethreshold->value)
 			{
 				cmd->sidemove += (fAxisValue * joy_sidesensitivity->value) * speed * cl_sidespeed->value;
 			}
 			break;
 
 		case AxisUp:
-			if (fabs(fAxisValue) > joy_upthreshold->value)
+			if ((float)fabs(fAxisValue) > joy_upthreshold->value)
 			{
 				cmd->upmove += (fAxisValue * joy_upsensitivity->value) * speed * cl_upspeed->value;
 			}
@@ -1168,7 +1186,7 @@ void IN_JoyMove (usercmd_t *cmd)
 			if ((in_strafe.state & 1) || (lookstrafe->value && mlooking))
 			{
 				// user wants turn control to become side control
-				if (fabs(fAxisValue) > joy_sidethreshold->value)
+				if ((float)fabs(fAxisValue) > joy_sidethreshold->value)
 				{
 					cmd->sidemove -= (fAxisValue * joy_sidesensitivity->value) * speed * cl_sidespeed->value;
 				}
@@ -1176,7 +1194,7 @@ void IN_JoyMove (usercmd_t *cmd)
 			else
 			{
 				// user wants turn control to be turn control
-				if (fabs(fAxisValue) > joy_yawthreshold->value)
+				if ((float)fabs(fAxisValue) > joy_yawthreshold->value)
 				{
 					if(dwControlMap[i] == JOY_ABSOLUTE_AXIS)
 					{
@@ -1194,7 +1212,7 @@ void IN_JoyMove (usercmd_t *cmd)
 		case AxisLook:
 			if (mlooking)
 			{
-				if (fabs(fAxisValue) > joy_pitchthreshold->value)
+				if ((float)fabs(fAxisValue) > joy_pitchthreshold->value)
 				{
 					// pitch movement detected and pitch movement desired by user
 					if(dwControlMap[i] == JOY_ABSOLUTE_AXIS)

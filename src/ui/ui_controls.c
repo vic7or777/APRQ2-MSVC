@@ -170,11 +170,11 @@ static void InvertMouseFunc( void *unused )
 {
 	if ( s_options_invertmouse_box.curvalue == 0 )
 	{
-		Cvar_SetValue( "m_pitch", fabs( m_pitch->value ) );
+		Cvar_SetValue( "m_pitch", (float)fabs( m_pitch->value ) );
 	}
 	else
 	{
-		Cvar_SetValue( "m_pitch", -fabs( m_pitch->value ) );
+		Cvar_SetValue( "m_pitch", -(float)fabs( m_pitch->value ) );
 	}
 }
 
@@ -308,7 +308,7 @@ void Options_MenuInit( void )
 		0
 	};
 
-	squality = Cvar_VariableValue ("s_khz");
+	squality = Cvar_VariableIntValue("s_khz");
 
 	switch (squality)	{
 		case 11:
@@ -367,7 +367,7 @@ void Options_MenuInit( void )
 	s_options_compatibility_list.generic.name	= "sound compatibility";
 	s_options_compatibility_list.generic.callback = UpdateSoundQualityFunc;
 	s_options_compatibility_list.itemnames		= compatibility_items;
-	s_options_compatibility_list.curvalue		= Cvar_VariableValue( "s_primary" );
+	s_options_compatibility_list.curvalue		= Cvar_VariableIntValue( "s_primary" );
 
 	s_options_sensitivity_slider.generic.type	= MTYPE_SLIDER;
 	s_options_sensitivity_slider.generic.x		= 0;
@@ -446,11 +446,7 @@ void Options_MenuInit( void )
 	s_options_mp3_action.generic.x		= 0;
 	s_options_mp3_action.generic.y		= y += 10;
 	s_options_mp3_action.generic.callback = MP3Func;
-#endif
-#if defined(_WIN32)
-	s_options_mp3_action.generic.name	= "Winamp";
-#elif defined(WITH_XMMS)
-	s_options_mp3_action.generic.name	= "XMMS";
+	s_options_mp3_action.generic.name	= MP3_PLAYERNAME_LEADINGCAP;
 #endif
 
 	s_options_customize_options_action.generic.type	= MTYPE_ACTION;

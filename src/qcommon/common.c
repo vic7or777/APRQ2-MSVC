@@ -72,6 +72,8 @@ static tagmalloc_tag_t tagmalloc_tags[] =
 	{TAGMALLOC_CLIENT_LOADPCX, "CLIENT_LOADPCX", 0},
 	{TAGMALLOC_CLIENT_CINEMA, "CLIENT_CINEMA", 0},
 	{TAGMALLOC_CLIENT_LOC, "CLIENT_LOC", 0},
+	{TAGMALLOC_CLIENT_IGNORE, "CLIENT_IGNORE", 0},
+	{TAGMALLOC_CLIENT_DOWNLOAD, "CLIENT_DOWNLOAD", 0},
 	{TAGMALLOC_X86, "X86CACHE", 0},
 	{TAGMALLOC_CLIPBOARD, "SYSTEM_CLIPB", 0},
 
@@ -168,7 +170,7 @@ void Com_Printf (const char *fmt, ...)
 	}
 
 	// Strip the last bit off
-	for( i = skip; msg[i] != 0; i++ ) {
+	for( i = skip; msg[i]; i++ ) {
 		if(colors && Q_IsColorString(msg+i)) {
 			memmove( msg + i, msg + i + 2, sizeof(msg) - i - 2 );
 			i--;
@@ -768,7 +770,7 @@ int MSG_ReadShort (sizebuf_t *msg_read)
 	if (msg_read->readcount+2 > msg_read->cursize)
 		c = -1;
 	else		
-		c = (short)(msg_read->data[msg_read->readcount]
+		c = (int16)(msg_read->data[msg_read->readcount]
 		+ (msg_read->data[msg_read->readcount+1]<<8));
 	
 	msg_read->readcount += 2;
@@ -825,7 +827,7 @@ char *MSG_ReadString (sizebuf_t *msg_read)
 	
 	do
 	{
-		c = MSG_ReadChar (msg_read);
+		c = MSG_ReadByte (msg_read);
 
 		if (c == -1 || c == 0)
 			break;
@@ -845,7 +847,7 @@ char *MSG_ReadStringLine (sizebuf_t *msg_read)
 	
 	do
 	{
-		c = MSG_ReadChar (msg_read);
+		c = MSG_ReadByte (msg_read);
 
 		if (c == -1 || c == 0 || c == '\n')
 			break;
@@ -1149,8 +1151,8 @@ just cleared malloc with counters now...
 typedef struct zhead_s
 {
 	struct zhead_s	*prev, *next;
-	short	magic;
-	short	tag;			// for group free
+	int16	magic;
+	int16	tag;			// for group free
 	int		size;
 } zhead_t;
 
@@ -1189,9 +1191,9 @@ void Z_Free (void *ptr)
 	if (z->magic != Z_MAGIC) {
 		if (z->tag < TAGMALLOC_MAX_TAGS)
 			Com_Error (ERR_FATAL, "Z_Free: bad magic from %s", tagmalloc_tags[z->tag].name);
-		else if (z->tag == TAG_LEVEL)
+		else if (z->tag == TAGMALLOC_DLL_LEVEL)
 			Com_Error (ERR_FATAL, "Z_Free: bad magic from Game DLL (LEVEL)");
-		else if(z->tag == TAG_GAME)
+		else if(z->tag == TAGMALLOC_DLL_GAME)
 			Com_Error (ERR_FATAL, "Z_Free: bad magic from Game DLL (GAME)");
 		else
 			Com_Error (ERR_FATAL, "Z_Free: bad magic");
@@ -1267,7 +1269,7 @@ void Z_FreeTags (int tag)
 {
 	zhead_t	*z, *next;
 
-	for (z=z_chain.next ; z != &z_chain ; z=next)
+	for (z=z_chain.next ; z && z != &z_chain ; z=next)
 	{
 		next = z->next;
 		if (z->tag == tag)
@@ -1346,7 +1348,6 @@ char *CopyString (const char *in, int tag)
 	out = Z_TagMalloc (len+1, tag);
 #endif
 	strcpy (out, in);
-	out[len] = 0;
 
 	return out;
 }
@@ -1416,7 +1417,7 @@ static void Z_FreeAll(void)
 {
 	zhead_t	*z, *next;
 
-	for (z=z_chain.next ; z != &z_chain ; z=next)
+	for (z=z_chain.next ; z && z != &z_chain ; z=next)
 	{
 		next = z->next;
 #ifndef NDEBUG
@@ -1573,11 +1574,10 @@ For proxy protecting
 */
 byte	COM_BlockSequenceCRCByte (byte *base, int length, int sequence)
 {
-	int		n;
+	int			n, x;
 	const byte	*p;
-	int		x;
-	byte chkb[60 + 4];
-	unsigned short crc;
+	byte		chkb[60 + 4];
+	uint16		crc;
 
 
 	if (sequence < 0)
@@ -1630,8 +1630,8 @@ static void Com_Date_m( char *buffer, int bufferSize )
 
 static void OnChange_Timescale (cvar_t *self, const char *oldValue)
 {
-	if(timescale->value > 400)
-		Cvar_SetValue("timescale", 400);
+	if(self->value > 400)
+		Cvar_Set(self->name, "400");
 }
 
 /*

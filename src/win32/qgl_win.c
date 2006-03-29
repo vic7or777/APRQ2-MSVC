@@ -808,16 +808,13 @@ void QGL_Shutdown( void )
 qboolean QGL_Init( const char *dllname )
 {
 	// update 3Dfx gamma irrespective of underlying DLL
-	{
-		char envbuffer[1024];
-		float g;
+	char envbuffer[16];
+	float g;
 
-		g = 2.00 * ( 0.8 - ( vid_gamma->value - 0.5 ) ) + 1.0F;
-		Com_sprintf( envbuffer, sizeof(envbuffer), "SSTV2_GAMMA=%f", g );
-		putenv( envbuffer );
-		Com_sprintf( envbuffer, sizeof(envbuffer), "SST_GAMMA=%f", g );
-		putenv( envbuffer );
-	}
+	g = 2.00f * ( 0.8f - ( vid_gamma->value - 0.5f ) ) + 1.0F;
+	Com_sprintf( envbuffer, sizeof(envbuffer), "%g", g );
+	SetEnvironmentVariable ("SSTV2_GAMMA", envbuffer);
+	SetEnvironmentVariable ("SST_GAMMA", envbuffer);
 
 	if ( ( glw_state.hinstOpenGL = LoadLibrary( dllname ) ) == 0 )
 	{

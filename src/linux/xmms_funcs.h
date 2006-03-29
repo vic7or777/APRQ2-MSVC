@@ -43,6 +43,7 @@ XMMS_FUNC (gint, xmms_remote_get_main_volume, (gint session))
 XMMS_FUNC (void, xmms_remote_set_main_volume, (gint session, gint v))
 XMMS_FUNC (void, xmms_remote_toggle_repeat, (gint session))
 XMMS_FUNC (void, xmms_remote_toggle_shuffle, (gint session))
+XMMS_FUNC (void, g_free, (gpointer))
 
 #ifdef UNDEF_XMMS_FUNC
 #undef XMMS_FUNC

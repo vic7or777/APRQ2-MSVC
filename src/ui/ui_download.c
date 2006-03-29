@@ -89,7 +89,7 @@ void DownloadOptions_MenuInit( void )
 	s_allow_download_box.generic.name	= "allow downloading";
 	s_allow_download_box.generic.callback = DownloadCallback;
 	s_allow_download_box.itemnames = yes_no_names;
-	s_allow_download_box.curvalue = (Cvar_VariableValue("allow_download") != 0);
+	s_allow_download_box.curvalue = (Cvar_VariableIntValue("allow_download") != 0);
 
 	s_allow_download_maps_box.generic.type = MTYPE_SPINCONTROL;
 	s_allow_download_maps_box.generic.x	= 0;
@@ -97,7 +97,7 @@ void DownloadOptions_MenuInit( void )
 	s_allow_download_maps_box.generic.name	= "maps";
 	s_allow_download_maps_box.generic.callback = DownloadCallback;
 	s_allow_download_maps_box.itemnames = yes_no_names;
-	s_allow_download_maps_box.curvalue = (Cvar_VariableValue("allow_download_maps") != 0);
+	s_allow_download_maps_box.curvalue = (Cvar_VariableIntValue("allow_download_maps") != 0);
 
 	s_allow_download_players_box.generic.type = MTYPE_SPINCONTROL;
 	s_allow_download_players_box.generic.x	= 0;
@@ -105,7 +105,7 @@ void DownloadOptions_MenuInit( void )
 	s_allow_download_players_box.generic.name	= "player models/skins";
 	s_allow_download_players_box.generic.callback = DownloadCallback;
 	s_allow_download_players_box.itemnames = yes_no_names;
-	s_allow_download_players_box.curvalue = (Cvar_VariableValue("allow_download_players") != 0);
+	s_allow_download_players_box.curvalue = (Cvar_VariableIntValue("allow_download_players") != 0);
 
 	s_allow_download_models_box.generic.type = MTYPE_SPINCONTROL;
 	s_allow_download_models_box.generic.x	= 0;
@@ -113,7 +113,7 @@ void DownloadOptions_MenuInit( void )
 	s_allow_download_models_box.generic.name	= "models";
 	s_allow_download_models_box.generic.callback = DownloadCallback;
 	s_allow_download_models_box.itemnames = yes_no_names;
-	s_allow_download_models_box.curvalue = (Cvar_VariableValue("allow_download_models") != 0);
+	s_allow_download_models_box.curvalue = (Cvar_VariableIntValue("allow_download_models") != 0);
 
 	s_allow_download_sounds_box.generic.type = MTYPE_SPINCONTROL;
 	s_allow_download_sounds_box.generic.x	= 0;
@@ -121,7 +121,7 @@ void DownloadOptions_MenuInit( void )
 	s_allow_download_sounds_box.generic.name	= "sounds";
 	s_allow_download_sounds_box.generic.callback = DownloadCallback;
 	s_allow_download_sounds_box.itemnames = yes_no_names;
-	s_allow_download_sounds_box.curvalue = (Cvar_VariableValue("allow_download_sounds") != 0);
+	s_allow_download_sounds_box.curvalue = (Cvar_VariableIntValue("allow_download_sounds") != 0);
 
 	s_downloadoptions_menu.draw = NULL;
 	s_downloadoptions_menu.key = NULL;

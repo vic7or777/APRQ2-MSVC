@@ -40,7 +40,8 @@ static qboolean	mlooking;
 cvar_t	*m_filter;
 cvar_t	*in_mouse;
 cvar_t	*in_dgamouse;
-
+cvar_t	*m_autosens;
+cvar_t	*m_accel;
 
 void IN_MLookDown (void) 
 { 
@@ -71,11 +72,13 @@ void IN_Init(void)
 	m_filter = Cvar_Get ("m_filter", "0", 0);
 	in_mouse = Cvar_Get ("in_mouse", "1", CVAR_ARCHIVE);
 	in_dgamouse = Cvar_Get ("in_dgamouse", "1", CVAR_ARCHIVE);
+	m_autosens				= Cvar_Get ("m_autosens",				"0",		0);
+	m_accel					= Cvar_Get ("m_accel",					"0",		0);
 
 	Cmd_AddCommand ("+mlook", IN_MLookDown);
 	Cmd_AddCommand ("-mlook", IN_MLookUp);
 
-	mx = my = 0.0;  
+	mx = my = 0;  
 	mouse_avail = true;	
 }
 
@@ -124,23 +127,36 @@ void IN_Move (usercmd_t *cmd)
 	if (!mouse_avail)
 		return;
 
-	if (m_filter->integer)
-	{
-		mx = (mx + old_mouse_x) * 0.5;
-		my = (my + old_mouse_y) * 0.5;
-	}
-
-	old_mouse_x = mx;
-	old_mouse_y = my;
-
 	if( cls.key_dest == key_menu ) {
 		M_MouseMove( mx, my );
 		mx = my = 0;
 		return;
 	}
 
-	mx *= sensitivity->value;
-	my *= sensitivity->value;
+	if (m_filter->integer)
+	{
+		mx = (mx + old_mouse_x) * 0.5f;
+		my = (my + old_mouse_y) * 0.5f;
+	}
+
+	old_mouse_x = mx;
+	old_mouse_y = my;
+
+	if (m_accel->value) {
+		float speed = (float)sqrt(mx * mx + my * my);
+		speed = sensitivity->value + speed * m_accel->value;
+		mx *= speed;
+		my *= speed;
+	} else {
+		mx *= sensitivity->value;
+		my *= sensitivity->value;
+	}
+
+	if (m_autosens->integer)
+	{
+		mx *= cl.refdef.fov_x/90.0;
+		my *= cl.refdef.fov_y/90.0;
+	}
 
 	// add mouse X/Y movement to cmd
 	if ((in_strafe.state & 1) || (lookstrafe->integer && mlooking))

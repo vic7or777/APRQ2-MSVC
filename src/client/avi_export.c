@@ -57,7 +57,7 @@ static HINSTANCE handle_avi = NULL, handle_acm = NULL;
 typedef struct
 {
 	float			m_fps;
-	int				m_video_frame_size;
+	unsigned int	m_video_frame_size;
 	int				m_video_frame_counter;
 	int				m_audio_frame_counter;
 	unsigned long	m_codec_fourcc;
@@ -74,7 +74,6 @@ static avi_Data_t avi;
 static qboolean movie_acm_loaded = false, movie_avi_loaded = false;
 static HACMDRIVER		had;
 static HACMSTREAM		hstr;
-static ACMSTREAMHEADER	strhdr;
 static MPEGLAYER3WAVEFORMAT mp3_format;
 static qboolean		mp3_driver = false;
 static qboolean		m_audio_is_mp3 = false;
@@ -90,16 +89,16 @@ static byte *aviFrameBuf = NULL;
 void GLAVI_ReadFrameData (byte *buffer);
 extern viddef_t	viddef;
 
-extern short *snd_out;
+extern int16 *snd_out;
 extern int snd_linear_count, soundtime;
 
 // Variables for buffering audio
-static short capture_audio_samples[44100];	// big enough buffer for 1fps at 44100Hz
+static int16 capture_audio_samples[44100];	// big enough buffer for 1fps at 44100Hz
 static int captured_audio_samples = 0;
 
 extern cvar_t *fixedtime;
 
-char *FourccToString (unsigned long fourcc)
+static char *FourccToString (unsigned long fourcc)
 {
 	static char s[8];
     
@@ -196,11 +195,23 @@ static void Capture_InitACM (void)
 	movie_acm_loaded = true;
 }
 
+static void InitModules(void)
+{
+	static qboolean aviInitialized = false;
+
+	if(aviInitialized)
+		return;
+
+	Capture_InitAVI();
+	Capture_InitACM();
+	aviInitialized = true;
+}
+
 BOOL CALLBACK acmDriverEnumCallback (HACMDRIVERID hadid, DWORD dwInstance, DWORD fdwSupport)
 {
 	if (fdwSupport & ACMDRIVERDETAILS_SUPPORTF_CODEC)
 	{
-		int	i;
+		unsigned int	i;
 		ACMDRIVERDETAILS details;
 
 		details.cbStruct = sizeof(details);
@@ -345,6 +356,11 @@ static  qboolean AVI_InitExporter (const char *filename, float fps)
 	if(!avi_sound->integer) //No sounds
 		return true;
 
+#ifdef USE_OPENAL
+	if(alSound) //Not supported
+		return true;
+#endif
+
 	// initialize audio data
 	memset (&avi.m_wave_format, 0, sizeof(avi.m_wave_format));
 	avi.m_wave_format.wFormatTag		= WAVE_FORMAT_PCM;
@@ -474,7 +490,7 @@ void AVI_StopExport(void)
 	if(avi_recording)
 	{
 		AVI_ReleaseExporter();
-		Cvar_SetValue("fixedtime", 0.0);
+		Cvar_Set("fixedtime", "0");
 		avi_recording = 0;
 	}
 }
@@ -501,7 +517,7 @@ void AVI_ProcessFrame (void)
 
 static void AVI_WriteAudio (int samples, byte *sample_buffer)
 {
-	HRESULT		hr;
+	HRESULT		hr = 0;
 	unsigned long	sample_bufsize;
 
 	if (!avi.m_audio_stream)
@@ -514,6 +530,7 @@ static void AVI_WriteAudio (int samples, byte *sample_buffer)
 	if (m_audio_is_mp3)
 	{
 		MMRESULT	mmr;
+		ACMSTREAMHEADER	strhdr;
 		byte		*mp3_buffer;
 		unsigned long	mp3_bufsize;
 
@@ -527,7 +544,7 @@ static void AVI_WriteAudio (int samples, byte *sample_buffer)
 			Com_Printf ("ERROR: mp3bufsize is zero\n");
 			return;
 		}
-		mp3_buffer = malloc (mp3_bufsize);
+		mp3_buffer = Z_TagMalloc(mp3_bufsize, TAGMALLOC_AVIEXPORT);
 
 		memset (&strhdr, 0, sizeof(strhdr));
 		strhdr.cbStruct = sizeof(strhdr);
@@ -539,27 +556,23 @@ static void AVI_WriteAudio (int samples, byte *sample_buffer)
 		if ((mmr = qacmStreamPrepareHeader(hstr, &strhdr, 0)))
 		{
 			Com_Printf ("ERROR: Couldn't prepare header\n");
-			free (mp3_buffer);
+			Z_Free (mp3_buffer);
 			return;
 		}
 
 		if ((mmr = qacmStreamConvert(hstr, &strhdr, ACM_STREAMCONVERTF_BLOCKALIGN)))
-		{
 			Com_Printf ("ERROR: Couldn't convert audio stream\n");
-			goto clean;
-		}
+		else
+			hr = qAVIStreamWrite (avi.m_audio_stream, avi.m_audio_frame_counter++, 1, mp3_buffer, strhdr.cbDstLengthUsed, AVIIF_KEYFRAME, NULL, NULL);
 
-		hr = qAVIStreamWrite (avi.m_audio_stream, avi.m_audio_frame_counter++, 1, mp3_buffer, strhdr.cbDstLengthUsed, AVIIF_KEYFRAME, NULL, NULL);
-
-clean:
 		if ((mmr = qacmStreamUnprepareHeader(hstr, &strhdr, 0)))
 		{
 			Com_Printf ("ERROR: Couldn't unprepare header\n");
-			free (mp3_buffer);
+			Z_Free (mp3_buffer);
 			return;
 		}
 
-		free (mp3_buffer);
+		Z_Free (mp3_buffer);
 	}
 	else
 	{
@@ -588,10 +601,15 @@ void AVI_StartExporting(const char *name, float fps)
 
 	aviFrameBuf = Z_TagMalloc(avi.m_video_frame_size, TAGMALLOC_AVIEXPORT);
 
-	if(avi_sound->integer)
-		avi_recording = 2;
-	else
-		avi_recording = 1;
+	avi_recording = 1;
+	if(avi_sound->integer) {
+#ifdef USE_OPENAL
+		if(alSound) //Not supported
+			Com_Printf("Sound exporting not supported with openAL\n");
+		else
+#endif
+			avi_recording = 2;
+	}
 
 	if(avi.m_codec_fourcc)
 		Com_Printf("Exporting %s using %s codec ", aviName, FourccToString(avi.m_codec_fourcc));
@@ -605,7 +623,7 @@ void AVI_StartExporting(const char *name, float fps)
 
     Cvar_SetValue("fixedtime", (int)(0.5f + 1000.0f / avi.m_fps));
     if (avi_recording == 2 && Cvar_VariableValue("s_mixahead") < 1.0f / avi.m_fps) {
-        Com_Printf("Warning: you may want to increase s_mixahead to %f!\n", 1.0f / avi.m_fps);
+        Com_Printf("Warning: you may want to increase s_mixahead to %g!\n", 1.0f / avi.m_fps);
     }
     if (Cvar_VariableValue("cl_maxfps") < avi.m_fps) {
         Com_Printf("Warning: you may need to increase cl_maxfps!\n");
@@ -617,17 +635,22 @@ void AVI_Export_f (void)
 	char		demoName[MAX_QPATH];
 	FILE		*f;
 
-
+	InitModules();
 	if(!movie_avi_loaded)
 	{
 		Com_Printf("Aviexport unavailable\n");
 		return;
 	}
 
+	if (avi_recording) {
+		Com_Printf("Allready exporting\n");
+		return;
+	}
+
 	// Check we have the correct number of arguments
 	if(Cmd_Argc() != 4)
 	{
-		Com_Printf("Usage: AVIEXPORT <Framerate> <Demo Name> <AVI Name>\n"
+		Com_Printf("Usage: aviexport <framerate> <demo> <avi name>\n"
 				   "For Example 'aviexport 25 demo1.dm2 demo1.avi'\n");
 		return;
 	}
@@ -643,7 +666,7 @@ void AVI_Export_f (void)
 	}
 	FS_FCloseFile(f);
 
-	AVI_StartExporting( Cmd_Argv(3), atof(Cmd_Argv(1)) );
+	AVI_StartExporting( Cmd_Argv(3), (float)atof(Cmd_Argv(1)) );
 	
 	if(!avi_recording)
 		return;
@@ -657,17 +680,22 @@ void AVI_Record_f(void)
 	FILE	*f;
 	int		i;
 
-
+	InitModules();
 	if(!movie_avi_loaded)
 	{
 		Com_Printf("Aviexport unavailable\n");
 		return;
 	}
 
+	if (avi_recording) {
+		Com_Printf("Allready exporting\n");
+		return;
+	}
+
 	// Check we have the correct number of arguments
 	if(Cmd_Argc() != 2)
 	{
-		Com_Printf("Usage: AVIRECORD <Framerate>\n"
+		Com_Printf("Usage: avirecord <framerate>\n"
 				   "For Example 'avirecord 16'\n");
 		return;
 	}
@@ -693,7 +721,7 @@ void AVI_Record_f(void)
 		return;
 	}
 
-	AVI_StartExporting( aviName, atof(Cmd_Argv(1)) );
+	AVI_StartExporting( aviName, (float)atof(Cmd_Argv(1)) );
 }
 
 void AVI_Stop_f (void) {
@@ -716,9 +744,6 @@ void CL_InitAVIExport( void )
 	Cmd_AddCommand ("aviexport", AVI_Export_f);
 	Cmd_AddCommand ("avirecord", AVI_Record_f);
 	Cmd_AddCommand ("avistop", AVI_Stop_f);
-
-	Capture_InitAVI();
-	Capture_InitACM();
 }
 
 static float VideoFps(void)
@@ -731,10 +756,7 @@ static float VideoFps(void)
 
 void Movie_TransferStereo16(void)
 {
-	if (!avi_recording || cls.state != ca_active || !cl.refresh_prepped)
-		return;
-
-	if(avi_recording == 1) 
+	if (avi_recording < 2 || cls.state != ca_active || !cl.refresh_prepped)
 		return;
 
 	// Copy last audio chunk written into our temporary buffer
@@ -750,11 +772,8 @@ void Movie_TransferStereo16(void)
 
 qboolean Movie_GetSoundtime(void)
 {
-	if (!avi_recording || cls.state != ca_active || !cl.refresh_prepped)
+	if (avi_recording < 2 || cls.state != ca_active || !cl.refresh_prepped)
 		return false;
-
-	if(avi_recording == 1) 
-		false;
 
 	soundtime += (int)(0.5f + (float)dma.speed / VideoFps());
 	return true;

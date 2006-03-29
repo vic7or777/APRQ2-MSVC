@@ -1,4 +1,4 @@
-/*
+ /*
 Copyright (C) 1997-2001 Id Software, Inc.
 
 This program is free software; you can redistribute it and/or
@@ -26,7 +26,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 portable_samplepair_t paintbuffer[PAINTBUFFER_SIZE];
 int		snd_scaletable[32][256];
 int 	*snd_p, snd_linear_count, snd_vol;
-short	*snd_out;
+int16	*snd_out;
 
 void S_WriteLinearBlastStereo16 (void);
 void S_WriteSwappedLinearBlastStereo16 (void);
@@ -40,10 +40,10 @@ void S_WriteLinearBlastStereo16 (void)
 	for (i=0 ; i<snd_linear_count ; i+=2)
 	{
 		val = snd_p[i]>>8;
-		snd_out[i] = bound ((short)0x8000, val, 0x7fff);
+		snd_out[i] = bound (-32768, val, 0x7fff);
 
 		val = snd_p[i+1]>>8;
-		snd_out[i+1] = bound ((short)0x8000, val, 0x7fff);
+		snd_out[i+1] = bound (-32768, val, 0x7fff);
 	}
 }
 
@@ -54,10 +54,10 @@ void S_WriteSwappedLinearBlastStereo16 (void)
 	for (i=0 ; i<snd_linear_count ; i+=2)
 	{
 		val = snd_p[i+1]>>8;
-		snd_out[i] = bound ((short)0x8000, val, 0x7fff);
+		snd_out[i] = bound (-32768, val, 0x7fff);
 
 		val = snd_p[i  ]>>8;
-		snd_out[i+1] = bound ((short)0x8000, val, 0x7fff);
+		snd_out[i+1] = bound (-32768, val, 0x7fff);
 	}
 }
 
@@ -167,7 +167,7 @@ void S_TransferStereo16 (unsigned long *pbuf, int endtime)
 	// handle recirculating buffer issues
 		lpos = lpaintedtime & ((dma.samples>>1)-1);
 
-		snd_out = (short *) pbuf + (lpos<<1);
+		snd_out = (int16 *) pbuf + (lpos<<1);
 
 		snd_linear_count = (dma.samples>>1) - lpos;
 		if (lpaintedtime + snd_linear_count > endtime)
@@ -199,7 +199,7 @@ S_TransferPaintBuffer
 void S_TransferPaintBuffer(int endtime)
 {
 	int 	out_idx;
-	int 	count;
+	int 	i, count;
 	int 	out_mask;
 	int 	*p;
 	int 	step;
@@ -210,12 +210,10 @@ void S_TransferPaintBuffer(int endtime)
 
 	if (s_testsound->integer)
 	{
-		int		i, count;
-
 		// write a fixed sine wave
 		count = (endtime - paintedtime);
 		for (i=0 ; i<count ; i++)
-			paintbuffer[i].left = paintbuffer[i].right = sin((paintedtime+i)*0.1)*20000*256;
+			paintbuffer[i].left = paintbuffer[i].right = (int)((float)sin((paintedtime+i)*0.1f)*20000*256);
 	}
 
 	if (dma.samplebits == 16 && dma.channels == 2)
@@ -232,12 +230,12 @@ void S_TransferPaintBuffer(int endtime)
 
 		if (dma.samplebits == 16)
 		{
-			short *out = (short *) pbuf;
+			int16 *out = (int16 *) pbuf;
 			while (count--)
 			{
 				val = *p >> 8;
 				p += step;
-				out[out_idx] = bound ((short)0x8000, val, 0x7fff);
+				out[out_idx] = bound (-32768, val, 0x7fff);
 				out_idx = (out_idx + 1) & out_mask;
 			}
 		}
@@ -248,7 +246,7 @@ void S_TransferPaintBuffer(int endtime)
 			{
 				val = *p >> 8;
 				p += step;
-				out[out_idx] = (bound ((short)0x8000, val, 0x7fff)>>8) + 128;
+				out[out_idx] = (bound (-32768, val, 0x7fff)>>8) + 128;
 				out_idx = (out_idx + 1) & out_mask;
 			}
 		}
@@ -438,7 +436,7 @@ void S_PaintChannelFrom16 (channel_t *ch, sfxcache_t *sc, int count, int offset)
 {
 	int	i, j;
 	int leftvol, rightvol;
-	signed short *sfx;
+	int16 *sfx;
 	portable_samplepair_t	*samp;
 
 	if ( !snd_vol ) {
@@ -450,7 +448,7 @@ void S_PaintChannelFrom16 (channel_t *ch, sfxcache_t *sc, int count, int offset)
 	rightvol = ch->rightvol*snd_vol;
 	samp = &paintbuffer[offset];
 
-	sfx = (signed short *)sc->data + ch->pos;
+	sfx = (int16 *)sc->data + ch->pos;
 	for (i=0 ; i<count ; i++, samp++)
 	{
 		j = *sfx++;

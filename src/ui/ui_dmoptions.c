@@ -60,7 +60,7 @@ static void DMFlagCallback( void *self )
 	int flags;
 	int bit = 0;
 
-	flags = Cvar_VariableValue( "dmflags" );
+	flags = Cvar_VariableIntValue("dmflags");
 
 	if ( f == &s_friendlyfire_box )
 	{
@@ -207,7 +207,7 @@ void DMOptions_MenuInit( void )
 	{
 		"disabled", "by skin", "by model", 0
 	};
-	int dmflags = Cvar_VariableValue( "dmflags" );
+	int dmflags = Cvar_VariableIntValue( "dmflags" );
 	int y = 0;
 
 	memset(&s_dmoptions_menu, 0, sizeof(s_dmoptions_menu));

@@ -19,8 +19,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 */
 	
 // q_shared.h -- included first by ALL program modules
-#ifndef __SHARED_H__
-#define __SHARED_H__
+#ifndef __Q_SHARED_H
+#define __Q_SHARED_H
 
 #include <math.h>
 #include <stdio.h>
@@ -34,6 +34,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #ifdef R1Q2_PROTOCOL
 # include <zlib.h>
 #endif
+
 //==============================================
 #ifdef _WIN32
 // unknown pragmas are SUPPOSED to be ignored, but....
@@ -41,7 +42,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #pragma warning(disable : 4136)     // X86
 #pragma warning(disable : 4051)     // ALPHA
 #pragma warning(disable : 4018)     // signed/unsigned mismatch
-#pragma warning(disable : 4305)		// truncation from const double to float
+//#pragma warning(disable : 4305)		// truncation from const double to float
+
+
+#pragma warning(disable : 4996)		// deprecated functions
 
 # define HAVE___INLINE
 # define HAVE__SNPRINTF
@@ -52,26 +56,53 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 # define VID_INITFIRST
 # define GL_DRIVERNAME	"opengl32"
+# define AL_DRIVERNAME	"openal32"
 
-# ifdef NDEBUG
-#  define BUILDSTRING "Win32 RELEASE"
-# else
-#  define BUILDSTRING "Win32 DEBUG"
-# endif
+#define USE_OPENAL
+
+#ifdef _WIN64
+	#ifdef NDEBUG
+		#define BUILDSTRING "Win64 RELEASE"
+	#else
+		#define BUILDSTRING "Win64 DEBUG"
+	#endif
+#else
+	#ifdef NDEBUG
+		#define BUILDSTRING "Win32 RELEASE"
+	#else
+		#define BUILDSTRING "Win32 DEBUG"
+	#endif
+#endif
 
 # ifdef _M_IX86
-#  define CPUSTRING	"x86"
+#	define CPUSTRING	"x86"
+# elif defined _M_AMD64 
+#	define	CPUSTRING	"AMD64"
+# elif defined _M_IA64
+#	define	CPUSTRING	"IA64"
 # elif defined(_M_ALPHA)
-#  define CPUSTRING	"AXP"
+#	define CPUSTRING	"AXP"
 # endif
 
+typedef __int32 int32;
+typedef __int16 int16;
+typedef unsigned __int32 uint32;
+typedef unsigned __int16 uint16;
+#else /* NON-WIN32 */
+#include <stdint.h>
+typedef int32_t int32;
+typedef int16_t int16;
+typedef uint32_t uint32;
+typedef uint16_t uint16;
 #endif
+
 //==============================================
 #if defined(__linux__) || defined(__FreeBSD__)
 
 # define HAVE_INLINE
 
 # define GL_DRIVERNAME	"libGL.so"
+# define AL_DRIVERNAME	"libopenal.so.0"
 
 # define HAVE_STRCASECMP
 
@@ -79,8 +110,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 # ifdef __i386__
 #  define CPUSTRING "i386"
-# elif defined(__alpha__)
+# elif defined(__alpha__) || defined(__axp__)
 #  define CPUSTRING "axp"
+# elif defined __x86_64__
+#  define CPUSTRING "x86-64"
 # else
 #  define CPUSTRING "Unknown"
 # endif
@@ -132,7 +165,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #ifdef HAVE__VSNPRINTF
 # ifndef vsnprintf 
-#  define vsnprintf(dest, size, src, list) _vsnprintf((dest), (size), (src), (list)), (dest)[(size)-1] = '\0'
+#  define vsnprintf(dest, size, src, list) _vsnprintf(dest, size, src, list), dest[size-1] = '\0'
 # endif
 #endif
 
@@ -269,25 +302,25 @@ typedef	int	fixed16_t;
 
 typedef	vec_t	quat_t[4];
 
-#define ONEDIV64	0.015625
-#define ONEDIV128	0.0078125
-#define ONEDIV255	0.003921568627450980392156862745098
-#define ONEDIV255_5	0.0039138943248532289628180039138943
-#define ONEDIV256	0.00390625
+#define ONEDIV64	0.015625f
+#define ONEDIV128	0.0078125f
+#define ONEDIV255	0.003921568627450980392156862745098f
+#define ONEDIV255_5	0.0039138943248532289628180039138943f
+#define ONEDIV256	0.00390625f
 
 #ifndef M_PI
-#define M_PI		3.14159265358979323846	// matches value in gcc v2 math.h
+#define M_PI		3.14159265358979323846f	// matches value in gcc v2 math.h
 #endif
 
 #ifndef M_TWOPI
-# define M_TWOPI	6.28318530717958647692
+# define M_TWOPI	6.28318530717958647692f
 #endif
 
-#define	M_PI_DIV_2		1.57079632679489661923
-#define M_PI_DIV_360	0.008726646259971647884611
+#define	M_PI_DIV_2		1.57079632679489661923f
+#define M_PI_DIV_360	0.008726646259971647884611f
 
-#define M_PI_DIV_180	0.0174532925199432957692
-#define M_180_DIV_PI	57.295779513082320876798
+#define M_PI_DIV_180	0.0174532925199432957692f
+#define M_180_DIV_PI	57.295779513082320876798f
 
 #define DEG2RAD( a ) (a * M_PI_DIV_180)
 #define RAD2DEG( a ) (a * M_180_DIV_PI)
@@ -400,6 +433,7 @@ void RotatePointAroundVector( vec3_t dst, const vec3_t dir, const vec3_t point, 
 
 //=============================================
 
+void COM_FixPath (char *path);
 char *COM_SkipPath (const char *pathname);
 void COM_StripExtension (const char *in, char *out);
 void COM_FileBase (const char *in, char *out);
@@ -411,8 +445,12 @@ const char *COM_Parse (char **data_p);
 
 void COM_MakePrintable (char *s);
 
-int Com_WildCmp( const char *filter, const char *string, qboolean ignoreCase );
-unsigned int Com_HashKey (const char *name, int hashSize);
+int Com_WildCmp (const char *filter, const char *string);
+
+unsigned int Com_HashValue (const char *name);
+unsigned int Com_HashValuePath (const char *name);
+#define Com_HashKey(s, size) Com_HashValue(s) & (size - 1)
+#define Com_HashKeyPath(s, size) Com_HashValuePath(s) & (size - 1)
 
 #ifndef Q_strnicmp
  int Q_strnicmp (const char *s1, const char *s2, size_t size);
@@ -420,14 +458,14 @@ unsigned int Com_HashKey (const char *name, int hashSize);
 #ifndef Q_stricmp
 #  define Q_stricmp(s1, s2) Q_strnicmp((s1), (s2), 99999)
 #endif
-
+char *Q_stristr(const char *str1, const char *str2);
 // buffer safe operations
 void Q_strncpyz( char *dest, const char *src, size_t size );
 void Q_strncatz( char *dest, const char *src, size_t size );
 void Com_sprintf (char *dest, size_t size, const char *fmt, ...);
 char *Q_strlwr( char *s );
 
-void Com_PageInMemory (byte *buffer, int size);
+void Com_PageInMemory (const byte *buffer, int size);
 
 #ifdef GL_QUAKE
 #define AnglesToAxis(angles, axis) (AngleVectors(angles, axis[0], axis[1], axis[2]),VectorInverse(axis[1]))
@@ -437,16 +475,16 @@ void Com_PageInMemory (byte *buffer, int size);
 
 //=============================================
 #if !defined(ENDIAN_LITTLE) && !defined(ENDIAN_BIG)
-# if defined(__i386__) || defined(__ia64__) || defined(WIN32) || (defined(__alpha__) || defined(__alpha)) || defined(__arm__) || (defined(__mips__) && defined(__MIPSEL__)) || defined(__LITTLE_ENDIAN__)
-#  define ENDIAN_LITTLE
-# else
+#ifdef __BIG_ENDIAN__
 #  define ENDIAN_BIG
+# else
+#  define ENDIAN_LITTLE
 # endif
 #endif
 
-short ShortSwap (short l);
+int16 ShortSwap (int16 l);
 int LongSwap (int l);
-float FloatSwap (const float *f);
+float FloatSwap (float f);
 
 #ifdef ENDIAN_LITTLE
 // little endian
@@ -457,7 +495,7 @@ float FloatSwap (const float *f);
 # define BigFloat(l) FloatSwap(l)
 # define LittleFloat(l) (l)
 # define Swap_Init()
-#elif ENDIAN_BIG
+#elif defined ENDIAN_BIG
 // big endian
 # define BigShort(l) (l)
 # define LittleShort(l) ShortSwap(l)
@@ -468,10 +506,10 @@ float FloatSwap (const float *f);
 # define Swap_Init()
 #else
 // figure it out at runtime
-extern short (*BigShort) (short l);
-extern short (*LittleShort) (short l);
-extern int (*BigLong) (int l);
-extern int (*LittleLong) (int l);
+extern int16 (*BigShort) (int16 l);
+extern int16 (*LittleShort) (int16t l);
+extern int32 (*BigLong) (int32 l);
+extern int32 (*LittleLong) (int32 l);
 extern float (*BigFloat) (const float *l);
 extern float (*LittleFloat) (const float *l);
 void	Swap_Init (void);
@@ -750,12 +788,12 @@ typedef struct
 {
 	pmtype_t	pm_type;
 
-	short		origin[3];		// 12.3
-	short		velocity[3];	// 12.3
+	int16		origin[3];		// 12.3
+	int16		velocity[3];	// 12.3
 	byte		pm_flags;		// ducked, jump_held, etc
 	byte		pm_time;		// each unit = 8 ms
-	short		gravity;
-	short		delta_angles[3];	// add to command angles to get view direction
+	int16		gravity;
+	int16		delta_angles[3];	// add to command angles to get view direction
 									// changed by spawns, rotating objects, and teleporters
 } pmove_state_t;
 
@@ -773,8 +811,8 @@ typedef struct usercmd_s
 {
 	byte	msec;
 	byte	buttons;
-	short	angles[3];
-	short	forwardmove, sidemove, upmove;
+	int16	angles[3];
+	int16	forwardmove, sidemove, upmove;
 	byte	impulse;		// remove?
 	byte	lightlevel;		// light level the player is standing on
 } usercmd_t;
@@ -1450,7 +1488,7 @@ typedef struct
 
 	int			rdflags;		// refdef flags
 
-	short		stats[MAX_STATS];		// fast status bar updates
+	int16		stats[MAX_STATS];		// fast status bar updates
 } player_state_t;
 
 typedef struct
@@ -1476,7 +1514,7 @@ typedef struct
 
 	int			rdflags;		// refdef flags
 
-	short		stats[MAX_STATS];		// fast status bar updates
+	int16		stats[MAX_STATS];		// fast status bar updates
 
 	vec3_t		mins;
 	vec3_t		maxs;

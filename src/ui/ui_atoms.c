@@ -44,7 +44,7 @@ void M_PushMenu ( menuframework_s *menu )
 {
 	int		i;
 
-	if (Cvar_VariableValue ("maxclients") == 1 
+	if (Cvar_VariableIntValue ("maxclients") == 1 
 		&& Com_ServerState () && !cl_paused->integer)
 		Cvar_Set ("paused", "1");
 
@@ -389,10 +389,8 @@ void M_Init (void)
 		Cmd_AddCommand ("menu_keys", M_Menu_Keys_f);
 	Cmd_AddCommand ("menu_quit", M_Menu_Quit_f);
 	Cmd_AddCommand ("menu_demos", M_Menu_Demos_f);
-#if defined(_WIN32)
-	Cmd_AddCommand ("menu_winamp", M_Menu_MP3_f);
-#elif defined(WITH_XMMS)
-	Cmd_AddCommand ("menu_xmms", M_Menu_MP3_f);
+#if defined(_WIN32) || defined(WITH_XMMS)
+	Cmd_AddCommand ("menu_" MP3_PLAYERNAME_NOCAPS, M_Menu_MP3_f);
 #endif
 }
 

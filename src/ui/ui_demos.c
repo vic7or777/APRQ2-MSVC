@@ -73,7 +73,7 @@ static void Demos_MenuDraw( menuframework_s *self )
 }
 
 static void Demos_Free( void ) {
-	int i;
+	unsigned int i;
 
 	if(!demo_count)
 		return;

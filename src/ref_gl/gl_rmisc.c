@@ -35,7 +35,7 @@ static const byte	dottexture[8][8] =
 	{0,0,1,1,0,0,0,0},
 	{0,0,0,0,0,0,0,0},
 	{0,0,0,0,0,0,0,0},
-	{0,0,0,0,0,0,0,0},
+	{0,0,0,0,0,0,0,0}
 };
 
 void R_InitParticleTexture (void)
@@ -221,12 +221,12 @@ void GL_Strings_f( void )
 */
 void GL_SetDefaultState( void )
 {
-	qglClearColor (1, 0.2, 0, 1);
+	qglClearColor (1, 0.2f, 0, 1);
 	qglCullFace(GL_FRONT);
 	qglEnable(GL_TEXTURE_2D);
 
 	qglEnable(GL_ALPHA_TEST);
-	qglAlphaFunc(GL_GREATER, 0.666);
+	qglAlphaFunc(GL_GREATER, 0.666f);
 
 	qglDisable (GL_DEPTH_TEST);
 	qglDisable (GL_CULL_FACE);
@@ -234,7 +234,7 @@ void GL_SetDefaultState( void )
 
 	qglDisable(GL_FOG);
 
-	qglColor4f (1,1,1,1);
+	qglColor4fv(colorWhite);
 
 	qglPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
 	qglShadeModel(GL_SMOOTH);
@@ -244,17 +244,17 @@ void GL_SetDefaultState( void )
 	GL_TextureAlphaMode( gl_texturealphamode->string );
 	GL_TextureSolidMode( gl_texturesolidmode->string );
 
-	qglTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, gl_filter_min);
-	qglTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, gl_filter_max);
+	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, gl_filter_min);
+	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, gl_filter_max);
 
-	qglTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
-	qglTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
 	qglBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
 	GL_TexEnv( GL_REPLACE );
 
-	if ( qglPointParameterfEXT )
+	if ( gl_ext_pointparameters->integer && qglPointParameterfEXT )
 	{
 		float attenuations[3];
 
@@ -288,7 +288,7 @@ void GL_UpdateSwapInterval( void )
 		if ( !gl_state.stereo_enabled ) 
 		{
 			if ( qwglSwapIntervalEXT )
-				qwglSwapIntervalEXT( gl_swapinterval->value );
+				qwglSwapIntervalEXT( gl_swapinterval->integer );
 		}
 #endif
 	}

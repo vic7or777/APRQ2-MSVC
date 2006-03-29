@@ -473,8 +473,8 @@ void Mod_LoadTexinfo (lump_t *l)
 	{
 		for (j=0 ; j<8 ; j++)
 			out->vecs[0][j] = LittleFloat (in->vecs[0][j]);
-		len1 = VectorLength (out->vecs[0]);
-		len2 = VectorLength (out->vecs[1]);
+		len1 = (float)VectorLength (out->vecs[0]);
+		len2 = (float)VectorLength (out->vecs[1]);
 		len1 = (len1 + len2)/2;
 		if (len1 < 0.32)
 			out->mipadjust = 4;
@@ -561,8 +561,8 @@ void CalcSurfaceExtents (msurface_t *s)
 
 	for (i=0 ; i<2 ; i++)
 	{	
-		bmins[i] = floor(mins[i]/16);
-		bmaxs[i] = ceil(maxs[i]/16);
+		bmins[i] = (int)floor(mins[i]/16);
+		bmaxs[i] = (int)ceil(maxs[i]/16);
 
 		s->texturemins[i] = bmins[i] * 16;
 		s->extents[i] = (bmaxs[i] - bmins[i]) * 16;

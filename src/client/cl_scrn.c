@@ -121,7 +121,7 @@ typedef struct
 	int		color;
 } graphsamp_t;
 
-static	int			current;
+static	int			current = 0;
 static	graphsamp_t	values[1024];
 
 /*
@@ -141,7 +141,7 @@ void SCR_DebugGraph (float value, int color)
 SCR_DrawDebugGraph
 ==============
 */
-void SCR_DrawDebugGraph (void)
+static void SCR_DrawDebugGraph (void)
 {
 	int		a, x, y, w, i, h;
 	float	v;
@@ -179,11 +179,11 @@ CENTER PRINTING
 ===============================================================================
 */
 
-char		scr_centerstring[1024];
-float		scr_centertime_start;	// for slow victory printing
-float		scr_centertime_off;
-int			scr_center_lines;
-int			scr_erase_center;
+static char			scr_centerstring[1024];
+//static float		scr_centertime_start;	// for slow victory printing
+static int			scr_centertime_off;
+static int			scr_center_lines;
+static int			scr_erase_center;
 
 /*
 ==============
@@ -200,15 +200,15 @@ void SCR_CenterPrint (const char *str)
 	int		i, j, l;
 
 	Q_strncpyz (scr_centerstring, str, sizeof(scr_centerstring));
-	scr_centertime_off = scr_centertime->value;
-	scr_centertime_start = cl.time;
+	scr_centertime_off = (int)(cls.realtime + scr_centertime->value * 1000);
+	//scr_centertime_start = cl.time;
 
 	// count the number of lines for centering
 	scr_center_lines = 1;
 	s = str;
 	while (*s)
 	{
-		if (*s == '\n')
+		if (*s == '\n' && s[1])
 			scr_center_lines++;
 		s++;
 	}
@@ -242,17 +242,14 @@ void SCR_CenterPrint (const char *str)
 		if (!*s)
 			break;
 		s++;		// skip the \n
-
-		if (!*s)
-			break;
 	}
-	while (1);
+	while (*s);
 	Com_Printf("\n\35\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\37\n\n");
 	Con_ClearNotify ();
 }
 
 
-void SCR_DrawCenterString (void)
+static void SCR_DrawCenterString (void)
 {
 	char	*start;
 	int		l, j, x, y;
@@ -292,14 +289,12 @@ void SCR_DrawCenterString (void)
 			break;
 		start++;		// skip the \n
 	}
-	while (1);
+	while (*start);
 }
 
 void SCR_CheckDrawCenterString (void)
 {
-	scr_centertime_off -= cls.frametime;
-	
-	if (scr_centertime_off <= 0)
+	if (scr_centertime_off <= cls.realtime)
 		return;
 
 	SCR_DrawCenterString ();
@@ -338,9 +333,12 @@ SCR_SizeUp_f
 Keybinding command
 =================
 */
-void SCR_SizeUp_f (void)
+static void SCR_SizeUp_f (void)
 {
-	Cvar_SetValue ("viewsize",scr_viewsize->integer+10);
+	if (scr_viewsize->integer >= 90)
+		Cvar_Set("viewsize", "100");
+	else
+		Cvar_SetValue ("viewsize", scr_viewsize->integer+10);	
 }
 
 
@@ -351,9 +349,12 @@ SCR_SizeDown_f
 Keybinding command
 =================
 */
-void SCR_SizeDown_f (void)
+static void SCR_SizeDown_f (void)
 {
-	Cvar_SetValue ("viewsize",scr_viewsize->integer-10);
+	if (scr_viewsize->integer <= 50)
+		Cvar_Set("viewsize", "40");
+	else
+		Cvar_SetValue ("viewsize", scr_viewsize->integer-10);
 }
 
 /*
@@ -363,7 +364,7 @@ SCR_Sky_f
 Set a specific sky and rotation speed
 =================
 */
-void SCR_Sky_f (void)
+static void SCR_Sky_f (void)
 {
 	float	rotate = 0;
 	vec3_t	axis;
@@ -374,10 +375,13 @@ void SCR_Sky_f (void)
 		return;
 	}
 	if (Cmd_Argc() > 2)
-		rotate = atof(Cmd_Argv(2));
+		rotate = (float)atof(Cmd_Argv(2));
 
-	if (Cmd_Argc() == 6)
-		VectorSet(axis, atof(Cmd_Argv(3)), atof(Cmd_Argv(4)), atof(Cmd_Argv(5)));
+	if (Cmd_Argc() == 6) {
+		axis[0] = (float)atof(Cmd_Argv(3));
+		axis[1] = (float)atof(Cmd_Argv(4));
+		axis[2] = (float)atof(Cmd_Argv(5));
+	}
 	else
 		VectorSet(axis, 0, 0, 1);
 
@@ -389,18 +393,18 @@ void SCR_Sky_f (void)
 static void OnChange_Conheight (cvar_t *self, const char *oldValue)
 {
 	if(self->value < 0.1)
-		Cvar_SetValue (self->name, 0.1);
+		Cvar_Set(self->name, "0.1");
 	else if(self->value > 1)
-		Cvar_SetValue (self->name, 1);
+		Cvar_Set(self->name, "1");
 }
 
 static void OnChange_Viewsize (cvar_t *self, const char *oldValue)
 {
 	// bound viewsize
 	if (self->integer < 40)
-		Cvar_Set (self->name, "40");
+		Cvar_Set(self->name, "40");
 	if (self->integer > 100)
-		Cvar_Set (self->name, "100");
+		Cvar_Set(self->name, "100");
 }
 
 /*
@@ -695,10 +699,12 @@ void SCR_TileClear (void)
 	if (scr_drawall->integer)
 		SCR_DirtyScreen ();	// for power vr or broken page flippers...
 
-	if (scr_con_current == 1.0)
-		return;		// full screen console
 	if (scr_viewsize->integer == 100)
 		return;		// full screen rendering
+
+	if (scr_con_current == 1.0)
+		return;		// full screen console
+
 	if (cl.cinematictime > 0)
 		return;		// full screen cinematic
 
@@ -796,7 +802,8 @@ SizeHUDString
 Allow embedded \n in the string
 ================
 */
-void SizeHUDString (const char *string, int *w, int *h)
+#if 0
+static void SizeHUDString (const char *string, int *w, int *h)
 {
 	int		lines = 1, width = 0, current = 0;
 
@@ -819,8 +826,9 @@ void SizeHUDString (const char *string, int *w, int *h)
 	*w = width * 8;
 	*h = lines * 8;
 }
+#endif
 
-void DrawHUDString (const char *string, int x, int y, int centerwidth, int xor)
+static void DrawHUDString (const char *string, int x, int y, int centerwidth, int xor)
 {
 	int		margin;
 	char	line[1024];
@@ -914,8 +922,10 @@ void SCR_TouchPics (void)
 
 	if (crosshair->integer)
 	{
-		if (crosshair->integer > 8 || crosshair->integer < 0)
-			crosshair->integer = 8;
+		if (crosshair->integer < 0)
+			Cvar_Set(crosshair->name, "0");
+		else if (crosshair->integer > 10)
+			Cvar_Set(crosshair->name, "10");
 
 		Com_sprintf (crosshair_pic, sizeof(crosshair_pic), "ch%i", crosshair->integer);
 		Draw_GetPicSize (&crosshair_width, &crosshair_height, crosshair_pic);
@@ -1236,15 +1246,15 @@ SCR_DrawLayout
 
 ================
 */
-#define	STAT_LAYOUTS		13
-
-void SCR_DrawLayout (void)
+//#define	STAT_LAYOUTS		13
+#if 0
+static void SCR_DrawLayout (void)
 {
 	if (!cl.frame.playerstate.stats[STAT_LAYOUTS])
 		return;
 	SCR_ExecuteLayoutString (cl.layout);
 }
-
+#endif
 //=======================================================
 
 /*
@@ -1321,8 +1331,6 @@ static void SCR_DrawScreenFrame( float separation )
 			SCR_DrawDebugGraph ();
 
 		SCR_Draw2D();
-
-		SCR_AutoDemo();
 	}
 
 	SCR_DrawPause ();

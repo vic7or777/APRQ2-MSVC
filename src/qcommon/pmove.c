@@ -40,7 +40,7 @@ typedef struct
 	cplane_t	groundplane;
 	int			groundcontents;
 
-	vec3_t		previous_origin;
+	int16		previous_origin[3];
 	qboolean	ladder;
 } pml_t;
 
@@ -72,7 +72,7 @@ Slide off of the impacting object
 returns the blocked flags (1 = floor, 2 = step / wall)
 ==================
 */
-#define	STOP_EPSILON	0.1
+#define	STOP_EPSILON	0.1f
 
 static void PM_ClipVelocity (const vec3_t in, const vec3_t normal, vec3_t out, float overbounce)
 {
@@ -102,7 +102,7 @@ Returns a new origin, velocity, and contact entity
 Does not modify any world state?
 ==================
 */
-#define	MIN_STEP_NORMAL	0.7		// can't step up onto very steep slopes
+#define	MIN_STEP_NORMAL	0.7f		// can't step up onto very steep slopes
 #define	MAX_CLIP_PLANES	5
 static void PM_StepSlideMove_ (void)
 {
@@ -172,7 +172,7 @@ static void PM_StepSlideMove_ (void)
 //
 		for (i = 0; i < numplanes; i++)
 		{
-			PM_ClipVelocity (pml.velocity, planes[i], pml.velocity, 1.01);
+			PM_ClipVelocity (pml.velocity, planes[i], pml.velocity, 1.01f);
 			for (j=0 ; j<numplanes ; j++)
 				if (j != i)
 				{
@@ -290,7 +290,7 @@ static void PM_Friction (void)
 	
 	vel = pml.velocity;
 	
-	speed = sqrt(vel[0]*vel[0] +vel[1]*vel[1] + vel[2]*vel[2]);
+	speed = (float)sqrt(vel[0]*vel[0] +vel[1]*vel[1] + vel[2]*vel[2]);
 	if (speed < 1)
 	{
 		vel[0] = vel[1] = 0;
@@ -812,7 +812,7 @@ static void PM_FlyMove (void)
 
 	// friction
 
-	speed = VectorLength (pml.velocity);
+	speed = (float)VectorLength (pml.velocity);
 	if (speed < 1)
 	{
 		VectorClear(pml.velocity);
@@ -821,7 +821,7 @@ static void PM_FlyMove (void)
 	{
 		drop = 0;
 
-		friction = pm_friction*1.5;	// extra friction
+		friction = pm_friction*1.5f;	// extra friction
 		control = speed < pm_stopspeed ? pm_stopspeed : speed;
 		drop += control*friction*pml.frametime;
 
@@ -994,7 +994,7 @@ static void PM_DeadMove (void)
 
 	// extra friction
 
-	forward = VectorLength (pml.velocity);
+	forward = (float)VectorLength (pml.velocity);
 	forward -= 20;
 	if (forward <= 0)
 	{
@@ -1036,14 +1036,14 @@ static void PM_SnapPosition (void)
 {
 	int		sign[3];
 	int		i, j, bits;
-	short	base[3];
+	int16	base[3];
 	// try all single bits first
-	static int jitterbits[8] = {0,4,1,2,3,5,6,7};
+	static const int jitterbits[8] = {0,4,1,2,3,5,6,7};
 
 	// snap velocity to eigths
-	pm->s.velocity[0] = (int)(pml.velocity[0]*8);
-	pm->s.velocity[1] = (int)(pml.velocity[1]*8);
-	pm->s.velocity[2] = (int)(pml.velocity[2]*8);
+	pm->s.velocity[0] = (int16)(pml.velocity[0]*8);
+	pm->s.velocity[1] = (int16)(pml.velocity[1]*8);
+	pm->s.velocity[2] = (int16)(pml.velocity[2]*8);
 
 	for (i=0 ; i<3 ; i++)
 	{
@@ -1051,7 +1051,7 @@ static void PM_SnapPosition (void)
 			sign[i] = 1;
 		else 
 			sign[i] = -1;
-		pm->s.origin[i] = (int)(pml.origin[i]*8);
+		pm->s.origin[i] = (int16)(pml.origin[i]*8);
 		if (pm->s.origin[i]*0.125 == pml.origin[i])
 			sign[i] = 0;
 	}
@@ -1085,7 +1085,7 @@ PM_InitialSnapPosition
 static void PM_InitialSnapPosition(void)
 {
 	int        x, y, z;
-	short      base[3];
+	int16      base[3];
 	static int offset[3] = { 0, -1, 1 };
 
 	VectorCopy (pm->s.origin, base);
@@ -1119,7 +1119,7 @@ PM_ClampAngles
 */
 static void PM_ClampAngles (void)
 {
-	short	temp;
+	int16	temp;
 	int		i;
 
 	if (pm->s.pm_flags & PMF_TIME_TELEPORT)

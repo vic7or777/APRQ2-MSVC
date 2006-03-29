@@ -39,11 +39,9 @@ Returns the entity number and the header bits
 =================
 */
 //int	bitcounts[32];	/// just for protocol profiling
-int CL_ParseEntityBits (unsigned *bits)
+int CL_ParseEntityBits (unsigned int *bits)
 {
-	unsigned	b, total;
-	//int			i;
-	int			number;
+	unsigned int b, total, number;
 
 	total = MSG_ReadByte (&net_message);
 	if (total & U_MOREBITS1)
@@ -70,7 +68,7 @@ int CL_ParseEntityBits (unsigned *bits)
 	if (total & U_NUMBER16)
 	{
 		number = MSG_ReadShort (&net_message);
-		if (number < 0 || number >= MAX_EDICTS)
+		if (number >= MAX_EDICTS)
 			Com_Error (ERR_DROP, "CL_ParseEntityBits: Bad entity number %u", number);
 	}
 	else
@@ -80,7 +78,7 @@ int CL_ParseEntityBits (unsigned *bits)
 
 	*bits = total;
 
-	return number;
+	return (int)number;
 }
 
 /*
@@ -242,7 +240,7 @@ rest of the data stream.
 void CL_ParsePacketEntities (const frame_t *oldframe, frame_t *newframe)
 {
 	int			newnum;
-	unsigned		bits;
+	unsigned int	bits;
 	entity_state_t	*oldstate  = NULL;
 	int			oldindex = 0, oldnum;
 
@@ -577,10 +575,10 @@ void CL_DemoDeltaEntity (const entity_state_t *from, const entity_state_t *to, s
 //of the server. used to write demo stream regardless of c/s protocol in use.
 static void CL_DemoPacketEntities (sizebuf_t *buf, const frame_t /*@null@*/*from, const frame_t *to)
 {
-	const entity_state_t	*oldent;
-	const entity_state_t	*newent;
+	const entity_state_t	*oldent = NULL;
+	const entity_state_t	*newent = NULL;
 
-	int				oldindex, newindex;
+	int				oldindex = 0, newindex = 0;
 	int				oldnum, newnum;
 	int				from_num_entities;
 
@@ -591,12 +589,6 @@ static void CL_DemoPacketEntities (sizebuf_t *buf, const frame_t /*@null@*/*from
 		from_num_entities = 0;
 	else
 		from_num_entities = from->num_entities;
-
-	newindex = 0;
-	oldindex = 0;
-
-	newent = NULL;
-	oldent = NULL;
 
 	while (newindex < to->num_entities || oldindex < from_num_entities)
 	{
@@ -624,7 +616,7 @@ static void CL_DemoPacketEntities (sizebuf_t *buf, const frame_t /*@null@*/*from
 			// note that players are always 'newentities', this updates their oldorigin always
 			// and prevents warping
 
-			CL_DemoDeltaEntity (oldent, newent, buf, false, newent->number <= atoi(cl.configstrings[CS_MAXCLIENTS]));
+			CL_DemoDeltaEntity (oldent, newent, buf, false, newent->number <= cl.maxclients);
 
 			oldindex++;
 			newindex++;
@@ -779,9 +771,9 @@ static void CL_DemoDeltaPlayerstate (sizebuf_t *buf, const frame_t *from, frame_
 	//
 	if (pflags & PS_VIEWOFFSET)
 	{
-		MSG_WriteChar (buf, ((int)ps->viewoffset[0]*4));
-		MSG_WriteChar (buf, ((int)ps->viewoffset[1]*4));
-		MSG_WriteChar (buf, ((int)ps->viewoffset[2]*4));
+		MSG_WriteChar (buf, (int)(ps->viewoffset[0]*4));
+		MSG_WriteChar (buf, (int)(ps->viewoffset[1]*4));
+		MSG_WriteChar (buf, (int)(ps->viewoffset[2]*4));
 	}
 
 	if (pflags & PS_VIEWANGLES)
@@ -793,9 +785,9 @@ static void CL_DemoDeltaPlayerstate (sizebuf_t *buf, const frame_t *from, frame_
 
 	if (pflags & PS_KICKANGLES)
 	{
-		MSG_WriteChar (buf, ((int)ps->kick_angles[0]*4));
-		MSG_WriteChar (buf, ((int)ps->kick_angles[1]*4));
-		MSG_WriteChar (buf, ((int)ps->kick_angles[2]*4));
+		MSG_WriteChar (buf, (int)(ps->kick_angles[0]*4));
+		MSG_WriteChar (buf, (int)(ps->kick_angles[1]*4));
+		MSG_WriteChar (buf, (int)(ps->kick_angles[2]*4));
 	}
 
 	if (pflags & PS_WEAPONINDEX)
@@ -806,20 +798,20 @@ static void CL_DemoDeltaPlayerstate (sizebuf_t *buf, const frame_t *from, frame_
 	if (pflags & PS_WEAPONFRAME)
 	{
 		MSG_WriteByte (buf, ps->gunframe);
-		MSG_WriteChar (buf, ((int)ps->gunoffset[0]*4));
-		MSG_WriteChar (buf, ((int)ps->gunoffset[1]*4));
-		MSG_WriteChar (buf, ((int)ps->gunoffset[2]*4));
-		MSG_WriteChar (buf, ((int)ps->gunangles[0]*4));
-		MSG_WriteChar (buf, ((int)ps->gunangles[1]*4));
-		MSG_WriteChar (buf, ((int)ps->gunangles[2]*4));
+		MSG_WriteChar (buf, (int)(ps->gunoffset[0]*4));
+		MSG_WriteChar (buf, (int)(ps->gunoffset[1]*4));
+		MSG_WriteChar (buf, (int)(ps->gunoffset[2]*4));
+		MSG_WriteChar (buf, (int)(ps->gunangles[0]*4));
+		MSG_WriteChar (buf, (int)(ps->gunangles[1]*4));
+		MSG_WriteChar (buf, (int)(ps->gunangles[2]*4));
 	}
 
 	if (pflags & PS_BLEND)
 	{
-		MSG_WriteByte (buf, ((int)ps->blend[0]*255));
-		MSG_WriteByte (buf, ((int)ps->blend[1]*255));
-		MSG_WriteByte (buf, ((int)ps->blend[2]*255));
-		MSG_WriteByte (buf, ((int)ps->blend[3]*255));
+		MSG_WriteByte (buf, (int)(ps->blend[0]*255));
+		MSG_WriteByte (buf, (int)(ps->blend[1]*255));
+		MSG_WriteByte (buf, (int)(ps->blend[2]*255));
+		MSG_WriteByte (buf, (int)(ps->blend[3]*255));
 	}
 
 	if (pflags & PS_FOV)
@@ -1250,6 +1242,11 @@ void CL_ParseFrame (int extrabits)
 			if (cls.disable_servercount != cl.servercount && cl.refresh_prepped)
 				SCR_EndLoadingPlaque ();	// get rid of loading plaque
 
+			if(!cl.attractloop) {
+				Cmd_ExecTrigger( "#cl_enterlevel" );
+				CL_StartAutoRecord();
+			}
+
 		}
 		cl.sound_prepped = true;	// can start mixing ambient sounds
 	
@@ -1420,7 +1417,7 @@ void CL_AddPacketEntities (const frame_t *frame)
 
 		// only used for black hole model right now, FIXME: do better
 		if (renderfx & RF_TRANSLUCENT)
-			ent.alpha = 0.70;
+			ent.alpha = 0.70f;
 
 		// render effects (fullbright, translucent, etc)
 		if ((effects & EF_COLOR_SHELL))
@@ -1463,11 +1460,11 @@ void CL_AddPacketEntities (const frame_t *frame)
 			// FIXME: still pass to refresh
 
 			if (effects & EF_FLAG1)
-				V_AddLight (ent.origin, 225, 1.0, 0.1f, 0.1f);
+				V_AddLight (ent.origin, 225, 1.0f, 0.1f, 0.1f);
 			else if (effects & EF_FLAG2)
-				V_AddLight (ent.origin, 225, 0.1f, 0.1f, 1.0);
+				V_AddLight (ent.origin, 225, 0.1f, 0.1f, 1.0f);
 			else if (effects & EF_TAGTRAIL)						//PGM
-				V_AddLight (ent.origin, 225, 1.0, 1.0, 0.0f);	//PGM
+				V_AddLight (ent.origin, 225, 1.0f, 1.0f, 0.0f);	//PGM
 			else if (effects & EF_TRACKERTRAIL)					//PGM
 				V_AddLight (ent.origin, 225, -1.0f, -1.0f, -1.0f);	//PGM
 
@@ -1706,24 +1703,24 @@ void CL_AddPacketEntities (const frame_t *frame)
 				ent.origin[2] += 32;
 				CL_TrapParticles (&ent);
 				i = (rand()%100) + 100;
-				V_AddLight (ent.origin, i, 1, 0.8f, 0.1f);
+				V_AddLight (ent.origin, i, 1.0f, 0.8f, 0.1f);
 			}
 			else if (effects & EF_FLAG1)
 			{
 				CL_FlagTrail (cent->lerp_origin, ent.origin, 242);
-				V_AddLight (ent.origin, 225, 1, 0.1f, 0.1f);
+				V_AddLight (ent.origin, 225, 1.0f, 0.1f, 0.1f);
 			}
 			else if (effects & EF_FLAG2)
 			{
 				CL_FlagTrail (cent->lerp_origin, ent.origin, 115);
-				V_AddLight (ent.origin, 225, 0.1f, 0.1f, 1);
+				V_AddLight (ent.origin, 225, 0.1f, 0.1f, 1.0f);
 			}
 //======
 //ROGUE
 			else if (effects & EF_TAGTRAIL)
 			{
 				CL_TagTrail (cent->lerp_origin, ent.origin, 220);
-				V_AddLight (ent.origin, 225, 1.0, 1.0, 0.0);
+				V_AddLight (ent.origin, 225, 1.0f, 1.0f, 0.0f);
 			}
 			else if (effects & EF_TRACKERTRAIL)
 			{
@@ -1731,18 +1728,18 @@ void CL_AddPacketEntities (const frame_t *frame)
 				{
 					float intensity;
 
-					intensity = 50 + (500 * (sin(cl.time/500.0f) + 1.0f));
+					intensity = 50 + (500 * ((float)sin(cl.time/500.0f) + 1.0f));
 					// FIXME - check out this effect in rendition
 #ifdef GL_QUAKE
-						V_AddLight (ent.origin, intensity, -1.0, -1.0, -1.0);
+						V_AddLight (ent.origin, intensity, -1.0f, -1.0f, -1.0f);
 #else
-						V_AddLight (ent.origin, -1.0f * intensity, 1.0, 1.0, 1.0);
+						V_AddLight (ent.origin, -1.0f * intensity, 1.0f, 1.0f, 1.0f);
 #endif
 				}
 				else
 				{
 					CL_Tracker_Shell (cent->lerp_origin);
-					V_AddLight (ent.origin, 155, -1.0, -1.0, -1.0);
+					V_AddLight (ent.origin, 155, -1.0f, -1.0f, -1.0f);
 				}
 			}
 			else if (effects & EF_TRACKER)
@@ -1766,7 +1763,7 @@ void CL_AddPacketEntities (const frame_t *frame)
 			else if (effects & EF_IONRIPPER)
 			{
 				CL_IonripperTrail (cent->lerp_origin, ent.origin);
-				V_AddLight (ent.origin, 100, 1, 0.5, 0.5);
+				V_AddLight (ent.origin, 100, 1, 0.5f, 0.5f);
 			}
 			// RAFAEL
 			else if (effects & EF_BLUEHYPERBLASTER)
@@ -1779,7 +1776,7 @@ void CL_AddPacketEntities (const frame_t *frame)
 				if (effects & EF_ANIM_ALLFAST)
 					CL_BlasterTrail (cent->lerp_origin, ent.origin);
 
-				V_AddLight (ent.origin, 130, 1, 0.5, 0.5);
+				V_AddLight (ent.origin, 130, 1, 0.5f, 0.5f);
 			}
 		}
 
@@ -1811,7 +1808,7 @@ static void CL_AddViewWeapon (const player_state_new_t *ps, const player_state_n
 		return;
 
 	// don't draw gun if in wide angle view
-	if (ps->fov > 90)
+	if (ps->fov > 90 && cl_gun->integer != 2)
 		return;
 
 	//memset (&gun, 0, sizeof(gun));
@@ -1869,7 +1866,7 @@ static void CL_AddViewWeapon (const player_state_new_t *ps, const player_state_n
 				gun.flags |= RF_SHELL_DOUBLE;
 			if (s1->effects & EF_HALF_DAMAGE)
 				gun.flags |= RF_SHELL_HALF_DAM;
-			gun.alpha = 0.1;
+			gun.alpha = 0.1f;
 			V_AddEntity(&gun);
 		}
 		break;
@@ -1993,7 +1990,7 @@ void CL_AddEntities (void)
 		if (cl_showclamp->integer)
 			Com_Printf ("high clamp %i\n", cl.time - cl.frame.servertime);
 		cl.time = cl.frame.servertime;
-		cl.lerpfrac = 1.0;
+		cl.lerpfrac = 1.0f;
 	}
 	else if (cl.time < cl.frame.servertime - 100)
 	{
@@ -2006,7 +2003,7 @@ void CL_AddEntities (void)
 		cl.lerpfrac = 1.0f - (cl.frame.servertime - cl.time) * 0.01f;
 
 	if (cl_timedemo->integer)
-		cl.lerpfrac = 1.0;
+		cl.lerpfrac = 1.0f;
 
 	CL_CalcViewValues ();
 	// PMM - moved this here so the heat beam has the right values for the vieworg, and can lock the beam to the gun
@@ -2021,7 +2018,6 @@ void CL_AddEntities (void)
 }
 
 
-
 /*
 ===============
 CL_GetEntitySoundOrigin
@@ -2032,8 +2028,6 @@ Called to get the sound spatialization origin
 void CL_GetEntitySoundOrigin (int ent, vec3_t org)
 {
 	centity_t	*cent;
-	cmodel_t	*cmodel;
-	vec3_t		midPoint;
 
 	if (ent < 0 || ent >= MAX_EDICTS)
 		Com_Error(ERR_DROP, "CL_GetEntityOrigin: ent = %i", ent);
@@ -2046,6 +2040,7 @@ void CL_GetEntitySoundOrigin (int ent, vec3_t org)
 	}
 
 	cent = &cl_entities[ent];
+	//VectorCopy(cent->lerp_origin, org);
 
 	if (cent->current.renderfx & (RF_FRAMELERP|RF_BEAM))
 	{
@@ -2065,7 +2060,9 @@ void CL_GetEntitySoundOrigin (int ent, vec3_t org)
 	// If a brush model, offset the origin
 	if (cent->current.solid == 31)
 	{
-		cmodel = cl.model_clip[cent->current.modelindex];
+		vec3_t		midPoint;
+		cmodel_t	*cmodel = cl.model_clip[cent->current.modelindex];
+
 		if (!cmodel)
 			return;
 

@@ -294,7 +294,7 @@ void R_AddDecals (void)
 
 	GL_TexEnv(GL_REPLACE);
 	qglDisable(GL_BLEND);
-	qglColor4f(1,1,1,1);
+	qglColor4fv(colorWhite);
 	qglDepthMask(GL_TRUE);
 	qglDisable(GL_POLYGON_OFFSET_FILL);
 }

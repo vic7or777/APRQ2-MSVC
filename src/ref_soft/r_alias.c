@@ -57,7 +57,7 @@ static vec3_t	s_alias_forward, s_alias_right, s_alias_up;
 #define NUMVERTEXNORMALS	162
 
 const float	r_avertexnormals[NUMVERTEXNORMALS][3] = {
-#include "anorms.h"
+#include "../client/anorms.h"
 };
 
 // precalculated dot products for quantized angles
@@ -620,17 +620,17 @@ void R_AliasSetupLighting (void)
 		float	scale;
 		float	min;
 
-		scale = 0.1 * sin(r_newrefdef.time*7);
+		scale = 0.1f * (float)sin(r_newrefdef.time*7);
 		for (i=0 ; i<3 ; i++)
 		{
-			min = light[i] * 0.8;
+			min = light[i] * 0.8f;
 			light[i] += scale;
 			if (light[i] < min)
 				light[i] = min;
 		}
 	}
 
-	j = (light[0] + light[1] + light[2])*0.3333*255;
+	j = (light[0] + light[1] + light[2])*0.3333f*255;
 
 	r_ambientlight = j;
 	r_shadelight = j;

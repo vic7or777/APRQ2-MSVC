@@ -38,8 +38,8 @@ typedef struct
 	int			contents;
 	int			cluster;
 	int			area;
-	unsigned short	firstleafbrush;
-	unsigned short	numleafbrushes;
+	uint16		firstleafbrush;
+	uint16		numleafbrushes;
 } cleaf_t;
 
 typedef struct
@@ -78,7 +78,7 @@ static int			numleafs = 1;	// allow leaf funcs to be called without a map
 static cleaf_t		map_leafs[MAX_MAP_LEAFS];		 // extra for box hull
 
 static int			numleafbrushes;
-static unsigned short	map_leafbrushes[MAX_MAP_LEAFBRUSHES];
+static uint16		map_leafbrushes[MAX_MAP_LEAFBRUSHES];
 
 static int			numcmodels;
 static cmodel_t		map_cmodels[MAX_MAP_MODELS];
@@ -365,8 +365,8 @@ CMod_LoadLeafBrushes
 static void CMod_LoadLeafBrushes (const lump_t *l)
 {
 	int			i;
-	unsigned short	*out;
-	unsigned short 	*in;
+	uint16		*out;
+	uint16	 	*in;
 	int			count;
 	
 	in = (void *)(cmod_base + l->fileofs);
@@ -537,7 +537,7 @@ CM_LoadMap
 Loads in the map and all submodels
 ==================
 */
-cmodel_t *CM_LoadMap (const char *name, qboolean clientload, unsigned *checksum)
+cmodel_t *CM_LoadMap (const char *name, qboolean clientload, uint32 *checksum)
 {
 	unsigned		*buf;
 #ifndef ENDIAN_LITTLE
@@ -545,11 +545,11 @@ cmodel_t *CM_LoadMap (const char *name, qboolean clientload, unsigned *checksum)
 #endif
 	dheader_t		header;
 	int				length;
-	static unsigned	last_checksum;
+	static uint32 last_checksum;
 
 	map_noareas = Cvar_Get ("map_noareas", "0", 0);
 
-	if (  !strcmp (map_name, name) && (clientload || !Cvar_VariableValue ("flushmap")) )
+	if (!strcmp (map_name, name) && (clientload || !Cvar_VariableIntValue("flushmap")) )
 	{
 		*checksum = last_checksum;
 		if (!clientload)
@@ -579,6 +579,7 @@ cmodel_t *CM_LoadMap (const char *name, qboolean clientload, unsigned *checksum)
 		numleafs = 1;
 		numclusters = 1;
 		numareas = 1;
+		last_checksum = 0;
 		*checksum = 0;
 		return &map_cmodels[0];			// cinematic servers won't have anything at all
 	}
@@ -615,8 +616,8 @@ cmodel_t *CM_LoadMap (const char *name, qboolean clientload, unsigned *checksum)
 	CMod_LoadPlanes (&header.lumps[LUMP_PLANES]);
 	CMod_LoadBrushes (&header.lumps[LUMP_BRUSHES]);
 	CMod_LoadBrushSides (&header.lumps[LUMP_BRUSHSIDES]);
-	CMod_LoadNodes (&header.lumps[LUMP_NODES]);
 	CMod_LoadSubmodels (&header.lumps[LUMP_MODELS]);
+	CMod_LoadNodes (&header.lumps[LUMP_NODES]);
 	CMod_LoadAreas (&header.lumps[LUMP_AREAS]);
 	CMod_LoadAreaPortals (&header.lumps[LUMP_AREAPORTALS]);
 	CMod_LoadVisibility (&header.lumps[LUMP_VISIBILITY]);
@@ -973,7 +974,7 @@ BOX TRACING
 */
 
 // 1/32 epsilon to keep floating point happy
-#define	DIST_EPSILON	(0.03125)
+#define	DIST_EPSILON	(0.03125f)
 
 static vec3_t	trace_start, trace_end;
 static vec3_t	trace_mins, trace_maxs;
@@ -1268,9 +1269,9 @@ static void CM_RecursiveHullCheck (int num, float p1f, float p2f, const vec3_t p
 		if (trace_ispoint)
 			offset = 0;
 		else
-			offset = fabs(trace_extents[0]*plane->normal[0]) +
+			offset = (float)(fabs(trace_extents[0]*plane->normal[0]) +
 				fabs(trace_extents[1]*plane->normal[1]) +
-				fabs(trace_extents[2]*plane->normal[2]);
+				fabs(trace_extents[2]*plane->normal[2]));
 	}
 
 
@@ -1373,7 +1374,7 @@ trace_t		CM_BoxTrace (const vec3_t start, const vec3_t end,
 	if (start[0] == end[0] && start[1] == end[1] && start[2] == end[2])
 	{
 		int		leafs[1024];
-		int		i, numleafs;
+		int		numleafs;
 		vec3_t	c1, c2;
 		int		topnode;
 
@@ -1439,9 +1440,9 @@ Handles offseting and rotation of the end points for moving and
 rotating entities
 ==================
 */
-#ifdef _WIN32
-#pragma optimize( "", off )
-#endif
+//#ifdef _WIN32
+//#pragma optimize( "", off )
+//#endif
 
 
 trace_t		CM_TransformedBoxTrace (const vec3_t start, const vec3_t end,
@@ -1462,10 +1463,9 @@ trace_t		CM_TransformedBoxTrace (const vec3_t start, const vec3_t end,
 
 	// rotate start and end into the models frame of reference
 	if (headnode != box_headnode && (angles[0] || angles[1] || angles[2]) )
+	{
 		rotated = true;
 
-	if (rotated)
-	{
 		AngleVectors (angles, forward, right, up);
 
 		VectorCopy (start_l, temp);
@@ -1494,23 +1494,16 @@ trace_t		CM_TransformedBoxTrace (const vec3_t start, const vec3_t end,
 		trace.plane.normal[2] = DotProduct (temp, up);
 	}
 
-	if (trace.fraction == 1)	
-	{	
-		VectorCopy (end, trace.endpos);	
-	}	
-	else	
-	{
-		trace.endpos[0] = start[0] + trace.fraction * (end[0] - start[0]);
-		trace.endpos[1] = start[1] + trace.fraction * (end[1] - start[1]);
-		trace.endpos[2] = start[2] + trace.fraction * (end[2] - start[2]);
-	}
+	trace.endpos[0] = start[0] + trace.fraction * (end[0] - start[0]);
+	trace.endpos[1] = start[1] + trace.fraction * (end[1] - start[1]);
+	trace.endpos[2] = start[2] + trace.fraction * (end[2] - start[2]);
 
 	return trace;
 }
 
-#ifdef _WIN32
-#pragma optimize( "", on )
-#endif
+//#ifdef _WIN32
+//#pragma optimize( "", on )
+//#endif
 
 
 
@@ -1632,11 +1625,10 @@ static void	FloodAreaConnections (void)
 {
 	int		i;
 	carea_t	*area;
-	int		floodnum;
+	int		floodnum = 0;
 
 	// all current floods are now invalid
 	floodvalid++;
-	floodnum = 0;
 
 	// area 0 is not used
 	for (i=1 ; i<numareas ; i++)

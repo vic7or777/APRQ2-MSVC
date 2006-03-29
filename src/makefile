@@ -12,6 +12,10 @@ BUILD_GLX=YES		# X11 GLX client
 BUILD_X11=NO		# X11 software client
 BUILD_EVDEV=NO		# build evdev mouse input support
 BUILD_XMMS=YES		# buildin xmms remote commands
+BUILD_MPD=NO		# buildin mpd remote commands, cant use with BUILD_XMMS
+BUILD_SDLSOUND=NO	# Using sdl for sounds
+BUILD_HTTP=NO		# Build support for http downloads. You need libcurl.
+BUILD_OPENAL=YES	# Build support for openAL sounds
 #--------------------------------------------------------
 
 # Check OS type.
@@ -25,17 +29,7 @@ endif
 
 # Check arch type
 ARCH:=$(shell uname -m | sed -e s/i.86/i386/ -e s/sun4u/sparc/ -e s/sparc64/sparc/ -e s/arm.*/arm/ -e s/sa110/arm/ -e s/alpha/axp/)
-
-ifneq ($(ARCH),i386)
-ifneq ($(ARCH),axp)
-ifneq ($(ARCH),ppc)
-ifneq ($(ARCH),sparc)
-  $(error arch $(ARCH) is currently not supported)
-endif
-endif
-endif
-endif
-  
+ 
 #COMPILATION TOOLS
 CC=gcc
 
@@ -46,10 +40,27 @@ ifneq ($(ARCH),i386)
 endif
 
 ifeq ($(strip $(BUILD_XMMS)),YES)
- BASE_CFLAGS+=-DWITH_XMMS `glib-config --cflags`
+ BASE_CFLAGS += -DWITH_XMMS `glib-config --cflags`
+else
+ ifeq ($(strip $(BUILD_MPD)),YES)
+  BASE_CFLAGS += -DWITH_MPD
+ endif
 endif
+
+ifeq ($(strip $(BUILD_HTTP)),YES)
+ BASE_CFLAGS += -DUSE_CURL
+endif
+ 
 ifeq ($(strip $(BUILD_EVDEV)),YES)
- BASE_CFLAGS+=-DWITH_EVDEV
+ BASE_CFLAGS += -DWITH_EVDEV
+endif
+
+ifeq ($(strip $(BUILD_OPENAL)),YES)
+ BASE_CFLAGS += -DUSE_OPENAL
+endif
+
+ifeq ($(strip $(BUILD_SDLSOUND)),YES)
+	BASE_CFLAGS += $(shell sdl-config --cflags)
 endif
 
 DEBUG_CFLAGS=$(BASE_CFLAGS) -g -Wall -Wimplicit
@@ -74,9 +85,13 @@ else
   endif
 endif
 
-#ifeq ($(strip $(BUILD_ALSA)),YES)
-#  LDFLAGS+=-lasound
-#endif
+ifeq ($(strip $(BUILD_HTTP)),YES)
+ LDFLAGS += -lcurl
+endif
+
+ifeq ($(strip $(BUILD_SDLSOUND)),YES)
+ LDFLAGS += $(shell sdl-config --libs)
+endif
 
 #FOR X11 BUILDS
 XCFLAGS=-I/usr/X11R6/include
@@ -157,6 +172,7 @@ QUAKE2GLX_OBJS = \
 	$(BUILDDIR)/q2glx/cl_loc.o \
 	$(BUILDDIR)/q2glx/cl_draw.o \
 	$(BUILDDIR)/q2glx/cl_demo.o \
+	$(BUILDDIR)/q2glx/cl_http.o \
 	\
 	$(BUILDDIR)/q2glx/cmd.o \
 	$(BUILDDIR)/q2glx/cmodel.o \
@@ -221,9 +237,19 @@ QUAKE2GLX_OBJS = \
 	$(BUILDDIR)/q2glx/gl_glx.o \
 	$(BUILDDIR)/q2glx/rw_linux.o \
 	$(BUILDDIR)/q2glx/xmms.o \
+	$(BUILDDIR)/q2glx/mpd.o \
+	$(BUILDDIR)/q2glx/libmpdclient.o \
+	$(BUILDDIR)/q2glx/snd_openal.o
+	
+ifeq ($(strip $(BUILD_SDLSOUND)),YES)
+QUAKE2GLX_OBJS += \
+	$(BUILDDIR)/q2glx/snd_sdl.o
+else
+QUAKE2GLX_OBJS += \
 	$(BUILDDIR)/q2glx/snd_linux.o \
 	$(BUILDDIR)/q2glx/snd_oss.o \
 	$(BUILDDIR)/q2glx/snd_alsa.o
+endif
 	
 ifeq ($(ARCH),i386)
 QUAKE2GLX_OBJS += \
@@ -285,13 +311,22 @@ $(BUILDDIR)/q2glx/qgl_linux.o :  $(LINUX_DIR)/qgl_linux.c
 $(BUILDDIR)/q2glx/gl_glx.o :     $(LINUX_DIR)/gl_glx.c
 	$(DO_GL_CC) $(GLXCFLAGS)
 	
-$(BUILDDIR)/q2glx/snd_oss.o :   $(LINUX_DIR)/snd_oss.c
+$(BUILDDIR)/q2glx/snd_oss.o :    $(LINUX_DIR)/snd_oss.c
 	$(DO_GL_CC)
 	
 $(BUILDDIR)/q2glx/snd_alsa.o :   $(LINUX_DIR)/snd_alsa.c
 	$(DO_GL_CC)
 
+$(BUILDDIR)/q2glx/snd_sdl.o :    $(LINUX_DIR)/snd_sdl.c
+	$(DO_GL_CC)
+	
 $(BUILDDIR)/q2glx/xmms.o :       $(LINUX_DIR)/xmms.c
+	$(DO_GL_CC)
+	
+$(BUILDDIR)/q2glx/mpd.o :		 $(LINUX_DIR)/mpd.c
+	$(DO_GL_CC)
+
+$(BUILDDIR)/q2glx/libmpdclient.o : $(LINUX_DIR)/libmpdclient.c
 	$(DO_GL_CC)
 	
 #############################################################################
@@ -320,6 +355,7 @@ QUAKE2SWX_OBJS = \
 	$(BUILDDIR)/q2swx/cl_loc.o \
 	$(BUILDDIR)/q2swx/cl_draw.o \
 	$(BUILDDIR)/q2swx/cl_demo.o \
+	$(BUILDDIR)/q2swx/cl_http.o \
 	\
 	$(BUILDDIR)/q2swx/cmd.o \
 	$(BUILDDIR)/q2swx/cmodel.o \
@@ -390,10 +426,20 @@ QUAKE2SWX_OBJS = \
 	$(BUILDDIR)/q2swx/rw_x11.o \
 	$(BUILDDIR)/q2swx/rw_linux.o \
 	$(BUILDDIR)/q2swx/xmms.o \
+	$(BUILDDIR)/q2swx/mpd.o \
+	$(BUILDDIR)/q2swx/libmpdclient.o \
+	$(BUILDDIR)/q2swx/snd_openal.o
+	
+ifeq ($(strip $(BUILD_SDLSOUND)),YES)
+QUAKE2SWX_OBJS += \
+	$(BUILDDIR)/q2swx/snd_sdl.o
+else
+QUAKE2SWX_OBJS += \
 	$(BUILDDIR)/q2swx/snd_linux.o \
 	$(BUILDDIR)/q2swx/snd_oss.o \
 	$(BUILDDIR)/q2swx/snd_alsa.o
-	
+endif
+
 ifeq ($(ARCH),i386)
 QUAKE2SWX_OBJS += \
 	$(BUILDDIR)/q2swx/snd_mixa.o \
@@ -460,13 +506,22 @@ $(BUILDDIR)/q2swx/rw_linux.o :   $(LINUX_DIR)/rw_linux.c
 $(BUILDDIR)/q2swx/rw_x11.o :     $(LINUX_DIR)/rw_x11.c
 	$(DO_CC) $(XCFLAGS)
 
-$(BUILDDIR)/q2swx/snd_oss.o :   $(LINUX_DIR)/snd_oss.c
+$(BUILDDIR)/q2swx/snd_oss.o :    $(LINUX_DIR)/snd_oss.c
 	$(DO_CC)
 		
 $(BUILDDIR)/q2swx/snd_alsa.o :   $(LINUX_DIR)/snd_alsa.c
 	$(DO_CC)
 
+$(BUILDDIR)/q2swx/snd_sdl.o :    $(LINUX_DIR)/snd_sdl.c
+	$(DO_CC)
+	
 $(BUILDDIR)/q2swx/xmms.o :       $(LINUX_DIR)/xmms.c
+	$(DO_CC)
+
+$(BUILDDIR)/q2swx/mpd.o :       $(LINUX_DIR)/mpd.c
+	$(DO_CC)
+
+$(BUILDDIR)/q2swx/libmpdclient.o : $(LINUX_DIR)/libmpdclient.c
 	$(DO_CC)
 
 $(BUILDDIR)/q2swx/%.o :          $(LINUX_DIR)/%.s

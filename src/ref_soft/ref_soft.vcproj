@@ -1,30 +1,58 @@
 <?xml version="1.0" encoding="Windows-1252"?>
 <VisualStudioProject
 	ProjectType="Visual C++"
-	Version="7.10"
+	Version="8,00"
 	Name="Q2 SW"
-	SccProjectName=""
-	SccLocalPath="">
+	ProjectGUID="{C8962C1F-320E-43AC-B023-DC8A08C51EED}"
+	>
 	<Platforms>
 		<Platform
-			Name="Win32"/>
+			Name="Win32"
+		/>
 	</Platforms>
+	<ToolFiles>
+	</ToolFiles>
 	<Configurations>
 		<Configuration
 			Name="Debug|Win32"
 			OutputDirectory=".\debug"
 			IntermediateDirectory=".\debug"
 			ConfigurationType="1"
+			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC71.vsprops"
 			UseOfMFC="0"
-			ATLMinimizesCRunTimeLibraryUsage="FALSE">
+			ATLMinimizesCRunTimeLibraryUsage="false"
+			>
+			<Tool
+				Name="VCPreBuildEventTool"
+			/>
+			<Tool
+				Name="VCCustomBuildTool"
+			/>
+			<Tool
+				Name="VCXMLDataGeneratorTool"
+			/>
+			<Tool
+				Name="VCWebServiceProxyGeneratorTool"
+			/>
+			<Tool
+				Name="VCMIDLTool"
+				PreprocessorDefinitions="_DEBUG"
+				MkTypLibCompatible="true"
+				SuppressStartupBanner="true"
+				TargetEnvironment="1"
+				TypeLibraryName=".\..\debug/ref_soft.tlb"
+				HeaderFileName=""
+			/>
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="0"
-				OptimizeForProcessor="1"
 				AdditionalIncludeDirectories="../win32/lib"
-				PreprocessorDefinitions="_DEBUG;WIN32;_WINDOWS"
-				RuntimeLibrary="4"
-				UsePrecompiledHeader="2"
+				PreprocessorDefinitions="_DEBUG;WIN32;_WINDOWS;USE_CURL"
+				ExceptionHandling="0"
+				RuntimeLibrary="0"
+				FloatingPointModel="2"
+				RuntimeTypeInfo="false"
+				UsePrecompiledHeader="0"
 				PrecompiledHeaderFile=".\debug/aq2sw.pch"
 				AssemblerListingLocation=".\debug/"
 				ObjectFile=".\debug/"
@@ -32,124 +60,167 @@
 				BrowseInformation="1"
 				BrowseInformationFile=".\debug/"
 				WarningLevel="3"
-				SuppressStartupBanner="TRUE"
-				DebugInformationFormat="4"/>
+				SuppressStartupBanner="true"
+				DebugInformationFormat="4"
+				CompileAs="1"
+			/>
 			<Tool
-				Name="VCCustomBuildTool"/>
-			<Tool
-				Name="VCLinkerTool"
-				AdditionalDependencies="winmm.lib wsock32.lib zlib.lib"
-				OutputFile="d:\games\quake2\aq2swde.exe"
-				LinkIncremental="2"
-				SuppressStartupBanner="TRUE"
-				IgnoreDefaultLibraryNames=""
-				ModuleDefinitionFile=""
-				GenerateDebugInformation="TRUE"
-				ProgramDatabaseFile=".\debug/aq2sw.pdb"
-				GenerateMapFile="TRUE"
-				MapFileName=".\debug/aq2sw.map"
-				SubSystem="2"
-				ImportLibrary=""
-				TargetMachine="1"/>
-			<Tool
-				Name="VCMIDLTool"
-				PreprocessorDefinitions="_DEBUG"
-				MkTypLibCompatible="TRUE"
-				SuppressStartupBanner="TRUE"
-				TargetEnvironment="1"
-				TypeLibraryName=".\..\debug/ref_soft.tlb"
-				HeaderFileName=""/>
-			<Tool
-				Name="VCPostBuildEventTool"/>
-			<Tool
-				Name="VCPreBuildEventTool"/>
-			<Tool
-				Name="VCPreLinkEventTool"/>
+				Name="VCManagedResourceCompilerTool"
+			/>
 			<Tool
 				Name="VCResourceCompilerTool"
 				PreprocessorDefinitions="_DEBUG"
-				Culture="1033"/>
+				Culture="1033"
+			/>
 			<Tool
-				Name="VCWebServiceProxyGeneratorTool"/>
+				Name="VCPreLinkEventTool"
+			/>
 			<Tool
-				Name="VCXMLDataGeneratorTool"/>
+				Name="VCLinkerTool"
+				AdditionalDependencies="winmm.lib wsock32.lib zlib.lib curllib.lib"
+				OutputFile="d:\games\quake2\aq2swde.exe"
+				LinkIncremental="2"
+				SuppressStartupBanner="true"
+				AdditionalLibraryDirectories="../win32/lib"
+				GenerateManifest="false"
+				IgnoreDefaultLibraryNames=""
+				ModuleDefinitionFile=""
+				GenerateDebugInformation="true"
+				ProgramDatabaseFile=".\debug/aq2sw.pdb"
+				GenerateMapFile="true"
+				MapFileName=".\debug/aq2sw.map"
+				SubSystem="2"
+				ImportLibrary=""
+				TargetMachine="1"
+			/>
 			<Tool
-				Name="VCWebDeploymentTool"/>
+				Name="VCALinkTool"
+			/>
 			<Tool
-				Name="VCManagedWrapperGeneratorTool"/>
+				Name="VCManifestTool"
+			/>
 			<Tool
-				Name="VCAuxiliaryManagedWrapperGeneratorTool"/>
+				Name="VCXDCMakeTool"
+			/>
+			<Tool
+				Name="VCBscMakeTool"
+			/>
+			<Tool
+				Name="VCFxCopTool"
+			/>
+			<Tool
+				Name="VCAppVerifierTool"
+			/>
+			<Tool
+				Name="VCWebDeploymentTool"
+			/>
+			<Tool
+				Name="VCPostBuildEventTool"
+			/>
 		</Configuration>
 		<Configuration
 			Name="Release|Win32"
 			OutputDirectory=".\release"
 			IntermediateDirectory=".\release"
 			ConfigurationType="1"
+			InheritedPropertySheets="$(VCInstallDir)VCProjectDefaults\UpgradeFromVC71.vsprops"
 			UseOfMFC="0"
-			ATLMinimizesCRunTimeLibraryUsage="FALSE"
-			CharacterSet="2">
+			ATLMinimizesCRunTimeLibraryUsage="false"
+			CharacterSet="2"
+			>
+			<Tool
+				Name="VCPreBuildEventTool"
+			/>
+			<Tool
+				Name="VCCustomBuildTool"
+			/>
+			<Tool
+				Name="VCXMLDataGeneratorTool"
+			/>
+			<Tool
+				Name="VCWebServiceProxyGeneratorTool"
+			/>
+			<Tool
+				Name="VCMIDLTool"
+				PreprocessorDefinitions="NDEBUG"
+				MkTypLibCompatible="true"
+				SuppressStartupBanner="true"
+				TargetEnvironment="1"
+				TypeLibraryName=".\..\release/ref_soft.tlb"
+				HeaderFileName=""
+			/>
 			<Tool
 				Name="VCCLCompilerTool"
 				Optimization="2"
-				GlobalOptimizations="FALSE"
 				InlineFunctionExpansion="2"
-				EnableIntrinsicFunctions="FALSE"
+				EnableIntrinsicFunctions="false"
 				FavorSizeOrSpeed="0"
-				OptimizeForProcessor="1"
 				AdditionalIncludeDirectories="../win32/lib"
-				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS"
-				StringPooling="TRUE"
-				RuntimeLibrary="4"
-				EnableFunctionLevelLinking="TRUE"
-				UsePrecompiledHeader="2"
+				PreprocessorDefinitions="WIN32;NDEBUG;_WINDOWS;USE_CURL"
+				StringPooling="true"
+				ExceptionHandling="0"
+				RuntimeLibrary="0"
+				EnableFunctionLevelLinking="true"
+				FloatingPointModel="2"
+				RuntimeTypeInfo="false"
+				UsePrecompiledHeader="0"
 				PrecompiledHeaderFile=".\release/aq2sw.pch"
 				AssemblerListingLocation=".\release/"
 				ObjectFile=".\release/"
 				ProgramDataBaseFileName=".\release/"
 				WarningLevel="3"
-				SuppressStartupBanner="TRUE"/>
+				SuppressStartupBanner="true"
+				CompileAs="1"
+			/>
 			<Tool
-				Name="VCCustomBuildTool"/>
+				Name="VCManagedResourceCompilerTool"
+			/>
+			<Tool
+				Name="VCResourceCompilerTool"
+				PreprocessorDefinitions="NDEBUG"
+				Culture="1033"
+			/>
+			<Tool
+				Name="VCPreLinkEventTool"
+			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="winmm.lib wsock32.lib zlib.lib"
+				AdditionalDependencies="winmm.lib wsock32.lib zlib.lib curllib.lib"
 				OutputFile="d:\games\quake2\aq2sw.exe"
 				LinkIncremental="1"
-				SuppressStartupBanner="FALSE"
+				SuppressStartupBanner="false"
 				AdditionalLibraryDirectories="../win32/lib"
+				GenerateManifest="false"
 				ModuleDefinitionFile=""
 				ProgramDatabaseFile=".\..\release/aq2_soft.pdb"
 				SubSystem="2"
 				ImportLibrary=""
-				TargetMachine="1"/>
+				TargetMachine="1"
+			/>
 			<Tool
-				Name="VCMIDLTool"
-				PreprocessorDefinitions="NDEBUG"
-				MkTypLibCompatible="TRUE"
-				SuppressStartupBanner="TRUE"
-				TargetEnvironment="1"
-				TypeLibraryName=".\..\release/ref_soft.tlb"
-				HeaderFileName=""/>
+				Name="VCALinkTool"
+			/>
 			<Tool
-				Name="VCPostBuildEventTool"/>
+				Name="VCManifestTool"
+			/>
 			<Tool
-				Name="VCPreBuildEventTool"/>
+				Name="VCXDCMakeTool"
+			/>
 			<Tool
-				Name="VCPreLinkEventTool"/>
+				Name="VCBscMakeTool"
+			/>
 			<Tool
-				Name="VCResourceCompilerTool"
-				PreprocessorDefinitions="NDEBUG"
-				Culture="1033"/>
+				Name="VCFxCopTool"
+			/>
 			<Tool
-				Name="VCWebServiceProxyGeneratorTool"/>
+				Name="VCAppVerifierTool"
+			/>
 			<Tool
-				Name="VCXMLDataGeneratorTool"/>
+				Name="VCWebDeploymentTool"
+			/>
 			<Tool
-				Name="VCWebDeploymentTool"/>
-			<Tool
-				Name="VCManagedWrapperGeneratorTool"/>
-			<Tool
-				Name="VCAuxiliaryManagedWrapperGeneratorTool"/>
+				Name="VCPostBuildEventTool"
+			/>
 		</Configuration>
 	</Configurations>
 	<References>
@@ -157,568 +228,736 @@
 	<Files>
 		<Filter
 			Name="render"
-			Filter="">
+			>
 			<File
-				RelativePath="adivtab.h">
+				RelativePath="adivtab.h"
+				>
 			</File>
 			<File
-				RelativePath="anorms.h">
+				RelativePath="anorms.h"
+				>
 			</File>
 			<File
-				RelativePath="anormtab.h">
+				RelativePath="anormtab.h"
+				>
 			</File>
 			<File
-				RelativePath="r_aclip.c">
+				RelativePath="r_aclip.c"
+				>
 			</File>
 			<File
-				RelativePath="r_alias.c">
+				RelativePath="r_alias.c"
+				>
 			</File>
 			<File
-				RelativePath="r_bsp.c">
+				RelativePath="r_bsp.c"
+				>
 			</File>
 			<File
-				RelativePath="r_draw.c">
+				RelativePath="r_draw.c"
+				>
 			</File>
 			<File
-				RelativePath="r_edge.c">
+				RelativePath="r_edge.c"
+				>
 			</File>
 			<File
-				RelativePath="r_image.c">
+				RelativePath="r_image.c"
+				>
 			</File>
 			<File
-				RelativePath="r_light.c">
+				RelativePath="r_light.c"
+				>
 			</File>
 			<File
-				RelativePath="r_local.h">
+				RelativePath="r_local.h"
+				>
 			</File>
 			<File
-				RelativePath="r_main.c">
+				RelativePath="r_main.c"
+				>
 			</File>
 			<File
-				RelativePath="r_misc.c">
+				RelativePath="r_misc.c"
+				>
 			</File>
 			<File
-				RelativePath="r_model.c">
+				RelativePath="r_model.c"
+				>
 			</File>
 			<File
-				RelativePath="r_model.h">
+				RelativePath="r_model.h"
+				>
 			</File>
 			<File
-				RelativePath="r_part.c">
+				RelativePath="r_part.c"
+				>
 			</File>
 			<File
-				RelativePath="r_poly.c">
+				RelativePath="r_poly.c"
+				>
 			</File>
 			<File
-				RelativePath="r_polyse.c">
+				RelativePath="r_polyse.c"
+				>
 			</File>
 			<File
-				RelativePath="r_rast.c">
+				RelativePath="r_rast.c"
+				>
 			</File>
 			<File
-				RelativePath="r_scan.c">
+				RelativePath="r_scan.c"
+				>
 			</File>
 			<File
-				RelativePath="r_sprite.c">
+				RelativePath="r_sprite.c"
+				>
 			</File>
 			<File
-				RelativePath="r_surf.c">
+				RelativePath="r_surf.c"
+				>
 			</File>
 			<File
-				RelativePath="rand1k.h">
+				RelativePath="rand1k.h"
+				>
 			</File>
 			<File
-				RelativePath="..\win32\rw_ddraw.c">
+				RelativePath="..\win32\rw_ddraw.c"
+				>
 			</File>
 			<File
-				RelativePath="..\win32\rw_dib.c">
+				RelativePath="..\win32\rw_dib.c"
+				>
 			</File>
 			<File
-				RelativePath="..\win32\rw_imp.c">
+				RelativePath="..\win32\rw_imp.c"
+				>
 			</File>
 			<File
-				RelativePath="..\win32\rw_win.h">
+				RelativePath="..\win32\rw_win.h"
+				>
 			</File>
 			<Filter
 				Name="i386"
-				Filter="">
+				>
 				<File
-					RelativePath="r_aclipa.asm">
+					RelativePath="r_aclipa.asm"
+					>
 					<FileConfiguration
-						Name="Debug|Win32">
+						Name="Debug|Win32"
+						>
 						<Tool
 							Name="VCCustomBuildTool"
-							CommandLine="ml /c /Cp /coff /Fo$(OUTDIR)\$(InputName).obj /Zm /Zi $(InputPath)
-"
-							Outputs="$(OUTDIR)\$(InputName).obj"/>
+							CommandLine="ml /c /Cp /coff /Fo$(OUTDIR)\$(InputName).obj /Zm /Zi $(InputPath)&#x0D;&#x0A;"
+							Outputs="$(OUTDIR)\$(InputName).obj"
+						/>
 					</FileConfiguration>
 					<FileConfiguration
-						Name="Release|Win32">
+						Name="Release|Win32"
+						>
 						<Tool
 							Name="VCCustomBuildTool"
-							CommandLine="ml /c /Cp /coff /Fo$(OUTDIR)\$(InputName).obj /Zm /Zi $(InputPath)
-"
-							Outputs="$(OUTDIR)\$(InputName).obj"/>
+							CommandLine="ml /c /Cp /coff /Fo$(OUTDIR)\$(InputName).obj /Zm /Zi $(InputPath)&#x0D;&#x0A;"
+							Outputs="$(OUTDIR)\$(InputName).obj"
+						/>
 					</FileConfiguration>
 				</File>
 				<File
-					RelativePath="r_draw16.asm">
+					RelativePath="r_draw16.asm"
+					>
 					<FileConfiguration
-						Name="Debug|Win32">
+						Name="Debug|Win32"
+						>
 						<Tool
 							Name="VCCustomBuildTool"
-							CommandLine="ml /c /Cp /coff /Fo$(OUTDIR)\$(InputName).obj /Zm /Zi $(InputPath)
-"
-							Outputs="$(OUTDIR)\$(InputName).obj"/>
+							CommandLine="ml /c /Cp /coff /Fo$(OUTDIR)\$(InputName).obj /Zm /Zi $(InputPath)&#x0D;&#x0A;"
+							Outputs="$(OUTDIR)\$(InputName).obj"
+						/>
 					</FileConfiguration>
 					<FileConfiguration
-						Name="Release|Win32">
+						Name="Release|Win32"
+						>
 						<Tool
 							Name="VCCustomBuildTool"
-							CommandLine="ml /c /Cp /coff /Fo$(OUTDIR)\$(InputName).obj /Zm /Zi $(InputPath)
-"
-							Outputs="$(OUTDIR)\$(InputName).obj"/>
-					</FileConfiguration>
-				</File>
-				<File
-					RelativePath="r_drawa.asm">
-					<FileConfiguration
-						Name="Debug|Win32">
-						<Tool
-							Name="VCCustomBuildTool"
-							CommandLine="ml /c /Cp /coff /Fo$(OUTDIR)\$(InputName).obj /Zm /Zi $(InputPath)
-"
-							Outputs="$(OUTDIR)\$(InputName).obj"/>
-					</FileConfiguration>
-					<FileConfiguration
-						Name="Release|Win32">
-						<Tool
-							Name="VCCustomBuildTool"
-							CommandLine="ml /c /Cp /coff /Fo$(OUTDIR)\$(InputName).obj /Zm /Zi $(InputPath)
-"
-							Outputs="$(OUTDIR)\$(InputName).obj"/>
+							CommandLine="ml /c /Cp /coff /Fo$(OUTDIR)\$(InputName).obj /Zm /Zi $(InputPath)&#x0D;&#x0A;"
+							Outputs="$(OUTDIR)\$(InputName).obj"
+						/>
 					</FileConfiguration>
 				</File>
 				<File
-					RelativePath="r_edgea.asm">
+					RelativePath="r_drawa.asm"
+					>
 					<FileConfiguration
-						Name="Debug|Win32">
+						Name="Debug|Win32"
+						>
 						<Tool
 							Name="VCCustomBuildTool"
-							CommandLine="ml /c /Cp /coff /Fo$(OUTDIR)\$(InputName).obj /Zm /Zi $(InputPath)
-"
-							Outputs="$(OUTDIR)\$(InputName).obj"/>
+							CommandLine="ml /c /Cp /coff /Fo$(OUTDIR)\$(InputName).obj /Zm /Zi $(InputPath)&#x0D;&#x0A;"
+							Outputs="$(OUTDIR)\$(InputName).obj"
+						/>
 					</FileConfiguration>
 					<FileConfiguration
-						Name="Release|Win32">
+						Name="Release|Win32"
+						>
 						<Tool
 							Name="VCCustomBuildTool"
-							CommandLine="ml /c /Cp /coff /Fo$(OUTDIR)\$(InputName).obj /Zm /Zi $(InputPath)
-"
-							Outputs="$(OUTDIR)\$(InputName).obj"/>
-					</FileConfiguration>
-				</File>
-				<File
-					RelativePath="r_polysa.asm">
-					<FileConfiguration
-						Name="Debug|Win32">
-						<Tool
-							Name="VCCustomBuildTool"
-							CommandLine="ml /c /Cp /coff /Fo$(OUTDIR)\$(InputName).obj /Zm /Zi $(InputPath)
-"
-							Outputs="$(OUTDIR)\$(InputName).obj"/>
-					</FileConfiguration>
-					<FileConfiguration
-						Name="Release|Win32">
-						<Tool
-							Name="VCCustomBuildTool"
-							CommandLine="ml /c /Cp /coff /Fo$(OUTDIR)\$(InputName).obj /Zm /Zi $(InputPath)
-"
-							Outputs="$(OUTDIR)\$(InputName).obj"/>
+							CommandLine="ml /c /Cp /coff /Fo$(OUTDIR)\$(InputName).obj /Zm /Zi $(InputPath)&#x0D;&#x0A;"
+							Outputs="$(OUTDIR)\$(InputName).obj"
+						/>
 					</FileConfiguration>
 				</File>
 				<File
-					RelativePath="r_scana.asm">
+					RelativePath="r_edgea.asm"
+					>
 					<FileConfiguration
-						Name="Debug|Win32">
+						Name="Debug|Win32"
+						>
 						<Tool
 							Name="VCCustomBuildTool"
-							CommandLine="ml /c /Cp /coff /Fo$(OUTDIR)\$(InputName).obj /Zm /Zi $(InputPath)
-"
-							Outputs="$(OUTDIR)\$(InputName).obj"/>
+							CommandLine="ml /c /Cp /coff /Fo$(OUTDIR)\$(InputName).obj /Zm /Zi $(InputPath)&#x0D;&#x0A;"
+							Outputs="$(OUTDIR)\$(InputName).obj"
+						/>
 					</FileConfiguration>
 					<FileConfiguration
-						Name="Release|Win32">
+						Name="Release|Win32"
+						>
 						<Tool
 							Name="VCCustomBuildTool"
-							CommandLine="ml /c /Cp /coff /Fo$(OUTDIR)\$(InputName).obj /Zm /Zi $(InputPath)
-"
-							Outputs="$(OUTDIR)\$(InputName).obj"/>
-					</FileConfiguration>
-				</File>
-				<File
-					RelativePath="r_spr8.asm">
-					<FileConfiguration
-						Name="Debug|Win32">
-						<Tool
-							Name="VCCustomBuildTool"
-							CommandLine="ml /c /Cp /coff /Fo$(OUTDIR)\$(InputName).obj /Zm /Zi $(InputPath)
-"
-							Outputs="$(OUTDIR)\$(InputName).obj"/>
-					</FileConfiguration>
-					<FileConfiguration
-						Name="Release|Win32">
-						<Tool
-							Name="VCCustomBuildTool"
-							CommandLine="ml /c /Cp /coff /Fo$(OUTDIR)\$(InputName).obj /Zm /Zi $(InputPath)
-"
-							Outputs="$(OUTDIR)\$(InputName).obj"/>
+							CommandLine="ml /c /Cp /coff /Fo$(OUTDIR)\$(InputName).obj /Zm /Zi $(InputPath)&#x0D;&#x0A;"
+							Outputs="$(OUTDIR)\$(InputName).obj"
+						/>
 					</FileConfiguration>
 				</File>
 				<File
-					RelativePath="r_surf8.asm">
+					RelativePath="r_polysa.asm"
+					>
 					<FileConfiguration
-						Name="Debug|Win32">
+						Name="Debug|Win32"
+						>
 						<Tool
 							Name="VCCustomBuildTool"
-							CommandLine="ml /c /Cp /coff /Fo$(OUTDIR)\$(InputName).obj /Zm /Zi $(InputPath)
-"
-							Outputs="$(OUTDIR)\$(InputName).obj"/>
+							CommandLine="ml /c /Cp /coff /Fo$(OUTDIR)\$(InputName).obj /Zm /Zi $(InputPath)&#x0D;&#x0A;"
+							Outputs="$(OUTDIR)\$(InputName).obj"
+						/>
 					</FileConfiguration>
 					<FileConfiguration
-						Name="Release|Win32">
+						Name="Release|Win32"
+						>
 						<Tool
 							Name="VCCustomBuildTool"
-							CommandLine="ml /c /Cp /coff /Fo$(OUTDIR)\$(InputName).obj /Zm /Zi $(InputPath)
-"
-							Outputs="$(OUTDIR)\$(InputName).obj"/>
+							CommandLine="ml /c /Cp /coff /Fo$(OUTDIR)\$(InputName).obj /Zm /Zi $(InputPath)&#x0D;&#x0A;"
+							Outputs="$(OUTDIR)\$(InputName).obj"
+						/>
 					</FileConfiguration>
 				</File>
 				<File
-					RelativePath="r_varsa.asm">
+					RelativePath="r_scana.asm"
+					>
 					<FileConfiguration
-						Name="Debug|Win32">
+						Name="Debug|Win32"
+						>
 						<Tool
 							Name="VCCustomBuildTool"
-							CommandLine="ml /c /Cp /coff /Fo$(OUTDIR)\$(InputName).obj /Zm /Zi $(InputPath)
-"
-							Outputs="$(OUTDIR)\$(InputName).obj"/>
+							CommandLine="ml /c /Cp /coff /Fo$(OUTDIR)\$(InputName).obj /Zm /Zi $(InputPath)&#x0D;&#x0A;"
+							Outputs="$(OUTDIR)\$(InputName).obj"
+						/>
 					</FileConfiguration>
 					<FileConfiguration
-						Name="Release|Win32">
+						Name="Release|Win32"
+						>
 						<Tool
 							Name="VCCustomBuildTool"
-							CommandLine="ml /c /Cp /coff /Fo$(OUTDIR)\$(InputName).obj /Zm /Zi $(InputPath)
-"
-							Outputs="$(OUTDIR)\$(InputName).obj"/>
+							CommandLine="ml /c /Cp /coff /Fo$(OUTDIR)\$(InputName).obj /Zm /Zi $(InputPath)&#x0D;&#x0A;"
+							Outputs="$(OUTDIR)\$(InputName).obj"
+						/>
+					</FileConfiguration>
+				</File>
+				<File
+					RelativePath="r_spr8.asm"
+					>
+					<FileConfiguration
+						Name="Debug|Win32"
+						>
+						<Tool
+							Name="VCCustomBuildTool"
+							CommandLine="ml /c /Cp /coff /Fo$(OUTDIR)\$(InputName).obj /Zm /Zi $(InputPath)&#x0D;&#x0A;"
+							Outputs="$(OUTDIR)\$(InputName).obj"
+						/>
+					</FileConfiguration>
+					<FileConfiguration
+						Name="Release|Win32"
+						>
+						<Tool
+							Name="VCCustomBuildTool"
+							CommandLine="ml /c /Cp /coff /Fo$(OUTDIR)\$(InputName).obj /Zm /Zi $(InputPath)&#x0D;&#x0A;"
+							Outputs="$(OUTDIR)\$(InputName).obj"
+						/>
+					</FileConfiguration>
+				</File>
+				<File
+					RelativePath="r_surf8.asm"
+					>
+					<FileConfiguration
+						Name="Debug|Win32"
+						>
+						<Tool
+							Name="VCCustomBuildTool"
+							CommandLine="ml /c /Cp /coff /Fo$(OUTDIR)\$(InputName).obj /Zm /Zi $(InputPath)&#x0D;&#x0A;"
+							Outputs="$(OUTDIR)\$(InputName).obj"
+						/>
+					</FileConfiguration>
+					<FileConfiguration
+						Name="Release|Win32"
+						>
+						<Tool
+							Name="VCCustomBuildTool"
+							CommandLine="ml /c /Cp /coff /Fo$(OUTDIR)\$(InputName).obj /Zm /Zi $(InputPath)&#x0D;&#x0A;"
+							Outputs="$(OUTDIR)\$(InputName).obj"
+						/>
+					</FileConfiguration>
+				</File>
+				<File
+					RelativePath="r_varsa.asm"
+					>
+					<FileConfiguration
+						Name="Debug|Win32"
+						>
+						<Tool
+							Name="VCCustomBuildTool"
+							CommandLine="ml /c /Cp /coff /Fo$(OUTDIR)\$(InputName).obj /Zm /Zi $(InputPath)&#x0D;&#x0A;"
+							Outputs="$(OUTDIR)\$(InputName).obj"
+						/>
+					</FileConfiguration>
+					<FileConfiguration
+						Name="Release|Win32"
+						>
+						<Tool
+							Name="VCCustomBuildTool"
+							CommandLine="ml /c /Cp /coff /Fo$(OUTDIR)\$(InputName).obj /Zm /Zi $(InputPath)&#x0D;&#x0A;"
+							Outputs="$(OUTDIR)\$(InputName).obj"
+						/>
 					</FileConfiguration>
 				</File>
 			</Filter>
 		</Filter>
 		<Filter
-			Name="client">
+			Name="client"
+			>
 			<File
-				RelativePath="..\client\anorms.h">
+				RelativePath="..\client\anorms.h"
+				>
 			</File>
 			<File
-				RelativePath="..\client\avi.h">
+				RelativePath="..\client\avi.h"
+				>
 			</File>
 			<File
-				RelativePath="..\client\avi_export.c">
+				RelativePath="..\client\avi_export.c"
+				>
 			</File>
 			<File
-				RelativePath="..\client\cl_cin.c">
+				RelativePath="..\client\cl_cin.c"
+				>
 			</File>
 			<File
-				RelativePath="..\client\cl_demo.c">
+				RelativePath="..\client\cl_demo.c"
+				>
 			</File>
 			<File
-				RelativePath="..\client\cl_draw.c">
+				RelativePath="..\client\cl_draw.c"
+				>
 			</File>
 			<File
-				RelativePath="..\client\cl_ents.c">
+				RelativePath="..\client\cl_ents.c"
+				>
 			</File>
 			<File
-				RelativePath="..\client\cl_fx.c">
+				RelativePath="..\client\cl_fx.c"
+				>
 			</File>
 			<File
-				RelativePath="..\client\cl_input.c">
+				RelativePath="..\client\cl_http.c"
+				>
 			</File>
 			<File
-				RelativePath="..\client\cl_inv.c">
+				RelativePath="..\client\cl_input.c"
+				>
 			</File>
 			<File
-				RelativePath="..\client\cl_loc.c">
+				RelativePath="..\client\cl_inv.c"
+				>
 			</File>
 			<File
-				RelativePath="..\client\cl_main.c">
+				RelativePath="..\client\cl_loc.c"
+				>
 			</File>
 			<File
-				RelativePath="..\client\cl_newfx.c">
+				RelativePath="..\client\cl_main.c"
+				>
 			</File>
 			<File
-				RelativePath="..\client\cl_parse.c">
+				RelativePath="..\client\cl_newfx.c"
+				>
 			</File>
 			<File
-				RelativePath="..\client\cl_pred.c">
+				RelativePath="..\client\cl_parse.c"
+				>
 			</File>
 			<File
-				RelativePath="..\client\cl_scrn.c">
+				RelativePath="..\client\cl_pred.c"
+				>
 			</File>
 			<File
-				RelativePath="..\client\cl_tent.c">
+				RelativePath="..\client\cl_scrn.c"
+				>
 			</File>
 			<File
-				RelativePath="..\client\cl_view.c">
+				RelativePath="..\client\cl_tent.c"
+				>
 			</File>
 			<File
-				RelativePath="..\client\client.h">
+				RelativePath="..\client\cl_view.c"
+				>
 			</File>
 			<File
-				RelativePath="..\client\console.c">
+				RelativePath="..\client\client.h"
+				>
 			</File>
 			<File
-				RelativePath="..\client\console.h">
+				RelativePath="..\client\console.c"
+				>
 			</File>
 			<File
-				RelativePath="..\client\input.h">
+				RelativePath="..\client\console.h"
+				>
 			</File>
 			<File
-				RelativePath="..\client\keys.c">
+				RelativePath="..\client\input.h"
+				>
 			</File>
 			<File
-				RelativePath="..\client\keys.h">
+				RelativePath="..\client\keys.c"
+				>
 			</File>
 			<File
-				RelativePath="..\client\ref.h">
+				RelativePath="..\client\keys.h"
+				>
 			</File>
 			<File
-				RelativePath="..\client\screen.h">
+				RelativePath="..\client\ref.h"
+				>
 			</File>
 			<File
-				RelativePath="..\client\vid.h">
+				RelativePath="..\client\screen.h"
+				>
 			</File>
 			<File
-				RelativePath="..\client\x86.c">
-			</File>
-		</Filter>
-		<Filter
-			Name="win32">
-			<File
-				RelativePath="..\win32\cd_win.c">
+				RelativePath="..\client\vid.h"
+				>
 			</File>
 			<File
-				RelativePath="..\win32\conproc.c">
-			</File>
-			<File
-				RelativePath="..\win32\conproc.h">
-			</File>
-			<File
-				RelativePath="..\win32\in_win.c">
-			</File>
-			<File
-				RelativePath="..\win32\net_wins.c">
-			</File>
-			<File
-				RelativePath="..\win32\q2.ico">
-			</File>
-			<File
-				RelativePath="..\win32\q2.rc">
-			</File>
-			<File
-				RelativePath="..\win32\q_shwin.c">
-			</File>
-			<File
-				RelativePath="..\win32\resource.h">
-			</File>
-			<File
-				RelativePath="..\win32\snd_win.c">
-			</File>
-			<File
-				RelativePath="..\win32\sys_win.c">
-			</File>
-			<File
-				RelativePath="..\win32\vid_dll.c">
-			</File>
-			<File
-				RelativePath="..\win32\winamp.c">
-			</File>
-			<File
-				RelativePath="..\win32\winamp.h">
-			</File>
-			<File
-				RelativePath="..\win32\winquake.h">
+				RelativePath="..\client\x86.c"
+				>
 			</File>
 		</Filter>
 		<Filter
-			Name="game">
+			Name="win32"
+			>
 			<File
-				RelativePath="..\game\game.h">
+				RelativePath="..\win32\cd_win.c"
+				>
 			</File>
 			<File
-				RelativePath="..\game\m_flash.c">
+				RelativePath="..\win32\conproc.c"
+				>
 			</File>
 			<File
-				RelativePath="..\game\q_shared.c">
+				RelativePath="..\win32\conproc.h"
+				>
 			</File>
 			<File
-				RelativePath="..\game\q_shared.h">
-			</File>
-		</Filter>
-		<Filter
-			Name="common">
-			<File
-				RelativePath="..\qcommon\cmd.c">
+				RelativePath="..\win32\in_win.c"
+				>
 			</File>
 			<File
-				RelativePath="..\qcommon\cmodel.c">
+				RelativePath="..\win32\net_wins.c"
+				>
 			</File>
 			<File
-				RelativePath="..\qcommon\common.c">
+				RelativePath="..\win32\q2.ico"
+				>
 			</File>
 			<File
-				RelativePath="..\qcommon\crc.c">
+				RelativePath="..\win32\q2.rc"
+				>
 			</File>
 			<File
-				RelativePath="..\qcommon\crc.h">
+				RelativePath="..\win32\q_shwin.c"
+				>
 			</File>
 			<File
-				RelativePath="..\qcommon\cvar.c">
+				RelativePath="..\win32\resource.h"
+				>
 			</File>
 			<File
-				RelativePath="..\qcommon\files.c">
+				RelativePath="..\win32\snd_win.c"
+				>
 			</File>
 			<File
-				RelativePath="..\qcommon\md4.c">
+				RelativePath="..\win32\sys_win.c"
+				>
 			</File>
 			<File
-				RelativePath="..\qcommon\net_chan.c">
+				RelativePath="..\win32\vid_dll.c"
+				>
 			</File>
 			<File
-				RelativePath="..\qcommon\pmove.c">
+				RelativePath="..\win32\winamp.c"
+				>
 			</File>
 			<File
-				RelativePath="..\qcommon\qcommon.h">
+				RelativePath="..\win32\winamp.h"
+				>
 			</File>
 			<File
-				RelativePath="..\qcommon\qfiles.h">
-			</File>
-		</Filter>
-		<Filter
-			Name="server">
-			<File
-				RelativePath="..\server\server.h">
-			</File>
-			<File
-				RelativePath="..\server\sv_ccmds.c">
-			</File>
-			<File
-				RelativePath="..\server\sv_ents.c">
-			</File>
-			<File
-				RelativePath="..\server\sv_game.c">
-			</File>
-			<File
-				RelativePath="..\server\sv_init.c">
-			</File>
-			<File
-				RelativePath="..\server\sv_main.c">
-			</File>
-			<File
-				RelativePath="..\server\sv_send.c">
-			</File>
-			<File
-				RelativePath="..\server\sv_user.c">
-			</File>
-			<File
-				RelativePath="..\server\sv_world.c">
+				RelativePath="..\win32\winquake.h"
+				>
 			</File>
 		</Filter>
 		<Filter
-			Name="sound">
+			Name="game"
+			>
 			<File
-				RelativePath="..\client\cdaudio.h">
+				RelativePath="..\game\game.h"
+				>
 			</File>
 			<File
-				RelativePath="..\client\snd_dma.c">
+				RelativePath="..\game\m_flash.c"
+				>
 			</File>
 			<File
-				RelativePath="..\client\snd_loc.h">
+				RelativePath="..\game\q_shared.c"
+				>
 			</File>
 			<File
-				RelativePath="..\client\snd_mem.c">
-			</File>
-			<File
-				RelativePath="..\client\snd_mix.c">
-			</File>
-			<File
-				RelativePath="..\client\sound.h">
+				RelativePath="..\game\q_shared.h"
+				>
 			</File>
 		</Filter>
 		<Filter
-			Name="ui">
+			Name="common"
+			>
 			<File
-				RelativePath="..\ui\qmenu.c">
+				RelativePath="..\qcommon\cmd.c"
+				>
 			</File>
 			<File
-				RelativePath="..\ui\ui_addressbook.c">
+				RelativePath="..\qcommon\cmodel.c"
+				>
 			</File>
 			<File
-				RelativePath="..\ui\ui_atoms.c">
+				RelativePath="..\qcommon\common.c"
+				>
 			</File>
 			<File
-				RelativePath="..\ui\ui_controls.c">
+				RelativePath="..\qcommon\crc.c"
+				>
 			</File>
 			<File
-				RelativePath="..\ui\ui_credits.c">
+				RelativePath="..\qcommon\crc.h"
+				>
 			</File>
 			<File
-				RelativePath="..\ui\ui_demos.c">
+				RelativePath="..\qcommon\cvar.c"
+				>
 			</File>
 			<File
-				RelativePath="..\ui\ui_dmoptions.c">
+				RelativePath="..\qcommon\files.c"
+				>
 			</File>
 			<File
-				RelativePath="..\ui\ui_download.c">
+				RelativePath="..\qcommon\md4.c"
+				>
 			</File>
 			<File
-				RelativePath="..\ui\ui_game.c">
+				RelativePath="..\qcommon\net_chan.c"
+				>
 			</File>
 			<File
-				RelativePath="..\ui\ui_joinserver.c">
+				RelativePath="..\qcommon\pmove.c"
+				>
 			</File>
 			<File
-				RelativePath="..\ui\ui_keys.c">
+				RelativePath="..\qcommon\qcommon.h"
+				>
 			</File>
 			<File
-				RelativePath="..\ui\ui_loadsavegame.c">
+				RelativePath="..\qcommon\qfiles.h"
+				>
+			</File>
+		</Filter>
+		<Filter
+			Name="server"
+			>
+			<File
+				RelativePath="..\server\server.h"
+				>
 			</File>
 			<File
-				RelativePath="..\ui\ui_local.h">
+				RelativePath="..\server\sv_ccmds.c"
+				>
 			</File>
 			<File
-				RelativePath="..\ui\ui_main.c">
+				RelativePath="..\server\sv_ents.c"
+				>
 			</File>
 			<File
-				RelativePath="..\ui\ui_mp3.c">
+				RelativePath="..\server\sv_game.c"
+				>
 			</File>
 			<File
-				RelativePath="..\ui\ui_multiplayer.c">
+				RelativePath="..\server\sv_init.c"
+				>
 			</File>
 			<File
-				RelativePath="..\ui\ui_newoptions.c">
+				RelativePath="..\server\sv_main.c"
+				>
 			</File>
 			<File
-				RelativePath="..\ui\ui_playerconfig.c">
+				RelativePath="..\server\sv_send.c"
+				>
 			</File>
 			<File
-				RelativePath="..\ui\ui_quit.c">
+				RelativePath="..\server\sv_user.c"
+				>
 			</File>
 			<File
-				RelativePath="..\ui\ui_startserver.c">
+				RelativePath="..\server\sv_world.c"
+				>
+			</File>
+		</Filter>
+		<Filter
+			Name="sound"
+			>
+			<File
+				RelativePath="..\client\cdaudio.h"
+				>
 			</File>
 			<File
-				RelativePath="..\ui\ui_video.c">
+				RelativePath="..\client\openal_funcs.h"
+				>
+			</File>
+			<File
+				RelativePath="..\client\snd_dma.c"
+				>
+			</File>
+			<File
+				RelativePath="..\client\snd_loc.h"
+				>
+			</File>
+			<File
+				RelativePath="..\client\snd_mem.c"
+				>
+			</File>
+			<File
+				RelativePath="..\client\snd_mix.c"
+				>
+			</File>
+			<File
+				RelativePath="..\client\snd_openal.c"
+				>
+			</File>
+			<File
+				RelativePath="..\client\sound.h"
+				>
+			</File>
+		</Filter>
+		<Filter
+			Name="ui"
+			>
+			<File
+				RelativePath="..\ui\qmenu.c"
+				>
+			</File>
+			<File
+				RelativePath="..\ui\ui_addressbook.c"
+				>
+			</File>
+			<File
+				RelativePath="..\ui\ui_atoms.c"
+				>
+			</File>
+			<File
+				RelativePath="..\ui\ui_controls.c"
+				>
+			</File>
+			<File
+				RelativePath="..\ui\ui_credits.c"
+				>
+			</File>
+			<File
+				RelativePath="..\ui\ui_demos.c"
+				>
+			</File>
+			<File
+				RelativePath="..\ui\ui_dmoptions.c"
+				>
+			</File>
+			<File
+				RelativePath="..\ui\ui_download.c"
+				>
+			</File>
+			<File
+				RelativePath="..\ui\ui_game.c"
+				>
+			</File>
+			<File
+				RelativePath="..\ui\ui_joinserver.c"
+				>
+			</File>
+			<File
+				RelativePath="..\ui\ui_keys.c"
+				>
+			</File>
+			<File
+				RelativePath="..\ui\ui_loadsavegame.c"
+				>
+			</File>
+			<File
+				RelativePath="..\ui\ui_local.h"
+				>
+			</File>
+			<File
+				RelativePath="..\ui\ui_main.c"
+				>
+			</File>
+			<File
+				RelativePath="..\ui\ui_mp3.c"
+				>
+			</File>
+			<File
+				RelativePath="..\ui\ui_multiplayer.c"
+				>
+			</File>
+			<File
+				RelativePath="..\ui\ui_newoptions.c"
+				>
+			</File>
+			<File
+				RelativePath="..\ui\ui_playerconfig.c"
+				>
+			</File>
+			<File
+				RelativePath="..\ui\ui_quit.c"
+				>
+			</File>
+			<File
+				RelativePath="..\ui\ui_startserver.c"
+				>
+			</File>
+			<File
+				RelativePath="..\ui\ui_video.c"
+				>
 			</File>
 		</Filter>
 	</Files>

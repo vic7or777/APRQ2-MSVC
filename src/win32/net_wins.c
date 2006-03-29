@@ -178,7 +178,7 @@ qboolean	NET_StringToSockaddr (const char *s, struct sockaddr *sadr)
 		if (*colon == ':')
 		{
 			*colon = 0;
-			((struct sockaddr_in *)sadr)->sin_port = htons((short)atoi(colon+1));	
+			((struct sockaddr_in *)sadr)->sin_port = htons((int16)atoi(colon+1));	
 			break;
 		}
 	}
@@ -455,7 +455,7 @@ int NET_IPSocket (char *net_interface, int port)
 	if (port == PORT_ANY)
 		address.sin_port = 0;
 	else
-		address.sin_port = htons((unsigned short)port);
+		address.sin_port = htons((uint16)port);
 
 	address.sin_family = AF_INET;
 
@@ -483,7 +483,7 @@ void NET_OpenIP (void)
 
 	ip = Cvar_Get ("ip", "localhost", CVAR_NOSET);
 
-	dedicated = Cvar_VariableValue ("dedicated");
+	dedicated = Cvar_VariableIntValue ("dedicated");
 
 	if (!ip_sockets[NS_SERVER])
 	{

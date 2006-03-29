@@ -94,16 +94,26 @@ V_AddStain
 
 =====================
 */
-void V_AddStain (const vec3_t org, const vec3_t color, float size)
+#ifdef GL_QUAKE
+static const vec3_t stainColors[4] = {
+  {1.0f, 0.8f, 0.8f}, //Blood
+  {0.89f, 0.89f, 0.89f}, //Normal shot
+  {1.1f, 1.1f, 0.0f}, //Blaster
+  {0.8f, 0.8f, 0.8f} //Explosion
+};
+extern cvar_t *gl_stainmaps; //should only used in renderer
+#endif
+
+void V_AddStain (const vec3_t org, int color, float size)
 {
 #ifdef GL_QUAKE
 	stain_t	*s;
 
-	if (r_numstains >= MAX_STAINS)
+	if (!gl_stainmaps->integer || r_numstains >= MAX_STAINS)
 		return;
 	s = &r_stains[r_numstains++];
 	VectorCopy (org, s->origin);
-	VectorCopy (color, s->color);
+	VectorCopy (stainColors[color], s->color);
 	s->size = size;
 #endif
 }
@@ -252,7 +262,6 @@ Call before entering a new level, or after changing dlls
 */
 void CL_PrepRefresh (void)
 {
-	char		mapname[32];
 	int			i;
 	char		name[MAX_QPATH];
 	float		rotate;
@@ -265,13 +274,11 @@ void CL_PrepRefresh (void)
 	SCR_AddDirtyPoint (viddef.width-1, viddef.height-1);
 
 	// let the render dll load the map
-	strcpy (mapname, cl.configstrings[CS_MODELS+1] + 5);	// skip "maps/"
-	mapname[strlen(mapname)-4] = 0;		// cut off ".bsp"
 
 	// register models, pics, and skins
-	Com_Printf ("Map: %s\r", mapname); 
+	Com_Printf ("Map: %s\r", cls.mapname); 
 	SCR_UpdateScreen ();
-	R_BeginRegistration (mapname);
+	R_BeginRegistration (cls.mapname);
 	Com_Printf ("                                     \r");
 
 	// precache status bar pics
@@ -340,9 +347,8 @@ void CL_PrepRefresh (void)
 	// set sky textures and speed
 	Com_Printf ("sky\r"); 
 	SCR_UpdateScreen ();
-	rotate = atof (cl.configstrings[CS_SKYROTATE]);
-	sscanf (cl.configstrings[CS_SKYAXIS], "%f %f %f", 
-		&axis[0], &axis[1], &axis[2]);
+	rotate = (float)atof(cl.configstrings[CS_SKYROTATE]);
+	sscanf (cl.configstrings[CS_SKYAXIS], "%f %f %f", &axis[0], &axis[1], &axis[2]);
 	R_SetSky (cl.configstrings[CS_SKY], rotate, axis);
 	Com_Printf ("                                     \r");
 
@@ -377,9 +383,9 @@ float CalcFov (float fov_x, float width, float height)
 	if (fov_x < 1 || fov_x > 179)
 		Com_Error (ERR_DROP, "Bad fov: %f", fov_x);
 
-	x = width/tan(fov_x/360*M_PI);
+	x = width/(float)tan(fov_x/360*M_PI);
 
-	return (float)atan(height/x)*360/M_PI;
+	return (float)atan2(height, x)*360/M_PI;
 }
 
 //============================================================================

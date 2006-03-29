@@ -22,13 +22,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 cvar_t	*cl_clan;
 cvar_t	*cl_autorecord;
-cvar_t	*cl_customlimitmsg;
-cvar_t	*cl_recordstopatlimits;
-cvar_t	*cl_recordstopatmatchsetup;
-cvar_t	*cl_custommatchsetup;
-cvar_t	*cl_custommatchstart;
-cvar_t	*cl_recordatmatchstart;
-cvar_t	*cl_dontrecorduntilmatchstart;
 
 /*
 ====================
@@ -80,8 +73,6 @@ void CL_WriteDemoMessage (byte *buff, int len, qboolean forceFlush)
 	if (len)
 		SZ_Write (&cl.demoBuff, buff, len);
 }
-
-void CL_DemoDeltaEntity (const entity_state_t *from, const entity_state_t *to, sizebuf_t *buf, qboolean force, qboolean newentity);
 #endif
 
 /*
@@ -91,8 +82,14 @@ CL_CloseDemoFile
 */
 void CL_CloseDemoFile( void )
 {
-	if( !cls.demofile )
+	int len;
+
+	if (!cls.demofile)
 		return;
+
+	// finish up
+	len = -1;
+	fwrite (&len, 4, 1, cls.demofile);
 
 	fclose( cls.demofile );
 	 
@@ -119,113 +116,31 @@ stop recording a demo
 */
 void CL_Stop_f( void )
 {
-	int		len;
-
 	if( !cls.demorecording )
 	{
 		Com_Printf( "Not recording a demo.\n" );
 		return;
 	}
 
-	// finish up
-	len = -1;
-	fwrite (&len, 4, 1, cls.demofile);
 	CL_CloseDemoFile();
-
 	cls.demorecording = false;
 	Com_Printf( "Stopped demo.\n" );
 }
 
-void CL_Stop_Autorecord_f (void)
+void CL_StopAutoRecord (void)
 {
-	int len;
-
-	if (!cls.demorecording)
-	{
-		Com_Printf ("Not recording a demo.\n");
-		return;
-	}
-
-	// finish up
-	len = -1;
-	fwrite (&len, 4, 1, cls.demofile);
-	CL_CloseDemoFile();
-
-	cls.demorecording = false;
-
-	Cvar_SetValue("cl_autorecord", 0);
-	Com_Printf ("Stopped demo and autorecord.\n");
+	if(cl_autorecord->integer && cls.demorecording)
+		CL_Stop_f();
 }
 
-/*
-====================
-CL_Record_f
-
-record <demoname>
-
-Begins recording a demo from the current position
-====================
-*/
-void CL_Record_f( void )
+void CL_StartRecording(char *name)
 {
-	char	name[MAX_OSPATH];
 	byte	buf_data[MAX_MSGLEN];
 	sizebuf_t	buf;
-	int		i;
-	int		len;
+	int		i, len;
 	entity_state_t	*ent;
 	entity_state_t	nullstate;
 	char *string;
-    struct 		tm *ntime;
-    char 		tmpbuf[32];
-    time_t		l_time;
-
-	if( Cmd_Argc() < 2 && strlen(cl_clan->string) < 2) {
-		Com_Printf( "Usage: %s <demoname>\n", Cmd_Argv( 0 ) );
-		return;
-	}
-
-	if( cls.demorecording )
-	{
-		Com_Printf( "Already recording.\n" );
-		return;
-	}
-
-	if( cls.state != ca_active )
-	{
-		Com_Printf( "You must be in a level to record.\n" );
-		return;
-	}
-
-	//
-	// open the demo file
-	//
-    if (Cmd_Argc() == 1 && strlen(cl_clan->string) > 2)
-    {
-		time( &l_time );
-        ntime = localtime( &l_time );
-        strftime( tmpbuf, sizeof(tmpbuf), "%Y-%m-%d", ntime );
-
-        Com_sprintf (name, sizeof(name), "%s/demos/%s_%s_%s.dm2", FS_Gamedir(), tmpbuf, cl_clan->string, cls.mapname);
-        for (i=2; i<100; i++)
-        {
-			cls.demofile = fopen (name, "rb");
-			if (!cls.demofile)
-				break;
-			fclose (cls.demofile);
-			Com_sprintf (name, sizeof(name), "%s/demos/%s_%s_%s_%i%i.dm2", FS_Gamedir(), tmpbuf, cl_clan->string, cls.mapname, (int)(i/10)%10, i%10);
-		}
-		if (i == 100)
-		{
-			Com_Printf ("ERROR: Too many demos with same name.\n");
-			return;
-		}
-    }
-	else
-	{
-		Com_sprintf( name, sizeof( name ), "%s/demos/%s.dm2", FS_Gamedir(), Cmd_Argv( 1 ) );
-	}
-
 
 	FS_CreatePath( name );
 	cls.demofile = fopen (name, "wb");
@@ -235,7 +150,7 @@ void CL_Record_f( void )
 		return;
 	}
 
-	Com_Printf( "Recording client demo to %s.\n", name );
+	Com_Printf( "Recording demo to %s.\n", name );
 
 	cls.demorecording = true;
 
@@ -318,67 +233,86 @@ void CL_Record_f( void )
 	// the rest of the demo file will be individual frames
 }
 
+/*
+====================
+CL_Record_f
+
+record <demoname>
+
+Begins recording a demo from the current position
+====================
+*/
+void CL_Record_f( void )
+{
+	int		i, c;
+    char 	name[MAX_OSPATH], timebuf[32];
+    time_t	clock;
+
+	c = Cmd_Argc();
+	if( c != 1 && c != 2) {
+		Com_Printf( "Usage: %s [demoname]\n", Cmd_Argv(0) );
+		return;
+	}
+
+	if( cls.demorecording )
+	{
+		Com_Printf( "Already recording.\n" );
+		return;
+	}
+
+	if( cls.state != ca_active )
+	{
+		Com_Printf( "You must be in a level to record.\n" );
+		return;
+	}
+
+	if (cl.attractloop)
+	{
+		Com_Printf ("Unable to record from a demo stream due to insufficient deltas.\n");
+		return;
+	}
+
+	//
+	// open the demo file
+	//
+    if (c == 1)
+    {
+		time( &clock );
+        strftime(timebuf, sizeof(timebuf), "%Y-%m-%d", localtime(&clock));
+
+        Com_sprintf (name, sizeof(name), "%s/demos/%s_%s_%s.dm2", FS_Gamedir(), timebuf, cl_clan->string, cls.mapname);
+        for (i=2; i<100; i++)
+        {
+			cls.demofile = fopen (name, "rb");
+			if (!cls.demofile)
+				break;
+			fclose (cls.demofile);
+			Com_sprintf (name, sizeof(name), "%s/demos/%s_%s_%s_%i%i.dm2", FS_Gamedir(), timebuf, cl_clan->string, cls.mapname, (int)(i/10)%10, i%10);
+		}
+		if (i == 100)
+		{
+			Com_Printf ("ERROR: Too many demos with same name.\n");
+			return;
+		}
+    }
+	else
+	{
+		Com_sprintf( name, sizeof( name ), "%s/demos/%s.dm2", FS_Gamedir(), Cmd_Argv( 1 ) );
+	}
+
+	CL_StartRecording(name);
+}
+
 //----------------------------------------------------
 //		AUTO RECORD
 //----------------------------------------------------
-void CL_ParseAutoRecord (const char *s)
+void CL_StartAutoRecord(void)
 {
-	if (!cl_autorecord->integer)
-		return;
-
-	if (cl_recordstopatlimits->integer)
-	{
-		if (strstr(s, "timelimit hit"))
-		{
-			if (cls.demorecording)
-				CL_Stop_f();
-			return;
-		}
-		if (strstr(s, "capturelimit hit"))
-		{
-			if (cls.demorecording)
-				CL_Stop_f();
-			return;
-		}
-		if (strstr(s, "fraglimit hit"))
-		{
-			if (cls.demorecording)
-				CL_Stop_f();
-			return;
-		}
-		if (strstr(s, cl_customlimitmsg->string))
-		{
-			if (cls.demorecording)
-				CL_Stop_f();
-			return;
-		}
-	}
-
-	if (cl_recordstopatmatchsetup->integer)
-	{
-		if (strstr(s, cl_custommatchsetup->string ))
-		{
-			if (cls.demorecording)
-				CL_Stop_f();
-			return;
-		}
-	}
-
-	if (cl_recordatmatchstart->integer)
-	{
-		if (strstr(s, cl_custommatchstart->string))
-		{
-			if (cls.demorecording)
-					CL_Stop_f();
-			return;
-		}
-	}
-}
-
-void SCR_AutoDemo(void)
-{
-	char	timebuf[32], fname[MAX_MSGLEN];
+	char	timebuf[32], name[MAX_OSPATH];
 	time_t	clock;
+
+	if (cls.state != ca_active)
+		return;
 
 	if (!cl_autorecord->integer || cls.demorecording || cl.attractloop)
 		return;
@@ -387,11 +321,16 @@ void SCR_AutoDemo(void)
 	strftime( timebuf, sizeof(timebuf), "%Y-%m-%d_%H-%M-%S", localtime(&clock));
 
 	if(strlen(cl_clan->string) > 2)
-		Com_sprintf(fname, sizeof(fname), "record %s_%s_%s", timebuf, cl_clan->string, cls.mapname);
+		Com_sprintf(name, sizeof(name), "%s/demos/%s_%s_%s.dm2", FS_Gamedir(), timebuf, cl_clan->string, cls.mapname);
 	else
-		Com_sprintf(fname, sizeof(fname), "record %s_%s", timebuf, cls.mapname);	
+		Com_sprintf(name, sizeof(name), "%s/demos/%s_%s.dm2", FS_Gamedir(), timebuf, cls.mapname);	
 
-	Cbuf_AddText(fname);
+	CL_StartRecording(name);
+}
+
+static void OnChange_AutoRecord(cvar_t *self, const char *oldValue)
+{
+	CL_StartAutoRecord();
 }
 
 /*
@@ -407,7 +346,7 @@ void CL_Demo_List_f ( void )
 	int		ndirs;
 	char	*tmp;
 
-	sprintf(findname, "%s/demos/*%s*.dm2", FS_Gamedir(), Cmd_Argv( 1 )) ;
+	Com_sprintf(findname, sizeof(findname), "%s/demos/*%s*.dm2", FS_Gamedir(), Cmd_Argv( 1 )) ;
 
 	tmp = findname;
 
@@ -459,13 +398,13 @@ void CL_Demo_Play_f ( void )
 
 	if(Cmd_Argc() == 1)
 	{
-		Com_Printf("Usage: %s <id> [search card]", Cmd_Argv(0)) ;
+		Com_Printf("Usage: %s <id> [search card]\n", Cmd_Argv(0)) ;
 		return;
 	}
 
 	find = atoi(Cmd_Argv (1));
 
-	sprintf (findname, "%s/demos/*%s*.dm2", FS_Gamedir(), Cmd_Argv( 2 ));
+	Com_sprintf (findname, sizeof(findname), "%s/demos/*%s*.dm2", FS_Gamedir(), Cmd_Argv( 2 ));
 
 	tmp = findname;
 
@@ -518,16 +457,10 @@ void CL_InitDemos( void )
 	cl_clan = Cvar_Get ("cl_clan", "", 0);
 	Cmd_AddCommand( "record", CL_Record_f );
 	Cmd_AddCommand( "stop", CL_Stop_f );
-	Cmd_AddCommand ("stopautorecord", CL_Stop_Autorecord_f);
 
 	Cmd_AddCommand ("demolist", CL_Demo_List_f );
 	Cmd_AddCommand ("demoplay", CL_Demo_Play_f );
 
 	cl_autorecord = Cvar_Get("cl_autorecord", "0", 0);
-	cl_customlimitmsg = Cvar_Get ("cl_customlimitmsg", "timelimit hit", 0);
-	cl_recordstopatlimits = Cvar_Get("cl_recordstopatlimits", "0", 0);
-	cl_recordstopatmatchsetup = Cvar_Get("cl_recordstopatmatchsetup", "0", 0);
-	cl_custommatchsetup = Cvar_Get("cl_custommatchsetup", "has put the server in match setup mode", 0);
-	cl_custommatchstart = Cvar_Get("cl_custommatchstart", "has started the match", 0);
-	cl_recordatmatchstart = Cvar_Get( "cl_recordatmatchstart", "0", 0);
+	cl_autorecord->OnChange = OnChange_AutoRecord;
 }

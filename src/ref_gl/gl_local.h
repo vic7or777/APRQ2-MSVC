@@ -127,7 +127,7 @@ typedef enum
 void GL_SetDefaultState( void );
 void GL_UpdateSwapInterval( void );
 
-extern	float	gldepthmin, gldepthmax;
+extern	double	gldepthmin, gldepthmax;
 
 typedef struct
 {
@@ -420,6 +420,9 @@ typedef struct
 	const char *extensions_string;
 
 	qboolean	allow_cds;
+
+	qboolean	anisotropic;
+	int			maxAnisotropic;
 } glconfig_t;
 
 typedef struct
@@ -459,6 +462,9 @@ void R_RotateForEntity2 (const entity_t *e);
 
 qboolean R_GetModeInfo( int *width, int *height, int mode );
 
+extern const vec3_t color_table[8];
+extern const vec4_t	colorWhite;
+
 /*
 ====================================================================
 
@@ -493,13 +499,4 @@ extern	cvar_t	*gl_eff_world_bg_color_b;
 extern	cvar_t	*gl_eff_world_lines_color_r;
 extern	cvar_t	*gl_eff_world_lines_color_g;
 extern	cvar_t	*gl_eff_world_lines_color_b;
-
-extern	cvar_t	*gl_eff_entities_wireframe;
-extern	cvar_t	*gl_eff_entities_bg_type;
-extern	cvar_t	*gl_eff_entities_bg_color_r;
-extern	cvar_t	*gl_eff_entities_bg_color_g;
-extern	cvar_t	*gl_eff_entities_bg_color_b;
-extern	cvar_t	*gl_eff_entities_lines_color_r;
-extern	cvar_t	*gl_eff_entities_lines_color_g;
-extern	cvar_t	*gl_eff_entities_lines_color_b;
 

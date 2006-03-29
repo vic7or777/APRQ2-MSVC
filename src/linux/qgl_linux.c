@@ -738,7 +738,7 @@ void QGL_Shutdown( void )
 void *qwglGetProcAddress(const GLubyte *procName)
 {
 	if (glw_state.OpenGLLib)
-		return (void *)dlsym( glw_state.OpenGLLib, procName );
+		return (void *)dlsym( glw_state.OpenGLLib, (const char *)procName );
 	return NULL;
 }
 

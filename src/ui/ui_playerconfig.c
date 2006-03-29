@@ -100,9 +100,9 @@ static qboolean IconOfSkinExists( const char *skin, char **pcxfiles, int npcxfil
 	int i;
 	char scratch[1024];
 
-	strcpy( scratch, skin );
+	Q_strncpyz( scratch, skin, sizeof(scratch) );
 	*strrchr( scratch, '.' ) = 0;
-	strcat( scratch, "_i.pcx" );
+	Q_strncatz( scratch, "_i.pcx", sizeof(scratch) );
 
 	for ( i = 0; i < npcxfiles; i++ )
 	{
@@ -203,8 +203,6 @@ static qboolean PlayerConfig_ScanDirectories( void )
 		// copy the valid skins
 		for ( s = 0, k = 0; k < npcxfiles-1; k++ )
 		{
-			char *a, *b, *c;
-
 			if ( !strstr( pcxnames[k], "_i.pcx" ) )
 			{
 				if ( IconOfSkinExists( pcxnames[k], pcxnames, npcxfiles - 1 ) )
@@ -488,11 +486,11 @@ qboolean PlayerConfig_MenuInit( void )
 	s_player_handedness_box.generic.name	= 0;
 	s_player_handedness_box.generic.cursor_offset = -48;
 	s_player_handedness_box.generic.callback = HandednessCallback;
-	s_player_handedness_box.curvalue = Cvar_VariableValue( "hand" );
+	s_player_handedness_box.curvalue = Cvar_VariableIntValue( "hand" );
 	s_player_handedness_box.itemnames = handedness;
 
 	for (i = 0; i < sizeof(rate_tbl) / sizeof(*rate_tbl) - 1; i++)
-		if (Cvar_VariableValue("rate") == rate_tbl[i])
+		if (Cvar_VariableIntValue("rate") == rate_tbl[i])
 			break;
 
 	s_player_rate_title.generic.type = MTYPE_SEPARATOR;

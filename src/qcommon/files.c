@@ -47,7 +47,7 @@ typedef struct pack_s
 	int			numfiles;
 	packfile_t	*files;
 	packfile_t	**fileHash;
-	int			hashSize;
+	unsigned int hashSize;
 } pack_t;
 
 char	fs_gamedir[MAX_OSPATH];
@@ -55,6 +55,9 @@ cvar_t	*fs_basedir;
 //cvar_t	*fs_cddir;
 cvar_t	*fs_gamedirvar;
 cvar_t	*fs_allpakloading;
+#ifndef _WIN32
+cvar_t	*fs_usehomedir;
+#endif
 
 typedef struct searchpath_s
 {
@@ -78,25 +81,6 @@ only used during filesystem initialization.
 The "game directory" is the first tree on the search path and directory that all generated files (savegames, screenshots, demos, config files) will be saved to.  This can be overridden with the "-game" command line parameter.  The game directory can never be changed while quake is executing.  This is a precacution against having a malicious server instruct clients to write files over areas they shouldn't.
 
 */
-
-/*
-===========
-FS_PackHashKey
-===========
-*/
-static int FS_HashKey( const char *name, int hashSize )
-{
-	int i;
-	unsigned int c, hash = 0;
-
-	for( i = 0; name[i]; i++ ) {
-		c = tolower(name[i]);
-		if( c == '\\' )
-			c = '/';
-		hash += c * (i+119);
-	}
-	return hash & (hashSize - 1);
-}
 
 /*
 ================
@@ -198,6 +182,7 @@ int FS_FOpenFile (const char *filename, FILE **file)
 //
 // search through the path, one element at a time
 //
+	hash = Com_HashValuePath(filename);
 	for (search = fs_searchpaths ; search ; search = search->next)
 	{
 	// is the element a pak file?
@@ -205,8 +190,7 @@ int FS_FOpenFile (const char *filename, FILE **file)
 		{
 		// look through all the pak file elements
 			pak = search->pack;
-			hash = FS_HashKey(filename, pak->hashSize);
-			for ( pakfile = pak->fileHash[hash]; pakfile; pakfile = pakfile->hashNext)
+			for ( pakfile = pak->fileHash[hash & (pak->hashSize-1)]; pakfile; pakfile = pakfile->hashNext)
 				if (!Q_stricmp( pakfile->name, filename ) )	{	// found it!
 					file_from_pak = 1;
 					Com_DPrintf ("PackFile: %s : %s\n",pak->filename, filename);
@@ -246,6 +230,63 @@ int FS_FOpenFile (const char *filename, FILE **file)
 	
 	file = NULL;
 	return -1;
+}
+
+void FS_WhereIs_f (void)
+{
+	unsigned int	hash;
+	searchpath_t	*search;
+	char			netpath[MAX_OSPATH];
+	pack_t			*pak;
+	packfile_t		*pakfile;
+	char			*filename;
+	FILE			*file;
+
+	if (Cmd_Argc() != 2)
+	{
+		Com_Printf ("Purpose: Find where a file is being loaded from on the filesystem.\n"
+					"Syntax : %s <path>\n"
+					"Example: %s maps/q2dm1.bsp\n", Cmd_Argv(0), Cmd_Argv(0));
+		return;
+	}
+
+	filename = Cmd_Argv(1);
+
+	hash = Com_HashValuePath(filename);
+	for (search = fs_searchpaths ; search ; search = search->next)
+	{
+		// is the element a pak file?
+		if (search->pack)
+		{
+			pak = search->pack;
+			for ( pakfile = pak->fileHash[hash & (pak->hashSize-1)]; pakfile; pakfile = pakfile->hashNext)
+				if (!Q_stricmp( pakfile->name, filename ) )	{	// found it!
+					Com_Printf ("%s is found in pakfile %s as %s, %d bytes.\n", filename, pak->filename, pakfile->name, pakfile->filelen);
+					return;
+				}
+		}
+		else
+		{		
+			// check a file in the directory tree
+			Com_sprintf (netpath, sizeof(netpath), "%s/%s", search->filename, filename);
+			
+			file = fopen (netpath, "rb");
+#ifndef _WIN32
+			if (!file)
+			{
+				Q_strlwr(netpath);
+				file = fopen (netpath, "rb");
+			}
+#endif
+			if (!file)
+				continue;
+			
+			Com_Printf ("%s is found on disk as %s\n", filename, netpath);
+			return;
+		}	
+	}
+	
+	Com_Printf ("Can't find %s\n", filename);
 }
 
 /*
@@ -374,21 +415,24 @@ static pack_t *FS_LoadPackFile (const char *packfile)
 	pack_t			*pack;
 	FILE			*packhandle;
 	dpackfile_t		*info;
-	int				hashSize;
+	unsigned int	hashSize;
 	unsigned int	hash;
 
 	packhandle = fopen(packfile, "rb");
 	if (!packhandle)
 		return NULL;
 
-	fread (&header, 1, sizeof(header), packhandle);
-	if (LittleLong(header.ident) != IDPAKHEADER) {
+	if (fread (&header, sizeof(header), 1, packhandle) != 1)
+		Com_Error (ERR_FATAL, "FS_LoadPackFile: couldn't read pak header from %s", packfile);
+
+	if (LittleLong(header.ident) != IDPAKHEADER)
 		Com_Error (ERR_FATAL, "FS_LoadPackFile: %s is not a packfile", packfile);
-		return NULL;
-	}
 
 	header.dirofs = LittleLong (header.dirofs);
 	header.dirlen = LittleLong (header.dirlen);
+
+	if (header.dirlen % sizeof(dpackfile_t))
+		Com_Error (ERR_FATAL, "FS_LoadPackFile: bad packfile %s (directory length %u is not a multiple of %d)", packfile, header.dirlen, (int)sizeof(dpackfile_t));
 
 	numpackfiles = header.dirlen / sizeof(dpackfile_t);
 	if (numpackfiles <= 0) {
@@ -397,13 +441,13 @@ static pack_t *FS_LoadPackFile (const char *packfile)
 	}
 
 	if(fseek(packhandle, header.dirofs, SEEK_SET)) {
-		Com_Printf("FS_LoadPackFile: fseek() to offset %u in %s failed (corrupt packfile?)", header.dirofs, packfile);
+		Com_Error (ERR_FATAL, "FS_LoadPackFile: fseek() to offset %u in %s failed (corrupt packfile?)", header.dirofs, packfile);
 		return NULL;
 	}
 
 	info = Z_TagMalloc (numpackfiles * sizeof(dpackfile_t), TAGMALLOC_FSLOADPAK);
 	if (fread(info, 1, header.dirlen, packhandle) != header.dirlen) {
-		Com_Printf("FS_LoadPackFile: error reading packfile directory from %s (failed to read %u bytes at %u)", packfile, header.dirofs, header.dirlen);
+		Com_Error (ERR_FATAL, "FS_LoadPackFile: error reading packfile directory from %s (failed to read %u bytes at %u)", packfile, header.dirofs, header.dirlen);
 		Z_Free(info);
 		return NULL;
 	}
@@ -427,7 +471,7 @@ static pack_t *FS_LoadPackFile (const char *packfile)
 		file->filepos = LittleLong(info[i].filepos);
 		file->filelen = LittleLong(info[i].filelen);
 
-		hash = FS_HashKey(file->name, hashSize);
+		hash = Com_HashValuePath(file->name) & (hashSize - 1);
 		file->hashNext = pack->fileHash[hash];
 		pack->fileHash[hash] = file;
 	}
@@ -536,9 +580,9 @@ FS_AddHomeAsGameDirectory
 Use ~/.quake2/dir as fs_gamedir
 ================
 */
+#ifndef _WIN32
 static void FS_AddHomeAsGameDirectory (const char *dir)
 {
-#ifndef _WIN32
 	char gdir[MAX_OSPATH];
 	char *homedir = getenv("HOME");
 
@@ -552,8 +596,8 @@ static void FS_AddHomeAsGameDirectory (const char *dir)
 
 		FS_AddGameDirectory (gdir);
 	}
-#endif
 }
+#endif
 /*
 ============
 FS_Gamedir
@@ -563,7 +607,7 @@ Called to find where to write a file (demos, savegames, etc)
 */
 char *FS_Gamedir (void)
 {
-	if (*fs_gamedir)
+	if (fs_gamedir[0])
 		return fs_gamedir;
 	else
 		return BASEDIRNAME;
@@ -601,7 +645,7 @@ void FS_SetGamedir (const char *dir)
 {
 	searchpath_t	*next;
 
-	if (strstr(dir, "..") || strstr(dir, "/") || strstr(dir, "\\") || strstr(dir, ":") )
+	if (strstr(dir, "..") || strchr(dir, '/') || strchr(dir, '\\') || strchr(dir, ':') )
 	{
 		Com_Printf ("Gamedir should be a single filename, not a path\n");
 		return;
@@ -628,23 +672,113 @@ void FS_SetGamedir (const char *dir)
 	if (dedicated && !dedicated->integer)
 		Cbuf_AddText ("vid_restart\nsnd_restart\n");
 
-	Com_sprintf (fs_gamedir, sizeof(fs_gamedir), "%s/%s", fs_basedir->string, dir);
-
 	if (!strcmp(dir,BASEDIRNAME) || (*dir == 0))
 	{
+		Com_sprintf (fs_gamedir, sizeof(fs_gamedir), "%s/%s", fs_basedir->string, BASEDIRNAME);
 		Cvar_FullSet ("gamedir", "", CVAR_SERVERINFO|CVAR_NOSET);
 		Cvar_FullSet ("game", "", CVAR_LATCH|CVAR_SERVERINFO);
 	}
 	else
 	{
+		Com_sprintf (fs_gamedir, sizeof(fs_gamedir), "%s/%s", fs_basedir->string, dir);
 		Cvar_FullSet ("gamedir", dir, CVAR_SERVERINFO|CVAR_NOSET);
-		//if (fs_cddir->string[0])
-		//	FS_AddGameDirectory (va("%s/%s", fs_cddir->string, dir) );
 		FS_AddGameDirectory (va("%s/%s", fs_basedir->string, dir) );
-		FS_AddHomeAsGameDirectory(dir);
+#ifndef _WIN32
+		if(fs_usehomedir->integer)
+			FS_AddHomeAsGameDirectory(dir);
+#endif
 	}
 }
 
+void FS_ReloadPAKs(void)
+{
+	const char		*dir;
+	searchpath_t	*next;
+
+	//
+	// free up any current game dir info
+	//
+	while (fs_searchpaths != fs_base_searchpaths)
+	{
+		if (fs_searchpaths->pack)
+		{
+			fclose (fs_searchpaths->pack->handle);
+			Z_Free (fs_searchpaths->pack);
+		}
+		next = fs_searchpaths->next;
+		Z_Free (fs_searchpaths);
+		fs_searchpaths = next;
+	}
+
+	dir = Cvar_VariableString ("gamedir");
+
+	if (dir[0] && strcmp(dir, BASEDIRNAME))
+		FS_AddGameDirectory (va("%s/%s", fs_basedir->string, dir) );
+}
+
+/*
+============
+FS_ExistsInGameDir
+
+See if a file exists in the mod directory/paks (ignores baseq2)
+============
+*/
+qboolean FS_ExistsInGameDir (const char *filename)
+{
+	unsigned int	hash;
+	searchpath_t	*search;
+	char			netpath[MAX_OSPATH];
+	pack_t			*pak;
+	packfile_t		*pakfile;
+	FILE			*file;
+	int				len;
+	char			*gamedir;
+
+
+	gamedir = FS_Gamedir();
+	len = strlen(gamedir);
+
+	hash = Com_HashValuePath(filename);
+	for (search = fs_searchpaths ; search ; search = search->next)
+	{
+		// is the element a pak file?
+		if (search->pack)
+		{
+			pak = search->pack;
+
+			if (strncmp (pak->filename, gamedir, len))
+				continue;
+
+			for ( pakfile = pak->fileHash[hash & (pak->hashSize-1)]; pakfile; pakfile = pakfile->hashNext)
+				if (!Q_stricmp( pakfile->name, filename ) )	{	// found it!
+					return true;
+				}
+		}
+		else
+		{
+			if (strncmp (search->filename, gamedir, len))
+				continue;
+
+			// check a file in the directory tree
+			Com_sprintf (netpath, sizeof(netpath), "%s/%s", search->filename, filename);
+			
+			file = fopen (netpath, "rb");
+#ifndef _WIN32
+			if (!file)
+			{
+				Q_strlwr(netpath);
+				file = fopen (netpath, "rb");
+			}
+#endif
+			if (!file)
+				continue;
+			
+			return true;
+		}	
+	}
+	
+	return false;
+}
 
 /*
 ** FS_ListFiles
@@ -705,7 +839,7 @@ static void FS_Dir_f( void )
 
 	if ( Cmd_Argc() != 1 )
 	{
-		strcpy( wildcard, Cmd_Argv( 1 ) );
+		Q_strncpyz(wildcard, Cmd_Argv(1), sizeof(wildcard));
 	}
 
 	while ( ( path = FS_NextPath( path ) ) != NULL )
@@ -862,7 +996,7 @@ FS_NextPath
 Allows enumerating all of the directories in the search path
 ================
 */
-char *FS_NextPath(char *prevpath)
+char *FS_NextPath(const char *prevpath)
 {
 	searchpath_t *s;
 	char *prev;
@@ -906,6 +1040,7 @@ void FS_InitFilesystem (void)
 	Cmd_AddCommand ("paklist", FS_PakList_f );
 //	Cmd_AddCommand ("pakfind", FS_PakFind_f );
 
+	Cmd_AddCommand ("whereis", FS_WhereIs_f);
 	//
 	// basedir <path>
 	// allows the game to run from outside the data tree
@@ -930,7 +1065,11 @@ void FS_InitFilesystem (void)
 	//
 	// then add a '.quake2/baseq2' directory in home directory by default
 	//
-	FS_AddHomeAsGameDirectory(BASEDIRNAME);
+#ifndef _WIN32
+	fs_usehomedir = Cvar_Get ("fs_usehomedir", "1", 0);
+	if(fs_usehomedir->integer)
+		FS_AddHomeAsGameDirectory(BASEDIRNAME);
+#endif
 
 	// any set gamedirs will be freed up to here
 	fs_base_searchpaths = fs_searchpaths;

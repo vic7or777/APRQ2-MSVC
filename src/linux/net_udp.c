@@ -182,7 +182,7 @@ qboolean	NET_StringToSockaddr (const char *s, struct sockaddr *sadr)
 		if (*colon == ':')
 		{
 			*colon = 0;
-			((struct sockaddr_in *)sadr)->sin_port = htons((short)atoi(colon+1));	
+			((struct sockaddr_in *)sadr)->sin_port = htons((int16)atoi(colon+1));	
 		}
 	
 	if (copy[0] >= '0' && copy[0] <= '9')
@@ -502,7 +502,7 @@ int NET_Socket (char *net_interface, int port)
 	if (port == PORT_ANY)
 		address.sin_port = 0;
 	else
-		address.sin_port = htons((short)port);
+		address.sin_port = htons((int16)port);
 
 	address.sin_family = AF_INET;
 

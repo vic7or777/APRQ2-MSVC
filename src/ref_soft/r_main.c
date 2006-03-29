@@ -232,8 +232,8 @@ void R_InitTurb (void)
 	
 	for (i=0 ; i<1280 ; i++)
 	{
-		sintable[i] = AMP + sin(i*3.14159*2/CYCLE)*AMP;
-		intsintable[i] = AMP2 + sin(i*3.14159*2/CYCLE)*AMP2;	// AMP2, not 20
+		sintable[i] = AMP + (float)sin(i*3.14159*2/CYCLE)*AMP;
+		intsintable[i] = AMP2 + (float)sin(i*3.14159*2/CYCLE)*AMP2;	// AMP2, not 20
 		blanktable[i] = 0;			//PGM
 	}
 }
@@ -1170,7 +1170,7 @@ void R_BeginFrame( float camera_separation )
 			{
 				R_InitGraphics( vid.width, vid.height );
 
-				Cvar_SetValue( "vid_fullscreen", 0);
+				Cvar_Set( "vid_fullscreen", "0");
 				Com_Printf ( "ref_soft::R_BeginFrame() - fullscreen unavailable in this mode\n" );
 				sw_state.prev_mode = sw_mode->integer;
 //				vid_fullscreen->modified = false;

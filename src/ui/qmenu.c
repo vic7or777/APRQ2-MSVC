@@ -142,10 +142,10 @@ void Field_Draw( menufield_s *f )
 	}
 }
 
+extern qboolean	keydown[256];
+
 qboolean Field_Key( menufield_s *f, int key )
 {
-	extern int keydown[];
-
 	switch ( key )
 	{
 	case K_KP_SLASH:
@@ -454,21 +454,16 @@ void Menu_DrawStringDark( int x, int y, const char *string )
 
 void Menu_DrawStringR2L( int x, int y, const char *string )
 {
-	unsigned i;
-	int len = strlen(string);
+	int len = strlen(string)-1;
 
-	for ( i = 0; i < len; i++ )
-		Draw_Char( ( x - i*8 ), y, string[len-i-1], COLOR_WHITE, 1 );
-
+	DrawString(x-(len<<3), y, string);
 }
 
 void Menu_DrawStringR2LDark( int x, int y, const char *string )
 {
-	int i, len = strlen(string);
+	int len = strlen(string)-1;
 
-	for ( i = 0; i < len; i++ )
-		Draw_Char( ( x - i*8 ), y, string[len-i-1]+128, COLOR_WHITE, 1 );
-
+	DrawAltString(x-(len<<3), y, string);
 }
 
 void *Menu_ItemAtCursor( menuframework_s *m )
@@ -542,10 +537,6 @@ static void DrawBoarder (int x, int y, int w, int h, int c, int s)
 	Draw_Fill( x,		y,		s, h, c );
 	Draw_Fill( x+w-s,	y,		s, h, c );
 }
-
-#define MLIST_SPACING	10
-#define MLIST_BSIZE 3
-#define MLIST_SSIZE 16
 
 
 void MenuList_Init( menulist_s *l )

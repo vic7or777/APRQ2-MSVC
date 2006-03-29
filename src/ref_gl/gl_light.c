@@ -46,19 +46,19 @@ static void R_RenderDlight (const dlight_t *light)
 	VectorSubtract (light->origin, r_origin, v);
 
 	qglBegin (GL_TRIANGLE_FAN);
-	qglColor3f (light->color[0]*0.2, light->color[1]*0.2, light->color[2]*0.2);
+	qglColor3f (light->color[0]*0.2f, light->color[1]*0.2f, light->color[2]*0.2f);
 
 	v[0] = light->origin[0] - vpn[0]*rad;
 	v[1] = light->origin[1] - vpn[1]*rad;
 	v[2] = light->origin[2] - vpn[2]*rad;
 
 	qglVertex3fv (v);
-	qglColor3f (0,0,0);
+	qglColor3fv(color_table[COLOR_BLACK]);
 	for (i=16 ; i>=0 ; i--)
 	{
 		a = i*0.39269908169872415f;
-		b = cos(a) * rad;
-		a = sin(a) * rad;
+		b = (float)cos(a) * rad;
+		a = (float)sin(a) * rad;
 		v[0] = light->origin[0] + vright[0] * b + vup[0] * a;
 		v[1] = light->origin[1] + vright[1] * b + vup[1] * a;
 		v[2] = light->origin[2] + vright[2] * b + vup[2] * a;
@@ -92,7 +92,7 @@ void R_RenderDlights (void)
 	for (i=0 ; i<r_newrefdef.num_dlights ; i++, l++)
 		R_RenderDlight (l);
 
-	qglColor3f (1,1,1);
+	qglColor3fv(color_table[COLOR_WHITE]);
 	qglDisable(GL_BLEND);
 	qglEnable (GL_TEXTURE_2D);
 	qglBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -385,7 +385,7 @@ static void R_StainNode (const stain_t *st, const mnode_t *node) {
 		if(surf->flags & SURF_PLANEBACK)
 			fdist *= -1;
 
-		frad -= fabs(fdist);
+		frad -= (float)fabs(fdist);
 
 		fminlight = DLIGHT_CUTOFF;
 		if (frad < fminlight)
@@ -506,7 +506,7 @@ void R_AddDynamicLights (const msurface_t *surf)
 		else
 			fdist = DotProduct (dlorigin, surf->plane->normal) - surf->plane->dist;
 
-		frad -= fabs(fdist);
+		frad -= (float)fabs(fdist);
 		// rad is now the highest intensity on the plane
 		
 		fminlight = DLIGHT_CUTOFF;

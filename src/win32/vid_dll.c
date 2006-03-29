@@ -287,7 +287,7 @@ LONG WINAPI MainWndProc (
 			Key_Event( K_MWHEELDOWN, true, sys_msg_time );
 			Key_Event( K_MWHEELDOWN, false, sys_msg_time );
 		}
-		return 0;
+		break;
 
 	case WM_HOTKEY:
 		return 0;
@@ -308,31 +308,30 @@ LONG WINAPI MainWndProc (
 
 	case WM_ACTIVATE:
 		// KJB: Watch this for problems in fullscreen modes with Alt-tabbing.
-		VID_AppActivate(  LOWORD(wParam) != WA_INACTIVE, (BOOL) HIWORD(wParam) );
+		VID_AppActivate((BOOL)(LOWORD(wParam) != WA_INACTIVE), (BOOL)HIWORD(wParam) );
         break;
 
 	case WM_MOVE:
+		if (!vid_fullscreen->integer)
 		{
-			int		xPos, yPos;
-			RECT r;
-			int		style;
+			int		xPos, yPos, style;
+			RECT	r;
 
-			if (!vid_fullscreen->integer)
-			{
-				xPos = (short) LOWORD(lParam);    // horizontal position 
-				yPos = (short) HIWORD(lParam);    // vertical position 
+			xPos = (short) LOWORD(lParam);    // horizontal position 
+			yPos = (short) HIWORD(lParam);    // vertical position 
 
-				r.left = r.top = 0;
-				r.right = r.bottom = 1;
+			r.left = r.top = 0;
+			r.right = r.bottom = 1;
 
-				style = GetWindowLong( hWnd, GWL_STYLE );
-				AdjustWindowRect( &r, style, FALSE );
+			style = GetWindowLong( hWnd, GWL_STYLE );
+			AdjustWindowRect( &r, style, FALSE );
 
-				Cvar_SetValue( "vid_xpos", xPos + r.left);
-				Cvar_SetValue( "vid_ypos", yPos + r.top);
-				if (ActiveApp)
-					IN_Activate (true);
-			}
+			Cvar_SetValue( "vid_xpos", xPos + r.left);
+			Cvar_SetValue( "vid_ypos", yPos + r.top);
+			vid_xpos->modified = false;
+			vid_ypos->modified = false;
+			if (ActiveApp)
+				IN_Activate (true);
 		}
         break;
 
@@ -347,11 +346,8 @@ LONG WINAPI MainWndProc (
 	case WM_MOUSEMOVE:
 	case WM_XBUTTONDOWN:
 	case WM_XBUTTONUP:
-		{
+		if(!DIMouse) {
 			int	temp = 0;
-
-			if(DIMouse)
-				break;
 
 			if (wParam & MK_LBUTTON)
 				temp |= 1;
@@ -373,23 +369,23 @@ LONG WINAPI MainWndProc (
 		break;
 
 	case WM_SYSCOMMAND:
-		switch (wParam) 
-		{ 
-		  case SC_SCREENSAVE: 
-		  case SC_MONITORPOWER: 
-			 return 0; 
-		  case SC_CLOSE: 
-			 Cbuf_ExecuteText( EXEC_APPEND, "quit" ); 
-		  case SC_MAXIMIZE: 
-			 Cvar_SetValue ("vid_fullscreen", 1); 
-		  return 0; 
+		switch (wParam) { 
+		case SC_SCREENSAVE: 
+		case SC_MONITORPOWER: 
+			return 0; 
+		case SC_CLOSE: 
+			Cbuf_AddText("quit\n");
+			return 0;
+		case SC_MAXIMIZE: 
+			Cvar_Set("vid_fullscreen", "1"); 
+			return 0;
 		} 
-		return DefWindowProc (hWnd, uMsg, wParam, lParam);
+		break;
 
 	case WM_QUIT:
 	case WM_CLOSE:
-		Cbuf_ExecuteText( EXEC_APPEND, "quit" );
-		break;
+		Cbuf_AddText("quit\n");
+		return 0;
 
 	case WM_SYSKEYDOWN:
 		if ( wParam == 13 )
@@ -419,7 +415,7 @@ LONG WINAPI MainWndProc (
 		break;
 #endif
     }
-
+	// pass all unhandled messages to DefWindowProc
     // return 0 if handled message, 1 if not
     return DefWindowProc( hWnd, uMsg, wParam, lParam );
 }
@@ -449,22 +445,32 @@ void VID_Front_f( void )
 */
 void VID_UpdateWindowPosAndSize( void )
 {
-	RECT r;
-	int		style;
-	int		w, h;
 
-	r.left   = 0;
-	r.top    = 0;
-	r.right  = viddef.width;
-	r.bottom = viddef.height;
+	if (!vid_xpos->modified && !vid_ypos->modified)
+		return;
 
-	style = GetWindowLong( cl_hwnd, GWL_STYLE );
-	AdjustWindowRect( &r, style, FALSE );
+	if (!vid_fullscreen->integer)
+	{
+		RECT	r;
+		int		style, w, h;
 
-	w = r.right - r.left;
-	h = r.bottom - r.top;
+		r.left   = 0;
+		r.top    = 0;
+		r.right  = viddef.width;
+		r.bottom = viddef.height;
 
-	MoveWindow( cl_hwnd, vid_xpos->integer, vid_ypos->integer, w, h, TRUE );
+		style = GetWindowLong( cl_hwnd, GWL_STYLE );
+		if(AdjustWindowRect( &r, style, FALSE ))
+		{
+			w = r.right - r.left;
+			h = r.bottom - r.top;
+
+			MoveWindow( cl_hwnd, vid_xpos->integer, vid_ypos->integer, w, h, TRUE );
+		}
+	}
+
+	vid_xpos->modified = false;
+	vid_ypos->modified = false;
 }
 
 /*
@@ -519,13 +525,14 @@ void VID_CheckChanges (void)
 		vid_restart = false;
 		vid_active = true;
 		cls.disable_screen = false;
+		VID_UpdateWindowPosAndSize();
 	}
 }
 
 
 static void OnChange_VID_AltTab (cvar_t *self, const char *oldValue)
 {
-	if(win_noalttab->integer)
+	if(self->integer)
 		WIN_DisableAltTab();
 	else
 		WIN_EnableAltTab();
@@ -534,8 +541,7 @@ static void OnChange_VID_AltTab (cvar_t *self, const char *oldValue)
 static void OnChange_VID_XY (cvar_t *self, const char *oldValue)
 {
 	// update our window position
-	if (!vid_fullscreen->integer)
-		VID_UpdateWindowPosAndSize();
+	VID_UpdateWindowPosAndSize();
 }
 
 /*

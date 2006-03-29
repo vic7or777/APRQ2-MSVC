@@ -36,6 +36,11 @@ cvar_t *sndbits;
 cvar_t *sndspeed;
 cvar_t *sndchannels;
 
+void Snd_Memset (void* dest, const int val, const size_t count)
+{
+	memset(dest,val,count);
+}
+
 static void sdl_audio_callback (void *unused, Uint8 * stream, int len)
 {
 	if (snd_inited) {
@@ -49,7 +54,6 @@ static void sdl_audio_callback (void *unused, Uint8 * stream, int len)
 qboolean SNDDMA_Init (void)
 {
 	SDL_AudioSpec desired, obtained;
-	int desired_bits, freq;
 	
 	if(snd_inited)
 		return true;
@@ -89,7 +93,7 @@ qboolean SNDDMA_Init (void)
 	if(sndspeed->integer)
 		desired.freq = sndspeed->integer;
 	else
-		desired.freg = 22050;
+		desired.freq = 22050;
 
     // just pick a sane default.
     if (desired.freq <= 11025)

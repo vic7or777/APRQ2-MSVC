@@ -70,11 +70,11 @@ void EmitWaterPolys (const msurface_t *fa)
 				wv[0] =v[0];
 				wv[1] =v[1];
 				#if !id386
-				wv[2] = v[2] + gl_waterwaves->value *sin(v[0]*0.025+r_newrefdef.time)*sin(v[2]*0.05+r_newrefdef.time)
-						+ gl_waterwaves->value *sin(v[1]*0.025+r_newrefdef.time*2)*sin(v[2]*0.05+r_newrefdef.time);
+				wv[2] = v[2] + gl_waterwaves->value *(float)sin(v[0]*0.025f+r_newrefdef.time)*(float)sin(v[2]*0.05f+r_newrefdef.time)
+						+ gl_waterwaves->value *(float)sin(v[1]*0.025f+r_newrefdef.time*2)*(float)sin(v[2]*0.05f+r_newrefdef.time);
 				#else
-				wv[2] = v[2] + gl_waterwaves->value *sin(v[0]*0.025+rdt)*sin(v[2]*0.05+rdt)
-						+ gl_waterwaves->value *sin(v[1]*0.025+rdt*2)*sin(v[2]*0.05+rdt);
+				wv[2] = v[2] + gl_waterwaves->value *(float)sin(v[0]*0.025f+rdt)*(float)sin(v[2]*0.05f+rdt)
+						+ gl_waterwaves->value *(float)sin(v[1]*0.025f+rdt*2)*(float)sin(v[2]*0.05f+rdt);
 				#endif
 
 				qglVertex3fv (wv);
@@ -142,7 +142,7 @@ static void DrawSkyPolygon (int nump, vec3_t vecs)
 	for (i=0, vp=vecs ; i<nump ; i++, vp+=3)
 		VectorAdd (vp, v, v);
 
-	VectorSet(av, fabs(v[0]), fabs(v[1]), fabs(v[2]));
+	VectorSet(av, (float)fabs(v[0]), (float)fabs(v[1]), (float)fabs(v[2]));
 	if (av[0] > av[1] && av[0] > av[2])
 	{
 		if (v[0] < 0)
@@ -174,7 +174,7 @@ static void DrawSkyPolygon (int nump, vec3_t vecs)
 		else
 			dv = -vecs[-j - 1];
 
-		if (dv < 0.001)
+		if (dv < 0.001f)
 			continue;	// don't divide by zero
 
 		j = vec_to_st[axis][0];
@@ -389,7 +389,8 @@ void R_DrawSkyBox (void)
 	qglPushMatrix ();
 
 	qglTranslatef (r_origin[0], r_origin[1], r_origin[2]);
-	qglRotatef (r_newrefdef.time * skyrotate, skyaxis[0], skyaxis[1], skyaxis[2]);
+	if(skyrotate)
+		qglRotatef (r_newrefdef.time * skyrotate, skyaxis[0], skyaxis[1], skyaxis[2]);
 
 	for (i=0 ; i<6 ; i++)
 	{
@@ -398,8 +399,7 @@ void R_DrawSkyBox (void)
 			skymins[0][i] =	skymins[1][i] = -1;
 			skymaxs[0][i] =	skymaxs[1][i] = 1;
 		}
-
-		if (skymins[0][i] >= skymaxs[0][i] || skymins[1][i] >= skymaxs[1][i])
+		else if (skymins[0][i] >= skymaxs[0][i] || skymins[1][i] >= skymaxs[1][i])
 			continue;
 
 		GL_Bind (sky_images[skytexorder[i]]->texnum);
@@ -469,8 +469,8 @@ void EmitCausticPolys (const msurface_t *fa)
 	float		txm, tym;
 
 
-	txm = cos (r_newrefdef.time*0.3) * 0.3;
-	tym = sin (r_newrefdef.time*-0.3) * 0.6;
+	txm = (float)cos(r_newrefdef.time*0.3f) * 0.3f;
+	tym = (float)sin(r_newrefdef.time*-0.3f) * 0.6f;
 
 	v = fa->polys->verts[0];	
 
@@ -497,7 +497,7 @@ void EmitCausticPolys (const msurface_t *fa)
 
 	qglBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-	qglColor4f (1,1,1,1);
+	qglColor4fv(colorWhite);
 	qglDisable(GL_BLEND);
 	GL_SelectTexture(QGL_TEXTURE1);
 	qglEnable(GL_TEXTURE_2D);
