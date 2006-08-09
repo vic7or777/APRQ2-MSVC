@@ -54,7 +54,7 @@ static void XMMS_LoadLibrary(void)
 	{
 		if( !(libxmms_handle = dlopen("libxmms.so.1", RTLD_NOW)) )
 		{
-			Com_Printf("Could open 'libxmms.so' or 'libxmms.so.1'\n");
+			Com_Printf("Could not open 'libxmms.so' or 'libxmms.so.1'\n");
 			return;
 		}
 	}
@@ -253,20 +253,6 @@ char *MP3_Macro_MP3Info(void) {
 	return title;
 }
 
-static void MP3_SongTitle_m ( char *buffer, int bufferSize )
-{
-	char *songtitle;
-
-	if (!MP3_IsPlayerRunning())
-		return;
-
-	songtitle = MP3_Macro_MP3Info();
-	if (!*songtitle)
-		return;
-
-	Q_strncpyz ( buffer, songtitle, bufferSize );
-}
-
 qboolean MP3_GetTrackTime(int *elapsed, int *total) {
 	int pos;
 
@@ -284,6 +270,24 @@ qboolean MP3_GetTrackTime(int *elapsed, int *total) {
 	}
 
 	return true;
+}
+
+static void MP3_SongTitle_m ( char *buffer, int bufferSize )
+{
+	char *songtitle;
+	int total = 0;
+
+	if (!MP3_IsPlayerRunning())
+		return;
+
+	if(!MP3_GetTrackTime(NULL, &total))
+		return;
+
+	songtitle = MP3_Macro_MP3Info();
+	if (!*songtitle)
+		return;
+
+	Com_sprintf(buffer, bufferSize, "%s [%i:%02i]\n", songtitle, total / 60, total % 60);
 }
 
 qboolean MP3_GetToggleState(int *shuffle, int *repeat) {

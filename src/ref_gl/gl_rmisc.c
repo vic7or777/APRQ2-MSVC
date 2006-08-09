@@ -110,8 +110,10 @@ void R_InitParticleTexture (void)
  
 ============================================================================== 
 */ 
-qboolean WriteJPG( const char *name, byte *buffer, int width, int height, int quality );
-qboolean WriteTGA( const char *name, byte *buffer, int width, int height );
+qboolean WriteJPG (const char *name, byte *buffer, int width, int height, int quality);
+qboolean WriteTGA (const char *name, byte *buffer, int width, int height);
+
+static const char *shotExt[2] = {"tga", "jpg"};
 /* 
 ================== 
 GL_ScreenShot_f
@@ -121,18 +123,22 @@ void GL_ScreenShot_f (void)
 {
 	FILE	*f;
 	byte	*buffer;
-	int		i;
+	int		i, picType, offset;
 	char	picname[80], checkname[MAX_OSPATH];
 	char	date[32], map[32] = "\0";
 	time_t	clock;
-	qboolean jpg = false;
+
 
 	if(CL_Mapname()[0])
 		Com_sprintf(map, sizeof(map), "_%s", CL_Mapname());
 
-	if(!Q_stricmp( Cmd_Argv( 0 ), "screenshotjpg" ))
-		jpg = true;
-
+	if(!Q_stricmp( Cmd_Argv( 0 ), "screenshotjpg" )) {
+		picType = 1;
+		offset = 0;
+	} else { //tga
+		picType = 0;
+		offset = 18;
+	}
 
     // Create the scrnshots directory if it doesn't exist
     Com_sprintf (checkname, sizeof(checkname), "%s/scrnshot", FS_Gamedir());
@@ -146,10 +152,7 @@ void GL_ScreenShot_f (void)
 		// Find a file name to save it to
 		for (i=0 ; i<100 ; i++)
 		{
-			if(jpg)
-				Com_sprintf (picname, sizeof(picname), "%s%s-%02i.jpg", date, map, i);
-			else
-				Com_sprintf (picname, sizeof(picname), "%s%s-%02i.tga", date, map, i);
+			Com_sprintf (picname, sizeof(picname), "%s%s-%02i.%s", date, map, i, shotExt[picType]);
 			Com_sprintf (checkname, sizeof(checkname), "%s/scrnshot/%s", FS_Gamedir(), picname);
 			f = fopen (checkname, "rb");
 			if (!f)
@@ -164,28 +167,20 @@ void GL_ScreenShot_f (void)
 	}
 	else
 	{
-			if(jpg)
-				Com_sprintf (picname, sizeof(picname), "%s.jpg", Cmd_Argv( 1 ));
-			else
-				Com_sprintf (picname, sizeof(picname), "%s.tga", Cmd_Argv( 1 ));
-
-			Com_sprintf( checkname, sizeof(checkname), "%s/scrnshot/%s", FS_Gamedir(), picname );
+		Com_sprintf (picname, sizeof(picname), "%s.%s", Cmd_Argv( 1 ), shotExt[picType]);
+		Com_sprintf( checkname, sizeof(checkname), "%s/scrnshot/%s", FS_Gamedir(), picname );
 	}
 
-	if( jpg ) {
-		buffer = Z_TagMalloc(vid.width * vid.height * 3, TAGMALLOC_RENDER_SCRSHOT);
-		qglReadPixels( 0, 0, vid.width, vid.height, GL_RGB, GL_UNSIGNED_BYTE, buffer);
+	buffer = Z_TagMalloc(vid.width * vid.height * 3 + offset, TAGMALLOC_RENDER_SCRSHOT);
+	qglReadPixels( 0, 0, vid.width, vid.height, GL_RGB, GL_UNSIGNED_BYTE, buffer + offset );
 
-		if( WriteJPG(checkname, buffer, vid.width, vid.height, gl_screenshot_quality->integer) )
-			Com_Printf( "Wrote %s\n", picname );
-	} else {
-		buffer = Z_TagMalloc(vid.width * vid.height * 3 + 18, TAGMALLOC_RENDER_SCRSHOT);
-		memset (buffer, 0, 18);
-		qglReadPixels( 0, 0, vid.width, vid.height, GL_RGB, GL_UNSIGNED_BYTE, buffer + 18 ); 
+	if( picType == 1 )
+		i = WriteJPG(checkname, buffer, vid.width, vid.height, gl_screenshot_quality->integer);
+	else
+		i = WriteTGA(checkname, buffer, vid.width, vid.height);
 
-		if( WriteTGA(checkname, buffer, vid.width, vid.height) )
-			Com_Printf( "Wrote %s\n", picname );
-	}
+	if(i)
+		Com_Printf("Wrote %s\n", picname);
 
 	Z_Free( buffer );
 } 
@@ -241,8 +236,7 @@ void GL_SetDefaultState( void )
 	qglDepthMask(GL_TRUE);
 
 	GL_TextureMode( gl_texturemode->string );
-	GL_TextureAlphaMode( gl_texturealphamode->string );
-	GL_TextureSolidMode( gl_texturesolidmode->string );
+	GL_TextureBits();
 
 	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, gl_filter_min);
 	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, gl_filter_max);
@@ -266,13 +260,6 @@ void GL_SetDefaultState( void )
 		qglPointParameterfEXT( GL_POINT_SIZE_MIN_EXT, gl_particle_min_size->value );
 		qglPointParameterfEXT( GL_POINT_SIZE_MAX_EXT, gl_particle_max_size->value );
 		qglPointParameterfvEXT( GL_DISTANCE_ATTENUATION_EXT, attenuations );
-	}
-
-	if ( qglColorTableEXT && gl_ext_palettedtexture->integer )
-	{
-		qglEnable( GL_SHARED_TEXTURE_PALETTE_EXT );
-
-		GL_SetTexturePalette( d_8to24table );
 	}
 
 	GL_UpdateSwapInterval();

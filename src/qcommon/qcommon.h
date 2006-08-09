@@ -33,7 +33,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #endif
 
 #define APR_APPNAME "AprQ2"
-#define APR_VERSION "1.19"
+#define APR_VERSION "1.20"
 
 //============================================================================
 
@@ -50,6 +50,7 @@ typedef struct sizebuf_s
 void SZ_Init (sizebuf_t *buf, byte *data, int length);
 void SZ_Clear (sizebuf_t *buf);
 void *SZ_GetSpace (sizebuf_t *buf, int length);
+
 void SZ_Write (sizebuf_t *buf, const void *data, int length);
 void SZ_Print (sizebuf_t *buf, const char *data);	// strcats onto the sizebuf
 
@@ -498,7 +499,7 @@ void	Cvar_SetCheatState( void );
 void	Cvar_GetLatchedVars (int flags);
 // any CVAR_LATCHED variables that have been set will now take effect
 
-qboolean Cvar_Command (char *name, unsigned int hash);
+qboolean Cvar_Command (const char *name, unsigned int hash);
 // called by Cmd_ExecuteString when Cmd_Argv(0) doesn't match a known
 // command.  Returns true if the command was a variable reference that
 // was handled. (print or change)
@@ -573,7 +574,8 @@ void		NET_Sleep(int msec);
 
 typedef struct
 {
-	qboolean	fatal_error;
+	//qboolean	fatal_error;
+	qboolean	got_reliable;
 
 	netsrc_t	sock;
 
@@ -599,11 +601,11 @@ typedef struct
 
 // reliable staging and holding areas
 	sizebuf_t	message;		// writing buffer to send to server
-	byte		message_buf[MAX_MSGLEN-16];		// leave space for header
+	byte		message_buf[MAX_USABLEMSG];		// leave space for header
 
 // message is copied to this buffer when it is first transfered
 	int			reliable_length;
-	byte		reliable_buf[MAX_MSGLEN-16];	// unacked reliable message
+	byte		reliable_buf[MAX_USABLEMSG];	// unacked reliable message
 } netchan_t;
 
 extern	netadr_t	net_from;
@@ -709,7 +711,8 @@ void	FS_InitFilesystem (void);
 void	FS_SetGamedir (const char *dir);
 char	*FS_Gamedir (void);
 char	*FS_NextPath (const char *prevpath);
-void	FS_ExecAutoexec (void);
+//void	FS_ExecAutoexec (void);
+void	FS_ExecConfig (const char *filename);
 void	FS_ReloadPAKs(void);
 qboolean FS_ExistsInGameDir (const char *filename);
 
@@ -721,7 +724,7 @@ int		FS_LoadFile (const char *path, void **buffer);
 // a null buffer will just return the file length without loading
 // a -1 length is not present
 
-void	FS_Read (void *buffer, int len, FILE *f);
+int		FS_Read (void *buffer, int len, FILE *f);
 // properly handles partial reads
 
 void	FS_FreeFile (void *buffer);
@@ -753,9 +756,17 @@ MISC
 void		Com_BeginRedirect (int target, char *buffer, int buffersize, void (*flush));
 void		Com_EndRedirect (void);
 void 		Com_Printf (const char *fmt, ...);
-void 		Com_DPrintf (const char *fmt, ...);
+void 		_Com_DPrintf (const char *fmt, ...);
 void 		Com_Error (int code, const char *fmt, ...);
 void 		Com_Quit (void);
+
+//r1: use variadic macros where possible to avoid overhead of evaluations and va
+/*#if  (__STDC_VERSION__ >= 199901L || _MSC_VER >= 1400 || __GNUC__ >= 3 || (__GNUC__ == 2 && __GNUC_MINOR__ >= 95))
+// #define Com_DPrintf(...) do{ if(developer->integer) Com_Printf(__VA_ARGS__); }while(0)
+ #define Com_DPrintf(...) if (developer->integer) { Com_Printf(__VA_ARGS__); }
+#endif*/
+// #define Com_DPrintf if(developer->integer) Com_Printf
+#define Com_DPrintf (!developer->integer) ? (void)0 : Com_Printf
 
 int			Com_ServerState (void);		// this should have just been a cvar...
 void		Com_SetServerState (int state);
@@ -848,9 +859,6 @@ void Z_FreeTagsGame (int tag);
 void Qcommon_Init (int argc, char **argv);
 void Qcommon_Frame (int msec);
 void Qcommon_Shutdown (void);
-
-#define NUMVERTEXNORMALS	162
-extern	const vec3_t	bytedirs[NUMVERTEXNORMALS];
 
 // this is in the client code, but can be used for debugging from server
 void SCR_DebugGraph (float value, int color);

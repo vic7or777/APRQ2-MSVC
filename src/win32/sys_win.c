@@ -48,12 +48,14 @@ unsigned	sys_msg_time;
 unsigned	sys_frame_time;
 
 
-static HANDLE		qwclsemaphore;
+//static HANDLE		qwclsemaphore;
 
 #define	MAX_NUM_ARGVS	128
 int			argc;
 char		*argv[MAX_NUM_ARGVS];
 
+static qboolean qDedConsole = true;
+static cvar_t	*win_consolelogging;
 
 /*
 ===============================================================================
@@ -69,20 +71,43 @@ void Sys_Error (const char *error, ...)
 	va_list		argptr;
 	char		text[1024];
 
-	CL_Shutdown ();
-	Qcommon_Shutdown ();
-
 	va_start (argptr, error);
 	vsnprintf (text, sizeof(text), error, argptr);
 	va_end (argptr);
 
-	MessageBox(NULL, text, "Error", 0 /* MB_OK */ );
+	timeEndPeriod( 1 );
 
-	if (qwclsemaphore)
-		CloseHandle (qwclsemaphore);
+	CL_Shutdown ();
+	Qcommon_Shutdown ();
 
-// shut down QHOST hooks if necessary
-	DeinitConProc ();
+	if (qDedConsole)
+	{
+		MSG		msg;
+		BOOL	bRet;
+
+		Conbuf_AppendText( text );
+		Conbuf_AppendText( "\n" );
+
+		Sys_SetErrorText( text );
+		Sys_ShowConsole( 1, true );
+
+		// wait for the user to quit
+		while ((bRet = GetMessage(&msg, NULL, 0, 0)) != 0) {
+			if (bRet == -1)
+				break;
+
+			TranslateMessage (&msg);
+      		DispatchMessage (&msg);
+
+			Sleep(25);
+		}
+	}
+	else
+	{
+		MessageBox(NULL, text, "Error", 0 /* MB_OK */ );
+	}
+
+	Sys_DestroyConsole();
 
 	exit (1);
 }
@@ -93,38 +118,11 @@ void Sys_Quit (void)
 
 	CL_Shutdown();
 
-	CloseHandle (qwclsemaphore);
-	if (dedicated && dedicated->integer)
-		FreeConsole ();
-
 	Qcommon_Shutdown();
 
-// shut down QHOST hooks if necessary
-	DeinitConProc ();
+	Sys_DestroyConsole();
 
 	exit (0);
-}
-
-
-void WinError (void)
-{
-	LPVOID lpMsgBuf;
-
-	FormatMessage( 
-		FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM,
-		NULL,
-		GetLastError(),
-		MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), // Default language
-		(LPTSTR) &lpMsgBuf,
-		0,
-		NULL 
-	);
-
-	// Display the string.
-	MessageBox( NULL, lpMsgBuf, "GetLastError", MB_OK|MB_ICONINFORMATION );
-
-	// Free the buffer.
-	LocalFree( lpMsgBuf );
 }
 
 //================================================================
@@ -209,26 +207,6 @@ void Sys_Init (void)
 {
 	OSVERSIONINFO	vinfo;
 
-#if 0
-	// allocate a named semaphore on the client so the
-	// front end can tell if it is alive
-
-	// mutex will fail if semephore already exists
-    qwclsemaphore = CreateMutex(
-        NULL,         /* Security attributes */
-        0,            /* owner       */
-        "qwcl"); /* Semaphore name      */
-	if (!qwclsemaphore)
-		Sys_Error ("QWCL is already running on this system");
-	CloseHandle (qwclsemaphore);
-
-    qwclsemaphore = CreateSemaphore(
-        NULL,         /* Security attributes */
-        0,            /* Initial count       */
-        1,            /* Maximum count       */
-        "qwcl"); /* Semaphore name      */
-#endif
-
 	timeBeginPeriod( 1 );
 
 	vinfo.dwOSVersionInfoSize = sizeof(vinfo);
@@ -243,7 +221,8 @@ void Sys_Init (void)
 	else if ( vinfo.dwPlatformId == VER_PLATFORM_WIN32_WINDOWS )
 		s_win95 = true;
 
-	if (dedicated->integer)
+	win_consolelogging = Cvar_Get("win_consolelogging", "0", 0);
+/*	if (dedicated->integer)
 	{
 		if (!AllocConsole ())
 			Sys_Error ("Couldn't create dedicated server console");
@@ -252,89 +231,11 @@ void Sys_Init (void)
 	
 		// let QHOST hook in
 		InitConProc (argc, argv);
-	}
+	}*/
 }
 
 
-static char	console_text[256];
-static int	console_textlen;
 
-/*
-================
-Sys_ConsoleInput
-================
-*/
-char *Sys_ConsoleInput (void)
-{
-	INPUT_RECORD	recs[8];
-	int		dummy;
-	int		ch, numread, numevents;
-
-	if (!dedicated || !dedicated->integer)
-		return NULL;
-
-
-	for ( ;; )
-	{
-		if (!GetNumberOfConsoleInputEvents (hinput, &numevents))
-			Sys_Error ("Error getting # of console events");
-
-		if (numevents <= 0)
-			break;
-
-		if (!ReadConsoleInput(hinput, recs, 1, &numread))
-			Sys_Error ("Error reading console input");
-
-		if (numread != 1)
-			Sys_Error ("Couldn't read console input");
-
-		if (recs[0].EventType == KEY_EVENT)
-		{
-			if (!recs[0].Event.KeyEvent.bKeyDown)
-			{
-				ch = recs[0].Event.KeyEvent.uChar.AsciiChar;
-
-				switch (ch)
-				{
-					case '\r':
-						WriteFile(houtput, "\r\n", 2, &dummy, NULL);	
-
-						if (console_textlen)
-						{
-							console_text[console_textlen] = 0;
-							console_textlen = 0;
-							return console_text;
-						}
-						break;
-
-					case '\b':
-						if (console_textlen)
-						{
-							console_textlen--;
-							WriteFile(houtput, "\b \b", 3, &dummy, NULL);	
-						}
-						break;
-
-					default:
-						if (ch >= ' ')
-						{
-							if (console_textlen < sizeof(console_text)-2)
-							{
-								WriteFile(houtput, &ch, 1, &dummy, NULL);	
-								console_text[console_textlen] = ch;
-								console_textlen++;
-							}
-						}
-
-						break;
-
-				}
-			}
-		}
-	}
-
-	return NULL;
-}
 
 
 /*
@@ -346,25 +247,8 @@ Print text to the dedicated console
 */
 void Sys_ConsoleOutput (const char *string)
 {
-	int		dummy;
-	char	text[256];
-
-	if (!dedicated || !dedicated->integer)
-		return;
-
-	if (console_textlen)
-	{
-		text[0] = '\r';
-		memset(&text[1], ' ', console_textlen);
-		text[console_textlen+1] = '\r';
-		text[console_textlen+2] = 0;
-		WriteFile(houtput, text, console_textlen+2, &dummy, NULL);
-	}
-
-	WriteFile(houtput, string, strlen(string), &dummy, NULL);
-
-	if (console_textlen)
-		WriteFile(houtput, console_text, console_textlen, &dummy, NULL);
+	if (qDedConsole)
+		Conbuf_AppendText( string );
 }
 
 
@@ -379,10 +263,10 @@ void Sys_SendKeyEvents (void)
 {
     MSG        msg;
 
-	while (PeekMessage (&msg, NULL, 0, 0, PM_NOREMOVE))
+	while (PeekMessage (&msg, NULL, 0, 0, PM_REMOVE))
 	{
-		if (!GetMessage (&msg, NULL, 0, 0))
-			Sys_Quit ();
+		//if (!GetMessage (&msg, NULL, 0, 0))
+		//	Sys_Quit ();
 		sys_msg_time = msg.time;
       	TranslateMessage (&msg);
       	DispatchMessage (&msg);
@@ -634,6 +518,12 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 
 	global_hInstance = hInstance;
 
+	// done before Com/Sys_Init since we need this for error output
+	Sys_CreateConsole();
+
+	// no abort/retry/fail errors
+	SetErrorMode (SEM_FAILCRITICALERRORS);
+
 	ParseCommandLine (lpCmdLine);
 
 	FixWorkingDirectory ();
@@ -660,19 +550,28 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 	Qcommon_Init (argc, argv);
 	oldtime = Sys_Milliseconds ();
 
+	//Com_Error (ERR_FATAL, "Testing");
+
+	if (dedicated->integer) {
+		Sys_ShowConsole(1, false);
+	}
+	else if(!win_consolelogging->integer) {
+		qDedConsole = false;
+		Sys_DestroyConsole();
+	}
+
+
     /* main window message loop */
 	while (1)
 	{
 		// if at a full screen console, don't update unless needed
-		if (Minimized || (dedicated && dedicated->integer) )
-		{
-			Sleep (1);
-		}
+		if (!ActiveApp || dedicated->integer)
+			Sleep (3);
 
-		while (PeekMessage (&msg, NULL, 0, 0, PM_NOREMOVE))
+		while (PeekMessage (&msg, NULL, 0, 0, PM_REMOVE))
 		{
-			if (!GetMessage (&msg, NULL, 0, 0))
-				Com_Quit ();
+			//if (!GetMessage (&msg, NULL, 0, 0))
+			//	Com_Quit ();
 			sys_msg_time = msg.time;
 			TranslateMessage (&msg);
    			DispatchMessage (&msg);
@@ -696,3 +595,55 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 	// never gets here
     return 1;
 }
+
+
+#ifdef ANTICHEAT
+#ifndef DEDICATED_ONLY
+
+typedef struct
+{
+	void (*Check) (void);
+} anticheat_export_t;
+
+static anticheat_export_t *anticheat;
+
+typedef VOID * (*FNINIT) (VOID);
+
+int Sys_GetAntiCheatAPI (void)
+{
+	qboolean	updated = false;
+	HMODULE		hAC;
+	static FNINIT	init;
+
+	//already loaded, just reinit
+	if (anticheat)
+	{
+		anticheat = (anticheat_export_t *)init ();
+		if (!anticheat)
+			return 0;
+		return 1;
+	}
+
+reInit:
+
+	hAC = LoadLibrary ("anticheat");
+	if (!hAC)
+		return 0;
+
+	init = (FNINIT)GetProcAddress (hAC, "Initialize");
+	anticheat = (anticheat_export_t *)init ();
+
+	if (!updated && !anticheat)
+	{
+		updated = true;
+		FreeLibrary (hAC);
+		hAC = NULL;
+		goto reInit;
+	}
+
+	if (!anticheat)
+		return 0;
+	return 1;
+}
+#endif
+#endif

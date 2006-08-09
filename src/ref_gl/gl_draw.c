@@ -72,11 +72,11 @@ smoothly scrolled off.
 #define DRAW_CHAR(x, y, frow, fcol) \
 	qglTexCoord2f (fcol, frow); \
 	qglVertex2i (x, y); \
-	qglTexCoord2f (fcol + 0.0625, frow); \
+	qglTexCoord2f (fcol + 0.0625f, frow); \
 	qglVertex2i (x+8, y); \
-	qglTexCoord2f (fcol + 0.0625, frow + 0.0625); \
+	qglTexCoord2f (fcol + 0.0625f, frow + 0.0625f); \
 	qglVertex2i (x+8, y+8); \
-	qglTexCoord2f (fcol, frow + 0.0625); \
+	qglTexCoord2f (fcol, frow + 0.0625f); \
 	qglVertex2i (x, y+8)
 
 void Draw_Char (int x, int y, int num, int color, float alpha)
@@ -95,8 +95,8 @@ void Draw_Char (int x, int y, int num, int color, float alpha)
 	VectorCopy(color_table[color&7], fcolor);
 	fcolor[3] = alpha;
 
-	frow = (num>>4)*0.0625;
-	fcol = (num&15)*0.0625;
+	frow = (num>>4)*0.0625f;
+	fcol = (num&15)*0.0625f;
 
 	qglDisable(GL_ALPHA_TEST);
 	qglEnable(GL_BLEND);
@@ -152,8 +152,8 @@ void Draw_String (int x, int y, const char *s, int color, float alpha, qboolean 
 	
 		if ((num&127) != 32) // not a space
 		{
-			frow = (num>>4)*0.0625;
-			fcol = (num&15)*0.0625;
+			frow = (num>>4)*0.0625f;
+			fcol = (num&15)*0.0625f;
 
 			if(gl_fontshadow->integer)
 			{
@@ -210,8 +210,8 @@ void DrawCString (int x, int y, const short *s, float alpha, int enable)
 				qglColor4fv (fcolor);
 			}
 
-			frow = (num>>4)*0.0625;
-			fcol = (num&15)*0.0625;
+			frow = (num>>4)*0.0625f;
+			fcol = (num&15)*0.0625f;
 
 			if(gl_fontshadow->integer)
 			{
@@ -286,7 +286,7 @@ Draw_ScaledPic
 void Draw_ScaledPic (int x, int y, float scale, const char *pic, float red, float green, float blue, float alpha)
 {
 	image_t *gl;
-	float yoff, xoff;
+	int yoff = 0, xoff = 0;
 	int enabled = 0;
 
 	gl = Draw_FindPic (pic);
@@ -315,17 +315,19 @@ void Draw_ScaledPic (int x, int y, float scale, const char *pic, float red, floa
 
 	qglBegin (GL_QUADS);
 
-	xoff = ((float)gl->width * scale - (float)gl->width)*0.5f;
-	yoff = ((float)gl->height * scale - (float)gl->height)*0.5f;
+	if(scale != 1.0f) {
+		xoff = (int)ceilf(((float)gl->width * scale - (float)gl->width)*0.5f);
+		yoff = (int)ceilf(((float)gl->height * scale - (float)gl->height)*0.5f);
+	}
 
 	qglTexCoord2f (gl->sl, gl->tl);
-	qglVertex2f (x-xoff, y-yoff);
+	qglVertex2i (x-xoff, y-yoff);
 	qglTexCoord2f (gl->sh, gl->tl);
-	qglVertex2f (x+gl->width+xoff, y-yoff);
+	qglVertex2i (x+gl->width+xoff, y-yoff);
 	qglTexCoord2f (gl->sh, gl->th);
-	qglVertex2f (x+gl->width+xoff, y+gl->height+yoff);
+	qglVertex2i (x+gl->width+xoff, y+gl->height+yoff);
 	qglTexCoord2f (gl->sl, gl->th);
-	qglVertex2f (x-xoff, y+gl->height+yoff);
+	qglVertex2i (x-xoff, y+gl->height+yoff);
 
 	qglEnd ();
 
@@ -573,6 +575,9 @@ void Draw_StretchRaw (int x, int y, int w, int h, int cols, int rows, byte *data
 	float		hscale;
 	int			row;
 	float		t;
+	unsigned image32[256*256] = { 0 };
+	unsigned *dest = image32;
+
 
 	GL_Bind (0);
 
@@ -587,74 +592,31 @@ void Draw_StretchRaw (int x, int y, int w, int h, int cols, int rows, byte *data
 		trows = 256;
 	}
 	t = rows*hscale * ONEDIV256;
-	fracstep = cols*0x10000 * ONEDIV256;
+	fracstep = cols*0x10000/256;
 
-	if ( !qglColorTableEXT )
+	for (i=0 ; i<trows ; i++, dest+=256)
 	{
-		unsigned image32[256*256];
-		unsigned *dest = image32;
+		row = (int)(i*hscale);
+		if (row > rows)
+			break;
+		source = data + cols*row;
 
-		memset ( image32, 0, sizeof(unsigned)*256*256 );
-
-		for (i=0 ; i<trows ; i++, dest+=256)
+		frac = fracstep >> 1;
+		for (j=0 ; j<256 ; j+=4)
 		{
-			row = (int)(i*hscale);
-			if (row > rows)
-				break;
-			source = data + cols*row;
-
-			frac = fracstep >> 1;
-			for (j=0 ; j<256 ; j+=4)
-			{
-				dest[j] = r_rawpalette[source[frac>>16]];
-				frac += fracstep;
-				dest[j+1] = r_rawpalette[source[frac>>16]];
-				frac += fracstep;
-				dest[j+2] = r_rawpalette[source[frac>>16]];
-				frac += fracstep;
-				dest[j+3] = r_rawpalette[source[frac>>16]];
-				frac += fracstep;
-			}
+			dest[j] = r_rawpalette[source[frac>>16]];
+			frac += fracstep;
+			dest[j+1] = r_rawpalette[source[frac>>16]];
+			frac += fracstep;
+			dest[j+2] = r_rawpalette[source[frac>>16]];
+			frac += fracstep;
+			dest[j+3] = r_rawpalette[source[frac>>16]];
+			frac += fracstep;
 		}
-
-		qglTexImage2D (GL_TEXTURE_2D, 0, gl_tex_solid_format, 256, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, image32);
 	}
-	else
-	{
-		unsigned char image8[256*256];
-		unsigned char *dest = image8;
 
-		memset ( image8, 0, sizeof(unsigned char)*256*256 );
-
-		for (i=0 ; i<trows ; i++, dest+=256)
-		{
-			row = (int)(i*hscale);
-			if (row > rows)
-				break;
-			source = data + cols*row;
-			frac = fracstep >> 1;
-			for (j=0 ; j<256 ; j+=4)
-			{
-				dest[j] = source[frac>>16];
-				frac += fracstep;
-				dest[j+1] = source[frac>>16];
-				frac += fracstep;
-				dest[j+2] = source[frac>>16];
-				frac += fracstep;
-				dest[j+3] = source[frac>>16];
-				frac += fracstep;
-			}
-		}
-
-		qglTexImage2D( GL_TEXTURE_2D, 
-			           0, 
-					   GL_COLOR_INDEX8_EXT, 
-					   256, 256, 
-					   0, 
-					   GL_COLOR_INDEX, 
-					   GL_UNSIGNED_BYTE, 
-					   image8 );
-	}
+	qglTexImage2D (GL_TEXTURE_2D, 0, gl_tex_solid_format, 256, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, image32);
+	
 	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
 

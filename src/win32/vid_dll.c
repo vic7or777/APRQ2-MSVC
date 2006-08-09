@@ -54,7 +54,7 @@ viddef_t	viddef;				// global video state; used by other modules
 
 HWND        cl_hwnd;            // Main window handle for life of program
 
-#define VID_NUM_MODES ( sizeof( vid_modes ) / sizeof( vid_modes[0] ) )
+//#define VID_NUM_MODES ( sizeof( vid_modes ) / sizeof( vid_modes[0] ) )
 
 LONG WINAPI MainWndProc( HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam );
 
@@ -484,6 +484,11 @@ void VID_NewWindow ( int width, int height)
 	cl.force_refdef = true;		// can't use a paused refdef
 }
 
+void VID_Minimize_f (void)
+{
+	if(cl_hwnd)
+		ShowWindow (cl_hwnd, SW_MINIMIZE);
+}
 
 /*
 ============
@@ -513,6 +518,8 @@ void VID_CheckChanges (void)
 
 		Com_Printf( "-------- [Loading Renderer] --------\n" );
 
+		vid_active = true; //Lets assume we get it active, otherwise
+							//if error occurs end of R_Init, it doesnt free the beging stuff
 		if ( R_Init( global_hInstance, MainWndProc ) == -1 )
 		{
 			R_Shutdown();
@@ -523,7 +530,6 @@ void VID_CheckChanges (void)
 		Com_Printf( "------------------------------------\n");
 
 		vid_restart = false;
-		vid_active = true;
 		cls.disable_screen = false;
 		VID_UpdateWindowPosAndSize();
 	}
@@ -561,6 +567,7 @@ void VID_Init (void)
 	/* Add some console commands that we want to handle */
 	Cmd_AddCommand ("vid_restart", VID_Restart_f);
 	Cmd_AddCommand ("vid_front", VID_Front_f);
+	Cmd_AddCommand ("vid_minimize", VID_Minimize_f);
 
 	vid_displayfrequency = Cvar_Get ( "vid_displayfrequency", "0", CVAR_ARCHIVE|CVAR_LATCHVIDEO );
 	vid_restore_on_switch = Cvar_Get ("vid_flip_on_switch", "0", 0);

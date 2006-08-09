@@ -104,10 +104,10 @@ void CL_ClipMoveToEntities ( vec3_t start, vec3_t mins, vec3_t maxs, vec3_t end,
 			zd = 8*((ent->solid>>5) & 31);
 			zu = 8*((ent->solid>>10) & 63) - 32;
 
-			bmins[0] = bmins[1] = -x;
-			bmaxs[0] = bmaxs[1] = x;
-			bmins[2] = -zd;
-			bmaxs[2] = zu;
+			bmins[0] = bmins[1] = -(float)x;
+			bmaxs[0] = bmaxs[1] = (float)x;
+			bmins[2] = -(float)zd;
+			bmaxs[2] = (float)zu;
 
 			headnode = CM_HeadnodeForBox (bmins, bmaxs);
 			angles = vec3_origin;	// boxes don't rotate
@@ -149,7 +149,7 @@ trace_t		CL_PMTrace (vec3_t start, vec3_t mins, vec3_t maxs, vec3_t end)
 
 	// check against world
 	t = CM_BoxTrace (start, end, mins, maxs, 0, MASK_PLAYERSOLID);
-	if (t.fraction < 1.0)
+	if (t.fraction < 1.0f)
 		t.ent = (struct edict_s *)1;
 
 	// check all other solid models
@@ -275,7 +275,7 @@ void CL_PredictMovement (void)
 	if (step > 63 && step < 160 && (pm.s.pm_flags & PMF_ON_GROUND) )
 	{
 		cl.predicted_step = step * 0.125f;
-		cl.predicted_step_time = cls.realtime - cls.frametime * 500;
+		cl.predicted_step_time = cls.realtime - (int)(cls.frametime * 500.0f);
 	}
 
 

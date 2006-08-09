@@ -50,13 +50,13 @@ typedef struct pack_s
 	unsigned int hashSize;
 } pack_t;
 
-char	fs_gamedir[MAX_OSPATH];
-cvar_t	*fs_basedir;
+static char		fs_gamedir[MAX_OSPATH];
+static cvar_t	*fs_basedir;
 //cvar_t	*fs_cddir;
 cvar_t	*fs_gamedirvar;
-cvar_t	*fs_allpakloading;
+static cvar_t	*fs_allpakloading;
 #ifndef _WIN32
-cvar_t	*fs_usehomedir;
+static cvar_t	*fs_usehomedir;
 #endif
 
 typedef struct searchpath_s
@@ -71,6 +71,7 @@ static searchpath_t	*fs_base_searchpaths;	// without gamedirs
 
 #define FS_MAX_HASH_SIZE 1024
 
+static qboolean fs_initialized = false;
 /*
 
 All of Quake's data access is through a hierchal file system, but the contents of the file system can be transparently merged from several sources.
@@ -172,10 +173,10 @@ int file_from_pak = 0;
 int FS_FOpenFile (const char *filename, FILE **file)
 {
 	unsigned int	hash;
-	searchpath_t	*search;
+	const searchpath_t	*search;
 	char			netpath[MAX_OSPATH];
-	pack_t			*pak;
-	packfile_t		*pakfile;
+	const pack_t			*pak;
+	const packfile_t		*pakfile;
 
 	file_from_pak = 0;
 
@@ -235,10 +236,10 @@ int FS_FOpenFile (const char *filename, FILE **file)
 void FS_WhereIs_f (void)
 {
 	unsigned int	hash;
-	searchpath_t	*search;
+	const searchpath_t	*search;
 	char			netpath[MAX_OSPATH];
-	pack_t			*pak;
-	packfile_t		*pakfile;
+	const pack_t			*pak;
+	const packfile_t		*pakfile;
 	char			*filename;
 	FILE			*file;
 
@@ -300,7 +301,7 @@ Properly handles partial reads
 void CDAudio_Stop(void);
 #endif
 #define	MAX_READ	0x10000		// read in blocks of 64k
-void FS_Read (void *buffer, int len, FILE *f)
+int FS_Read (void *buffer, int len, FILE *f)
 {
 	int		block, remaining;
 	int		read;
@@ -331,7 +332,7 @@ void FS_Read (void *buffer, int len, FILE *f)
 			}
 			else
 #endif
-				Com_Error (ERR_FATAL, "FS_Read: 0 bytes read");
+			return len - remaining;
 		}
 
 		if (read == -1)
@@ -342,6 +343,7 @@ void FS_Read (void *buffer, int len, FILE *f)
 		remaining -= read;
 		buf += read;
 	}
+	return len;
 }
 
 /*
@@ -489,16 +491,29 @@ Sets fs_gamedir, adds the directory to the head of the path,
 then loads and adds pak1.pak pak2.pak ... 
 ================
 */
+static int pakcmp (const void *a, const void *b)
+{
+	if (*(int *)a > *(int *)b)
+		return 1;
+	else if (*(int *)a == *(int *)b)
+		return 0;
+	return -1;
+}
+
 static void FS_AddGameDirectory (const char *dir)
 {
-	int				i, numfiles;
+	int				i, j;
 	searchpath_t	*search;
 	pack_t			*pak;
 	char			pakfile[MAX_OSPATH];
-	char			**searchnames;
-	int   j;
-	char buf[16];
-	qboolean numberedpak;
+	char			pakmatch[MAX_OSPATH];
+	char			*s;
+
+	char			*filenames[1024];
+	int				pakfiles[100];
+	int				total, totalpaks;
+	size_t			pakmatchlen;
+	qboolean		numPak;
 
 	Q_strncpyz(fs_gamedir, dir, sizeof(fs_gamedir));
 
@@ -511,65 +526,83 @@ static void FS_AddGameDirectory (const char *dir)
 	search->next = fs_searchpaths;
 	fs_searchpaths = search;
 
-	//
-	// add any pak files in the format pak0.pak pak1.pak, ...
-	//
-	for (i=0; i<100; i++) //0-99 pak loading
+
+	Com_sprintf (pakfile, sizeof(pakfile), "%s/*.pak", dir);
+	Com_sprintf (pakmatch, sizeof(pakmatch), "%s/pak", dir);
+	pakmatchlen = strlen(pakmatch);
+
+	total = 0;
+	totalpaks = 0;
+
+	s = Sys_FindFirst (pakfile, 0, SFF_SUBDIR | SFF_HIDDEN | SFF_SYSTEM);
+	while (s)
 	{
-		Com_sprintf (pakfile, sizeof(pakfile), "%s/pak%i.pak", dir, i);
+		i = (int)strlen (s);
+		if (i > 4 && *(s+(i-4)) == '.' && !Q_stricmp(s+(i-3), "pak"))
+		{
+			numPak = false;
+
+			//Check for pakxx.pak
+			if (i > pakmatchlen + 4 && !Q_strnicmp(s, pakmatch, pakmatchlen) && i < pakmatchlen + 7)
+			{
+				for(j = pakmatchlen; j < i-4; j++) {
+					if(s[j] < '0' || s[j] > '9')
+						break;
+				}
+				if(j == i-4)
+					numPak = true;
+			}
+
+			if(numPak)
+			{
+				if(totalpaks < 100)
+					pakfiles[totalpaks++] = atoi(s+pakmatchlen);
+			}
+			else if(fs_allpakloading->integer)
+			{
+				if(total < 1024)
+					filenames[total++] = strdup(s);
+				else
+					Com_Printf("Warning: more than 1024 pak's found, ignoring.\n");
+			}
+		}
+		s = Sys_FindNext (0, SFF_SUBDIR | SFF_HIDDEN | SFF_SYSTEM);
+	}
+	Sys_FindClose ();
+
+	// add any pak files in the format pak0.pak pak1.pak, ...
+	qsort (pakfiles, totalpaks, sizeof(pakfiles[0]), pakcmp);
+	for (i=0; i<totalpaks; i++)
+	{
+		Com_sprintf (pakfile, sizeof(pakfile), "%s/pak%i.pak", dir, pakfiles[i]);
 		pak = FS_LoadPackFile (pakfile);
-		if (!pak)
-			continue;
-		search = Z_TagMalloc (sizeof(searchpath_t), TAGMALLOC_SEARCHPATH);
-		search->filename[0] = 0;
-		search->pack = pak;
-		search->next = fs_searchpaths;
-		fs_searchpaths = search;		
+		if (pak)
+		{
+			search = Z_TagMalloc (sizeof(searchpath_t), TAGMALLOC_SEARCHPATH);
+			search->pack = pak;
+			search->filename[0] = 0;
+			search->next = fs_searchpaths;
+			fs_searchpaths = search;
+		}
 	}
 
 	if(!fs_allpakloading->integer)
 		return;
 
-	Com_sprintf (pakfile, sizeof(pakfile), "%s/*.pak", dir);
+	qsort (filenames, total, sizeof(filenames[0]), (int (*)(const void *, const void *))strcmp);
 
-	searchnames = FS_ListFiles (pakfile, &numfiles, 0, 0);
-	if (searchnames)
+	for (i = 0; i < total; i++)
 	{
-		for (i=0 ; i<numfiles - 1 ; i++)
+		pak = FS_LoadPackFile (filenames[i]);
+		if (pak)
 		{
-			if( Q_stricmp(searchnames[i]+strlen(searchnames[i])-4, ".pak") )
-				continue;
-
-			numberedpak = false;
-
-			for (j=0; j<100; j++)
-			{
-				Com_sprintf( buf, sizeof(buf), "/pak%i.pak", j);
-				if ( strstr(searchnames[i], buf) )
-				{
-					numberedpak = true;
-					break;
-				}
-			}
-
-			if (numberedpak)
-				continue;
-
-			pak = FS_LoadPackFile (searchnames[i]);
-			if (!pak)
-				continue;
-
 			search = Z_TagMalloc (sizeof(searchpath_t), TAGMALLOC_SEARCHPATH);
-			search->filename[0] = 0;
 			search->pack = pak;
+			search->filename[0] = 0;
 			search->next = fs_searchpaths;
 			fs_searchpaths = search;
 		}
-
-		for (i=0 ; i<numfiles - 1 ; i++)
-			Z_Free (searchnames[i]);
-
-		Z_Free (searchnames);
+		free (filenames[i]);
 	}
 }
 
@@ -618,18 +651,18 @@ char *FS_Gamedir (void)
 FS_ExecAutoexec
 =============
 */
-void FS_ExecAutoexec (void)
+void FS_ExecConfig (const char *filename)
 {
-	char *dir;
+	const char *dir;
 	char name [MAX_QPATH];
 
 	dir = Cvar_VariableString("gamedir");
 	if (*dir)
-		Com_sprintf(name, sizeof(name), "%s/%s/autoexec.cfg", fs_basedir->string, dir); 
+		Com_sprintf(name, sizeof(name), "%s/%s/%s", fs_basedir->string, dir, filename); 
 	else
-		Com_sprintf(name, sizeof(name), "%s/%s/autoexec.cfg", fs_basedir->string, BASEDIRNAME); 
+		Com_sprintf(name, sizeof(name), "%s/%s/%s", fs_basedir->string, BASEDIRNAME, filename); 
 	if (Sys_FindFirst(name, 0, SFF_SUBDIR | SFF_HIDDEN | SFF_SYSTEM))
-		Cbuf_AddText ("exec autoexec.cfg\n");
+		Cbuf_AddText (va("exec %s\n", filename));
 	Sys_FindClose();
 }
 
@@ -669,7 +702,7 @@ void FS_SetGamedir (const char *dir)
 	//
 	// flush all data, so it will be forced to reload
 	//
-	if (dedicated && !dedicated->integer)
+	if (!dedicated->integer && fs_initialized)
 		Cbuf_AddText ("vid_restart\nsnd_restart\n");
 
 	if (!strcmp(dir,BASEDIRNAME) || (*dir == 0))
@@ -725,14 +758,14 @@ See if a file exists in the mod directory/paks (ignores baseq2)
 */
 qboolean FS_ExistsInGameDir (const char *filename)
 {
-	unsigned int	hash;
-	searchpath_t	*search;
-	char			netpath[MAX_OSPATH];
-	pack_t			*pak;
-	packfile_t		*pakfile;
-	FILE			*file;
-	int				len;
-	char			*gamedir;
+	unsigned int		hash;
+	const searchpath_t	*search;
+	char				netpath[MAX_OSPATH];
+	const pack_t		*pak;
+	const packfile_t	*pakfile;
+	FILE				*file;
+	int					len;
+	const char			*gamedir;
 
 
 	gamedir = FS_Gamedir();
@@ -785,7 +818,7 @@ qboolean FS_ExistsInGameDir (const char *filename)
 */
 char **FS_ListFiles( const char *findname, int *numfiles, unsigned musthave, unsigned canthave )
 {
-	char *s;
+	const char *s;
 	int nfiles = 0;
 	char **list = 0;
 
@@ -884,7 +917,7 @@ FS_Path_f
 */
 static void FS_Path_f (void)
 {
-	searchpath_t	*s;
+	const searchpath_t	*s;
 
 	Com_Printf ("Current search path:\n");
 	for (s=fs_searchpaths ; s ; s=s->next)
@@ -1078,4 +1111,6 @@ void FS_InitFilesystem (void)
 	fs_gamedirvar = Cvar_Get ("game", "", CVAR_LATCH|CVAR_SERVERINFO);
 	if (fs_gamedirvar->string[0])
 		FS_SetGamedir (fs_gamedirvar->string);
+
+	fs_initialized = true;
 }

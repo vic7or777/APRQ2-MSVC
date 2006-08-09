@@ -30,10 +30,12 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  cvar_t *mevdev;
 #endif 
 
+ int vid_minimized = 0;
+
 //void HandleEvents(void);
 extern int mx, my;
 qboolean	mouse_avail;
-static int old_mouse_x, old_mouse_y;
+int old_mouse_x, old_mouse_y;
 
 static qboolean	mlooking;
 
@@ -78,6 +80,7 @@ void IN_Init(void)
 	Cmd_AddCommand ("+mlook", IN_MLookDown);
 	Cmd_AddCommand ("-mlook", IN_MLookUp);
 
+	old_mouse_x = old_mouse_y = 0;
 	mx = my = 0;  
 	mouse_avail = true;	
 }
@@ -175,13 +178,20 @@ void IN_Move (usercmd_t *cmd)
 
 void IN_Frame (void)
 {
-	if (!mouse_avail)
+	if (!mouse_avail || vid_minimized)
 		return;
 
 	if ( !cl.refresh_prepped || cls.key_dest == key_console || cls.key_dest == key_menu)
-		IN_Activate(false);
-	else
-		IN_Activate(true);
+	{
+		// temporarily deactivate if in fullscreen
+		if (Cvar_VariableIntValue ("vid_fullscreen") == 0)
+		{
+			IN_Activate(false);
+			return;
+		}
+	}
+
+	IN_Activate(true);
 
 //	HandleEvents();
 }

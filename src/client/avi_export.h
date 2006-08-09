@@ -22,10 +22,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #ifdef AVI_EXPORT
 void CL_InitAVIExport( void );
+void CL_ShutdownAVIExport( void );
 void AVI_ProcessFrame (void);
 void AVI_StopExport(void);
 qboolean Movie_GetSoundtime(void);
 void Movie_TransferStereo16 (void);
-
+qboolean CL_AviRecording(void);
 #endif
 

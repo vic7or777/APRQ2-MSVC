@@ -57,8 +57,8 @@ bind g "impulse 5 ; +attack ; wait ; -attack ; impulse 2"
 */
 static void Cmd_Wait_f (void)
 {
-	if( Cmd_Argc() > 1 )
-		cmd_wait = atoi( Cmd_Argv( 1 ) );
+	if(Cmd_Argc() > 1)
+		cmd_wait = atoi(Cmd_Argv(1));
 	else
 		cmd_wait = 1;
 }
@@ -71,12 +71,14 @@ static void Cmd_Wait_f (void)
 
 =============================================================================
 */
-#define	MAX_CMD_BUFFER	32768
+#define	MAX_CMD_BUFFER	65536
 #define	MAX_CMD_LINE	1024
 static sizebuf_t	cmd_text;
 
 static byte		cmd_text_buf[MAX_CMD_BUFFER];
 static byte		defer_text_buf[MAX_CMD_BUFFER];
+static int		deferCurSize = 0;
+static qboolean insertToDefer = false;
 
 /*
 ============
@@ -163,6 +165,26 @@ void Cbuf_CopyToDefer (void)
 	cmd_text.cursize = 0;
 }
 
+void Cbuf_AddTextToDefer (const char *text)
+{
+	int		l;
+	
+	if (!text[0])
+		return;
+
+	l = strlen(text) + 1;
+
+	if (deferCurSize + l >= sizeof(defer_text_buf))
+	{
+		Com_Printf ("Cbuf_AddTextToDefer: overflow\n");
+		return;
+	}
+	memcpy(&defer_text_buf[deferCurSize], text, l - 1);
+
+	deferCurSize += l;
+	defer_text_buf[deferCurSize-1] = '\n';
+}
+
 /*
 ============
 Cbuf_InsertFromDefer
@@ -172,6 +194,8 @@ void Cbuf_InsertFromDefer (void)
 {
 	Cbuf_InsertText ((char *)defer_text_buf);
 	defer_text_buf[0] = 0;
+	deferCurSize = 0;
+	insertToDefer = false;
 }
 
 
@@ -259,6 +283,13 @@ void Cbuf_Execute (void)
 	}
 }
 
+void Cbuf_ExecuteAll(qboolean insertDefer)
+{
+	insertToDefer = insertDefer;
+
+	while(cmd_text.cursize) //There could be some 'wait' cmds in configs
+		Cbuf_Execute();
+}
 
 /*
 ===============
@@ -339,7 +370,7 @@ qboolean Cbuf_AddLateCommands (void)
 		{
 			i++;
 
-			for (j=i ; (text[j] != '+') && (text[j] != '-') && (text[j] != 0) ; j++)
+			for (j=i ; (text[j] != '+') && (text[j] != 0) ; j++)
 				;
 
 			c = text[j];
@@ -389,12 +420,19 @@ static void Cmd_Exec_f (void)
 	}
 
 	Q_strncpyz(config, Cmd_Argv(1), sizeof(config));
-	COM_DefaultExtension(config, sizeof(config), ".cfg");
 	len = FS_LoadFile (config, (void **)&f);
 	if (!f || !len)
 	{
-		Com_Printf ("couldn't exec %s\n", config);
-		return;
+		if(!strchr(config, '.')) {
+			COM_DefaultExtension(config, sizeof(config), ".cfg");
+			len = FS_LoadFile (config, (void **)&f);
+		}
+
+		if (!f || !len)
+		{
+			Com_Printf ("couldn't exec %s\n", config);
+			return;
+		}
 	}
 	Com_Printf ("execing %s\n", config);
 	
@@ -410,7 +448,7 @@ Cmd_Echo_f
 Just prints the rest of the line to the console
 ===============
 */
-static void Cmd_Echo_f (void)
+void Cmd_Echo_f (void)
 {
 	Com_Printf (S_ENABLE_COLOR "%s\n", Cmd_ArgsFrom(1));
 }
@@ -423,7 +461,7 @@ static int AliasSort( const cmdalias_t *a, const cmdalias_t *b )
 static void Cmd_Aliaslist_f (void)
 {
 	const cmdalias_t	*a;
-    char    *filter = NULL;
+    const char    *filter = NULL;
 	int		i, total = 0, matching = 0;
 	cmdalias_t *sortedList;
 
@@ -470,7 +508,7 @@ static void Cmd_Aliaslist_f (void)
 Cmd_AliasFind
 ===============
 */
-static cmdalias_t *Cmd_AliasFind( const char *name )
+cmdalias_t *Cmd_AliasFind( const char *name )
 {
 	unsigned int hash;
 	cmdalias_t *alias;
@@ -494,7 +532,7 @@ Creates a new command that executes a command string (possibly ; seperated)
 static void Cmd_Alias_f (void)
 {
 	cmdalias_t	*a;
-	char		*s;
+	const char	*s;
 	unsigned int hash;
 
 	if (Cmd_Argc() == 1)
@@ -554,7 +592,7 @@ static void Cmd_Alias_f (void)
 		if(*s == '{')
 			s++;
 
-		if(*s < '1' && *s > '9')
+		if(*s < '1' || *s > '9')
 			continue;
 
 		if(s[1] && s[1] == '-')
@@ -667,7 +705,7 @@ Cmd_Trigger_f
 static void Cmd_Trigger_f( void )
 {
 	cmd_trigger_t *trigger;
-	char *command, *match;
+	const char *command, *match;
 	int clen, mlen;
 
 	if(Cmd_Argc() == 1)
@@ -721,7 +759,7 @@ static void Cmd_Trigger_f( void )
 static void Cmd_TriggerRemove_f( void )
 {
 	cmd_trigger_t *trigger, *next, **back;
-	char *command, *match;
+	const char *command, *match;
 	int count = 0;
 
 	if(!cmd_triggers)
@@ -992,7 +1030,7 @@ const char *Cmd_MacroExpandString (const char *text)
 	len = strlen (scan);
 	if (len >= MAX_STRING_CHARS)
 	{
-		Com_Printf ("Line exceeded %i chars, discarded.\n", MAX_STRING_CHARS);
+		Com_Printf ("Cmd_MacroExpandString: Line exceeded %i chars, discarded.\n", MAX_STRING_CHARS);
 		return NULL;
 	}
 
@@ -1119,17 +1157,27 @@ $Cvars will be expanded unless they are in a quoted token
 */
 void Cmd_TokenizeString (const char *text, qboolean macroExpand)
 {
-	int len = 0;
+	char *textOut;
 
 // clear the args from the last string
 	cmd_argc = 0;
 	cmd_args[0] = 0;
 	
 	// macro expand the text
-	if (macroExpand)
+	if (macroExpand) {
 		text = Cmd_MacroExpandString (text);
-	if (!text)
-		return;
+		if (!text)
+			return;
+	} else {
+		if (!text)
+			return;
+		if (strlen(text) >= MAX_STRING_CHARS) { //Macroexpand do this
+			Com_Printf ("Cmd_TokenizeString: Line exceeded %i chars, discarded.\n", MAX_STRING_CHARS);
+			return;
+		}
+	}
+
+	textOut = cmd_tokenized;
 
 	do {
 		// skip whitespace up to a /n
@@ -1147,7 +1195,7 @@ void Cmd_TokenizeString (const char *text, qboolean macroExpand)
 		{
 			int		l;
 
-			Q_strncpyz (cmd_args, text, sizeof(cmd_args));
+			strcpy(cmd_args, text);
 			// strip off any trailing whitespace
 			for (l = strlen(cmd_args) - 1; l >= 0 ; l--) {
 				if (cmd_args[l] <= ' ')
@@ -1157,36 +1205,26 @@ void Cmd_TokenizeString (const char *text, qboolean macroExpand)
 			}
 		}
 		
-		cmd_argv[cmd_argc++] = cmd_tokenized + len;
+		cmd_argv[cmd_argc++] = textOut;
 
 		if ( *text == '"' )
 		{	// handle quoted strings
 			text++;
-			while (*text && *text != '"' && len < sizeof(cmd_tokenized)-1)
-			{
-				cmd_tokenized[len++] = *text++;
-			}
-			cmd_tokenized[len++] = 0;
 
-			if (len >= sizeof(cmd_tokenized)) {
-				Com_Printf ("Cmd_TokenizeString: overflow\n");
-				return;
+			while (*text && *text != '"') {
+				*textOut++ = *text++;
 			}
+			*textOut++ = 0;
+
 			if (!*text++)
 				return;		// all tokens parsed
 		}
 		else
 		{	// parse a regular word
-			while (*text > ' ' && len < sizeof(cmd_tokenized)-1)
-			{
-				cmd_tokenized[len++] = *text++;
+			while (*text > ' ') {
+				*textOut++ = *text++;
 			}
-			cmd_tokenized[len++] = 0;
-
-			if (len >= sizeof(cmd_tokenized)) {
-				Com_Printf ("Cmd_TokenizeString: overflow\n");
-				return;
-			}
+			*textOut++ = 0;
 		}
 	} while (cmd_argc < MAX_STRING_TOKENS);
 
@@ -1197,8 +1235,7 @@ void Cmd_TokenizeString (const char *text, qboolean macroExpand)
 Cmd_Find
 ============
 */
-#if 0
-static cmd_function_t *Cmd_Find( const char *name )
+cmd_function_t *Cmd_Find( const char *name )
 {
 	cmd_function_t *cmd;
 	unsigned int	hash;
@@ -1211,7 +1248,7 @@ static cmd_function_t *Cmd_Find( const char *name )
 
 	return NULL;
 }
-#endif
+
 /*
 ============
 Cmd_AddCommand
@@ -1366,6 +1403,13 @@ void	Cmd_ExecuteString (const char *text)
 	if (Cvar_Command(cmd_argv[0], hash))
 		return;
 
+	if(insertToDefer) { //could command which isnt initialized yet
+		if (Q_stricmp(cmd_argv[0], "vid_restart") &&
+			Q_stricmp(cmd_argv[0], "snd_restart")) //Hacky, but no need extra restart
+			Cbuf_AddTextToDefer(text);
+		return;
+	}
+
 	// send it as a server command if we are connected
 	Cmd_ForwardToServer();
 }
@@ -1380,10 +1424,10 @@ static int CmdSort( const cmd_function_t *a, const cmd_function_t *b )
 	return strcmp (a->name, b->name);
 }
 
-void Cmd_List_f (void)
+static void Cmd_List_f (void)
 {
     const cmd_function_t  *cmd;
-    char    *filter = NULL;
+    const char *filter = NULL;
 	int		i, total = 0, matching = 0;
 	cmd_function_t	*sortedList;
 
@@ -1431,43 +1475,11 @@ void Cmd_List_f (void)
 Cmd_If_f
 ============
 */
-qboolean Q_IsNumeric (const char *string)
-{
-	if( !string )
-		return false;
-
-	while (*string)
-	{
-		switch( *string ) {
-		case '0':
-		case '1':
-		case '2':
-		case '3':
-		case '4':
-		case '5':
-		case '6':
-		case '7':
-		case '8':
-		case '9':
-		case '-':
-		case '.':
-		case ' ':
-			break;
-		default:
-			return false;
-		}
-		string++;
-	}
-
-	return true;
-}
-
 static void Cmd_If_f( void )
 {
 	char command[MAX_STRING_CHARS];
-	char *a, *b, *op;
-	qboolean numeric;
-	qboolean istrue;
+	const char *a, *b, *op;
+	qboolean numeric, istrue;
 	int i;
 
 	if( Cmd_Argc() < 5 ) {
@@ -1475,9 +1487,9 @@ static void Cmd_If_f( void )
 		return;
 	}
 
-	a = Cmd_Argv( 1 );
-	op = Cmd_Argv( 2 );
-	b = Cmd_Argv( 3 );
+	a = Cmd_Argv(1);
+	op = Cmd_Argv(2);
+	b = Cmd_Argv(3);
 
 #define CHECK_NUMERIC	if( !numeric ) { Com_Printf( "Can't use '%s' with non-numeric expression(s)\n", op );	return; }
 
@@ -1585,9 +1597,10 @@ void Cmd_Init (void)
 
 	Cmd_AddCommand ("cmdlist",Cmd_List_f);
 	Cmd_AddCommand ("exec",Cmd_Exec_f);
-	Cmd_AddCommand ("echo",Cmd_Echo_f);
+	//Cmd_AddCommand ("echo",Cmd_Echo_f);
 	Cmd_AddCommand ("alias",Cmd_Alias_f);
 	Cmd_AddCommand ("unalias", Cmd_UnAlias_f);
 	Cmd_AddCommand ("aliaslist",Cmd_Aliaslist_f);
 	Cmd_AddCommand ("wait", Cmd_Wait_f);
 }
+

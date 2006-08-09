@@ -198,6 +198,9 @@ Called when either the cinematic completes, or it is aborted
 */
 void SCR_FinishCinematic (void)
 {
+	if( cls.state < ca_connected || cls.demoplaying )
+		return;
+
 	// tell the server to advance to the next map / cinematic
 	MSG_WriteByte (&cls.netchan.message, clc_stringcmd);
 	SZ_Print (&cls.netchan.message, va("nextserver %i\n", cl.servercount));
@@ -508,7 +511,7 @@ void SCR_RunCinematic (void)
 		return;
 	}
 
-	frame = (cls.realtime - cl.cinematictime)*14.0/1000;
+	frame = (cls.realtime - cl.cinematictime)*14/1000;
 	if (frame <= cl.cinematicframe)
 		return;
 	if (frame > cl.cinematicframe+1)

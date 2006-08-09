@@ -106,7 +106,7 @@ static void ApplyChanges( void *unused )
 	/*
 	** invert sense so greater = brighter, and scale to a range of 0.5 to 1.3
 	*/
-	gamma = ( 0.8 - ( s_brightness_slider.curvalue/10.0 - 0.5 ) ) + 0.5;
+	gamma = ( 0.8f - ( s_brightness_slider.curvalue/10.0f - 0.5f ) ) + 0.5f;
 
 	Cvar_SetValue( "vid_gamma", gamma );
 	Cvar_SetValue( "sw_stipplealpha", s_stipple_box.curvalue );
@@ -160,13 +160,14 @@ static void ApplyChanges( void *unused )
 		{
 			if ( Q_stricmp( gl_driver->string, "3dfxgl" ) == 0 )
 			{
-				char envbuffer[16];
+				char envbuffer[32];
 				float g;
 
 				g = 2.00f * ( 0.8f - ( vid_gamma->value - 0.5f ) ) + 1.0F;
-				Com_sprintf( envbuffer, sizeof(envbuffer), "%g", g );
-				SetEnvironmentVariable ("SSTV2_GAMMA", envbuffer);
-				SetEnvironmentVariable ("SST_GAMMA", envbuffer);
+				Com_sprintf( envbuffer, sizeof(envbuffer), "SSTV2_GAMMA=%g", g );
+				putenv( envbuffer );
+				Com_sprintf( envbuffer, sizeof(envbuffer), "SST_GAMMA=%g", g );
+				putenv( envbuffer );
 
 				vid_gamma->modified = false;
 			}

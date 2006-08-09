@@ -52,7 +52,7 @@ cvar_t	*public_server;			// should heartbeats be sent
 
 cvar_t	*sv_reconnect_limit;	// minimum seconds between connect messages
 
-void Master_Shutdown (void);
+//void Master_Shutdown (void);
 
 
 //============================================================================
@@ -105,7 +105,7 @@ SV_StatusString
 Builds the string that is sent as heartbeats and status replies
 ===============
 */
-char	*SV_StatusString (void)
+static char	*SV_StatusString (void)
 {
 	char	player[1024];
 	static char	status[MAX_MSGLEN - 16];
@@ -143,7 +143,7 @@ SVC_Status
 Responds with all the info that qplug or qspy can see
 ================
 */
-void SVC_Status (void)
+static void SVC_Status (void)
 {
 	Netchan_OutOfBandPrint (NS_SERVER, &net_from, "print\n%s", SV_StatusString());
 #if 0
@@ -159,7 +159,7 @@ SVC_Ack
 
 ================
 */
-void SVC_Ack (void)
+static void SVC_Ack (void)
 {
 	Com_Printf ("Ping acknowledge from %s\n", NET_AdrToString(&net_from));
 }
@@ -172,7 +172,7 @@ Responds with short info for broadcast scans
 The second parameter should be the current protocol version number.
 ================
 */
-void SVC_Info (void)
+static void SVC_Info (void)
 {
 	char	string[64];
 	int		i, count;
@@ -205,7 +205,7 @@ SVC_Ping
 Just responds with an acknowledgement
 ================
 */
-void SVC_Ping (void)
+static void SVC_Ping (void)
 {
 	Netchan_OutOfBandPrint (NS_SERVER, &net_from, "ack");
 }
@@ -222,7 +222,7 @@ flood the server with invalid connection IPs.  With a
 challenge, they must give a valid IP address.
 =================
 */
-void SVC_GetChallenge (void)
+static void SVC_GetChallenge (void)
 {
 	int		i;
 	int		oldest;
@@ -263,7 +263,7 @@ SVC_DirectConnect
 A connection request that did not come from the master
 ==================
 */
-void SVC_DirectConnect (void)
+static void SVC_DirectConnect (void)
 {
 	char		userinfo[MAX_INFO_STRING];
 	netadr_t	adr;
@@ -408,7 +408,7 @@ gotnewcl:
 	newcl->lastconnect = svs.realtime;
 }
 
-int Rcon_Validate (void)
+static int Rcon_Validate (void)
 {
 	if (!strlen (rcon_password->string))
 		return 0;
@@ -428,7 +428,7 @@ Shift down the remaining args
 Redirect all printfs
 ===============
 */
-void SVC_RemoteCommand (void)
+static void SVC_RemoteCommand (void)
 {
 	int		i;
 	char	remaining[1024];
@@ -442,7 +442,7 @@ void SVC_RemoteCommand (void)
 
 	Com_BeginRedirect (RD_PACKET, sv_outputbuf, SV_OUTPUTBUF_LENGTH, SV_FlushRedirect);
 
-	if (!Rcon_Validate ())
+	if (!i)
 	{
 		Com_Printf ("Bad rcon_password.\n");
 	}
@@ -472,7 +472,7 @@ Clients that are in the game can still send
 connectionless packets.
 =================
 */
-void SV_ConnectionlessPacket (void)
+static void SV_ConnectionlessPacket (void)
 {
 	char	*s;
 	char	*c;
@@ -516,7 +516,7 @@ SV_CalcPings
 Updates the cl->ping variables
 ===================
 */
-void SV_CalcPings (void)
+static void SV_CalcPings (void)
 {
 	int			i, j;
 	client_t	*cl;
@@ -568,7 +568,7 @@ Every few frames, gives all clients an allotment of milliseconds
 for their command moves.  If they exceed it, assume cheating.
 ===================
 */
-void SV_GiveMsec (void)
+static void SV_GiveMsec (void)
 {
 	int			i;
 	client_t	*cl;
@@ -592,7 +592,7 @@ void SV_GiveMsec (void)
 SV_ReadPackets
 =================
 */
-void SV_ReadPackets (void)
+static void SV_ReadPackets (void)
 {
 	int			i;
 	client_t	*cl;
@@ -658,7 +658,7 @@ for a few seconds to make sure any final reliable message gets resent
 if necessary
 ==================
 */
-void SV_CheckTimeouts (void)
+static void SV_CheckTimeouts (void)
 {
 	int		i;
 	client_t	*cl;
@@ -698,7 +698,7 @@ This has to be done before the world logic, because
 player processing happens outside RunWorldFrame
 ================
 */
-void SV_PrepWorldFrame (void)
+static void SV_PrepWorldFrame (void)
 {
 	edict_t	*ent;
 	int		i;
@@ -718,7 +718,7 @@ void SV_PrepWorldFrame (void)
 SV_RunGameFrame
 =================
 */
-void SV_RunGameFrame (void)
+static void SV_RunGameFrame (void)
 {
 	if (host_speeds->integer)
 		time_before_game = Sys_Milliseconds ();
@@ -748,6 +748,8 @@ void SV_RunGameFrame (void)
 		time_after_game = Sys_Milliseconds ();
 
 }
+
+static void Master_Heartbeat (void);
 
 /*
 ==================
@@ -822,7 +824,7 @@ let it know we are alive, and log information
 ================
 */
 #define	HEARTBEAT_SECONDS	300
-void Master_Heartbeat (void)
+static void Master_Heartbeat (void)
 {
 	char		*string;
 	int			i;
@@ -863,12 +865,12 @@ Master_Shutdown
 Informs all masters that this server is going down
 =================
 */
-void Master_Shutdown (void)
+static void Master_Shutdown (void)
 {
 	int			i;
 
 	// pgm post3.19 change, cvar pointer not validated before dereferencing
-	if (!dedicated || !dedicated->integer)
+	if (!dedicated->integer)
 		return;		// only dedicated servers send heartbeats
 
 	// pgm post3.19 change, cvar pointer not validated before dereferencing
@@ -991,7 +993,7 @@ not just stuck on the outgoing message list, because the server is going
 to totally exit after returning from this function.
 ==================
 */
-void SV_FinalMessage (char *message, qboolean reconnect)
+static void SV_FinalMessage (const char *message, qboolean reconnect)
 {
 	int			i;
 	client_t	*cl;

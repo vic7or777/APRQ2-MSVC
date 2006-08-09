@@ -153,6 +153,8 @@ typedef struct
 	int			surpressCount;		// number of messages rate supressed
 	frame_t		frames[UPDATE_BACKUP];
 
+	int			serverTime;
+
 	// the client maintains its own idea of view angles, which are
 	// sent to the server each frame.  It is cleared to 0 upon entering each level.
 	// the server sends a delta each frame which is added to the locally
@@ -269,7 +271,7 @@ typedef struct
 	float		frametime;			// seconds since last frame
 
 // screen rendering information
-	float		disable_screen;		// showing loading plaque between levels
+	int			disable_screen;		// showing loading plaque between levels
 									// or changing rendering dlls
 									// if time gets > 30 seconds ahead, break it
 	int			disable_servercount;	// when we receive a frame and cl.servercount
@@ -278,7 +280,7 @@ typedef struct
 // connection information
 	char		servername[MAX_OSPATH];	// name of server from original connect
 	char		lastservername[MAX_OSPATH];	// name of server from original connect
-	float		connect_time;		// for connection retransmits
+	int			connect_time;		// for connection retransmits
 
 	int			quakePort;			// a 16 bit value that allows quake servers
 									// to work around address translating routers
@@ -301,6 +303,11 @@ typedef struct
 	qboolean	demorecording;
 	qboolean	demowaiting;	// don't record until a non-delta message is received
 	FILE		*demofile;
+
+	qboolean	demoplaying;
+	int			timeDemoFrames;		// counter of rendered frames
+	int			timeDemoStart;		// cls.realtime before first frame
+	int			timeDemoBaseTime;	// each frame will be at this time + frameNum * 50
 
 	int doscreenshot;
 
@@ -416,8 +423,8 @@ typedef struct
 	vec3_t	origin;
 	float	radius;
 	float	die;				// stop lighting after this time
-	float	decay;				// drop this each second
-	float	minlight;			// don't add when contributing less
+	//float	decay;				// drop this each second
+	//float	minlight;			// don't add when contributing less
 } cdlight_t;
 
 extern	centity_t	cl_entities[MAX_EDICTS];
@@ -494,8 +501,9 @@ typedef struct particle_s
 	vec3_t		org;
 	vec3_t		vel;
 	vec3_t		accel;
-	float		color;
-	float		colorvel;
+	int			color;
+	//float		color;
+	//float		colorvel;
 	float		alpha;
 	float		alphavel;
 } cparticle_t;
@@ -534,7 +542,7 @@ void CL_Heatbeam (const vec3_t start, const vec3_t end);
 void CL_ParticleSteamEffect (const vec3_t org, const vec3_t dir, int color, int count, int magnitude);
 void CL_TrackerTrail (const vec3_t start, const vec3_t end, int particleColor);
 void CL_Tracker_Explode(const vec3_t origin);
-void CL_TagTrail (const vec3_t start, const vec3_t end, float color);
+void CL_TagTrail (const vec3_t start, const vec3_t end, int color);
 void CL_ColorFlash (const vec3_t pos, int ent, int intensity, float r, float g, float b);
 void CL_Tracker_Shell(const vec3_t origin);
 void CL_MonsterPlasma_Shell(const vec3_t origin);
@@ -546,14 +554,13 @@ void CL_WidowSplash (const vec3_t org);
 // PGM
 // ========
 
-int CL_ParseEntityBits (unsigned int *bits);
-void CL_ParseDelta (const entity_state_t *from, entity_state_t *to, int number, int bits);
-void CL_ParseFrame (int extrabits);
+int CL_ParseEntityBits (sizebuf_t *msg, unsigned int *bits);
+void CL_ParseDelta (sizebuf_t *msg, const entity_state_t *from, entity_state_t *to, int number, int bits);
+void CL_ParseFrame (sizebuf_t *msg, int extrabits);
 
-void CL_ParseTEnt (void);
-void CL_ParseConfigString (void);
-void CL_ParseMuzzleFlash (void);
-void CL_ParseMuzzleFlash2 (void);
+void CL_ParseTEnt (sizebuf_t *msg);
+void CL_ParseMuzzleFlash (sizebuf_t *msg);
+void CL_ParseMuzzleFlash2 (sizebuf_t *msg);
 void SmokeAndFlash(vec3_t origin);
 
 void CL_SetLightstyle (int i);
@@ -627,7 +634,7 @@ const char *Key_KeynumToString (int keynum);
 //
 // cl_demo.c
 //
-void CL_WriteDemoMessageFull (void);
+void CL_WriteDemoMessageFull (sizebuf_t *msg);
 #ifdef R1Q2_PROTOCOL
 void CL_WriteDemoMessage (byte *buff, int len, qboolean forceFlush);
 #endif
@@ -642,9 +649,9 @@ void CL_StopAutoRecord (void);
 //
 extern	const char *svc_strings[256];
 
-void CL_ParseServerMessage (void);
+void CL_ParseServerMessage (sizebuf_t *msg);
 void CL_LoadClientinfo (clientinfo_t *ci, char *s);
-void SHOWNET(const char *s);
+void SHOWNET(sizebuf_t *msg, const char *s);
 void CL_ParseClientinfo (int player);
 void CL_Download_f (void);
 
@@ -695,7 +702,7 @@ void M_ForceMenuOff (void);
 void M_AddToServerList (const serverStatus_t *status);
 
 // cl_inv.c
-void CL_ParseInventory (void);
+void CL_ParseInventory (sizebuf_t *msg);
 void CL_DrawInventory (void);
 
 // cl_pred.c

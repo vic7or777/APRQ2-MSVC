@@ -801,16 +801,16 @@ void S_StartSound(const vec3_t origin, int entnum, int entchannel, sfx_t *sfx, f
 	{
 		ps->volume = fvol*255;
 		// drift s_beginofs
-		start = cl.frame.servertime * 0.001f * dma.speed + s_beginofs;
+		start = cl.serverTime * 0.001f * dma.speed + s_beginofs;
 		if (start < paintedtime)
 		{
 			start = paintedtime;
-			s_beginofs = start - (cl.frame.servertime * 0.001f * dma.speed);
+			s_beginofs = start - (cl.serverTime * 0.001f * dma.speed);
 		}
 		else if (start > paintedtime + 0.3f * dma.speed)
 		{
 			start = paintedtime + 0.1f * dma.speed;
-			s_beginofs = start - (cl.frame.servertime * 0.001f * dma.speed);
+			s_beginofs = start - (cl.serverTime * 0.001f * dma.speed);
 		}
 		else
 		{
@@ -974,7 +974,7 @@ static void S_AddLoopSounds (void)
 
 		CL_GetEntitySoundOrigin (ent->number, origin);
 		// find the total contribution of all sounds of this type
-		S_SpatializeOrigin (origin, 255.0, SOUND_LOOPATTENUATE,
+		S_SpatializeOrigin (origin, 255.0f, SOUND_LOOPATTENUATE,
 			&left_total, &right_total);
 		for (j=i+1 ; j<cl.frame.num_entities ; j++)
 		{
@@ -985,7 +985,7 @@ static void S_AddLoopSounds (void)
 			num = (cl.frame.parse_entities + j)&(MAX_PARSE_ENTITIES-1);
 			ent = &cl_parse_entities[num];
 
-			S_SpatializeOrigin (ent->origin, 255.0, SOUND_LOOPATTENUATE, 
+			S_SpatializeOrigin (ent->origin, 255.0f, SOUND_LOOPATTENUATE, 
 				&left, &right);
 			left_total += left;
 			right_total += right;
@@ -1026,7 +1026,7 @@ S_RawSamples
 Cinematic streaming and voice over network
 ============
 */
-void S_RawSamples (int samples, int rate, int width, int channels, byte *data)
+void S_RawSamples (int samples, int rate, int width, int nchannels, byte *data)
 {
 	int			snd_vol;
 	unsigned	src, dst;
@@ -1053,7 +1053,7 @@ void S_RawSamples (int samples, int rate, int width, int channels, byte *data)
 	if( width == 2 ) {
 		int16 *in = (int16 *)data;
 
-		if( channels == 2 ) {
+		if( nchannels == 2 ) {
 			for( src = 0; src < samples; samplefrac += fracstep, src = (samplefrac >> 8) ) {
 				dst = s_rawend++ & (MAX_RAW_SAMPLES - 1);
 				s_rawsamples[dst].left = LittleShort( in[src*2] ) * snd_vol;
@@ -1066,7 +1066,7 @@ void S_RawSamples (int samples, int rate, int width, int channels, byte *data)
 			}
 		}
 	} else {
-		if( channels == 2 ) {
+		if( nchannels == 2 ) {
 			char *in = (char *)data;
 
 			for( src = 0; src < samples; samplefrac += fracstep, src = (samplefrac >> 8) ) {

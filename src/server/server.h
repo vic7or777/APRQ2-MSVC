@@ -197,7 +197,7 @@ extern	edict_t		*sv_player;
 //
 // sv_main.c
 //
-void SV_FinalMessage (char *message, qboolean reconnect);
+//void SV_FinalMessage (char *message, qboolean reconnect);
 void SV_DropClient (client_t *drop);
 
 int SV_ModelIndex (char *name);
@@ -213,8 +213,8 @@ void SV_SendServerinfo (client_t *client);
 void SV_UserinfoChanged (client_t *cl);
 
 
-void Master_Heartbeat (void);
-void Master_Packet (void);
+//void Master_Heartbeat (void);
+//void Master_Packet (void);
 
 //
 // sv_init.c
@@ -226,7 +226,7 @@ void SV_Map (qboolean attractloop, char *levelstring, qboolean loadgame);
 //
 // sv_phys.c
 //
-void SV_PrepWorldFrame (void);
+//void SV_PrepWorldFrame (void);
 
 //
 // sv_send.c
@@ -259,7 +259,7 @@ void SV_ExecuteClientMessage (client_t *cl);
 // sv_ccmds.c
 //
 void SV_ReadLevelFile (void);
-void SV_Status_f (void);
+//void SV_Status_f (void);
 
 //
 // sv_ents.c

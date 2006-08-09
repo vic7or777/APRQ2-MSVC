@@ -207,8 +207,8 @@ qboolean Field_Key( menufield_s *f, int key )
 	/*
 	** support pasting from the clipboard
 	*/
-	if ( ( toupper( key ) == 'V' && keydown[K_CTRL] ) ||
-		 ( ( ( key == K_INS ) || ( key == K_KP_INS ) ) && keydown[K_SHIFT] ) )
+	if ( ( toupper( key ) == 'V' && Key_IsDown(K_CTRL) ) ||
+		 ( ( ( key == K_INS ) || ( key == K_KP_INS ) ) && Key_IsDown(K_SHIFT) ) )
 	{
 		char *cbd;
 		
@@ -577,7 +577,7 @@ void MenuList_Draw( menulist_s *l )
 	n = l->itemnames + l->prestep;
 
 	y += 1;
-	for( i=0 ; i<maxItems; i++ )
+	for( i=0 ; i<maxItems && *n; i++, n++ )
 	{
 		if( n - l->itemnames == l->curvalue )
 			Draw_Fill( x, y-1, width, 10, 16 );
@@ -588,10 +588,6 @@ void MenuList_Draw( menulist_s *l )
 
 		DrawString( x, y, buffer );
 		y += MLIST_SPACING;
-
-		n++;
-		if( !*n )
-			break;
 	}
 }
 
@@ -622,7 +618,7 @@ int MenuList_HitTest( menulist_s *l, int mx, int my )
 		maxItems = numItems;
 
 	n = l->itemnames + l->prestep;
-	for( i=0 ; i<maxItems ; i++ ) {
+	for( i=0 ; i<maxItems && *n; i++, n++) {
 
 		if( mx >= x   && mx <= x + width &&
 			my >= y-1 && my <= y + MLIST_SPACING )
@@ -631,10 +627,6 @@ int MenuList_HitTest( menulist_s *l, int mx, int my )
 		}
 
 		y += MLIST_SPACING;
-
-		n++;
-		if( !*n )
-			break;
 	}
 
 	return -1;

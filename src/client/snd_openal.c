@@ -796,8 +796,8 @@ static void QAL_Shutdown(void)
 	if (snd_alLibrary) {
 		Com_Printf ("...releasing the OpenAL library\n");
 		AL_FREELIB (snd_alLibrary);
-		snd_alLibrary = NULL;
 	}
+	snd_alLibrary = NULL;
 
 	// Reset QAL bindings
 #define AL_FUNC(type, func) q##func = NULL;
@@ -954,27 +954,30 @@ void ALSnd_Shutdown (void)
 
 	// Release the context
 	if (al_hALC) {
-		if (qalcMakeContextCurrent) {
-			Com_Printf ("...releasing the context\n");
+		Com_Printf ("...releasing the context\n");
+#ifndef _WIN32
+		//Hack, this versio hangs when givin NULL as parameter, known bug
+		if(!strcmp(snd_audioAL.vendorString, "J. Valenzuela") && 
+			!strcmp(snd_audioAL.versionString, "0.0.8")) {
+			Com_Printf("Your OpenAL lib has problem with alcMakeContextCurrent(NULL), skipping...\n");
+		}
+		else
+#endif
+		{
 			qalcMakeContextCurrent (NULL);
 		}
-		if (qalcDestroyContext) {
-			Com_Printf ("...destroying the context\n");
-			qalcDestroyContext (al_hALC);
-		}
 
-		al_hALC = NULL;
+		Com_Printf ("...destroying the context\n");
+		qalcDestroyContext (al_hALC);
 	}
+	al_hALC = NULL;
 
 	// Close the device
 	if (al_hDevice) {
-		if (qalcCloseDevice) {
-			Com_Printf ("...closing the device\n");
-			qalcCloseDevice (al_hDevice);
-		}
-
-		al_hDevice = NULL;
+		Com_Printf ("...closing the device\n");
+		qalcCloseDevice (al_hDevice);
 	}
+	al_hDevice = NULL;
 
 	QAL_Shutdown();
 

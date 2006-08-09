@@ -195,9 +195,9 @@ static void Load_Demo (void *s)
 		break;
 	case FFILE_DEMO:
 		if(demoFolder[0])
-			Cbuf_AddText( va( "demomap \"%s/%s\"\n", demoFolder + 1, m_demos.names[m_demos.list.curvalue] ) );
+			Cbuf_AddText( va( "demo \"%s/%s\"\n", demoFolder + 1, m_demos.names[m_demos.list.curvalue] ) );
 		else
-			Cbuf_AddText( va( "demomap \"%s\"\n", m_demos.names[m_demos.list.curvalue] ) );
+			Cbuf_AddText( va( "demo \"%s\"\n", m_demos.names[m_demos.list.curvalue] ) );
 		Demos_Free();
 		M_ForceMenuOff();
 		break;

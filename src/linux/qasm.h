@@ -37,7 +37,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #endif
 
-#ifdef __i386__
+#if defined(__i386__) && !defined(MACOS_X)
 #define id386	1
 #else
 #define id386	0
@@ -46,7 +46,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // !!! must be kept the same as in d_iface.h !!!
 #define TRANSPARENT_COLOR	255
 
-#ifndef GLQUAKE
+#ifndef GL_QUAKE
 	.extern C(d_zistepu)
 	.extern C(d_pzbuffer)
 	.extern C(d_zistepv)
@@ -271,11 +271,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 	.extern spr8entryvec_table
 #endif
 
-	.extern C(snd_scaletable)
-	.extern C(paintbuffer)
 	.extern C(snd_linear_count)
 	.extern C(snd_p)
-	.extern C(snd_vol)
 	.extern C(snd_out)
 	.extern C(vright)
 	.extern C(vup)

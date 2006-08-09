@@ -435,9 +435,9 @@ void	R_ShutdownImages (void)
 			continue;		// free texture
 		// free it
 		free (image->pixels[0]);	// the other mip levels just follow
-		memset (image, 0, sizeof(*image));
 	}
 	numr_images = 0;
+	memset(r_images, 0, sizeof(r_images));
 	memset( images_hash, 0, sizeof(images_hash) );
 }
 

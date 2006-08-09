@@ -84,6 +84,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #	define CPUSTRING	"AXP"
 # endif
 
+#define ANTICHEAT
+
 typedef __int32 int32;
 typedef __int16 int16;
 typedef unsigned __int32 uint32;
@@ -104,7 +106,9 @@ typedef uint16_t uint16;
 # define GL_DRIVERNAME	"libGL.so"
 # define AL_DRIVERNAME	"libopenal.so.0"
 
+#ifndef HAVE_STRCASECMP
 # define HAVE_STRCASECMP
+#endif
 
 # define BUILDSTRING "Linux"
 
@@ -118,6 +122,35 @@ typedef uint16_t uint16;
 #  define CPUSTRING "Unknown"
 # endif
 
+#endif
+//==============================================
+#if defined(MACOS_X)
+
+# define HAVE_INLINE
+
+# define GL_DRIVERNAME	"libGL.dylib"
+# define AL_DRIVERNAME	"libopenal.so.0"
+
+#ifndef HAVE_STRCASECMP
+# define HAVE_STRCASECMP
+#endif
+
+# define BUILDSTRING "MaxOSX"
+
+# ifdef __ppc__
+#  define CPUSTRING	"ppc"
+# elif defined __i386__
+#  define CPUSTRING	"i386"
+# else
+#  define CPUSTRING	"Unknown"
+# endif
+
+#define ENDIAN_BIG
+#ifndef C_ONLY
+# define C_ONLY
+#endif
+#define WITHOUT_PNG
+#define WITHOUT_DGA
 #endif
 //==============================================
 #if defined __sun__
@@ -165,25 +198,25 @@ typedef uint16_t uint16;
 
 #ifdef HAVE__VSNPRINTF
 # ifndef vsnprintf 
-#  define vsnprintf(dest, size, src, list) _vsnprintf(dest, size, src, list), dest[size-1] = '\0'
+#  define vsnprintf(dest, size, src, list) _vsnprintf(dest, size-1, src, list), dest[size-1] = '\0'
 # endif
 #endif
 
 #ifdef HAVE__STRICMP
 # ifndef Q_stricmp 
-#  define Q_stricmp(s1, s2) _stricmp((s1), (s2))
+#  define Q_stricmp _stricmp
 # endif
 # ifndef Q_strnicmp 
-#  define Q_strnicmp(s1, s2, n) _strnicmp((s1), (s2), (n))
+#  define Q_strnicmp _strnicmp
 # endif
 #endif
 
 #ifdef HAVE_STRCASECMP
 # ifndef Q_stricmp 
-#  define Q_stricmp(s1, s2) strcasecmp((s1), (s2))
+#  define Q_stricmp strcasecmp
 # endif
 # ifndef Q_strnicmp 
-#  define Q_strnicmp(s1, s2, n) strncasecmp((s1), (s2), (n))
+#  define Q_strnicmp strncasecmp
 # endif
 #endif
 
@@ -212,6 +245,10 @@ typedef uint16_t uint16;
 #else //software
 # define R_AppActivate SWimp_AppActivate
 # define R_EndFrame SWimp_EndFrame
+#endif
+
+#ifdef ANTICHEAT
+int Sys_GetAntiCheatAPI (void);
 #endif
 
 //==============================================
@@ -368,7 +405,7 @@ extern long Q_ftol( float f );
 #define VectorSubtract(a,b,c)   ((c)[0]=(a)[0]-(b)[0],(c)[1]=(a)[1]-(b)[1],(c)[2]=(a)[2]-(b)[2])
 #define VectorAdd(a,b,c)		((c)[0]=(a)[0]+(b)[0],(c)[1]=(a)[1]+(b)[1],(c)[2]=(a)[2]+(b)[2])
 #define VectorCopy(a,b)			((b)[0]=(a)[0],(b)[1]=(a)[1],(b)[2]=(a)[2])
-#define VectorClear(a)			((a)[0]=(a)[1]=(a)[2]=0)
+#define VectorClear(a)			(*(int *)&(a)[0]=0,*(int *)&(a)[1]=0,*(int *)&(a)[2]=0)
 #define VectorNegate(a,b)		((b)[0]=-(a)[0],(b)[1]=-(a)[1],(b)[2]=-(a)[2])
 #define VectorSet(v, x, y, z)	((v)[0]=(x),(v)[1]=(y),(v)[2]=(z))
 #define VectorAvg(a,b,c)		((c)[0]=((a)[0]+(b)[0])*0.5f,(c)[1]=((a)[1]+(b)[1])*0.5f, (c)[2]=((a)[2]+(b)[2])*0.5f)
@@ -402,12 +439,19 @@ void MakeNormalVectors (const vec3_t forward, vec3_t right, vec3_t up);
 int Q_log2(int val);
 #define Q_rint(x)	((x) < 0 ? ((int)((x)-0.5f)) : ((int)((x)+0.5f)))
 
+#define NUMVERTEXNORMALS	162
+extern	const vec3_t	bytedirs[NUMVERTEXNORMALS];
+int DirToByte (const vec3_t dir);
+void ByteToDir (int b, vec3_t dir);
+
 void R_ConcatRotations (float in1[3][3], float in2[3][3], float out[3][3]);
 void R_ConcatTransforms (float in1[3][4], float in2[3][4], float out[3][4]);
 
+void Q_sincos( float angle, float *s, float *c );
+
 void AngleVectors (const vec3_t angles, vec3_t forward, vec3_t right, vec3_t up);
 int BoxOnPlaneSide (const vec3_t emins, const vec3_t emaxs, const struct cplane_s *plane);
-#define anglemod(a) ((360.0/65536) * ((int)((a)*(65536/360.0)) & 65535))
+#define anglemod(a) ((360.0f/65536) * ((int)((a)*(65536/360.0f)) & 65535))
 float LerpAngle (float a1, float a2, float frac);
 
 #define BOX_ON_PLANE_SIDE(emins, emaxs, p)	\
@@ -464,11 +508,13 @@ void Q_strncpyz( char *dest, const char *src, size_t size );
 void Q_strncatz( char *dest, const char *src, size_t size );
 void Com_sprintf (char *dest, size_t size, const char *fmt, ...);
 char *Q_strlwr( char *s );
+qboolean Q_IsNumeric (const char *s);
 
 void Com_PageInMemory (const byte *buffer, int size);
 
 #ifdef GL_QUAKE
-#define AnglesToAxis(angles, axis) (AngleVectors(angles, axis[0], axis[1], axis[2]),VectorInverse(axis[1]))
+//#define AnglesToAxis(angles, axis) (AngleVectors(angles, axis[0], axis[1], axis[2]),VectorInverse(axis[1]))
+void AnglesToAxis (const vec3_t angles, vec3_t axis[3]);
 #else
 #define AnglesToAxis(angles, axis) 
 #endif
@@ -592,6 +638,7 @@ CVARS (console variables)
 #define CVAR_LATCHSOUND 64	// save changes until sound restart
 #define CVAR_CHEAT		128	// will be reset to default unless cheats are enabled
 #define CVAR_USER_CREATED 256 // user own cvars created with set
+#define CVAR_ROM		512 //user cant change it even from command line
 
 // nothing outside the Cvar_*() functions should modify these fields!
 typedef struct cvar_s
@@ -1383,10 +1430,10 @@ ROGUE - VERSIONS
 */
 
 #define	ANGLE2SHORT(x)	((int)((x)*65536/360) & 65535)
-#define	SHORT2ANGLE(x)	((x)*(360.0/65536))
+#define	SHORT2ANGLE(x)	((x)*(360.0f/65536))
 
 #define	ANGLE2BYTE(x)	((int)((x)*256/360) & 255)
-#define	BYTE2ANGLE(x)	((x)*(360.0/256))
+#define	BYTE2ANGLE(x)	((x)*(360.0f/256))
 
 //
 // config strings are a general means of communication from

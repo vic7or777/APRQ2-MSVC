@@ -46,7 +46,7 @@ typedef struct
 
 	int		vislines;
 
-	float	times[MAX_CON_TIMES];	// cls.realtime time the line was generated
+	int		times[MAX_CON_TIMES];	// cls.realtime time the line was generated
 								// for transparent notify lines
 } console_t;
 

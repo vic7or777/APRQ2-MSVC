@@ -220,8 +220,8 @@ static void SV_SpawnServer (char *server, char *spawnpoint, server_state_t serve
 
 	sv.time = 1000;
 	
-	//strcpy (sv.name, server);
-	//strcpy (sv.configstrings[CS_NAME], server);
+	strcpy (sv.name, server);
+	strcpy (sv.configstrings[CS_NAME], server);
 
 	if (serverstate != ss_game)
 	{

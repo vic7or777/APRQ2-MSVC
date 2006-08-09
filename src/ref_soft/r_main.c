@@ -949,13 +949,13 @@ void R_SetLightLevel (void)
 
 	if ((r_newrefdef.rdflags & RDF_NOWORLDMODEL) || (!r_drawentities->integer) || (!currententity))
 	{
-		r_lightlevel->integer = 150;
+		r_lightlevel->value = 150.0f;
 		return;
 	}
 
 	// save off light value for server to look at (BIG HACK!)
 	R_LightPoint (r_newrefdef.vieworg, light);
-	r_lightlevel->integer = 150.0 * light[0];
+	r_lightlevel->value = 150.0f * light[0];
 }
 
 

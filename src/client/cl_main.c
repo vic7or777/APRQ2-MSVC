@@ -120,6 +120,9 @@ void Cmd_ForwardToServer (void)
 {
 	char	*cmd;
 
+	if(cls.demoplaying)
+		return;
+
 	cmd = Cmd_Argv(0);
 	if (cls.state <= ca_connected || *cmd == '-' || *cmd == '+')
 	{
@@ -128,7 +131,6 @@ void Cmd_ForwardToServer (void)
 	}
 
 	MSG_WriteByte (&cls.netchan.message, clc_stringcmd);
-
 	SZ_Print (&cls.netchan.message, cmd);
 	if (Cmd_Argc() > 1)
 	{
@@ -180,6 +182,9 @@ CL_ForwardToServer_f
 */
 void CL_ForwardToServer_f (void)
 {
+	if(cls.demoplaying)
+		return;
+
 	//if (cls.state != ca_connected && cls.state != ca_active)
 	if (cls.state < ca_connected)
 	{
@@ -271,18 +276,9 @@ static void CL_SendConnectPacket (int useProtocol)
 
 #ifdef R1Q2_PROTOCOL
 	if (cl.attractloop)
-	{
 		cls.serverProtocol = ORIGINAL_PROTOCOL_VERSION;
-	}
-	else if(!cls.serverProtocol)
-	{
-		if(useProtocol)
-			cls.serverProtocol = useProtocol;
-		else if(cl_protocol->integer)
-			cls.serverProtocol = cl_protocol->integer;
-		else
-			cls.serverProtocol = ORIGINAL_PROTOCOL_VERSION;
-	}
+	else
+		cls.serverProtocol = useProtocol;
 
 	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
 		port &= 0xFF;
@@ -396,16 +392,6 @@ void CL_Connect_f (void)
 
 	CL_Disconnect ();
 
-#ifdef R1Q2_PROTOCOL
-	//reset protocol attempt if we're connecting to a different server
-	if (!NET_CompareAdr (&adr, &cls.netchan.remote_address))
-	{
-		Com_DPrintf ("Resetting protocol attempt since %s is not ", NET_AdrToString (&adr));
-		Com_DPrintf ("%s.\n", NET_AdrToString (&cls.netchan.remote_address));
-		cls.serverProtocol = 0;
-	}
-#endif
-
 	cls.state = ca_connecting;
 	Q_strncpyz (cls.servername, server, sizeof(cls.servername));
 	strcpy (cls.lastservername, cls.servername);
@@ -507,11 +493,13 @@ Sends a disconnect message to the server
 This is also called on Com_Error, so it shouldn't cause any errors
 =====================
 */
+void CL_StopDemoFile( void );
+
 void CL_Disconnect (void)
 {
 	byte	final[32];
 
-	if (cls.state == ca_disconnected)
+	if (cls.state <= ca_disconnected)
 		return;
 
 	if (cl_timedemo->integer)
@@ -536,6 +524,9 @@ void CL_Disconnect (void)
 	if (cls.demorecording)
 		CL_Stop_f ();
 
+	if( cls.demoplaying )
+		CL_StopDemoFile();
+
 	// send a disconnect message to the server
 	final[0] = clc_stringcmd;
 	strcpy ((char *)final+1, "disconnect");
@@ -559,19 +550,22 @@ void CL_Disconnect (void)
 	cls.downloadname[0] = 0;
 	cls.downloadposition = 0;
 
+	cls.serverProtocol = 0;
 	cls.servername[0] = '\0';
 	cls.state = ca_disconnected;
 
-	#ifdef AVI_EXPORT
-		AVI_StopExport();
-	#endif
+#ifdef AVI_EXPORT
+	AVI_StopExport();
+#endif
+#ifdef GL_QUAKE
+	Cvar_Set("cl_avidemo", "0");
+#endif
 }
 
 void CL_Disconnect_f (void)
 {
 	if (cls.state != ca_disconnected)
 	{
-		cls.serverProtocol = 0;
 		cls.key_dest = key_console;
 		Com_Error (ERR_DROP, "Disconnected from server");
 	}
@@ -807,11 +801,11 @@ CL_ParseStatusMessage
 Handle a reply from a ping
 =================
 */
-void CL_ParseStatusMessage (void)
+static void CL_ParseStatusMessage (sizebuf_t *msg)
 {
 	char	*s;
 
-	s = MSG_ReadString(&net_message);
+	s = MSG_ReadString(msg);
 
 	if(strrchr(s, '\n'))
 		Com_Printf ("%s", s);
@@ -898,14 +892,14 @@ CL_ConnectionlessPacket
 Responses to broadcasts, etc
 =================
 */
-void CL_ConnectionlessPacket (void)
+static void CL_ConnectionlessPacket (sizebuf_t *msg)
 {
 	char	*s, *c;
 	
-	MSG_BeginReading (&net_message);
-	MSG_ReadLong (&net_message);	// skip the -1
+	MSG_BeginReading (msg);
+	MSG_ReadLong (msg);	// skip the -1
 
-	s = MSG_ReadStringLine (&net_message);
+	s = MSG_ReadStringLine (msg);
 
 	Cmd_TokenizeString (s, false);
 
@@ -916,9 +910,10 @@ void CL_ConnectionlessPacket (void)
 	// server connection
 	if (!strcmp(c, "client_connect"))
 	{
-#ifdef USE_CURL
 		int		i;
 		char	*p;
+#ifdef ANTICHEAT
+		qboolean	try_to_use_anticheat = false;
 #endif
 
 		if (cls.state == ca_connected)
@@ -928,25 +923,55 @@ void CL_ConnectionlessPacket (void)
 		}
 		Netchan_Setup (NS_CLIENT, &cls.netchan, &net_from, cls.serverProtocol, cls.quakePort);
 
-#ifdef USE_CURL
 		for (i = 1; i < Cmd_Argc(); i++)
 		{
 			p = Cmd_Argv(i);
+#ifdef USE_CURL
 			if (!strncmp (p, "dlserver=", 9))
 			{
 				char	*buff;
 				buff = NET_AdrToString(&cls.netchan.remote_address);
 				p += 9;
+				if (strlen(p) < 3)
+					continue;
 				Com_sprintf (cls.downloadReferer, sizeof(cls.downloadReferer), "quake2://%s", buff);
 				CL_SetHTTPServer (p);
 				if (cls.downloadServer[0])
 					Com_Printf ("HTTP downloading enabled, URL: %s\n", cls.downloadServer);
 
-				break;
+				continue;
 			}
+#endif
+#ifdef ANTICHEAT
+			if (!strncmp (p, "ac=", 3))
+			{
+				p+= 3;
+				if (!p[0])
+					continue;
+
+				if (atoi(p))
+					try_to_use_anticheat = true;
+			}
+#endif
+		}
+
+#ifdef ANTICHEAT
+		if (try_to_use_anticheat) {
+			MSG_WriteByte (&cls.netchan.message, clc_nop);
+			Netchan_Transmit (&cls.netchan, 0, NULL);
+			S_StopAllSounds ();
+			con.ormask = 128;
+			Com_Printf("\35\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\37\n");
+			Com_Printf ("Loading anticheat, this may take a few moments...\n");
+			Com_Printf("\35\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\37\n");
+			con.ormask = 0;
+			SCR_UpdateScreen ();
+			SCR_UpdateScreen ();
+			SCR_UpdateScreen ();
+			if (!Sys_GetAntiCheatAPI ())
+				Com_Printf ("anticheat failed to load, trying to connect without it.\n");
 		}
 #endif
-
 		MSG_WriteByte (&cls.netchan.message, clc_stringcmd);
 		MSG_WriteString (&cls.netchan.message, "new");
 		cls.state = ca_connected;
@@ -956,7 +981,7 @@ void CL_ConnectionlessPacket (void)
 	// server responding to a status broadcast
 	if (!strcmp(c, "info"))
 	{
-		CL_ParseStatusMessage ();
+		CL_ParseStatusMessage (msg);
 		return;
 	}
 
@@ -969,7 +994,7 @@ void CL_ConnectionlessPacket (void)
 			return;
 		}
 		Sys_AppActivate ();
-		s = MSG_ReadString (&net_message);
+		s = MSG_ReadString (msg);
 		Cbuf_AddText (s);
 		Cbuf_AddText ("\n");
 		return;
@@ -977,25 +1002,11 @@ void CL_ConnectionlessPacket (void)
 	// print command from somewhere
 	if (!strcmp(c, "print"))
 	{
-		s = MSG_ReadString (&net_message);
+		s = MSG_ReadString (msg);
 		if( CL_ServerStatusResponse( s, &net_from ) )
 			return;
 
 		Com_Printf ("%s", s);
-
-#ifdef R1Q2_PROTOCOL
-		//BIG HACK to allow new client on old server!
-		if (!strstr (s, "full") &&
-			!strstr (s, "locked") &&
-			!strncmp (s, "Server is ", 10) &&
-			cls.serverProtocol != ORIGINAL_PROTOCOL_VERSION)
-		{
-			Com_Printf ("Retrying with protocol %d.\n", ORIGINAL_PROTOCOL_VERSION);
-			cls.serverProtocol = ORIGINAL_PROTOCOL_VERSION;
-			//force immediate retry
-			cls.connect_time = -99999;
-		}
-#endif
 		return;
 	}
 
@@ -1009,7 +1020,7 @@ void CL_ConnectionlessPacket (void)
 	// challenge from the server we are connecting to
 	if (!strcmp(c, "challenge"))
 	{
-		int		protocol = 0;
+		int		protocol = ORIGINAL_PROTOCOL_VERSION;
 #ifdef R1Q2_PROTOCOL
 		int		i;
 		char	*p;
@@ -1089,11 +1100,11 @@ void CL_ReadPackets (void)
 		// remote command packet
 		if (*(int *)net_message.data == -1)
 		{
-			CL_ConnectionlessPacket ();
+			CL_ConnectionlessPacket (&net_message);
 			continue;
 		}
 
-		if (cls.state == ca_disconnected || cls.state == ca_connecting)
+		if (cls.state <= ca_connecting || cls.demoplaying)
 			continue;		// dump it if not connected
 
 		if (net_message.cursize < 8)
@@ -1111,7 +1122,7 @@ void CL_ReadPackets (void)
 		if (!Netchan_Process(&cls.netchan, &net_message))
 			continue;		// wasn't accepted for some reason
 
-		CL_ParseServerMessage ();
+		CL_ParseServerMessage (&net_message);
 
 		CL_AddNetgraph ();
 
@@ -1124,13 +1135,13 @@ void CL_ReadPackets (void)
 #else
 		if (cls.demorecording && !cls.demowaiting)
 #endif
-			CL_WriteDemoMessageFull ();
+			CL_WriteDemoMessageFull (&net_message);
 
 		SCR_AddLagometerPacketInfo();
 	}
 
 	// check timeout
-	if (cls.state >= ca_connected && cls.realtime - cls.netchan.last_received > cl_timeout->value*1000)
+	if (cls.state >= ca_connected && cls.realtime - cls.netchan.last_received > cl_timeout->integer*1000 && !cls.demoplaying)
 	{
 		if (++cl.timeoutcount > 5)	// timeoutcount saves debugger
 		{
@@ -1336,7 +1347,7 @@ redoSkins:;
 							{
 								//get sprite header
 								spriteheader = (dsprite_t *)precache_model;
-								if (LittleLong (spriteheader->version != SPRITE_VERSION))
+								if (LittleLong (spriteheader->version) != SPRITE_VERSION)
 								{
 									//this is unknown version! free and move onto next.
 									FS_FreeFile(precache_model);
@@ -1760,12 +1771,13 @@ void CL_Precache_f (void)
 {
 	//Yet another hack to let old demos work
 	//the old precache sequence
-	if (Cmd_Argc() < 2) {
+	if (Cmd_Argc() < 2 || cls.demoplaying) {
 		uint32 map_checksum;		// for detecting cheater maps
 
 		CM_LoadMap (cl.configstrings[CS_MODELS+1], true, &map_checksum);
 		CL_RegisterSounds ();
 		CL_PrepRefresh ();
+		cls.state = ca_connected;
 		return;
 	}
 
@@ -1835,6 +1847,40 @@ static void OnChange_StereoSeparation (cvar_t *self, const char *oldValue)
 	else if ( self->value < 0.0f )
 		Cvar_Set( self->name, "0" );
 }
+
+#ifdef GL_QUAKE
+void R_BeginAviDemo( int format );
+void R_WriteAviFrame( void );
+void R_StopAviDemo( void );
+extern cvar_t uninitialized_cvar;
+cvar_t *cl_avidemo = &uninitialized_cvar;
+static cvar_t *cl_forceavidemo;
+static cvar_t *cl_avidemoformat;
+
+static void OnChange_AviDemo(cvar_t *self, const char *oldValue)
+{
+#ifdef AVI_EXPORT
+	if(CL_AviRecording()) {
+		if(self->integer)
+			Cvar_Set(self->name, "0");
+		return;
+	}
+#endif
+
+	if(self->integer > 0)
+	{
+		if(!atoi(oldValue))
+			R_BeginAviDemo(cl_avidemoformat->integer);
+	}
+	else
+	{
+		if(atoi(oldValue))
+			R_StopAviDemo();
+		if(self->integer < 0)
+			Cvar_Set(self->name, "0");
+	}
+}
+#endif
 
 char *CL_Mapname (void)
 {
@@ -2001,6 +2047,14 @@ void CL_InitLocal (void)
 	OnChange_http_max_connections(cl_http_max_connections, cl_http_max_connections->resetString);
 #endif
 
+#ifdef GL_QUAKE
+	cl_avidemo = Cvar_Get("cl_avidemo", "0", CVAR_CHEAT);
+	cl_avidemoformat = Cvar_Get("cl_avidemoformat", "0", 0);
+	cl_forceavidemo = Cvar_Get("cl_forceavidemo", "0", 0);
+	cl_avidemo->OnChange = OnChange_AviDemo;
+	OnChange_AviDemo(cl_avidemo, cl_avidemo->resetString);
+#endif
+
 	cl_maxfps->OnChange = OnChange_MaxFps;
 	OnChange_MaxFps(cl_maxfps, cl_maxfps->resetString);
 	name->OnChange = OnChange_Name;
@@ -2140,11 +2194,11 @@ CL_FixCvarCheats
 */
 qboolean CL_CheatsOK(void)
 {
-	if( cls.state < ca_connected || cl.attractloop)
+	if( cls.state < ca_connected || cl.attractloop || Com_ServerState() == ss_demo)
 		return true;
 
 	// single player can cheat
-	if( cl.maxclients < 2 )
+	if( cl.maxclients == 1 )
 		return true;
 
 	// developer option
@@ -2180,7 +2234,8 @@ void CL_SendCommand (void)
 	CL_SendCmd ();
 
 	// resend a connection request if necessary
-	CL_CheckForResend ();
+	if(!cls.demoplaying)
+		CL_CheckForResend ();
 }
 
 /*
@@ -2189,6 +2244,8 @@ CL_Frame
 
 ==================
 */
+void CL_DemoFrame( int msec );
+
 void CL_Frame (int msec)
 {
 	static int	extratime;
@@ -2201,11 +2258,16 @@ void CL_Frame (int msec)
 
 	if (!cl_timedemo->integer)
 	{
-		if (cls.state == ca_connected && extratime < 100)
-			return;			// don't flood packets out while connecting
-
-		if (extratime < 1000/cl_maxfps->integer)
-			return;			// framerate is too high
+		if (cls.state == ca_connected)
+		{
+			if (extratime < 100)
+				return;			// don't flood packets out while connecting
+		}
+		else
+		{
+			if (extratime < 1000/cl_maxfps->integer)
+				return;			// framerate is too high
+		}
 	}
 
 	// let the mouse activate or deactivate
@@ -2213,7 +2275,8 @@ void CL_Frame (int msec)
 
 	// decide the simulation time
 	cls.frametime = extratime * 0.001f;
-	cl.time += extratime;
+	//cl.time += extratime;
+	CL_DemoFrame(extratime);
 	cls.realtime = curtime;
 
 	extratime = 0;
@@ -2265,12 +2328,23 @@ void CL_Frame (int msec)
 
 	if (cls.spamTime && cls.spamTime < cls.realtime)
 	{
-		char buff[64];
-		Com_sprintf (buff, sizeof(buff), "say \"AprQ2 v%s %s %s\"\n", APR_VERSION, CPUSTRING, BUILDSTRING);
-		Cbuf_AddText (buff);
+		Cbuf_AddText ("say \"" APPLICATION " v" APR_VERSION " " CPUSTRING " " BUILDSTRING "\"\n");
 		cls.lastSpamTime = cls.realtime;
 		cls.spamTime = 0;
 	}
+
+#ifdef GL_QUAKE
+#ifdef AVI_EXPORT
+	if (CL_AviRecording()) {
+		AVI_ProcessFrame (); //Avi export
+	}
+	else
+#endif
+	if(cl_avidemo->integer) {
+		if((cls.state == ca_active && cl.attractloop) || (cls.state != ca_active && cl_forceavidemo->integer))
+			R_WriteAviFrame();
+	}
+#endif
 
 	// advance local effects for next frame
 	CL_RunDLights ();
@@ -2280,7 +2354,6 @@ void CL_Frame (int msec)
 
 	//cls.framecount++;
 }
-
 
 //============================================================================
 
@@ -2310,8 +2383,7 @@ void CL_Init (void)
 	
 	V_Init ();
 	
-	net_message.data = net_message_buffer;
-	net_message.maxsize = sizeof(net_message_buffer);
+	SZ_Init (&net_message, net_message_buffer, sizeof(net_message_buffer));
 
 	M_Init ();	
 	
@@ -2322,6 +2394,7 @@ void CL_Init (void)
 	CDAudio_Init ();
 #endif
 	CL_InitLocal ();
+
 	IN_Init ();
 
 #if defined(_WIN32) || defined(WITH_XMMS) || defined(WITH_MPD)
@@ -2332,9 +2405,8 @@ void CL_Init (void)
 	CL_InitHTTPDownloads ();
 #endif
 
-	FS_ExecAutoexec ();
-	Cbuf_Execute ();
-
+	//FS_ExecAutoexec ();
+	//Cbuf_Execute ();
 }
 
 
@@ -2360,7 +2432,9 @@ void CL_Shutdown(void)
 #ifdef USE_CURL
 	CL_HTTP_Cleanup (true);
 #endif
-
+#ifdef AVI_EXPORT
+	CL_ShutdownAVIExport();
+#endif
 	CL_FreeLocs ();
 	CL_WriteConfiguration (); 
 
@@ -2369,8 +2443,10 @@ void CL_Shutdown(void)
 #endif
 	S_Shutdown();
 #if defined(_WIN32) || defined(WITH_XMMS) || defined(WITH_MPD)
-	MP3_Shutdown();
+	if (!dedicated->integer)
+		MP3_Shutdown();
 #endif
+
 	IN_Shutdown ();
 	VID_Shutdown();
 }

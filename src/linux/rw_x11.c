@@ -49,7 +49,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <X11/Xatom.h>
 #include <X11/keysym.h>
 #include <X11/extensions/XShm.h>
+#ifndef WITHOUT_DGA
 #include <X11/extensions/xf86dga.h>
+#endif
 
 #include "../ref_soft/r_local.h"
 #include "../client/keys.h"
@@ -78,7 +80,6 @@ static int				x_shmeventtype;
 static qboolean			oktodraw = false;
 static qboolean			ignorefirst = false;
 static qboolean			exposureflag = false;
-static qboolean			X11_active = false;
 
 int XShmQueryExtension(Display *);
 int XShmGetEventBase(Display *);
@@ -251,7 +252,7 @@ extern qboolean evdev_masked;
 #endif
 
 int		mx, my;
-
+static int p_mouse_x, p_mouse_y;
 
 qboolean mouse_active = false;
 qboolean dgamouse = false;
@@ -295,6 +296,8 @@ void install_grabs(void)
 	XDefineCursor(dpy, win, CreateNullCursor(dpy, win));
 	XGrabPointer(dpy, win, True, 0, GrabModeAsync, GrabModeAsync, win, None, CurrentTime);
 
+	dgamouse = false;
+#ifndef WITHOUT_DGA
 	if (in_dgamouse->integer)
 	{
 		int MajorVersion, MinorVersion;
@@ -307,10 +310,13 @@ void install_grabs(void)
 			// unable to query, probalby not supported
 			Com_Printf ( "Failed to detect XF86DGA Mouse\n" );
 			Cvar_Set( "in_dgamouse", "0" );
-			dgamouse = false;
 		}
-	} else {
-		XWarpPointer(dpy, None, win, 0, 0, 0, 0, vid.width / 2, vid.height / 2);
+	}
+#endif
+	if(!dgamouse) {
+		p_mouse_x = vid.width / 2;
+		p_mouse_y = vid.height / 2;
+		XWarpPointer(dpy, None, win, 0, 0, 0, 0, p_mouse_x, p_mouse_y);
 	}
 
 	XGrabKeyboard(dpy, win, False, GrabModeAsync, GrabModeAsync, CurrentTime);
@@ -328,7 +334,9 @@ void uninstall_grabs(void)
 
 	if (dgamouse) {
 		dgamouse = false;
+#ifndef WITHOUT_DGA
 		XF86DGADirectVideo(dpy, DefaultScreen(dpy), 0);
+#endif
 	}
 
 	XUngrabPointer(dpy, CurrentTime);
@@ -530,18 +538,25 @@ void HandleEvents(void)
 				}
 				#endif
 				if (dgamouse) {
-					mx += (event.xmotion.x + win_x) * 2;
-					my += (event.xmotion.y + win_y) * 2;
+					if (in_dgamouse->integer == 2) {
+						mx += event.xmotion.x_root * 2;
+						my += event.xmotion.y_root * 2;
+					} else {
+						mx += (event.xmotion.x + win_x) * 2;
+						my += (event.xmotion.y + win_y) * 2;
+					}
 				} 
 				else 
 				{
-					mx = -((int)event.xmotion.x - mwx);// * 2;
-					my = -((int)event.xmotion.y - mwy);// * 2;
-					mwx = event.xmotion.x;
-					mwy = event.xmotion.y;
+					if( !event.xmotion.send_event ) {
+						mx += event.xmotion.x - p_mouse_x;
+						my += event.xmotion.y - p_mouse_y;
 
-					if (mx || my)
-						dowarp = true;
+						if( abs(mwx - event.xmotion.x) > mwx / 2 || abs(mwy - event.xmotion.y) > mwy / 2 )
+							dowarp = true;
+					}
+					p_mouse_x = event.xmotion.x;
+					p_mouse_y = event.xmotion.y;
 				}
 			}
 			break;
@@ -603,7 +618,9 @@ void HandleEvents(void)
 	}
 	if (dowarp) {
 		/* move the mouse to the window center again */
-		XWarpPointer(dpy,None,win,0,0,0,0, vid.width/2,vid.height/2);
+		p_mouse_x = mwx;
+		p_mouse_y = mwy;
+		XWarpPointer(dpy,None,win,0,0,0,0, p_mouse_x, p_mouse_y);
 	}
 }
 
@@ -933,7 +950,7 @@ static qboolean SWimp_InitGraphics( qboolean fullscreen )
 		if (wmhints)
 			XFree(wmhints);
 
-		XStoreName(dpy, win, "Quake II");
+		XStoreName(dpy, win, APPLICATION);
 
 		wmDeleteWindow = XInternAtom(dpy, "WM_DELETE_WINDOW", False);
 		XSetWMProtocols(dpy, win, &wmDeleteWindow, 1);
@@ -1008,8 +1025,6 @@ static qboolean SWimp_InitGraphics( qboolean fullscreen )
 	vid.buffer = (byte *)x_framebuffer[0]->data;
 
 //	XSynchronize(dpy, False);
-
-	X11_active = true;
 
 	return true;
 }
@@ -1091,7 +1106,7 @@ void SWimp_SetPalette( const unsigned char *palette )
 	int i;
 	XColor colors[256];
 
-	if (!X11_active)
+	if (!dpy || !win)
 		return;
 
     if ( !palette )
@@ -1126,8 +1141,10 @@ void SWimp_Shutdown( void )
 {
 	int i;
 
-	if (!X11_active)
-		return;
+	IN_DeactivateMouse();
+	mouse_active = false;
+	dgamouse = false;
+	win_x = win_y = 0;
 
 	if (doShm) {
 		for (i = 0; i < 2; i++)
@@ -1146,14 +1163,15 @@ void SWimp_Shutdown( void )
 			}
 	}
 
-	XDestroyWindow(	dpy, win );
+	if(dpy){
+		if(win)
+			XDestroyWindow(	dpy, win );
 
+		XCloseDisplay(dpy);
+	}
+
+	dpy = NULL;
 	win = 0;
-
-//	XAutoRepeatOn(dpy);
-//	XCloseDisplay(dpy);
-
-	X11_active = false;
 }
 
 /*

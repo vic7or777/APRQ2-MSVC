@@ -39,6 +39,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <unistd.h>
 #include <signal.h>
 #include <dlfcn.h>
+#include <execinfo.h>
 
 #include "../ref_gl/gl_local.h"
 #include "../client/keys.h"
@@ -49,10 +50,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <X11/keysym.h>
 #include <X11/cursorfont.h>
 
+#ifndef WITHOUT_DGA
 #include <X11/extensions/xf86dga.h>
+#endif
 #include <X11/extensions/xf86vmode.h>
-
-#include <GL/glx.h>
 
 glwstate_t glw_state;
 
@@ -63,18 +64,9 @@ static GLXContext ctx = NULL;
 static Atom wmDeleteWindow;
 
 #define KEY_MASK (KeyPressMask | KeyReleaseMask)
-#define MOUSE_MASK (ButtonPressMask | ButtonReleaseMask | \
-		    PointerMotionMask | ButtonMotionMask )
-#define X_MASK (KEY_MASK | MOUSE_MASK | VisibilityChangeMask | StructureNotifyMask )
+#define MOUSE_MASK (ButtonPressMask | ButtonReleaseMask | PointerMotionMask | ButtonMotionMask )
+#define X_MASK (KEY_MASK | MOUSE_MASK | VisibilityChangeMask | StructureNotifyMask /*| SubstructureNotifyMask*/ )
 
-//GLX Functions
-static XVisualInfo * (*qglXChooseVisual)( Display *dpy, int screen, int *attribList );
-static GLXContext (*qglXCreateContext)( Display *dpy, XVisualInfo *vis, GLXContext shareList, Bool direct );
-static void (*qglXDestroyContext)( Display *dpy, GLXContext ctx );
-static Bool (*qglXMakeCurrent)( Display *dpy, GLXDrawable drawable, GLXContext ctx);
-static void (*qglXCopyContext)( Display *dpy, GLXContext src, GLXContext dst, GLuint mask );
-static void (*qglXSwapBuffers)( Display *dpy, GLXDrawable drawable );
-static int (*qglXGetConfig) (Display *dpy, XVisualInfo *vis, int attrib, int *value);
 
 /*****************************************************************************/
 /* MOUSE                                                                     */
@@ -85,18 +77,22 @@ extern qboolean evdev_masked;
 #endif
 
 int mx, my;
+extern int old_mouse_x, old_mouse_y;
 
-static cvar_t	*r_fakeFullscreen;
 extern cvar_t	*in_dgamouse;
-static int win_x, win_y;
+static int win_x = 0, win_y = 0;
+static int p_mouse_x, p_mouse_y;
+
+extern int vid_minimized;
 
 static XF86VidModeModeInfo **vidmodes;
 static int num_vidmodes;
 static qboolean vidmode_active = false;
+static Window minimized_window;
+static int best_fit;
 
 qboolean mouse_active = false;
 qboolean dgamouse = false;
-qboolean vidmode_ext = false;
 
 static Time myxtime;
 
@@ -122,11 +118,14 @@ static Cursor CreateNullCursor(Display *display, Window root)
     return cursor;
 }
 
-void install_grabs(void)
+static void install_grabs(void)
 {
 	XDefineCursor(dpy, win, CreateNullCursor(dpy, win));
 	XGrabPointer(dpy, win, True, 0, GrabModeAsync, GrabModeAsync, win, None, CurrentTime);
+	//XGrabPointer(dpy, win, False, MOUSE_MASK, GrabModeAsync, GrabModeAsync, win, None, CurrentTime);
 
+	dgamouse = false;
+#ifndef WITHOUT_DGA
 	if (in_dgamouse->integer)
 	{
 		int MajorVersion, MinorVersion;
@@ -139,25 +138,25 @@ void install_grabs(void)
 			// unable to query, probalby not supported
 			Com_Printf ( "Failed to detect XF86DGA Mouse\n" );
 			Cvar_Set( "in_dgamouse", "0" );
-			dgamouse = false;
 		}
-	} else {
-		XWarpPointer(dpy, None, win, 0, 0, 0, 0, vid.width / 2, vid.height / 2);
+	}
+#endif
+	if(!dgamouse) {
+		p_mouse_x = vid.width / 2;
+		p_mouse_y = vid.height / 2;
+		XWarpPointer(dpy, None, win, 0, 0, 0, 0, p_mouse_x, p_mouse_y);
 	}
 
 	XGrabKeyboard(dpy, win, False, GrabModeAsync, GrabModeAsync, CurrentTime);
-
-	mouse_active = true;
 }
 
-void uninstall_grabs(void)
+static void uninstall_grabs(void)
 {
-	if (!dpy || !win)
-		return;
-
 	if (dgamouse) {
 		dgamouse = false;
+#ifndef WITHOUT_DGA
 		XF86DGADirectVideo(dpy, DefaultScreen(dpy), 0);
+#endif
 	}
 
 	XUngrabPointer(dpy, CurrentTime);
@@ -165,8 +164,6 @@ void uninstall_grabs(void)
 
 // inviso cursor
 	XUndefineCursor(dpy, win);
-
-	mouse_active = false;
 }
 
 static void IN_DeactivateMouse( void ) 
@@ -177,6 +174,7 @@ static void IN_DeactivateMouse( void )
 	if (mouse_active) {
 		uninstall_grabs();
 		mouse_active = false;
+		dgamouse = false;
 	}
 }
 
@@ -187,6 +185,7 @@ static void IN_ActivateMouse( void )
 
 	if (!mouse_active) {
 		mx = my = 0; // don't spazz
+		old_mouse_x = old_mouse_y = 0;
 		install_grabs();
 		mouse_active = true;
 	}
@@ -194,7 +193,7 @@ static void IN_ActivateMouse( void )
 
 void IN_Activate(qboolean active)
 {
-	if (active || vidmode_active)
+	if (active)
 		IN_ActivateMouse();
 	else
 		IN_DeactivateMouse ();
@@ -208,13 +207,11 @@ void IN_Activate(qboolean active)
 static int XLateKey(XKeyEvent *ev)
 {
 
-	int key;
+	int key = 0;
 	char buf[64];
 	KeySym keysym;
 
-	key = 0;
-
-	XLookupString(ev, buf, sizeof buf, &keysym, 0);
+	XLookupString(ev, buf, sizeof(buf), &keysym, 0);
 
 	switch(keysym)
 	{
@@ -359,18 +356,25 @@ void HandleEvents(void)
 				}
 				#endif
 				if (dgamouse) {
-					mx += (event.xmotion.x + win_x) * 2;
-					my += (event.xmotion.y + win_y) * 2;
+					if (in_dgamouse->integer == 2) {
+						mx += event.xmotion.x_root * 2;
+						my += event.xmotion.y_root * 2;
+					} else {
+						mx += (event.xmotion.x + win_x) * 2;
+						my += (event.xmotion.y + win_y) * 2;
+					}
 				} 
 				else 
 				{
-					mx = -((int)event.xmotion.x - mwx);// * 2;
-					my = -((int)event.xmotion.y - mwy);// * 2;
-					mwx = event.xmotion.x;
-					mwy = event.xmotion.y;
+					if( !event.xmotion.send_event ) {
+						mx += event.xmotion.x - p_mouse_x;
+						my += event.xmotion.y - p_mouse_y;
 
-					if (mx || my)
-						dowarp = true;
+						if( abs(mwx - event.xmotion.x) > mwx / 2 || abs(mwy - event.xmotion.y) > mwy / 2 )
+							dowarp = true;
+					}
+					p_mouse_x = event.xmotion.x;
+					p_mouse_y = event.xmotion.y;
 				}
 			}
 			break;
@@ -406,6 +410,26 @@ void HandleEvents(void)
 			if (event.xclient.data.l[0] == wmDeleteWindow)
 				Cbuf_ExecuteText(EXEC_NOW, "quit");
 			break;
+	case MapNotify:
+		if (event.xmap.window == win)
+			IN_ActivateMouse();
+		if (!vid_minimized)
+			break;
+		vid_minimized = 0;
+		if (vidmode_active) {
+			XDestroyWindow(dpy, minimized_window);
+			XMapWindow(dpy, win);
+			XF86VidModeSwitchToMode(dpy, scrnum, vidmodes[best_fit]);
+			XF86VidModeSetViewPort(dpy, scrnum, 0, 0);
+		}
+		break;
+
+	case UnmapNotify:
+		if (event.xunmap.window != win) break;
+		Key_ClearStates();
+		IN_DeactivateMouse();
+		vid_minimized = 1;
+		break;
 #ifdef WITH_EVDEV
 		case VisibilityNotify:
 			switch(event.xvisibility.state) {
@@ -422,13 +446,15 @@ void HandleEvents(void)
 	}
 	if (dowarp) {
 		/* move the mouse to the window center again */
-		XWarpPointer(dpy,None,win,0,0,0,0, vid.width/2,vid.height/2);
+		p_mouse_x = mwx;
+		p_mouse_y = mwy;
+		XWarpPointer(dpy,None,win,0,0,0,0, p_mouse_x, p_mouse_y);
 	}
 }
 
 /*****************************************************************************/
 
-char *Sys_GetClipboardData()
+char *Sys_GetClipboardData(void)
 {
 	Window sowner;
 	Atom type, property;
@@ -467,6 +493,29 @@ char *Sys_GetClipboardData()
 
 qboolean GLimp_InitGL (void);
 
+static void signal_handler2(int sig)
+{
+	void		*array[32];
+	size_t		size, i;
+	char		**strings;
+
+	printf("Received signal %d, exiting...\n", sig);
+
+	size = backtrace (array, sizeof(array)/sizeof(void*));
+	
+	strings = backtrace_symbols (array, size);
+
+	printf("Stack dump (%zd frames):\n", size);
+
+	for (i = 0; i < size; i++)
+		printf("%.2zd: %s\n", i, strings[i]);
+
+	free (strings);
+
+	GLimp_Shutdown();
+	_exit(0);
+}
+
 static void signal_handler(int sig)
 {
 	printf("Received signal %d, exiting...\n", sig);
@@ -483,7 +532,7 @@ static void InitSig(void)
 	signal(SIGIOT, signal_handler);
 	signal(SIGBUS, signal_handler);
 	signal(SIGFPE, signal_handler);
-	signal(SIGSEGV, signal_handler);
+	signal(SIGSEGV, signal_handler2);
 	signal(SIGTERM, signal_handler);
 }
 
@@ -517,13 +566,9 @@ rserr_t GLimp_SetMode( int *pwidth, int *pheight, int mode, qboolean fullscreen 
 	XVisualInfo *visinfo;
 	XSetWindowAttributes attr;
 	XSizeHints *sizehints;
-	XWMHints *wmhints;
 	unsigned long mask;
-	int MajorVersion, MinorVersion;
-	int actualWidth, actualHeight;
 	int i;
 
-	r_fakeFullscreen = Cvar_Get( "r_fakeFullscreen", "0", CVAR_ARCHIVE);
 
 	Com_Printf ( "Initializing OpenGL display\n");
 
@@ -550,16 +595,6 @@ rserr_t GLimp_SetMode( int *pwidth, int *pheight, int mode, qboolean fullscreen 
 
 	scrnum = DefaultScreen(dpy);
 	root = RootWindow(dpy, scrnum);
-
-	// Get video mode list
-	MajorVersion = MinorVersion = 0;
-	if (!XF86VidModeQueryVersion(dpy, &MajorVersion, &MinorVersion)) { 
-		vidmode_ext = false;
-	} else {
-		Com_Printf ( "Using XFree86-VidModeExtension Version %d.%d\n",
-			MajorVersion, MinorVersion);
-		vidmode_ext = true;
-	}
 
 	visinfo = qglXChooseVisual(dpy, scrnum, attrib);
 	if (!visinfo) {
@@ -595,13 +630,25 @@ rserr_t GLimp_SetMode( int *pwidth, int *pheight, int mode, qboolean fullscreen 
 		Com_Printf ( "Depth(%dbits) Alpha(%dbits) Stencil(%dbits)\n", depth_bits, alpha_bits, stencil_bits);
 	}
 
-	if (vidmode_ext) {
-		int best_fit, best_dist, dist, x, y;
-		
-		XF86VidModeGetAllModeLines(dpy, scrnum, &num_vidmodes, &vidmodes);
+	vidmode_active = false;
+	if (fullscreen)
+	{
+		int MajorVersion = 0, MinorVersion = 0;
 
-		// Are we going fullscreen?  If so, let's change video mode
-		if (fullscreen && !r_fakeFullscreen->integer) {
+		// Get video mode list
+		if (!XF86VidModeQueryVersion(dpy, &MajorVersion, &MinorVersion))
+		{ 
+			Com_Printf ("..XFree86-VidMode Extension not available, going windowed mode\n");
+		}
+		else
+		{
+			int best_dist, dist, x, y;
+
+			Com_Printf ( "Using XFree86-VidModeExtension Version %d.%d\n", MajorVersion, MinorVersion);
+		
+			num_vidmodes = 0;
+			XF86VidModeGetAllModeLines(dpy, scrnum, &num_vidmodes, &vidmodes);
+
 			best_dist = 9999999;
 			best_fit = -1;
 
@@ -619,9 +666,9 @@ rserr_t GLimp_SetMode( int *pwidth, int *pheight, int mode, qboolean fullscreen 
 				}
 			}
 
-			if (best_fit != -1) {
-				actualWidth = vidmodes[best_fit]->hdisplay;
-				actualHeight = vidmodes[best_fit]->vdisplay;
+			if (best_fit > -1) {
+				width = vidmodes[best_fit]->hdisplay;
+				height = vidmodes[best_fit]->vdisplay;
 
 				// change to the mode
 				XF86VidModeSwitchToMode(dpy, scrnum, vidmodes[best_fit]);
@@ -632,8 +679,9 @@ rserr_t GLimp_SetMode( int *pwidth, int *pheight, int mode, qboolean fullscreen 
 			}
 			else
 			{
-				fullscreen = 0;
-				Com_Printf("XFree86-VidModeExtension: No acceptable modes found\n");
+				Com_Printf("XFree86-VidModeExtension: No acceptable modes found, going windowed mode\n");
+				if(num_vidmodes)
+					XFree(vidmodes);
 			}
 		}
 	}
@@ -656,47 +704,20 @@ rserr_t GLimp_SetMode( int *pwidth, int *pheight, int mode, qboolean fullscreen 
 						0, visinfo->depth, InputOutput,
 						visinfo->visual, mask, &attr);
 
+
 	sizehints = XAllocSizeHints();
 	if (sizehints) {
-		sizehints->min_width = width;
-		sizehints->min_height = height;
-		sizehints->max_width = width;
-		sizehints->max_height = height;
-		sizehints->base_width = width;
-		sizehints->base_height = vid.height;
-		
-		sizehints->flags = PMinSize | PMaxSize | PBaseSize;
-	}
-	
-	wmhints = XAllocWMHints();
-	if (wmhints) {
-		#include "q2icon.xbm"
+		sizehints->min_width = sizehints->max_width = width;
+		sizehints->min_height = sizehints->max_height = height;
+		sizehints->flags = PMinSize | PMaxSize;
 
-		Pixmap icon_pixmap, icon_mask;
-		unsigned long fg, bg;
-		int i;
-		
-		fg = BlackPixel(dpy, visinfo->screen);
-		bg = WhitePixel(dpy, visinfo->screen);
-		icon_pixmap = XCreatePixmapFromBitmapData(dpy, win, (char *)q2icon_bits, q2icon_width, q2icon_height, fg, bg, visinfo->depth);
-		for (i = 0; i < sizeof(q2icon_bits); i++)
-			q2icon_bits[i] = ~q2icon_bits[i];
-		icon_mask = XCreatePixmapFromBitmapData(dpy, win, (char *)q2icon_bits, q2icon_width, q2icon_height, bg, fg, visinfo->depth); 
-	
-		wmhints->flags = IconPixmapHint|IconMaskHint;
-		wmhints->icon_pixmap = icon_pixmap;
-		wmhints->icon_mask = icon_mask;
+		XSetWMNormalHints (dpy, win, sizehints);
+		XFree (sizehints);
 	}
 
-	XSetWMProperties(dpy, win, NULL, NULL, NULL, 0,
-			sizehints, wmhints, None);
-	if (sizehints)
-		XFree(sizehints);
-	if (wmhints)
-		XFree(wmhints);
-	
-	XStoreName(dpy, win, "Quake II");
-	
+	XStoreName(dpy, win, APPLICATION);
+	XSetIconName(dpy, win, APPLICATION);
+
 	wmDeleteWindow = XInternAtom(dpy, "WM_DELETE_WINDOW", False);
 	XSetWMProtocols(dpy, win, &wmDeleteWindow, 1);
 
@@ -705,10 +726,6 @@ rserr_t GLimp_SetMode( int *pwidth, int *pheight, int mode, qboolean fullscreen 
 	if (vidmode_active) {
 		XMoveWindow(dpy, win, 0, 0);
 		XRaiseWindow(dpy, win);
-		XWarpPointer(dpy, None, win, 0, 0, 0, 0, 0, 0);
-		XFlush(dpy);
-		// Move the viewport to top left
-		XF86VidModeSetViewPort(dpy, scrnum, 0, 0);
 	}
 
 	XFlush(dpy);
@@ -723,9 +740,35 @@ rserr_t GLimp_SetMode( int *pwidth, int *pheight, int mode, qboolean fullscreen 
 	// let the sound and input subsystems know about the new window
 	VID_NewWindow (width, height);
 
-	qglXMakeCurrent(dpy, win, ctx);
+	if (fullscreen && !vidmode_active)
+		return rserr_invalid_fullscreen;
 
 	return rserr_ok;
+}
+
+void VID_Minimize_f(void) {
+
+	if (vidmode_active) {
+		XSetWindowAttributes attr;
+		Window root = RootWindow(dpy, scrnum);
+		unsigned long mask;
+
+		attr.background_pixel = 0;
+		attr.border_pixel = 0;
+		attr.event_mask = X_MASK;
+		mask = CWBackPixel | CWBorderPixel | CWEventMask;
+		
+		minimized_window = XCreateWindow(dpy, root, 0, 0, 1, 1,0, CopyFromParent, InputOutput, CopyFromParent, mask, &attr);
+		XMapWindow(dpy, minimized_window);
+		XIconifyWindow(dpy, minimized_window, scrnum);
+
+		XStoreName(dpy, minimized_window, APPLICATION);
+		XSetIconName(dpy, minimized_window, APPLICATION);
+
+		XUnmapWindow(dpy, win);
+		XF86VidModeSwitchToMode(dpy, scrnum, vidmodes[0]);
+	} else
+		XIconifyWindow(dpy, win, scrnum);
 }
 
 /*
@@ -742,15 +785,19 @@ void GLimp_Shutdown( void )
 	IN_DeactivateMouse();
 	mouse_active = false;
 	dgamouse = false;
+	win_x = win_y = 0;
+	vid_minimized = 0;
 
 	if (dpy) {
 		if (ctx)
 			qglXDestroyContext(dpy, ctx);
 		if (win)
 			XDestroyWindow(dpy, win);
-		if (vidmode_active)
+		if (vidmode_active) {
 			XF86VidModeSwitchToMode(dpy, scrnum, vidmodes[0]);
-		XUngrabKeyboard(dpy, CurrentTime);
+			XFree(vidmodes);
+		}
+
 		XCloseDisplay(dpy);
 	}
 	vidmode_active = false;
@@ -767,21 +814,18 @@ void GLimp_Shutdown( void )
 */
 int GLimp_Init( void *hinstance, void *wndproc )
 {
+	static qboolean firstTime = true;
+
 	InitSig();
 
-	if ( glw_state.OpenGLLib) {
-		#define GPA( a ) dlsym( glw_state.OpenGLLib, a )
-
-		qglXChooseVisual             =  GPA("glXChooseVisual");
-		qglXCreateContext            =  GPA("glXCreateContext");
-		qglXDestroyContext           =  GPA("glXDestroyContext");
-		qglXMakeCurrent              =  GPA("glXMakeCurrent");
-		qglXCopyContext              =  GPA("glXCopyContext");
-		qglXSwapBuffers              =  GPA("glXSwapBuffers");
-		qglXGetConfig                =  GPA("glXGetConfig");
-		
-		return true;
+	if(firstTime) {
+		Cmd_AddCommand ("vid_minimize", VID_Minimize_f);
+		firstTime = false;
 	}
+
+	if ( glw_state.OpenGLLib)
+		return true;
+
 	
 	return false;
 }
@@ -813,19 +857,3 @@ void GLimp_AppActivate( qboolean active )
 {
 }
 
-void Fake_glColorTableEXT( GLenum target, GLenum internalformat,
-                             GLsizei width, GLenum format, GLenum type,
-                             const GLvoid *table )
-{
-	byte temptable[256][4];
-	byte *intbl;
-	int i;
-
-	for (intbl = (byte *)table, i = 0; i < 256; i++) {
-		temptable[i][2] = *intbl++;
-		temptable[i][1] = *intbl++;
-		temptable[i][0] = *intbl++;
-		temptable[i][3] = 255;
-	}
-	qgl3DfxSetPaletteEXT((GLuint *)temptable);
-}

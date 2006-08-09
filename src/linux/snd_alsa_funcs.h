@@ -48,6 +48,20 @@ ALSA_FUNC (int, snd_pcm_prepare, (snd_pcm_t *pcm))
 ALSA_FUNC (snd_pcm_sframes_t, snd_pcm_writei, (snd_pcm_t *pcm, const void *buffer, snd_pcm_uframes_t size))
 ALSA_FUNC (const char *, snd_strerror, (int errnum))
 
+
+/*ALSA_FUNC (int, snd_pcm_sw_params, (snd_pcm_t *pcm, snd_pcm_sw_params_t *params))
+ALSA_FUNC (int, snd_pcm_sw_params_current, (snd_pcm_t *pcm, snd_pcm_sw_params_t *params))
+ALSA_FUNC (int, snd_pcm_sw_params_set_start_threshold, (snd_pcm_t *pcm, snd_pcm_sw_params_t *params, snd_pcm_uframes_t val))
+ALSA_FUNC (int, snd_pcm_sw_params_set_stop_threshold, (snd_pcm_t *pcm, snd_pcm_sw_params_t *params, snd_pcm_uframes_t val))
+ALSA_FUNC (size_t, snd_pcm_sw_params_sizeof, (void))
+
+ALSA_FUNC (int, snd_pcm_mmap_begin, (snd_pcm_t *pcm, const snd_pcm_channel_area_t **areas, snd_pcm_uframes_t *offset, snd_pcm_uframes_t *frames))
+ALSA_FUNC (int, snd_pcm_avail_update, (snd_pcm_t *pcm))
+ALSA_FUNC (snd_pcm_sframes_t, snd_pcm_mmap_commit, (snd_pcm_t *pcm, snd_pcm_uframes_t offset, snd_pcm_uframes_t frames))
+ALSA_FUNC (int, snd_pcm_pause, (snd_pcm_t *pcm, int enable))
+ALSA_FUNC (int, snd_pcm_start, (snd_pcm_t *pcm))
+ALSA_FUNC (snd_pcm_state_t, snd_pcm_state, (snd_pcm_t *pcm))*/
+
 ALSA_FUNC (int, snd_pcm_hw_params_malloc, (snd_pcm_hw_params_t **ptr))
 ALSA_FUNC (void, snd_pcm_hw_params_free, (snd_pcm_hw_params_t *obj))
 

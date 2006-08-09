@@ -199,7 +199,7 @@ void R_AddDecal	(vec3_t origin, vec3_t dir, float red, float green, float blue, 
 			R_LightPoint (origin, shade);
 
 			for (j=0 ; j<3 ; j++)
-				d->color[j] = (d->color[j] * shade[j] * 0.6) + (d->color[j] * 0.4);
+				d->color[j] = (d->color[j] * shade[j] * 0.6f) + (d->color[j] * 0.4f);
 		}
 
 		d->type = type;
@@ -238,7 +238,7 @@ void R_AddDecals (void)
 
 	active = &active_decals;
 
-	mindist = DotProduct(r_origin, vpn) + 4.0f; 
+	mindist = DotProduct(r_origin, viewAxis[0]) + 4.0f; 
 
 	qglEnable(GL_POLYGON_OFFSET_FILL);
 	qglPolygonOffset(-1, -2);
@@ -261,7 +261,7 @@ void R_AddDecals (void)
 			continue;
 
 		// do not render if the decal is behind the view
-		if ( DotProduct(dl->org, vpn) < mindist)
+		if ( DotProduct(dl->org, viewAxis[0]) < mindist)
 			continue;
 
 		// do not render if the view origin is behind the decal
@@ -273,8 +273,8 @@ void R_AddDecals (void)
 
 		time = dl->time + gl_decals_time->value - r_newrefdef.time;
 
-		if (time < 1.5)
-			color[3] *= time / 1.5;
+		if (time < 1.5f)
+			color[3] *= time / 1.5f;
 
 		//Draw it
 		qglColor4fv (color);

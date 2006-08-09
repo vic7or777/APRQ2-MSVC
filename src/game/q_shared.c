@@ -22,6 +22,38 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 vec3_t vec3_origin = {0,0,0};
 
+const vec3_t bytedirs[NUMVERTEXNORMALS] =
+{
+#include "../client/anorms.h"
+};
+
+int DirToByte( const vec3_t dir )
+{
+	int		i, best = 0;
+	float	d, bestd = 0.0f;
+
+	if (!dir)
+		return 0;
+
+	for( i = 0; i < NUMVERTEXNORMALS; i++ ) {
+		d = DotProduct( dir, bytedirs[i] );
+		if( d > bestd ) {
+			bestd = d;
+			best = i;
+		}
+	}
+
+	return best;
+}
+
+void ByteToDir (int b, vec3_t dir)
+{
+	if (b < 0 || b >= NUMVERTEXNORMALS)
+		VectorClear(dir);
+	else
+		VectorCopy (bytedirs[b], dir);
+}
+
 //============================================================================
 
 void MakeNormalVectors (const vec3_t forward, vec3_t right, vec3_t up)
@@ -40,14 +72,29 @@ void MakeNormalVectors (const vec3_t forward, vec3_t right, vec3_t up)
 	CrossProduct (right, forward, up);
 }
 
+void Q_sincos( float angle, float *s, float *c )
+{
+#ifdef _WIN32
+	_asm {
+		fld		angle
+		fsincos
+		mov		ecx, c
+		mov		edx, s
+		fstp	dword ptr [ecx]
+		fstp	dword ptr [edx]
+	}
+#else
+	*s = (float)sin( angle );
+	*c = (float)cos( angle );
+#endif
+}
+
 void RotatePointAroundVector( vec3_t dst, const vec3_t dir, const vec3_t point, float degrees )
 {
 	float		t0, t1, c, s;
 	vec3_t		vr, vu, vf;
 
-	s = DEG2RAD (degrees);
-	c = (float)cos(s);
-	s = (float)sin(s);
+	Q_sincos(DEG2RAD(degrees), &s, &c);
 
 	VectorCopy (dir, vf);
 	MakeNormalVectors (vf, vr, vu);
@@ -71,19 +118,12 @@ void RotatePointAroundVector( vec3_t dst, const vec3_t dir, const vec3_t point, 
 		   + (t0 * vr[2] + t1 * vu[2] + vf[2] * vf[2]) * point[2];
 }
 
-
 void AngleVectors (const vec3_t angles, vec3_t forward, vec3_t right, vec3_t up)
 {
-	float		angle;
-	static float		sr, sp, sy, cr, cp, cy, t;
-	// static to help MS compiler fp bugs
+	float sr, sp, sy, cr, cp, cy, t;
 
-	angle = DEG2RAD(angles[YAW]);
-	sy = (float)sin(angle);
-	cy = (float)cos(angle);
-	angle = DEG2RAD(angles[PITCH]);
-	sp = (float)sin(angle);
-	cp = (float)cos(angle);
+	Q_sincos(DEG2RAD(angles[YAW]), &sy, &cy);
+	Q_sincos(DEG2RAD(angles[PITCH]), &sp, &cp);
 
 	if (forward)
 	{
@@ -92,18 +132,14 @@ void AngleVectors (const vec3_t angles, vec3_t forward, vec3_t right, vec3_t up)
 		forward[2] = -sp;
 	}
 
-	if (right || up)
-	{
-		angle = DEG2RAD(angles[ROLL]);
-		sr = (float)sin(angle);
-		cr = (float)cos(angle);
+	if (right) {
+		Q_sincos(DEG2RAD(angles[ROLL]), &sr, &cr);
 
-		if (right) {
-			t = sr*sp;
-			right[0] = -1*t*cy+cr*sy;
-			right[1] = -1*t*sy-cr*cy;
-			right[2] = -1*sr*cp;
-		}
+		t = sr*sp;
+		right[0] = -t*cy+cr*sy;
+		right[1] = -t*sy-cr*cy;
+		right[2] = -sr*cp;
+
 		if (up) {
 			t = cr*sp;
 			up[0] = t*cy+sr*sy;
@@ -111,7 +147,36 @@ void AngleVectors (const vec3_t angles, vec3_t forward, vec3_t right, vec3_t up)
 			up[2] = cr*cp;
 		}
 	}
+	else if (up) {
+		Q_sincos(DEG2RAD(angles[ROLL]), &sr, &cr);
+
+		t = cr*sp;
+		up[0] = t*cy+sr*sy;
+		up[1] = t*sy-sr*cy;
+		up[2] = cr*cp;
+	}
 }
+
+#ifndef AnglesToAxis
+void AnglesToAxis (const vec3_t angles, vec3_t axis[3])
+{
+	float	sp, sy, sr, cp, cy, cr;
+
+	Q_sincos(DEG2RAD(angles[YAW]), &sy, &cy);
+	Q_sincos(DEG2RAD(angles[PITCH]), &sp, &cp);
+	Q_sincos(DEG2RAD(angles[ROLL]), &sr, &cr);
+
+	axis[0][0] = cp*cy;
+	axis[0][1] = cp*sy;
+	axis[0][2] = -sp;
+	axis[1][0] = sr*sp*cy+cr*-sy;
+	axis[1][1] = sr*sp*sy+cr*cy;
+	axis[1][2] = sr*cp;
+	axis[2][0] = cr*sp*cy+sr*sy;
+	axis[2][1] = cr*sp*sy-sr*cy;
+	axis[2][2] = cr*cp;
+}
+#endif
 
 void ProjectPointOnPlane( vec3_t dst, const vec3_t p, const vec3_t normal )
 {
@@ -131,32 +196,16 @@ void ProjectPointOnPlane( vec3_t dst, const vec3_t p, const vec3_t normal )
 */
 void PerpendicularVector( vec3_t dst, const vec3_t src )
 {
-	int i, pos = 0;
-	float minelem = 1.0F;
-	vec3_t tempvec = {0.0, 0.0, 0.0};
-
-	/*
-	** find the smallest magnitude axially aligned vector
-	*/
-	for ( i = 0; i < 3; i++ )
-	{
-		if ( fabs( src[i] ) < minelem )
-		{
-			pos = i;
-			minelem = (float)fabs( src[i] );
-		}
+	if (!src[0]) {
+		VectorSet(dst, 1, 0, 0);
+	} else if (!src[1]) {
+		VectorSet(dst, 0, 1, 0);
+	} else if (!src[2]) {
+		VectorSet(dst, 0, 0, 1);
+	} else {
+		VectorSet(dst, -src[1], src[0], 0);
+		VectorNormalize(dst);
 	}
-	tempvec[pos] = 1.0F;
-
-	/*
-	** project the point onto the plane defined by src
-	*/
-	ProjectPointOnPlane( dst, tempvec, src );
-
-	/*
-	** normalize the result
-	*/
-	VectorNormalize( dst );
 }
 
 
@@ -539,11 +588,11 @@ int	PlaneTypeForNormal (const vec3_t normal)
 	vec_t	ax, ay, az;
 	
 	// NOTE: should these have an epsilon around 1.0?		
-	if (normal[0] >= 1.0)
+	if (normal[0] >= 1.0f)
 		return PLANE_X;
-	if (normal[1] >= 1.0)
+	if (normal[1] >= 1.0f)
 		return PLANE_Y;
-	if (normal[2] >= 1.0)
+	if (normal[2] >= 1.0f)
 		return PLANE_Z;
 		
 	ax = (float)fabs( normal[0] );
@@ -559,17 +608,20 @@ int	PlaneTypeForNormal (const vec3_t normal)
 
 void AddPointToBounds (const vec3_t v, vec3_t mins, vec3_t maxs)
 {
-	int		i;
-	vec_t	val;
+	if (v[0] < mins[0])
+		mins[0] = v[0];
+	if (v[0] > maxs[0])
+		maxs[0] = v[0];
 
-	for (i=0 ; i<3 ; i++)
-	{
-		val = v[i];
-		if (val < mins[i])
-			mins[i] = val;
-		if (val > maxs[i])
-			maxs[i] = val;
-	}
+	if (v[1] < mins[1])
+		mins[1] = v[1];
+	if (v[1] > maxs[1])
+		maxs[1] = v[1];
+
+	if (v[2] < mins[2])
+		mins[2] = v[2];
+	if (v[2] > maxs[2])
+		maxs[2] = v[2];
 }
 
 
@@ -577,8 +629,7 @@ vec_t VectorNormalize (vec3_t v)
 {
 	float	length, ilength;
 
-	length = v[0]*v[0] + v[1]*v[1] + v[2]*v[2];
-	length = (float)sqrt (length);		// FIXME
+	length = (float)sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]); // FIXME
 
 	if (length)
 	{
@@ -595,8 +646,7 @@ vec_t VectorNormalize2 (const vec3_t v, vec3_t out)
 {
 	float	length, ilength;
 
-	length = v[0]*v[0] + v[1]*v[1] + v[2]*v[2];
-	length = (float)sqrt (length);		// FIXME
+	length = (float)sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]); // FIXME
 
 	if (length)
 	{
@@ -605,7 +655,11 @@ vec_t VectorNormalize2 (const vec3_t v, vec3_t out)
 		out[1] = v[1]*ilength;
 		out[2] = v[2]*ilength;
 	}
-		
+	else
+	{
+		VectorClear (out);
+	}
+
 	return length;
 }
 
@@ -706,8 +760,9 @@ char *COM_SkipPath (const char *pathname)
 	last = pathname;
 	while (*pathname)
 	{
-		if (*pathname=='/')
+		if (*pathname == '/' || *pathname=='\\')
 			last = pathname+1;
+
 		pathname++;
 	}
 	return (char *)last;
@@ -742,9 +797,8 @@ void COM_FilePath (const char *in, char *out)
 {
 	const char *s;
 	
-	s = in + strlen(in) - 1;
-	
-	while (s != in && *s != '/')
+	s = in + strlen(in);
+	while (s != in && *s != '/' && *s != '\\')
 		s--;
 
 	strncpy (out,in, s-in);
@@ -764,9 +818,9 @@ void COM_DefaultExtension (char *path, size_t size, const char *extension)
 // if path doesn't have a .EXT, append extension
 // (extension should include the .)
 //
-	src = path + strlen(path) - 1;
+	src = path + strlen(path);
 
-	while (*src != '/' && src != path)
+	while (*src != '/' && *src != '\\' && src != path)
 	{
 		if (*src == '.')
 			return;                 // it has an extension
@@ -1174,8 +1228,10 @@ void Q_strncpyz( char *dest, const char *src, size_t size )
 		Com_Error(ERR_FATAL, "Q_strncpyz: size < 1" ); 
 #endif
 
-	while( --size && (*dest++ = *src++) );
-	*dest = '\0';
+	if( size ) {
+		while( --size && (*dest++ = *src++) );
+		*dest = '\0';
+	}
 }
 /*
 ==============
@@ -1194,21 +1250,33 @@ void Q_strncatz( char *dest, const char *src, size_t size )
 	if ( size < 1 )
 		Com_Error(ERR_FATAL, "Q_strncatz: size < 1" ); 
 #endif
-	while( --size && *dest++ );
-	if( size ) {
-		dest--;
-		while( --size && (*dest++ = *src++) );
+	if(size) {
+		while( --size && *dest++ );
+		if( size ) {
+			dest--;
+			while( --size && (*dest++ = *src++) );
+		}
+		*dest = '\0';
 	}
-	*dest = '\0';
 }
 
 void Com_sprintf (char *dest, size_t size, const char *fmt, ...)
 {
 	va_list		argptr;
 
-	va_start( argptr, fmt );
-	vsnprintf( dest, size, fmt, argptr );
-	va_end( argptr );
+#ifndef NDEBUG
+	if ( !dest )
+		Com_Error(ERR_FATAL, "Q_strncatz: NULL dest" );
+
+	if ( size < 1 )
+		Com_Error(ERR_FATAL, "Q_strncatz: size < 1" ); 
+#endif
+
+	if(size) {
+		va_start( argptr, fmt );
+		vsnprintf( dest, size, fmt, argptr );
+		va_end( argptr );
+	}
 }
 
 /*
@@ -1242,13 +1310,42 @@ char *Q_strlwr( char *s )
 	char *p;
 
 	for( p = s; *s; s++ ) {
-		if(isupper(*s))
+		if(*s >= 'A' && *s <= 'Z')
 			*s += 'a' - 'A';
 	}
 
 	return p;
 }
 
+/*
+==============
+Q_IsNumeric
+==============
+*/
+qboolean Q_IsNumeric (const char *s)
+{
+	qboolean dot;
+
+	if(!s)
+		return false;
+
+	if (*s == '-')
+		s++;
+
+	dot = false;
+	do
+	{
+		if(*s < '0' || *s > '9') {
+			if(*s == '.' && !dot)
+				dot = true;
+			else
+				return false;
+		}
+		s++;
+	} while(*s);
+
+	return true;
+}
 /*
 =====================================================================
 

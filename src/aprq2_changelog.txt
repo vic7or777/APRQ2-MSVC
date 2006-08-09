@@ -1,4 +1,44 @@
-::   AprQ2 changelog  ::
+:: AprQ2 changelog  ::
+
+1.20b
+-Checks for bad vid_displayfrequency/gl_bitdepth on mode change fail.
+-Checks that we actually got all addresses for used gl pointers from gl lib.
+-Old protocol < 34 demos works again.
+-Fixed laser beams not shown on localhost.
+-autoexec.cfg is loaded before subsystems intialize. Allow loading setting for cvar's which would otherwise
+ need subsystem restart to take effect (vid_restart/snd_restart). Command which isnt added yet, willbe run where autoexec.cfg
+ was loaded before.
+-Try to exec postinit.cfg at same place where old autoexec was loaded.
+-Q3 dedicated console for windows.
+-cvar win_consolelogging to enable logging all console msg's to dedicated console, this allow user to see last lines
+ when Q2 own error occurs.
+-MD3 model support from QFusion, set gl_replacemd2 to 1 so it try to load .md3 instead of md2.
+-MD2 is loaded as triangles and drawed whole model at once using DrawElements, so it might give some fps, even more if youre using shadows and/or celshading.
+-Uses the new protocol if server send it in challenge msg, otherwise it assumes its old one so no more reconnect "server is using 3.12". You can also force to use old with cl_protocol 34.
+-Cmd 'dec <cvar> [value]' to decrease cvar value.
+-Cmd 'random <cvar> <from> <to>' to set cvar a random value between from and to.
+-cmd 'centerprint <text>' to print text to screen center.
+-Removed gl_ext_palettedtexture and hacky gl_monolightmap.
+-Support for loading R1CH's anticheat module.
+-cvar con_mwheel to disable mouse wheel console scrolling.
+-Added Q3 style AVI demo frame dumping (cl_avidemo cvar). cvar value is the fps to dump. Also 'cl_forceavidemo' to dump
+ even if not in level.
+-'cl_avidemoformat' to choose between tga/jpg screenshots, default 0 as tga.
+-Fixed blackbars on some gl_scale value.
+-gl_coloredlightmaps also effects models.
+-Skipping context release on openal when using linux J. Valenzuela v0.0.8 library. It seems to hang up.
+-Changed png loading, it should be faster.
+-Added option to makefile to use SDL for mouse/keyboard/window handling for both software and gl.
+-GL version should compile on MacOSX, thanks to hifi.
+-Swiching back to fullscreen from window mode in linux screwed mouse.
+-removed gl_texturealphamode & gl_texturesolidmode, use gl_texturebits instead.
+-Added client side demoplayback, use demo cmd instead of demomap. With this you can use cl_demotimescale.
+-Demoplay and demos menu use the 'demo' cmd instead of demomap.
+-Added cvar mpd_pass to define password for mpd.
+-In linux in_dgamouse 2 uses different method for movement.
+-Added game source files back and compile option to makefile.
+-Makefile make only realease build by default, if you want debug version, use 'make debug'.
+-Added cmd 'vid_minimize' to minimize in both, windows and linux.
 
 1.19
 -toggle command multi parameters now actually works
@@ -97,7 +137,6 @@ _loc's using now linked list, no more max locations limit.
   Tough no support yet for sv_advanced_deltas.
 -cl_protocol cvar allow force to use orginal 34 protocol.
 -Windows direct sound try to use hardware mixing if available. If you have some problems with this, you can force old soft mixing using s_forcesoft cvar.
-
 
 1.17
 -console buffer size doubled

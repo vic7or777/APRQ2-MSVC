@@ -21,29 +21,29 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "client.h"
 
-cvar_t		*cl_testparticles;
-cvar_t		*cl_testentities;
-cvar_t		*cl_testlights;
-cvar_t		*cl_testblend;
+static cvar_t		*cl_testparticles;
+static cvar_t		*cl_testentities;
+static cvar_t		*cl_testlights;
+static cvar_t		*cl_testblend;
 
-cvar_t		*cl_stats;
+static cvar_t		*cl_stats;
 
 
-int			r_numdlights;
-dlight_t	r_dlights[MAX_DLIGHTS];
+static int			r_numdlights;
+static dlight_t	r_dlights[MAX_DLIGHTS];
 
-int			r_numentities;
-entity_t	r_entities[MAX_ENTITIES];
+static int			r_numentities;
+static entity_t	r_entities[MAX_ENTITIES];
 
-int			r_numparticles;
-particle_t	r_particles[MAX_PARTICLES];
+static int			r_numparticles;
+static particle_t	r_particles[MAX_PARTICLES];
 
 // Stainmaps: Begin // -Maniac
-int			r_numstains;
-stain_t		r_stains[MAX_STAINS];
+static int			r_numstains;
+static stain_t		r_stains[MAX_STAINS];
 // Stainmaps: End
 
-lightstyle_t	r_lightstyles[MAX_LIGHTSTYLES];
+static lightstyle_t	r_lightstyles[MAX_LIGHTSTYLES];
 
 char cl_weaponmodels[MAX_CLIENTWEAPONMODELS][MAX_QPATH];
 int num_cl_weaponmodels;
@@ -55,7 +55,7 @@ V_ClearScene
 Specifies the model that will be used as the world
 ====================
 */
-void V_ClearScene (void)
+static void V_ClearScene (void)
 {
 	r_numdlights = r_numentities = r_numparticles = 0;
 }
@@ -85,6 +85,7 @@ void V_AddParticle (const particle_t *p)
 {
 	if (r_numparticles >= MAX_PARTICLES)
 		return;
+
 	r_particles[r_numparticles++] = *p;
 }
 
@@ -163,7 +164,7 @@ V_TestParticles
 If cl_testparticles is set, create 4096 particles in the view
 ================
 */
-void V_TestParticles (void)
+static void V_TestParticles (void)
 {
 	particle_t	*p;
 	int			i, j;
@@ -172,9 +173,9 @@ void V_TestParticles (void)
 	r_numparticles = MAX_PARTICLES;
 	for (i=0 ; i<r_numparticles ; i++)
 	{
-		d = i*0.25;
-		r = 4*((i&7)-3.5);
-		u = 4*(((i>>3)&7)-3.5);
+		d = i*0.25f;
+		r = 4*((i&7)-3.5f);
+		u = 4*(((i>>3)&7)-3.5f);
 		p = &r_particles[i];
 
 		for (j=0 ; j<3 ; j++)
@@ -193,7 +194,7 @@ V_TestEntities
 If cl_testentities is set, create 32 player models
 ================
 */
-void V_TestEntities (void)
+static void V_TestEntities (void)
 {
 	int			i, j;
 	float		f, r;
@@ -206,8 +207,8 @@ void V_TestEntities (void)
 	{
 		ent = &r_entities[i];
 
-		r = 64 * ( (i%4) - 1.5 );
-		f = 64 * (i*0.25) + 128;
+		r = 64 * ( (i%4) - 1.5f );
+		f = 64 * (i*0.25f) + 128;
 
 		for (j=0 ; j<3 ; j++)
 			ent->origin[j] = cl.refdef.vieworg[j] + cl.v_forward[j]*f +
@@ -225,7 +226,7 @@ V_TestLights
 If cl_testlights is set, create 32 lights models
 ================
 */
-void V_TestLights (void)
+static void V_TestLights (void)
 {
 	int			i, j;
 	float		f, r;
@@ -238,8 +239,8 @@ void V_TestLights (void)
 	{
 		dl = &r_dlights[i];
 
-		r = 64 * ( (i%4) - 1.5 );
-		f = 64 * (i*0.25) + 128;
+		r = 64 * ( (i%4) - 1.5f );
+		f = 64 * (i*0.25f) + 128;
 
 		for (j=0 ; j<3 ; j++)
 			dl->origin[j] = cl.refdef.vieworg[j] + cl.v_forward[j]*f +
@@ -294,7 +295,7 @@ void CL_PrepRefresh (void)
 
 	for (i=1 ; i<MAX_MODELS && cl.configstrings[CS_MODELS+i][0] ; i++)
 	{
-		strcpy (name, cl.configstrings[CS_MODELS+i]);
+		Q_strncpyz (name, cl.configstrings[CS_MODELS+i], sizeof(name));
 		name[37] = 0;	// never go beyond one line
 		if (name[0] != '*')
 			Com_Printf ("%s\r", name); 
@@ -438,10 +439,10 @@ void V_RenderView( float stereo_separation )
 		if (cl_testlights->integer)
 			V_TestLights ();
 		if (cl_testblend->integer)
-			Vector4Set(cl.refdef.blend, 1, 0.5, 0.25, 0.5);
+			Vector4Set(cl.refdef.blend, 1, 0.5f, 0.25f, 0.5f);
 
 		// offset vieworg appropriately if we're doing stereo separation
-		if ( stereo_separation != 0 )
+		if ( stereo_separation != 0.0f )
 		{
 			vec3_t tmp;
 
@@ -462,7 +463,7 @@ void V_RenderView( float stereo_separation )
 		cl.refdef.height = scr_vrect.height;
 #ifdef GL_QUAKE
 		if(R_IsWideScreen())
-			cl.refdef.fov_y = CalcFov (cl.refdef.fov_x, cl.refdef.width*0.75, cl.refdef.height);
+			cl.refdef.fov_y = CalcFov (cl.refdef.fov_x, cl.refdef.width*0.75f, cl.refdef.height);
 		else
 #endif
 			cl.refdef.fov_y = CalcFov (cl.refdef.fov_x, cl.refdef.width, cl.refdef.height);

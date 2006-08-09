@@ -15,7 +15,7 @@ id386	equ		1
 ; !!! must be kept the same as in d_iface.h !!!
 TRANSPARENT_COLOR	equ		255
 
-ifndef GLQUAKE
+ifndef GL_QUAKE
 	externdef _d_zistepu:dword
 	externdef _d_pzbuffer:dword
 	externdef _d_zistepv:dword
@@ -240,11 +240,8 @@ endif
 
 	externdef _fpu_ceil_cw:dword
 	externdef _fpu_chop_cw:dword
-	externdef _snd_scaletable:dword
-	externdef _paintbuffer:dword
 	externdef _snd_linear_count:dword
 	externdef _snd_p:dword
-	externdef _snd_vol:dword
 	externdef _snd_out:dword
 	externdef _vright:dword
 	externdef _vup:dword

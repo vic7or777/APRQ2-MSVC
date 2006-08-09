@@ -85,7 +85,7 @@ uint16 CRC_Block (byte *start, int count)
 
 	CRC_Init (&crc);
 	while (count--)
-		crc = (crc << 8) ^ crctable[(crc >> 8) ^ *start++];
+		crc = ((crc << 8) ^ crctable[(crc >> 8) ^ *start++]) & 0xFFFF;
 
 	return crc;
 }

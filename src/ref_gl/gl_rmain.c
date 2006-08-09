@@ -27,6 +27,8 @@ unsigned int QGL_TEXTURE0, QGL_TEXTURE1;
 model_t		*r_worldmodel;
 
 double		gldepthmin, gldepthmax;
+int			vid_scaled_width, vid_scaled_height;
+qboolean usingmodifiedlightmaps;
 
 glconfig_t gl_config;
 glstate_t  gl_state;
@@ -59,9 +61,6 @@ static float	r_ProjectionMatrix[16];
 float			r_WorldViewMatrix[16];
 
 vec3_t	viewAxis[3];
-vec3_t	vup;
-vec3_t	vpn;
-vec3_t	vright;
 vec3_t	r_origin;
 
 //float	r_world_matrix[16];
@@ -111,7 +110,7 @@ cvar_t	*gl_lightmap;
 cvar_t	*gl_shadows;
 cvar_t	*gl_mode;
 cvar_t	*gl_dynamic;
-cvar_t  *gl_monolightmap;
+//cvar_t  *gl_monolightmap;
 cvar_t	*gl_modulate;
 cvar_t	*gl_nobind;
 cvar_t	*gl_round_down;
@@ -128,8 +127,7 @@ cvar_t	*gl_flashblend;
 cvar_t  *gl_saturatelighting;
 cvar_t	*gl_swapinterval;
 cvar_t	*gl_texturemode;
-cvar_t	*gl_texturealphamode;
-cvar_t	*gl_texturesolidmode;
+cvar_t	*gl_texturebits;
 cvar_t	*gl_lockpvs;
 
 cvar_t	*gl_3dlabs_broken;
@@ -153,6 +151,7 @@ cvar_t *gl_screenshot_quality;
 
 cvar_t 	*gl_replacewal;
 cvar_t  *gl_replacepcx;
+cvar_t	*gl_replacemd2;
 cvar_t	*gl_stainmaps;				// stainmaps
 cvar_t	*gl_motionblur;				// motionblur
 cvar_t	*gl_waterwaves;
@@ -177,14 +176,18 @@ cvar_t	*gl_shelleffect;
 cvar_t	*gl_ext_texture_filter_anisotropic;
 cvar_t	*gl_ext_max_anisotropy;
 
+/*cvar_t	*gl_colorbits;
+cvar_t	*gl_alphabits;
+cvar_t	*gl_depthbits;
+cvar_t	*gl_stencilbits;*/
+
 static void R_ModeList_f( void );
 static qboolean isWideScreen = false;
 
 // vertex arrays
-static float	tex_array[MAX_ARRAY][2];
-static float	vert_array[MAX_ARRAY][3];
-static float	col_array[MAX_ARRAY][4];
-//End
+vec2_t	texCoordArray[MAX_ARRAY];
+vec3_t	vertArray[MAX_ARRAY];
+vec4_t	colorArray[MAX_ARRAY];
 
 /*
 =================
@@ -313,16 +316,16 @@ R_DrawSpriteModel
 */
 static void R_DrawSpriteModel (void)
 {
-	float alpha = 1.0F;
-	vec3_t	point;
-	dsprframe_t	*frame;
-	float		*up, *right;
-	dsprite_t		*psprite;
+	mspritemodel_t	*psprite;
+	mspriteframe_t	*frame;
+	qboolean		alpha = false;
+	vec3_t			point;
+	float			*up, *right;
 
 	// don't even bother culling, because it's just a single
 	// polygon without a surface cache
 
-	psprite = (dsprite_t *)currentmodel->extradata;
+	psprite = (mspritemodel_t *)currentmodel->extradata;
 
 	currententity->frame %= psprite->numframes;
 
@@ -330,19 +333,24 @@ static void R_DrawSpriteModel (void)
 
 
 	// normal sprite
-	up = vup;
-	right = vright;
+	up = viewAxis[2];
+	right = viewAxis[1];
 
 	if (currententity->flags & RF_TRANSLUCENT && currententity->alpha < 1.0F)
 	{
-		alpha = currententity->alpha;
+		alpha = true;
 		qglEnable(GL_BLEND);
-		qglColor4f( 1, 1, 1, alpha );
+		qglColor4f( 1, 1, 1, currententity->alpha );
 	}
 	else
 		qglEnable(GL_ALPHA_TEST);
 
-    GL_Bind(currentmodel->skins[currententity->frame]->texnum);
+	if(currentmodel->skins[currententity->frame])
+		GL_Bind(currentmodel->skins[currententity->frame]->texnum);
+	else if(currentmodel->skins[0])
+		GL_Bind(currentmodel->skins[0]->texnum);
+	else
+		GL_Bind(r_notexture->texnum);
 
 	GL_TexEnv( GL_MODULATE );
 
@@ -350,29 +358,29 @@ static void R_DrawSpriteModel (void)
 
 	qglTexCoord2i (0, 1);
 	VectorMA (currententity->origin, -frame->origin_y, up, point);
-	VectorMA (point, -frame->origin_x, right, point);
+	VectorMA (point, frame->origin_x, right, point);
 	qglVertex3fv (point);
 
 	qglTexCoord2i (0, 0);
 	VectorMA (currententity->origin, frame->height - frame->origin_y, up, point);
-	VectorMA (point, -frame->origin_x, right, point);
+	VectorMA (point, frame->origin_x, right, point);
 	qglVertex3fv (point);
 
 	qglTexCoord2i (1, 0);
 	VectorMA (currententity->origin, frame->height - frame->origin_y, up, point);
-	VectorMA (point, frame->width - frame->origin_x, right, point);
+	VectorMA (point, -(frame->width - frame->origin_x), right, point);
 	qglVertex3fv (point);
 
 	qglTexCoord2i (1, 1);
 	VectorMA (currententity->origin, -frame->origin_y, up, point);
-	VectorMA (point, frame->width - frame->origin_x, right, point);
+	VectorMA (point, -(frame->width - frame->origin_x), right, point);
 	qglVertex3fv (point);
 	
 	qglEnd ();
 
 	GL_TexEnv( GL_REPLACE );
 
-	if ( alpha < 1.0F )
+	if (alpha)
 	{
 		qglDisable(GL_BLEND);
 		qglColor4fv(colorWhite);
@@ -531,20 +539,20 @@ static void GL_DrawParticles( int num_particles, const particle_t particles[], c
 	GL_TexEnv( GL_MODULATE );
 	qglBegin( GL_QUADS );
 
-	VectorScale (vup, 1.5f, r_pup);
-	VectorScale (vright, 1.5f, r_pright);
+	VectorScale (viewAxis[2], 1.5f, r_pup);
+	VectorScale (viewAxis[1], -1.5f, r_pright);
 
 	for ( p = particles, i=0 ; i < num_particles ; i++,p++)
 	{
 		// hack a scale up to keep particles from disapearing
-		scale = ( p->origin[0] - r_origin[0] ) * vpn[0] + 
-			    ( p->origin[1] - r_origin[1] ) * vpn[1] +
-			    ( p->origin[2] - r_origin[2] ) * vpn[2];
+		scale = ( p->origin[0] - r_origin[0] ) * viewAxis[0][0] + 
+			    ( p->origin[1] - r_origin[1] ) * viewAxis[0][1] +
+			    ( p->origin[2] - r_origin[2] ) * viewAxis[0][2];
 
 		scale = (scale < 20) ? 1 : 1 + scale * 0.004f;
 
-		*(int *)color = colortable[p->color];
-		color[3] = p->alpha * 255;
+		*(int *)color = colortable[p->color & 0xFF];
+		color[3] = (byte)(p->alpha * 255);
 
 		qglColor4ubv( color );
 
@@ -593,7 +601,7 @@ static void R_DrawParticles (void)
 		const particle_t *p;
 		int				i,k;
 		vec3_t			up, right;
-		float			scale, r,g,b;
+		float			scale;
 
 		qglDepthMask( GL_FALSE );		// no z buffering
 		qglEnable(GL_BLEND);
@@ -606,44 +614,35 @@ static void R_DrawParticles (void)
 		qglEnableClientState (GL_TEXTURE_COORD_ARRAY);
 		qglEnableClientState (GL_COLOR_ARRAY);
 
-		qglTexCoordPointer (2, GL_FLOAT, sizeof(tex_array[0]), tex_array[0]);
-		qglVertexPointer (3, GL_FLOAT, sizeof(vert_array[0]), vert_array[0]);
-		qglColorPointer (4, GL_FLOAT, sizeof(col_array[0]), col_array[0]);
+		qglTexCoordPointer (2, GL_FLOAT, sizeof(texCoordArray[0]), texCoordArray[0]);
+		qglVertexPointer (3, GL_FLOAT, sizeof(vertArray[0]), vertArray[0]);
 
 		GL_Bind(r_particletexture->texnum);
 
-
-		VectorScale (vup, 1.5, up);
-		VectorScale (vright, 1.5, right);
+		VectorScale (viewAxis[2], 1.5f, up);
+		VectorScale (viewAxis[1], -1.5f, right);
 
 		for ( p = r_newrefdef.particles, i=0, k=0 ; i < r_newrefdef.num_particles; i++,p++,k+=4)
 		{
 			// hack a scale up to keep particles from disapearing
-			scale = ( p->origin[0] - r_origin[0] ) * vpn[0] + 
-				    ( p->origin[1] - r_origin[1] ) * vpn[1] +
-				    ( p->origin[2] - r_origin[2] ) * vpn[2];
+			scale = ( p->origin[0] - r_origin[0] ) * viewAxis[0][0] + 
+				    ( p->origin[1] - r_origin[1] ) * viewAxis[0][1] +
+				    ( p->origin[2] - r_origin[2] ) * viewAxis[0][2];
 
 			scale = (scale < 20) ? 1 : 1 + scale * 0.0004f;
 
-			r = d_8to24tablef[p->color & 0xFF][0];
-			g = d_8to24tablef[p->color & 0xFF][1];
-			b = d_8to24tablef[p->color & 0xFF][2];
+			texCoordArray[k][0] = texCoordArray[k][1] = texCoordArray[k+1][1] = texCoordArray[k+3][0] = 0;
+			texCoordArray[k+1][0] = texCoordArray[k+2][0] = texCoordArray[k+2][1] = texCoordArray[k+3][1] = 1;
 
-			Vector2Set(tex_array[k], 0, 0);
-			Vector4Set(col_array[k], r, g, b, p->alpha);
-			VectorSet(vert_array[k], p->origin[0] - (up[0]*scale) - (right[0]*scale), p->origin[1] - (up[1]*scale) - (right[1]*scale), p->origin[2] - (up[2]*scale) - (right[2]*scale));
+			colorArray[k][0] = colorArray[k+1][0] = colorArray[k+2][0] = colorArray[k+3][0] = d_8to24tablef[p->color & 0xFF][0];
+			colorArray[k][1] = colorArray[k+1][1] = colorArray[k+2][1] = colorArray[k+3][1] = d_8to24tablef[p->color & 0xFF][1];
+			colorArray[k][2] = colorArray[k+1][2] = colorArray[k+2][2] = colorArray[k+3][2] = d_8to24tablef[p->color & 0xFF][2];
+			colorArray[k][3] = colorArray[k+1][3] = colorArray[k+2][3] = colorArray[k+3][3] = p->alpha;
 
-			Vector2Set(tex_array[k+1], 1, 0);
-			Vector4Set(col_array[k+1], r, g, b, p->alpha);
-			VectorSet(vert_array[k+1],p->origin[0] + (up[0]*scale) - (right[0]*scale), p->origin[1] + (up[1]*scale) - (right[1]*scale), p->origin[2] + (up[2]*scale) - (right[2]*scale));
-
-			Vector2Set(tex_array[k+2], 1, 1);
-			Vector4Set(col_array[k+2], r, g, b, p->alpha);
-			VectorSet(vert_array[k+2], p->origin[0] + (right[0]*scale) + (up[0]*scale), p->origin[1] + (right[1]*scale) + (up[1]*scale), p->origin[2] + (right[2]*scale) + (up[2]*scale));
-
-			Vector2Set(tex_array[k+3], 0, 1);
-			Vector4Set(col_array[k+3], r, g, b, p->alpha);
-			VectorSet(vert_array[k+3], p->origin[0] + (right[0]*scale) - (up[0]*scale), p->origin[1] + (right[1]*scale) - (up[1]*scale), p->origin[2] + (right[2]*scale) - (up[2]*scale));
+			VectorSet(vertArray[k],   p->origin[0] - (up[0]*scale) - (right[0]*scale), p->origin[1] - (up[1]*scale) - (right[1]*scale), p->origin[2] - (up[2]*scale) - (right[2]*scale));
+			VectorSet(vertArray[k+1], p->origin[0] + (up[0]*scale) - (right[0]*scale), p->origin[1] + (up[1]*scale) - (right[1]*scale), p->origin[2] + (up[2]*scale) - (right[2]*scale));
+			VectorSet(vertArray[k+2], p->origin[0] + (right[0]*scale) + (up[0]*scale), p->origin[1] + (right[1]*scale) + (up[1]*scale), p->origin[2] + (right[2]*scale) + (up[2]*scale));
+			VectorSet(vertArray[k+3], p->origin[0] + (right[0]*scale) - (up[0]*scale), p->origin[1] + (right[1]*scale) - (up[1]*scale), p->origin[2] + (right[2]*scale) - (up[2]*scale));
 		}
 
 		qglDrawArrays(GL_QUADS,0,k);
@@ -660,7 +659,7 @@ static void R_DrawParticles (void)
 	else if ( gl_ext_pointparameters->integer && qglPointParameterfEXT )
 	{
 		int i;
-		unsigned char color[4];
+		byte color[4];
 		const particle_t *p;
 
 		qglDepthMask( GL_FALSE );
@@ -672,8 +671,8 @@ static void R_DrawParticles (void)
 		qglBegin( GL_POINTS );
 		for ( i = 0, p = r_newrefdef.particles; i < r_newrefdef.num_particles; i++, p++ )
 		{
-			*(int *)color = d_8to24table[p->color];
-			color[3] = p->alpha*255;
+			*(int *)color = d_8to24table[p->color & 0xFF];
+			color[3] = (byte)(p->alpha*255);
 
 			qglColor4ubv( color );
 
@@ -735,38 +734,34 @@ static void R_PolyBlend (void)
 
 static void SetPlaneSignbits(cplane_t *out)
 {
-	int	bits = 0, j;
+	out->signbits = 0;
 
-	// for fast box on planeside test
-	for (j=0; j<3; j++) {
-		if (out->normal[j] < 0)
-			bits |= 1<<j;
-	}
-	out->signbits = bits;
+	if (out->normal[0] < 0)
+		out->signbits |= 1;
+	if (out->normal[1] < 0)
+		out->signbits |= 2;
+	if (out->normal[2] < 0)
+		out->signbits |= 4;
 }
-
 
 static void R_SetFrustum (void)
 {
 	int		i;
-	float	xs, xc;
-	float	ang;
+	float	xs, xc, ang;
 
 	if(isWideScreen)
-		ang = r_newrefdef.fov_x / 180 * M_PI * 0.625f;
+		ang = r_newrefdef.fov_x / 180.0f * M_PI * 0.625f;
 	else
-		ang = r_newrefdef.fov_x / 180 * M_PI * 0.5f;
+		ang = r_newrefdef.fov_x / 180.0f * M_PI * 0.5f;
 
-	xs = (float)sin( ang );
-	xc = (float)cos( ang );
+	Q_sincos(ang, &xs, &xc);
 
 	VectorScale( viewAxis[0], xs, frustum[1].normal );
 	VectorMA( frustum[1].normal, xc, viewAxis[1], frustum[0].normal );
 	VectorMA( frustum[1].normal, -xc, viewAxis[1], frustum[1].normal );
 
-	ang = r_newrefdef.fov_y / 180 * M_PI * 0.5f;
-	xs = (float)sin( ang );
-	xc = (float)cos( ang );
+	ang = r_newrefdef.fov_y / 180.0f * M_PI * 0.5f;
+	Q_sincos(ang, &xs, &xc);
 
 	VectorScale( viewAxis[0], xs, frustum[3].normal );
 	VectorMA( frustum[3].normal, xc, viewAxis[2], frustum[2].normal );
@@ -789,49 +784,34 @@ R_SetupFrame
 */
 static void R_SetupFrame (void)
 {
-	//int i;
-	mleaf_t	*leaf;
 
 	r_framecount++;
 
 	// build the transformation matrix for the given view angles
 	VectorCopy (r_newrefdef.vieworg, r_origin);
-	AngleVectors (r_newrefdef.viewangles, vpn, vright, vup);
-	VectorCopy(vpn, viewAxis[0]);
-	VectorNegate(vright, viewAxis[1]);
-	VectorCopy(vup, viewAxis[2]);
+	AnglesToAxis(r_newrefdef.viewangles, viewAxis);
 
 	// current viewcluster
 	if ( !( r_newrefdef.rdflags & RDF_NOWORLDMODEL ) )
 	{
+		mleaf_t	*leaf;
+		vec3_t	temp;
+
 		r_oldviewcluster = r_viewcluster;
 		r_oldviewcluster2 = r_viewcluster2;
 		leaf = Mod_PointInLeaf (r_origin, r_worldmodel);
 		r_viewcluster = r_viewcluster2 = leaf->cluster;
 
+		VectorCopy (r_origin, temp);
 		// check above and below so crossing solid water doesn't draw wrong
 		if (!leaf->contents)
-		{
-			// look down a bit
-			vec3_t	temp;
-
-			VectorCopy (r_origin, temp);
-			temp[2] -= 16;
-			leaf = Mod_PointInLeaf (temp, r_worldmodel);
-			if ( !(leaf->contents & CONTENTS_SOLID) && (leaf->cluster != r_viewcluster2) )
-				r_viewcluster2 = leaf->cluster;
-		}
+			temp[2] -= 16; // look down a bit
 		else
-		{
-			// look up a bit
-			vec3_t	temp;
-
-			VectorCopy (r_origin, temp);
 			temp[2] += 16;
-			leaf = Mod_PointInLeaf (temp, r_worldmodel);
-			if ( !(leaf->contents & CONTENTS_SOLID) && (leaf->cluster != r_viewcluster2) )
-				r_viewcluster2 = leaf->cluster;
-		}
+
+		leaf = Mod_PointInLeaf (temp, r_worldmodel);
+		if ( !(leaf->contents & CONTENTS_SOLID) && (leaf->cluster != r_viewcluster2) )
+			r_viewcluster2 = leaf->cluster;
 	}
 	else // clear out the portion of the screen that the NOWORLDMODEL defines
 	{
@@ -845,7 +825,31 @@ static void R_SetupFrame (void)
 }
 
 
-static float skybox_farz = 4096;
+float skybox_farz = 4096;
+
+/*
+static float R_SetFarClip (void) {
+
+	float	farDist, dirDist, worldDist = 0;
+	vec_t *mins, *maxs;
+
+	if (r_newrefdef.rdflags & RDF_NOWORLDMODEL)
+		return 4096.0f;
+
+	dirDist = DotProduct(r_origin, viewAxis[0]);
+	farDist = dirDist + 256.0f;
+
+	mins = &r_worldmodel->nodes[0].minmaxs[0];
+	maxs = &r_worldmodel->nodes[0].minmaxs[3];
+	worldDist += (viewAxis[0][0] < 0 ? mins[0] : maxs[0]) * viewAxis[0][0] + 
+				 (viewAxis[0][1] < 0 ? mins[1] : maxs[1]) * viewAxis[0][1] +
+				 (viewAxis[0][2] < 0 ? mins[2] : maxs[2]) * viewAxis[0][2];
+
+	if (farDist < worldDist)
+		farDist = worldDist;
+
+	return farDist - dirDist + 256.0f;
+}*/
 
 static void R_SetupProjection( void )
 {
@@ -854,7 +858,7 @@ static void R_SetupProjection( void )
 	float	zNear, zFar;
 
 	// set up projection matrix
-	zNear	= 4;
+	zNear	= 4.0f;
 	zFar	= skybox_farz;
 
 	ymax = zNear * (float)tan( r_newrefdef.fov_y * M_PI_DIV_360 );
@@ -864,33 +868,33 @@ static void R_SetupProjection( void )
 	xmin = -xmax;
 
 	if(gl_state.camera_separation) {
-		xmin += -( 2 * gl_state.camera_separation ) / zNear;
-		xmax += -( 2 * gl_state.camera_separation ) / zNear;
+		xmin += -( 2.0f * gl_state.camera_separation ) / zNear;
+		xmax += -( 2.0f * gl_state.camera_separation ) / zNear;
 	}
 
 	width = xmax - xmin;
 	height = ymax - ymin;
 	depth = zFar - zNear;
 
-	r_ProjectionMatrix[0] = 2 * zNear / width;
-	r_ProjectionMatrix[4] = 0;
+	r_ProjectionMatrix[0] = 2.0f * zNear / width;
+	r_ProjectionMatrix[4] = 0.0f;
 	r_ProjectionMatrix[8] = ( xmax + xmin ) / width;	// normally 0
-	r_ProjectionMatrix[12] = 0;
+	r_ProjectionMatrix[12] = 0.0f;
 
-	r_ProjectionMatrix[1] = 0;
-	r_ProjectionMatrix[5] = 2 * zNear / height;
+	r_ProjectionMatrix[1] = 0.0f;
+	r_ProjectionMatrix[5] = 2.0f * zNear / height;
 	r_ProjectionMatrix[9] = ( ymax + ymin ) / height;	// normally 0
-	r_ProjectionMatrix[13] = 0;
+	r_ProjectionMatrix[13] = 0.0f;
 
-	r_ProjectionMatrix[2] = 0;
-	r_ProjectionMatrix[6] = 0;
+	r_ProjectionMatrix[2] = 0.0f;
+	r_ProjectionMatrix[6] = 0.0f;
 	r_ProjectionMatrix[10] = -( zFar + zNear ) / depth;
-	r_ProjectionMatrix[14] = -2 * zFar * zNear / depth;
+	r_ProjectionMatrix[14] = -2.0f * zFar * zNear / depth;
 
-	r_ProjectionMatrix[3] = 0;
-	r_ProjectionMatrix[7] = 0;
-	r_ProjectionMatrix[11] = -1;
-	r_ProjectionMatrix[15] = 0;
+	r_ProjectionMatrix[3] = 0.0f;
+	r_ProjectionMatrix[7] = 0.0f;
+	r_ProjectionMatrix[11] = -1.0f;
+	r_ProjectionMatrix[15] = 0.0f;
 }
 
 /*
@@ -903,19 +907,19 @@ static void R_SetupModelviewMatrix( void )
 	r_WorldViewMatrix[ 0] = -viewAxis[1][0];
 	r_WorldViewMatrix[ 1] = viewAxis[2][0];
 	r_WorldViewMatrix[ 2] = -viewAxis[0][0];
-	r_WorldViewMatrix[ 3] = 0.0;
+	r_WorldViewMatrix[ 3] = 0.0f;
 	r_WorldViewMatrix[ 4] = -viewAxis[1][1];
 	r_WorldViewMatrix[ 5] = viewAxis[2][1];
 	r_WorldViewMatrix[ 6] = -viewAxis[0][1];
-	r_WorldViewMatrix[ 7] = 0.0;
+	r_WorldViewMatrix[ 7] = 0.0f;
 	r_WorldViewMatrix[ 8] = -viewAxis[1][2];
 	r_WorldViewMatrix[ 9] = viewAxis[2][2];
 	r_WorldViewMatrix[10] = -viewAxis[0][2];
-	r_WorldViewMatrix[11] = 0.0;
+	r_WorldViewMatrix[11] = 0.0f;
 	r_WorldViewMatrix[12] = DotProduct(r_origin, viewAxis[1]);
 	r_WorldViewMatrix[13] = -DotProduct(r_origin, viewAxis[2]);
 	r_WorldViewMatrix[14] = DotProduct(r_origin, viewAxis[0]);
-	r_WorldViewMatrix[15] = 1.0;
+	r_WorldViewMatrix[15] = 1.0f;
 }
 
 /*
@@ -926,6 +930,7 @@ R_SetupGL
 static void R_SetupGL (void)
 {
 	// set up viewport
+	//qglScissor( r_newrefdef.x, vid.height - r_newrefdef.height - r_newrefdef.y, r_newrefdef.width, r_newrefdef.height );
 	qglViewport( r_newrefdef.x, vid.height - r_newrefdef.height - r_newrefdef.y, r_newrefdef.width, r_newrefdef.height );
 
 	// set up projection matrix
@@ -960,11 +965,11 @@ static void R_Clear (void)
 
 	if (gl_state.stencil && gl_shadows->integer == 2)
 	{
-		qglClearStencil(1);
+		qglClearStencil(128);
 		bits |= GL_STENCIL_BUFFER_BIT;
 	}
 
-	if (gl_ztrick->integer)
+	if (gl_ztrick->integer && r_worldmodel != NULL)
 	{
 		static int trickframe = 0;
 
@@ -1010,20 +1015,21 @@ void R_ApplyStains(void);
 
 static void R_RenderView (refdef_t *fd)
 {
-	static const float fogcolor[4] = {0.09f,0.1f,0.12f,1.0f};
-
 	if (r_norefresh->integer)
 		return;
 
 	r_newrefdef = *fd;
 
-	r_newrefdef.width *= gl_scale->value;
-	r_newrefdef.height *= gl_scale->value;
-	r_newrefdef.x *= gl_scale->value;
-	r_newrefdef.y *= gl_scale->value;
-
 	if (!r_worldmodel && !( r_newrefdef.rdflags & RDF_NOWORLDMODEL ) )
 		Com_Error (ERR_DROP, "R_RenderView: NULL worldmodel");
+
+	if (gl_scale->value > 1.0f)
+	{
+		r_newrefdef.width *= gl_scale->value;
+		r_newrefdef.height *= gl_scale->value;
+		r_newrefdef.x *= gl_scale->value;
+		r_newrefdef.y *= gl_scale->value;
+	}
 
 	c_brush_polys = c_alias_polys = 0;
 
@@ -1068,6 +1074,8 @@ static void R_RenderView (refdef_t *fd)
 
 	if(gl_fog->integer)
 	{
+		static const float fogcolor[4] = {0.09f,0.1f,0.12f,1.0f};
+
 		qglFogi		(GL_FOG_MODE, GL_EXP2);
 		qglFogf		(GL_FOG_DENSITY, gl_fog_density->value*2/4096);
 		qglFogfv	(GL_FOG_COLOR, fogcolor);
@@ -1075,7 +1083,7 @@ static void R_RenderView (refdef_t *fd)
 	}
 }
 
-void R_MotionBlur(void)
+static void R_MotionBlur(void)
 {
 	static unsigned int blurtex = 0;
 
@@ -1138,7 +1146,7 @@ static void	R_SetGL2D (void)
 	qglMatrixMode(GL_PROJECTION);
     qglLoadIdentity ();
 
-	qglOrtho(0, vid.width / gl_scale->value, vid.height / gl_scale->value, 0, -99999, 99999);
+	qglOrtho(0, vid_scaled_width, vid_scaled_height, 0, -99999, 99999);
 //	qglOrtho  (0, vid.width, vid.height, 0, -99999, 99999);
 
 	qglMatrixMode(GL_MODELVIEW);
@@ -1172,16 +1180,16 @@ static void R_SetLightLevel (void)
 	if (shadelight[0] > shadelight[1])
 	{
 		if (shadelight[0] > shadelight[2])
-			r_lightlevel->integer = 150*shadelight[0];
+			r_lightlevel->value = 150.0f*shadelight[0];
 		else
-			r_lightlevel->integer = 150*shadelight[2];
+			r_lightlevel->value = 150.0f*shadelight[2];
 	}
 	else
 	{
 		if (shadelight[1] > shadelight[2])
-			r_lightlevel->integer = 150*shadelight[1];
+			r_lightlevel->value = 150.0f*shadelight[1];
 		else
-			r_lightlevel->integer = 150*shadelight[2];
+			r_lightlevel->value = 150.0f*shadelight[2];
 	}
 
 }
@@ -1213,10 +1221,15 @@ static void OnChange_Scale(cvar_t *self, const char *oldValue)
 			return;
 	}
 
-	// get the current resolution
-	R_GetModeInfo(&width, &height, gl_mode->integer);
+	vid_scaled_width = (int)ceilf((float)vid.width / self->value);
+	vid_scaled_height = (int)ceilf((float)vid.height / self->value);
+
+	//round to powers of 8/2 to avoid blackbars
+	width = (vid_scaled_width+7)&~7;
+	height = (vid_scaled_height+1)&~1;
+
 	// lie to client about new scaled window size
-	VID_NewWindow( width / self->value, height / self->value );
+	VID_NewWindow( width, height );
 }
 
 static void OnChange_WaterWaves(cvar_t *self, const char *oldValue)
@@ -1233,19 +1246,6 @@ static void OnChange_TexMode(cvar_t *self, const char *oldValue)
 	GL_TextureMode( self->string );
 	self->modified = false;
 }
-
-static void OnChange_TexAlphaMode(cvar_t *self, const char *oldValue)
-{
-	GL_TextureAlphaMode( self->string );
-	self->modified = false;
-}
-
-static void OnChange_TexSolidMode(cvar_t *self, const char *oldValue)
-{
-	GL_TextureSolidMode( self->string );
-	self->modified = false;
-}
-
 
 static void OnChange_Skydistace(cvar_t *self, const char *oldValue)
 {
@@ -1270,10 +1270,22 @@ static void OnChange_Fog(cvar_t *self, const char *oldValue)
 	qglDisable(GL_FOG);
 }
 
-static void OnChangeCustomWH(cvar_t *self, const char *oldValue)
+static void OnChangeCustomWidth(cvar_t *self, const char *oldValue)
 {
 	if(gl_state.prev_mode == -1)
 		gl_state.prev_mode = 3;
+
+	if(self->integer < 320)
+		Cvar_Set(self->name, "320");
+}
+
+static void OnChangeCustomHeight(cvar_t *self, const char *oldValue)
+{
+	if(gl_state.prev_mode == -1)
+		gl_state.prev_mode = 3;
+
+	if(self->integer < 240)
+		Cvar_Set(self->name, "240");
 }
 
 static void OnChangeMaxAnisotropy(cvar_t *self, const char *oldValue)
@@ -1365,11 +1377,10 @@ static void R_Register( void )
 	gl_polyblend = Cvar_Get ("gl_polyblend", "1", 0);
 	gl_flashblend = Cvar_Get ("gl_flashblend", "0", 0);
 //	gl_playermip = Cvar_Get ("gl_playermip", "0", 0);
-	gl_monolightmap = Cvar_Get( "gl_monolightmap", "0", 0 );
+//	gl_monolightmap = Cvar_Get( "gl_monolightmap", "0", 0 );
 	gl_driver = Cvar_Get( "gl_driver", GL_DRIVERNAME, CVAR_ARCHIVE|CVAR_LATCHVIDEO);	
 	gl_texturemode = Cvar_Get( "gl_texturemode", "GL_LINEAR_MIPMAP_NEAREST", CVAR_ARCHIVE );
-	gl_texturealphamode = Cvar_Get( "gl_texturealphamode", "default", CVAR_ARCHIVE );
-	gl_texturesolidmode = Cvar_Get( "gl_texturesolidmode", "default", CVAR_ARCHIVE );
+	gl_texturebits = Cvar_Get( "gl_texturebits", "0", CVAR_ARCHIVE|CVAR_LATCHVIDEO);
 	gl_lockpvs = Cvar_Get( "gl_lockpvs", "0", CVAR_CHEAT );
 
 	gl_vertex_arrays = Cvar_Get( "gl_vertex_arrays", "0", CVAR_ARCHIVE );
@@ -1391,17 +1402,18 @@ static void R_Register( void )
 //	vid_gamma = Cvar_Get( "vid_gamma", "1.0", CVAR_ARCHIVE );
 
 	//Added cvar's -Maniac
-	skydistance = Cvar_Get("skydistance", "2300", CVAR_ARCHIVE ); // DMP - skybox size change
+	skydistance = Cvar_Get("skydistance", "4096", CVAR_ARCHIVE ); // DMP - skybox size change
 
 	gl_replacewal = Cvar_Get( "gl_replacewal", "0", CVAR_ARCHIVE|CVAR_LATCHVIDEO);
 	gl_replacepcx = Cvar_Get( "gl_replacepcx", "0", CVAR_ARCHIVE|CVAR_LATCHVIDEO);
+	gl_replacemd2 = Cvar_Get( "gl_replacemd2", "0", CVAR_ARCHIVE|CVAR_LATCHVIDEO);
 	gl_fontshadow = Cvar_Get( "gl_fontshadow", "0", CVAR_ARCHIVE);
 
 	gl_stainmaps = Cvar_Get( "gl_stainmaps", "0", CVAR_ARCHIVE );
 	gl_sgis_mipmap = Cvar_Get( "gl_sgis_mipmap", "0", CVAR_ARCHIVE|CVAR_LATCHVIDEO );
 	gl_ext_texture_compression = Cvar_Get( "gl_ext_texture_compression", "0", CVAR_ARCHIVE|CVAR_LATCHVIDEO );
 	gl_celshading = Cvar_Get ( "gl_celshading", "0", CVAR_ARCHIVE ); //Celshading
-	gl_celshading_width = Cvar_Get ( "gl_celshading_width", "6", CVAR_ARCHIVE );
+	gl_celshading_width = Cvar_Get ( "gl_celshading_width", "4", CVAR_ARCHIVE );
 	gl_scale = Cvar_Get ("gl_scale", "1", CVAR_ARCHIVE);
 
 	gl_watercaustics = Cvar_Get ("gl_watercaustics", "0", 0);
@@ -1418,7 +1430,6 @@ static void R_Register( void )
 	gl_fog = Cvar_Get ("gl_fog", "0", 0);
 	gl_fog_density = Cvar_Get ("gl_fog_density", "1", 0);
 	gl_coloredlightmaps = Cvar_Get( "gl_coloredlightmaps", "1", CVAR_ARCHIVE|CVAR_LATCHVIDEO);
-    Cmd_AddCommand( "screenshotjpg", GL_ScreenShot_f );
 
 	gl_eff_world_wireframe = Cvar_Get( "gl_eff_world_wireframe", "0", CVAR_CHEAT );
 	gl_eff_world_bg_type = Cvar_Get( "gl_eff_world_bg_type", "0", CVAR_CHEAT );
@@ -1431,18 +1442,23 @@ static void R_Register( void )
 
 	gl_shelleffect = Cvar_Get ("gl_shelleffect", "0", CVAR_ARCHIVE);
 
+	/*gl_colorbits =	Cvar_Get ("gl_colorbits", "0", 0);
+	gl_alphabits =		Cvar_Get ("gl_alphabits", "", 0);
+	gl_depthbits =		Cvar_Get ("gl_depthbits", "", 0);
+	gl_stencilbits =	Cvar_Get ("gl_stencilbits", "0", 0);*/
+
 	gl_ext_texture_filter_anisotropic = Cvar_Get("gl_ext_texture_filter_anisotropic", "0", CVAR_ARCHIVE|CVAR_LATCHVIDEO);
 	gl_ext_max_anisotropy = Cvar_Get("gl_ext_max_anisotropy", "2", CVAR_ARCHIVE);
 	gl_ext_max_anisotropy->OnChange = OnChangeMaxAnisotropy;
 
 	gl_texturemode->OnChange = OnChange_TexMode;
-	gl_texturealphamode->OnChange = OnChange_TexAlphaMode;
-	gl_texturesolidmode->OnChange = OnChange_TexSolidMode;
 
 	r_customwidth = Cvar_Get ("r_customwidth",  "1024", CVAR_ARCHIVE);
 	r_customheight = Cvar_Get ("r_customheight", "768", CVAR_ARCHIVE);
-	r_customwidth->OnChange = OnChangeCustomWH;
-	r_customheight->OnChange = OnChangeCustomWH;
+	r_customwidth->OnChange = OnChangeCustomWidth;
+	r_customheight->OnChange = OnChangeCustomHeight;
+	OnChangeCustomWidth(r_customwidth, r_customwidth->resetString);
+	OnChangeCustomHeight(r_customheight, r_customheight->resetString);
 
 	Cmd_AddCommand( "modelist", R_ModeList_f );
 
@@ -1459,6 +1475,7 @@ static void R_Register( void )
 
 	Cmd_AddCommand( "imagelist", GL_ImageList_f );
 	Cmd_AddCommand( "screenshot", GL_ScreenShot_f );
+    Cmd_AddCommand( "screenshotjpg", GL_ScreenShot_f );
 	Cmd_AddCommand( "modellist", Mod_Modellist_f );
 	Cmd_AddCommand( "gl_strings", GL_Strings_f );
 
@@ -1531,8 +1548,12 @@ qboolean R_IsWideScreen(void)
 
 static void R_CheckWideScreen(void)
 {
-	if( (gl_mode->integer == -1 && (r_customwidth->value/r_customheight->value == 16.0f/9.0f)) ||
-		(float)((float)vid.width/(float)vid.height) == (float)(16.0f/9.0f)) {
+	float aspect, aspect2;
+
+	aspect = (float)vid.width/(float)vid.height;
+	aspect2 = 16.0f/9.0f;
+
+	if(aspect == aspect2) {
 		Com_Printf("WideScreen Mode\n");
 		isWideScreen = true;
 	}
@@ -1572,16 +1593,20 @@ qboolean R_SetMode (void)
 			Cvar_Set( "vid_fullscreen", "0");
 			vid_fullscreen->modified = false;
 			Com_Printf ( "R_SetMode: fullscreen unavailable in this mode (%i).\n", gl_mode->integer );
-			if ( ( err = GLimp_SetMode( &vid.width, &vid.height, gl_mode->integer, false ) ) == rserr_ok ) {
+			//This isnt nesecery, GLimp_SetMode go windowed mode automaticly on fs fail
+			//if ( ( err = GLimp_SetMode( &vid.width, &vid.height, gl_mode->integer, false ) ) == rserr_ok ) {
 				R_CheckWideScreen();
 				return true;
-			}
+			//}
 		}
 		else if ( err == rserr_invalid_mode )
 		{
-			Cvar_SetValue( "gl_mode", gl_state.prev_mode );
-			gl_mode->modified = false;
 			Com_Printf ( "R_SetMode: invalid mode (%i).\n", gl_mode->integer );
+			if(gl_mode->integer != gl_state.prev_mode) {
+				Cvar_SetValue( "gl_mode", gl_state.prev_mode );
+				gl_mode->modified = false;
+				return R_SetMode();
+			}
 		}
 
 		// try setting it back to something safe
@@ -1601,7 +1626,7 @@ qboolean R_SetMode (void)
 R_Init
 ===============
 */
-char qglLastError[128];
+char qglLastError[256];
 
 static const char *GetQGLErrorString (unsigned int error)
 {
@@ -1623,12 +1648,24 @@ int R_Init( void *hinstance, void *hWnd )
 	char renderer_buffer[1000];
 	char vendor_buffer[1000];
 	unsigned int		err;
+	char envbuffer[32];
+	float g;
 
 	Com_Printf ("ref_gl version: "REF_VERSION"\n");
 
 	Draw_GetPalette ();
 
 	R_Register();
+
+
+	// update 3Dfx gamma irrespective of underlying DLL
+	g = 2.00f * ( 0.8f - ( vid_gamma->value - 0.5f ) ) + 1.0F;
+	Com_sprintf( envbuffer, sizeof(envbuffer), "SSTV2_GAMMA=%g", g );
+	putenv( envbuffer );
+	Com_sprintf( envbuffer, sizeof(envbuffer), "SST_GAMMA=%g", g );
+	putenv( envbuffer );
+
+	gl_config.allow_cds = true;
 
 	// initialize our QGL dynamic bindings
 	if ( !QGL_Init( gl_driver->string ) )
@@ -1664,9 +1701,9 @@ int R_Init( void *hinstance, void *hWnd )
 	{
 		QGL_Shutdown();
 		if(qglLastError[0])
-			Com_Error (ERR_FATAL, "R_Init: Could not set resolution: %s", qglLastError);
+			Com_Error (ERR_FATAL, "R_Init: Could not set video mode: %s", qglLastError);
 		else
-			Com_Error (ERR_FATAL, "R_Init: Could not set resolution!" );
+			Com_Error (ERR_FATAL, "R_Init: Could not set video mode!" );
 		return -1;
 	}
 
@@ -1710,18 +1747,6 @@ int R_Init( void *hinstance, void *hWnd )
 	else
 		gl_config.renderer = GL_RENDERER_OTHER;
 
-	if ( toupper( gl_monolightmap->string[1] ) != 'F' )
-	{
-		if ( gl_config.renderer == GL_RENDERER_PERMEDIA2 )
-		{
-			Cvar_Set( "gl_monolightmap", "A" );
-			Com_Printf ( "...using gl_monolightmap 'a'\n" );
-		}
-		else if ( gl_config.renderer & GL_RENDERER_POWERVR ) 
-			Cvar_Set( "gl_monolightmap", "0" );
-		else
-			Cvar_Set( "gl_monolightmap", "0" );
-	}
 
 	// power vr can't have anything stay in the framebuffer, so
 	// the screen needs to redraw the tiled background every frame
@@ -1752,24 +1777,42 @@ int R_Init( void *hinstance, void *hWnd )
 		Com_Printf ( "...disabling CDS\n" );
 #endif
 
+	gl_state.compiledVertexArray = false;
 	// grab extensions
 	if ( strstr( gl_config.extensions_string, "GL_EXT_compiled_vertex_array" ) || 
 		 strstr( gl_config.extensions_string, "GL_SGI_compiled_vertex_array" ) )
 	{
-		Com_Printf ( "...enabling GL_EXT_compiled_vertex_array\n" );
-		qglLockArraysEXT = ( void * ) qwglGetProcAddress( "glLockArraysEXT" );
-		qglUnlockArraysEXT = ( void * ) qwglGetProcAddress( "glUnlockArraysEXT" );
+		if (gl_ext_compiled_vertex_array->integer) {
+			qglLockArraysEXT = qglGetProcAddress( "glLockArraysEXT" );
+			if(qglLockArraysEXT)
+				qglUnlockArraysEXT = qglGetProcAddress( "glUnlockArraysEXT" );
+
+			if(qglUnlockArraysEXT) {
+				Com_Printf ( "...enabling GL_EXT_compiled_vertex_array\n" );
+				gl_state.compiledVertexArray = true;
+			}
+			else {
+				Com_Printf ("...GL_EXT_compiled_vertex_array not properly supported!\n");
+				qglLockArraysEXT = NULL;
+				qglUnlockArraysEXT = NULL;
+			}
+		}
+		else {
+			Com_Printf ( "...ignoring GL_EXT_compiled_vertex_array\n" );
+		}
 	}
-	else
-	{
+	else {
 		Com_Printf ( "...GL_EXT_compiled_vertex_array not found\n" );
 	}
 
 #ifdef _WIN32
 	if ( strstr( gl_config.extensions_string, "WGL_EXT_swap_control" ) )
 	{
-		qwglSwapIntervalEXT = ( BOOL (WINAPI *)(int)) qwglGetProcAddress( "wglSwapIntervalEXT" );
-		Com_Printf ( "...enabling WGL_EXT_swap_control\n" );
+		qwglSwapIntervalEXT = ( BOOL (WINAPI *)(int)) qglGetProcAddress( "wglSwapIntervalEXT" );
+		if(qwglSwapIntervalEXT)
+			Com_Printf ( "...enabling WGL_EXT_swap_control\n" );
+		else
+			Com_Printf ("...WGL_EXT_swap_control not properly supported!\n");
 	}
 	else
 	{
@@ -1781,77 +1824,53 @@ int R_Init( void *hinstance, void *hWnd )
 	{
 		if ( gl_ext_pointparameters->integer )
 		{
-			qglPointParameterfEXT = ( void (APIENTRY *)( GLenum, GLfloat ) ) qwglGetProcAddress( "glPointParameterfEXT" );
-			qglPointParameterfvEXT = ( void (APIENTRY *)( GLenum, const GLfloat * ) ) qwglGetProcAddress( "glPointParameterfvEXT" );
-			Com_Printf ( "...using GL_EXT_point_parameters\n" );
+			qglPointParameterfEXT = ( void (APIENTRY *)( GLenum, GLfloat ) ) qglGetProcAddress( "glPointParameterfEXT" );
+			if(qglPointParameterfEXT)
+				qglPointParameterfvEXT = ( void (APIENTRY *)( GLenum, const GLfloat * ) ) qglGetProcAddress( "glPointParameterfvEXT" );
+			if(qglPointParameterfvEXT) {
+				Com_Printf ( "...using GL_EXT_point_parameters\n" );
+			}
+			else {
+				Com_Printf ("...GL_EXT_point_parameters not properly supported!\n");
+				qglPointParameterfEXT = NULL;
+				qglPointParameterfvEXT = NULL;
+			}
 		}
-		else
-		{
+		else {
 			Com_Printf ( "...ignoring GL_EXT_point_parameters\n" );
 		}
 	}
-	else
-	{
+	else {
 		Com_Printf ( "...GL_EXT_point_parameters not found\n" );
 	}
 
-#ifdef __linux__
-	if ( strstr( gl_config.extensions_string, "3DFX_set_global_palette" ))
-	{
-		if ( gl_ext_palettedtexture->integer )
-		{
-			Com_Printf ( "...using 3DFX_set_global_palette\n" );
-			qgl3DfxSetPaletteEXT = ( void ( APIENTRY * ) (GLuint *) )qwglGetProcAddress( "gl3DfxSetPaletteEXT" );
-			qglColorTableEXT = Fake_glColorTableEXT;
-		}
-		else
-		{
-			Com_Printf ( "...ignoring 3DFX_set_global_palette\n" );
-		}
-	}
-	else
-	{
-		Com_Printf ( "...3DFX_set_global_palette not found\n" );
-	}
-#endif
-
-	if ( !qglColorTableEXT &&
-		strstr( gl_config.extensions_string, "GL_EXT_paletted_texture" ) && 
-		strstr( gl_config.extensions_string, "GL_EXT_shared_texture_palette" ) )
-	{
-		if ( gl_ext_palettedtexture->integer )
-		{
-			Com_Printf ( "...using GL_EXT_shared_texture_palette\n" );
-			qglColorTableEXT = ( void ( APIENTRY * ) ( GLenum, GLenum, GLsizei, GLenum, GLenum, const GLvoid * ) ) qwglGetProcAddress( "glColorTableEXT" );
-		}
-		else
-		{
-			Com_Printf ( "...ignoring GL_EXT_shared_texture_palette\n" );
-		}
-	}
-	else
-	{
-		Com_Printf ( "...GL_EXT_shared_texture_palette not found\n" );
-	}
-
+	QGL_TEXTURE0 = QGL_TEXTURE1 = 0;
 	if ( strstr( gl_config.extensions_string, "GL_ARB_multitexture" ) )
 	{
-		if ( gl_ext_multitexture->integer )
-		{
-			Com_Printf ( "...using GL_ARB_multitexture\n" );
-			qglMTexCoord2fSGIS = ( void * ) qwglGetProcAddress( "glMultiTexCoord2fARB" );
-			qglActiveTextureARB = ( void * ) qwglGetProcAddress( "glActiveTextureARB" );
-			qglClientActiveTextureARB = ( void * ) qwglGetProcAddress( "glClientActiveTextureARB" );
-			QGL_TEXTURE0 = GL_TEXTURE0_ARB;
-			QGL_TEXTURE1 = GL_TEXTURE1_ARB;
+		if ( gl_ext_multitexture->integer ) {
+			qglActiveTextureARB = qglGetProcAddress( "glActiveTextureARB" );
+			if(qglActiveTextureARB)
+				qglClientActiveTextureARB = qglGetProcAddress( "glClientActiveTextureARB" );
+			if(qglClientActiveTextureARB)
+				qglMTexCoord2fSGIS = qglGetProcAddress( "glMultiTexCoord2fARB" );
+
+			if(qglMTexCoord2fSGIS) {
+				Com_Printf ( "...using GL_ARB_multitexture\n" );
+				QGL_TEXTURE0 = GL_TEXTURE0_ARB;
+				QGL_TEXTURE1 = GL_TEXTURE1_ARB;
+			}
+			else {
+				Com_Printf ("...GL_ARB_multitexture not properly supported!\n");
+				qglActiveTextureARB = NULL;
+				qglClientActiveTextureARB = NULL;
+				qglMTexCoord2fSGIS = NULL;
+			}
 		}
-		else
-		{
+		else {
 			Com_Printf ( "...ignoring GL_ARB_multitexture\n" );
 		}
 	}
-	else
-	{
+	else {
 		Com_Printf ( "...GL_ARB_multitexture not found\n" );
 	}
 
@@ -1863,49 +1882,53 @@ int R_Init( void *hinstance, void *hWnd )
 		}
 		else if ( gl_ext_multitexture->integer )
 		{
-			Com_Printf ( "...using GL_SGIS_multitexture\n" );
-			qglMTexCoord2fSGIS = ( void * ) qwglGetProcAddress( "glMTexCoord2fSGIS" );
-			qglSelectTextureSGIS = ( void * ) qwglGetProcAddress( "glSelectTextureSGIS" );
-			QGL_TEXTURE0 = GL_TEXTURE0_SGIS;
-			QGL_TEXTURE1 = GL_TEXTURE1_SGIS;
+			qglSelectTextureSGIS = qglGetProcAddress( "glSelectTextureSGIS" );
+			if(qglSelectTextureSGIS)
+				qglMTexCoord2fSGIS = qglGetProcAddress( "glMTexCoord2fSGIS" );
+			if(qglMTexCoord2fSGIS) {
+				Com_Printf ( "...using GL_SGIS_multitexture\n" );
+				QGL_TEXTURE0 = GL_TEXTURE0_SGIS;
+				QGL_TEXTURE1 = GL_TEXTURE1_SGIS;
+			}
+			else {
+				Com_Printf ("...GL_SGIS_multitexture not properly supported!\n");
+				qglMTexCoord2fSGIS = NULL;
+				qglSelectTextureSGIS = NULL;
+			}
 		}
-		else
-		{
+		else {
 			Com_Printf ( "...ignoring GL_SGIS_multitexture\n" );
 		}
 	}
-	else
-	{
+	else {
 		Com_Printf ( "...GL_SGIS_multitexture not found\n" );
 	}
 
-	if ( strstr( gl_config.extensions_string, "GL_NV_texture_rectangle" ) )
-	{
+	if (strstr( gl_config.extensions_string, "GL_NV_texture_rectangle" )) {
 		Com_Printf ( "...using GL_NV_texture_rectangle\n");
 		gl_state.tex_rectangle = true;
 	}
-	else if (strstr(gl_config.extensions_string, "GL_EXT_texture_rectangle"))
-	{
+	else if (strstr( gl_config.extensions_string, "GL_EXT_texture_rectangle" )) {
 		Com_Printf ( "...using GL_EXT_texture_rectangle\n");
 		gl_state.tex_rectangle = true;
-	} else {
+	}
+	else {
 		Com_Printf ( "...GL_NV_texture_rectangle not found\n");
 		gl_state.tex_rectangle = false;
 	}
 
 	if ( strstr( gl_config.extensions_string, "GL_SGIS_generate_mipmap" ) )
 	{
-		if(gl_sgis_mipmap->integer)
-		{
+		if(gl_sgis_mipmap->integer) {
 			Com_Printf ( "...using GL_SGIS_generate_mipmap\n");
 			gl_state.sgis_mipmap = true;
 		}
-		else
-		{
+		else {
 			Com_Printf ( "...ignoring GL_SGIS_generate_mipmap\n");
 			gl_state.sgis_mipmap = false;
 		}
-	} else {
+	}
+	else {
 		Com_Printf ( "...GL_SGIS_generate_mipmap not found\n");
 		gl_state.sgis_mipmap = false;
 	}
@@ -1913,20 +1936,17 @@ int R_Init( void *hinstance, void *hWnd )
 	// Heffo - ARB Texture Compression
 	if ( strstr( gl_config.extensions_string, "GL_ARB_texture_compression" ) )
 	{
-		if(gl_ext_texture_compression->integer)
-		{
+		if(gl_ext_texture_compression->integer) {
 			Com_Printf ( "...using GL_ARB_texture_compression\n");
 			gl_state.texture_compression = true;
 			qglHint(GL_TEXTURE_COMPRESSION_HINT_ARB, GL_NICEST);
 		}
-		else
-		{
+		else {
 			Com_Printf ( "...ignoring GL_ARB_texture_compression\n");
 			gl_state.texture_compression = false;
 		}
 	}
-	else
-	{
+	else {
 		Com_Printf ( "...GL_ARB_texture_compression not found\n");
 		gl_state.texture_compression = false;
 	}
@@ -1935,7 +1955,8 @@ int R_Init( void *hinstance, void *hWnd )
 
 	//Anisotropic
 	gl_config.anisotropic = false;
-	if (strstr( gl_config.extensions_string, "GL_EXT_texture_filter_anisotropic")) {
+	if (strstr( gl_config.extensions_string, "GL_EXT_texture_filter_anisotropic"))
+	{
 		if(gl_ext_texture_filter_anisotropic->integer)
 		{
 			qglGetIntegerv (GL_MAX_TEXTURE_MAX_ANISOTROPY_EXT, &gl_config.maxAnisotropic);
@@ -1954,23 +1975,32 @@ int R_Init( void *hinstance, void *hWnd )
 					Cvar_Set("gl_ext_max_anisotropy", "0");
 			}
 		}
-		else
+		else {
 			Com_Printf ("...ignoring GL_EXT_texture_filter_anisotropic\n");
+		}
 	}
-	else
+	else {
 		Com_Printf ("...GL_EXT_texture_filter_anisotropic not found\n");
+	}
 
-	if(gl_ext_palettedtexture->integer && qglColorTableEXT)
-	{
+	qglGetIntegerv (GL_MAX_TEXTURE_SIZE, &gl_state.maxtexsize);
+	if(gl_state.maxtexsize < 256)
 		gl_state.maxtexsize = 256;
-	}
-	else
-	{
-		qglGetIntegerv (GL_MAX_TEXTURE_SIZE, &gl_state.maxtexsize);
-		if(gl_state.maxtexsize < 256)
-			gl_state.maxtexsize = 256;
-	}
+
 	Com_Printf ( "Maximum Texture Size: %ix%i\n", gl_state.maxtexsize, gl_state.maxtexsize);
+
+	if(gl_coloredlightmaps->modified) {
+		if (gl_coloredlightmaps->value < 0.0f)
+			Cvar_Set(gl_coloredlightmaps->name, "0");
+		else if (gl_coloredlightmaps->value > 1.0f)
+			Cvar_Set(gl_coloredlightmaps->name, "1");
+
+		usingmodifiedlightmaps = (gl_coloredlightmaps->value < 1.0f) ? true : false;
+
+		gl_coloredlightmaps->modified = false;
+	}
+
+	qglColorPointer (4, GL_FLOAT, sizeof(colorArray[0]), colorArray[0]);
 
 	GL_SetDefaultState();
 
@@ -1980,6 +2010,9 @@ int R_Init( void *hinstance, void *hWnd )
 #if 0 // commented out until H3D pays us the money they owe us
 	GL_DrawStereoPattern();
 #endif
+
+	vid_scaled_width = (int)ceilf((float)vid.width / gl_scale->value);
+	vid_scaled_height = (int)ceilf((float)vid.height / gl_scale->value);
 
 	GL_InitImages ();
 
@@ -2009,7 +2042,7 @@ void R_Shutdown (void)
 	Cmd_RemoveCommand ("screenshotjpg");*/
 
 
-	Mod_FreeAll ();
+	R_ShutdownModels();
 
 	GL_ShutdownImages ();
 
@@ -2047,13 +2080,13 @@ void R_BeginFrame( float camera_separation )
 
 		if ( gl_config.renderer & ( GL_RENDERER_VOODOO ) )
 		{
-			char envbuffer[1024];
+			char envbuffer[32];
 			float g;
 
 			g = 2.00f * ( 0.8f - ( vid_gamma->value - 0.5f ) ) + 1.0F;
-			Com_sprintf( envbuffer, sizeof(envbuffer), "SSTV2_GAMMA=%f", g );
+			Com_sprintf( envbuffer, sizeof(envbuffer), "SSTV2_GAMMA=%g", g );
 			putenv( envbuffer );
-			Com_sprintf( envbuffer, sizeof(envbuffer), "SST_GAMMA=%f", g );
+			Com_sprintf( envbuffer, sizeof(envbuffer), "SST_GAMMA=%g", g );
 			putenv( envbuffer );
 		}
 	}
@@ -2117,7 +2150,7 @@ void R_CinematicSetPalette ( const unsigned char *palette)
 		}
 	}
 
-	GL_SetTexturePalette( r_rawpalette );
+	//GL_SetTexturePalette( r_rawpalette );
 
 	qglClearColor (0, 0, 0, 0);
 	qglClear (GL_COLOR_BUFFER_BIT);
@@ -2147,15 +2180,15 @@ void R_DrawBeam (void)
 	normalized_direction[1] = direction[1] = oldorigin[1] - origin[1];
 	normalized_direction[2] = direction[2] = oldorigin[2] - origin[2];
 
-	if ( VectorNormalize( normalized_direction ) == 0 )
+	if ( VectorNormalize( normalized_direction ) == 0.0f )
 		return;
 
 	PerpendicularVector( perpvec, normalized_direction );
-	VectorScale( perpvec, currententity->frame * 0.5, perpvec );
+	VectorScale( perpvec, currententity->frame * 0.5f, perpvec );
 
 	for ( i = 0; i < NUM_BEAM_SEGS; i++ )
 	{
-		RotatePointAroundVector( start_points[i], normalized_direction, perpvec, (360.0/NUM_BEAM_SEGS)*i );
+		RotatePointAroundVector( start_points[i], normalized_direction, perpvec, (360.0f/NUM_BEAM_SEGS)*i );
 		VectorAdd( start_points[i], origin, start_points[i] );
 		VectorAdd( start_points[i], direction, end_points[i] );
 	}

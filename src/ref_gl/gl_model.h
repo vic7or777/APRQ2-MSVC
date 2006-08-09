@@ -230,19 +230,18 @@ typedef struct model_s
 	byte		*staindata;
 
 	// for alias models and skins
-	image_t		*skins[MAX_MD2SKINS];
+	image_t		*skins[MD2_MAX_SKINS];
+
+	struct model_s *hashNext;
 
 	int			extradatasize;
 	void		*extradata;
-	struct model_s *hashNext;
-
 } model_t;
 
 //============================================================================
 
 void	Mod_Init (void);
-void	Mod_ClearAll (void);
-model_t *Mod_ForName (const char *name, qboolean crash);
+
 mleaf_t *Mod_PointInLeaf (const float *p, const model_t *model);
 byte	*Mod_ClusterPVS (int cluster, const model_t *model);
 
@@ -253,5 +252,87 @@ void	*Hunk_Alloc (int size);
 int		Hunk_End (void);
 void	Hunk_Free (void *base);
 
-void	Mod_FreeAll (void);
+void	R_ShutdownModels (void);
 void	Mod_Free (model_t *mod);
+
+
+
+//Sprite model
+typedef struct
+{
+	int			width, height;
+	int			origin_x, origin_y;			// raster coordinates inside pic
+
+	char		name[SPRITE_MAX_NAME];
+/*	shader_t	*shader;
+
+	float		mins[3], maxs[3];
+	float		radius;*/
+} mspriteframe_t;
+
+typedef struct 
+{
+	int				numframes;
+	mspriteframe_t	*frames;
+} mspritemodel_t;
+
+//Alias models
+#define ALIAS_MAX_VERTS		4096
+#define ALIAS_MAX_LODS		4
+
+typedef unsigned int index_t;
+
+typedef struct maliasvertex_s {
+	short			point[3];
+	//byte			latlong[2];		// use bytes to keep 8-byte alignment
+	vec3_t			normal;
+	//byte			lightnormalindex;
+} maliasvertex_t;
+
+typedef struct maliasframe_s {
+	vec3_t			mins;
+	vec3_t			maxs;
+
+	vec3_t			scale;
+	vec3_t			translate;
+	float			radius;
+} maliasframe_t;
+
+typedef struct maliastag_s {
+	char			name[MAX_QPATH];
+	quat_t			quat;
+	vec3_t			origin;
+} maliastag_t;
+
+typedef struct maliasskin_s {
+	char			name[MAX_QPATH];
+	image_t			*image;
+//	shader_t		*shader;
+} maliasskin_t;
+
+typedef struct maliasmesh_s {
+	char			name[MAX_QPATH];
+
+	int				numverts;
+	maliasvertex_t	*vertexes;
+	vec2_t			*stcoords;
+
+	int				numtris;
+	index_t			*indexes;
+
+	int				numskins;
+	maliasskin_t	*skins;
+} maliasmesh_t;
+
+typedef struct maliasmodel_s {
+	int				numframes;
+	maliasframe_t	*frames;
+
+	int				numtags;
+	maliastag_t		*tags;
+
+	int				nummeshes;
+	maliasmesh_t	*meshes;
+} maliasmodel_t;
+
+

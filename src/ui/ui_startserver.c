@@ -153,7 +153,7 @@ void StartServerActionFunc( void *self )
 	timelimit	= atoi( s_timelimit_field.buffer );
 	fraglimit	= atoi( s_fraglimit_field.buffer );
 
-	Cvar_SetValue( "maxclients", ClampCvar( 0, maxclients, maxclients ) );
+	Cvar_SetLatched( "maxclients", va("%i", (int)ClampCvar( 0, maxclients, maxclients )) );
 	Cvar_SetValue ("timelimit", ClampCvar( 0, timelimit, timelimit ) );
 	Cvar_SetValue ("fraglimit", ClampCvar( 0, fraglimit, fraglimit ) );
 	Cvar_Set("hostname", s_hostname_field.buffer );
@@ -163,15 +163,15 @@ void StartServerActionFunc( void *self )
 //PGM
 	if((s_rules_box.curvalue < 2) || (Developer_searchpath() != 2))
 	{
-		Cvar_SetValue ("deathmatch", !s_rules_box.curvalue );
-		Cvar_SetValue ("coop", s_rules_box.curvalue );
+		Cvar_SetLatched ("deathmatch", s_rules_box.curvalue ? "0" : "1");
+		Cvar_SetLatched ("coop", s_rules_box.curvalue ? "1" : "0" );
 		Cvar_SetValue ("gamerules", 0 );
 	}
 	else
 	{
-		Cvar_SetValue ("deathmatch", 1 );	// deathmatch is always true for rogue games, right?
-		Cvar_SetValue ("coop", 0 );			// FIXME - this might need to depend on which game we're running
-		Cvar_SetValue ("gamerules", s_rules_box.curvalue );
+		Cvar_SetLatched ("deathmatch", "1");	// deathmatch is always true for rogue games, right?
+		Cvar_SetLatched ("coop", "0");			// FIXME - this might need to depend on which game we're running
+		Cvar_SetValue ("gamerules", s_rules_box.curvalue);
 	}
 //PGM
 

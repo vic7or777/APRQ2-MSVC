@@ -36,7 +36,7 @@ SV_SetMaster_f
 Specify a list of master servers
 ====================
 */
-void SV_SetMaster_f (void)
+static void SV_SetMaster_f (void)
 {
 	int		i, slot;
 
@@ -50,8 +50,7 @@ void SV_SetMaster_f (void)
 	// make sure the server is listed public
 	Cvar_Set ("sv_public", "1");
 
-	for (i=1 ; i<MAX_MASTERS ; i++)
-		memset (&master_adr[i], 0, sizeof(master_adr[i]));
+	memset (&master_adr, 0, sizeof(master_adr));
 
 	slot = 1;		// slot 0 will always contain the id master
 	for (i=1 ; i<Cmd_Argc() ; i++)
@@ -69,9 +68,12 @@ void SV_SetMaster_f (void)
 
 		Com_Printf ("Master server at %s\n", NET_AdrToString (&master_adr[slot]));
 
-		Com_Printf ("Sending a ping.\n");
+		if (svs.initialized)
+		{
+			Com_Printf ("Sending a ping.\n");
 
-		Netchan_OutOfBandPrint (NS_SERVER, &master_adr[slot], "ping");
+			Netchan_OutOfBandPrint (NS_SERVER, &master_adr[slot], "ping");
+		}
 
 		slot++;
 	}
@@ -153,7 +155,7 @@ SV_WipeSavegame
 Delete save/<XXX>/
 =====================
 */
-void SV_WipeSavegame (char *savename)
+static void SV_WipeSavegame (char *savename)
 {
 	char	name[MAX_OSPATH];
 	char	*s;
@@ -189,7 +191,7 @@ void SV_WipeSavegame (char *savename)
 CopyFile
 ================
 */
-void CopyFile (char *src, char *dst)
+static void CopyFile (char *src, char *dst)
 {
 	FILE	*f1, *f2;
 	int		l;
@@ -225,7 +227,7 @@ void CopyFile (char *src, char *dst)
 SV_CopySaveGame
 ================
 */
-void SV_CopySaveGame (char *src, char *dst)
+static void SV_CopySaveGame (char *src, char *dst)
 {
 	char	name[MAX_OSPATH], name2[MAX_OSPATH];
 	int		l, len;
@@ -275,7 +277,7 @@ SV_WriteLevelFile
 
 ==============
 */
-void SV_WriteLevelFile (void)
+static void SV_WriteLevelFile (void)
 {
 	char	name[MAX_OSPATH];
 	FILE	*f;
@@ -331,7 +333,7 @@ SV_WriteServerFile
 
 ==============
 */
-void SV_WriteServerFile (qboolean autosave)
+static void SV_WriteServerFile (qboolean autosave)
 {
 	FILE	*f;
 	cvar_t	*var;
@@ -404,7 +406,7 @@ SV_ReadServerFile
 
 ==============
 */
-void SV_ReadServerFile (void)
+static void SV_ReadServerFile (void)
 {
 	FILE	*f;
 	char	name[MAX_OSPATH], string[128];
@@ -462,7 +464,7 @@ SV_DemoMap_f
 Puts the server in demo mode on a specific map/cinematic
 ==================
 */
-void SV_DemoMap_f (void)
+static void SV_DemoMap_f (void)
 {
 	char	demoName[MAX_QPATH];
 
@@ -502,7 +504,7 @@ Clears the archived maps, plays the inter.cin cinematic, then
 goes to map jail.bsp.
 ==================
 */
-void SV_GameMap_f (void)
+static void SV_GameMap_f (void)
 {
 	char		*map;
 	int			i;
@@ -528,6 +530,18 @@ void SV_GameMap_f (void)
 	}
 	else
 	{	// save the map just exited
+
+		if (!strchr(map, '.') && !strchr(map, '$'))
+		{
+			char	expanded[MAX_QPATH];
+
+			Com_sprintf (expanded, sizeof(expanded), "maps/%s.bsp", map);
+			if (FS_LoadFile (expanded, NULL) == -1)
+			{
+				Com_Printf ("Can't find %s\n", expanded);
+				return;
+			}
+		}
 		if (sv.state == ss_game)
 		{
 			qboolean	savedInuse[MAX_CLIENTS];
@@ -551,13 +565,13 @@ void SV_GameMap_f (void)
 	}
 
 	// start up the next map
-	SV_Map (false, Cmd_Argv(1), false );
+	SV_Map (false, map, false );
 
 	// archive server state
-	Q_strncpyz (svs.mapcmd, Cmd_Argv(1), sizeof(svs.mapcmd));
+	Q_strncpyz (svs.mapcmd, map, sizeof(svs.mapcmd));
 
 	// copy off the level to the autosave slot
-	if (!dedicated->integer)
+	if (!dedicated->integer && !Cvar_VariableIntValue("deathmatch"))
 	{
 		SV_WriteServerFile (true);
 		SV_CopySaveGame ("current", "save0");
@@ -572,7 +586,7 @@ Goes directly to a given map without any savegame archiving.
 For development work
 ==================
 */
-void SV_Map_f (void)
+static void SV_Map_f (void)
 {
 	char	*map;
 	char	expanded[MAX_QPATH];
@@ -583,7 +597,7 @@ void SV_Map_f (void)
 	}
 	// if not a pcx, demo, or cinematic, check to make sure the level exists
 	map = Cmd_Argv(1);
-	if (!strchr(map, '.'))
+	if (!strchr(map, '.') && !strchr(map, '$'))
 	{
 		Com_sprintf (expanded, sizeof(expanded), "maps/%s.bsp", map);
 		if (FS_LoadFile (expanded, NULL) == -1)
@@ -613,7 +627,7 @@ SV_Loadgame_f
 
 ==============
 */
-void SV_Loadgame_f (void)
+static void SV_Loadgame_f (void)
 {
 	char	name[MAX_OSPATH];
 	FILE	*f;
@@ -629,6 +643,7 @@ void SV_Loadgame_f (void)
 	if (strstr(dir, "..") || strchr(dir, '/') || strchr(dir, '\\'))
 	{
 		Com_Printf ("Bad savedir.\n");
+		return;
 	}
 
 	// make sure the server.ssv file exists
@@ -641,9 +656,8 @@ void SV_Loadgame_f (void)
 	}
 	fclose (f);
 
-	SV_CopySaveGame (Cmd_Argv(1), "current");
-
 	Com_Printf ("Loading game...\n");
+	SV_CopySaveGame (Cmd_Argv(1), "current");
 
 	SV_ReadServerFile ();
 
@@ -660,7 +674,7 @@ SV_Savegame_f
 
 ==============
 */
-void SV_Savegame_f (void)
+static void SV_Savegame_f (void)
 {
 	char	*dir;
 
@@ -676,7 +690,7 @@ void SV_Savegame_f (void)
 		return;
 	}
 
-	if (Cvar_VariableValue("deathmatch"))
+	if (Cvar_VariableIntValue("deathmatch"))
 	{
 		Com_Printf ("Can't savegame in a deathmatch\n");
 		return;
@@ -698,6 +712,7 @@ void SV_Savegame_f (void)
 	if (strstr(dir, "..") || strchr(dir, '/') || strchr(dir, '\\'))
 	{
 		Com_Printf ("Bad savedir.\n");
+		return;
 	}
 
 	Com_Printf ("Saving game...\n");
@@ -725,7 +740,7 @@ SV_Kick_f
 Kick a user off of the server
 ==================
 */
-void SV_Kick_f (void)
+static void SV_Kick_f (void)
 {
 	if (!svs.initialized)
 	{
@@ -743,7 +758,7 @@ void SV_Kick_f (void)
 		return;
 
 	//r1: ignore kick message on connecting players (and those with no name)
-	if (sv_client->state == cs_spawned && *sv_client->name)
+	if (sv_client->state == cs_spawned && sv_client->name[0])
 		SV_BroadcastPrintf (PRINT_HIGH, "%s was kicked\n", sv_client->name);
 	// print directly, because the dropped client won't get the
 	// SV_BroadcastPrintf message
@@ -758,9 +773,9 @@ void SV_Kick_f (void)
 SV_Status_f
 ================
 */
-void SV_Status_f (void)
+static void SV_Status_f (void)
 {
-	int			i, j, l;
+	int			i;
 	client_t	*cl;
 	char		*s;
 	int			ping;
@@ -790,22 +805,11 @@ void SV_Status_f (void)
 			Com_Printf ("%4i ", ping);
 		}
 
-		Com_Printf ("%s", cl->name);
-		l = 16 - strlen(cl->name);
-		for (j=0 ; j<l ; j++)
-			Com_Printf (" ");
-
+		Com_Printf ("%-15s %7i ", cl->name, svs.realtime - cl->lastmessage);
 		Com_Printf ("%7i ", svs.realtime - cl->lastmessage );
 
 		s = NET_AdrToString ( &cl->netchan.remote_address);
-		Com_Printf ("%s", s);
-		l = 22 - strlen(s);
-		for (j=0 ; j<l ; j++)
-			Com_Printf (" ");
-		
-		Com_Printf ("%5i", cl->netchan.qport);
-
-		Com_Printf ("\n");
+		Com_Printf ("%-21s %5i\n", s, cl->netchan.qport);
 	}
 	Com_Printf ("\n");
 }
@@ -815,7 +819,7 @@ void SV_Status_f (void)
 SV_ConSay_f
 ==================
 */
-void SV_ConSay_f(void)
+static void SV_ConSay_f(void)
 {
 	client_t *client;
 	int		j;
@@ -824,6 +828,11 @@ void SV_ConSay_f(void)
 
 	if (Cmd_Argc () < 2)
 		return;
+
+	if (!svs.initialized) {
+		Com_Printf ("No server running.\n");
+		return;
+	}
 
 	strcpy (text, "console: ");
 	p = Cmd_Args();
@@ -850,7 +859,7 @@ void SV_ConSay_f(void)
 SV_Heartbeat_f
 ==================
 */
-void SV_Heartbeat_f (void)
+static void SV_Heartbeat_f (void)
 {
 	svs.last_heartbeat = -9999999;
 }
@@ -863,7 +872,7 @@ SV_Serverinfo_f
   Examine or change the serverinfo string
 ===========
 */
-void SV_Serverinfo_f (void)
+static void SV_Serverinfo_f (void)
 {
 	Com_Printf ("Server info settings:\n");
 	Info_Print (Cvar_Serverinfo());
@@ -877,7 +886,7 @@ SV_DumpUser_f
 Examine all a users info strings
 ===========
 */
-void SV_DumpUser_f (void)
+static void SV_DumpUser_f (void)
 {
 	if (Cmd_Argc() != 2)
 	{
@@ -903,10 +912,10 @@ Begins server demo recording.  Every entity and every message will be
 recorded, but no playerinfo will be stored.  Primarily for demo merging.
 ==============
 */
-void SV_ServerRecord_f (void)
+static void SV_ServerRecord_f (void)
 {
 	char	name[MAX_OSPATH];
-	char	buf_data[32768];
+	byte	buf_data[32768];
 	sizebuf_t	buf;
 	int		len;
 	int		i;
@@ -992,7 +1001,7 @@ SV_ServerStop_f
 Ends server demo recording
 ==============
 */
-void SV_ServerStop_f (void)
+static void SV_ServerStop_f (void)
 {
 	if (!svs.demofile)
 	{
@@ -1013,7 +1022,7 @@ Kick everyone off, possibly in preparation for a new game
 
 ===============
 */
-void SV_KillServer_f (void)
+static void SV_KillServer_f (void)
 {
 	if (!svs.initialized)
 		return;
@@ -1028,7 +1037,7 @@ SV_ServerCommand_f
 Let the game dll handle a command
 ===============
 */
-void SV_ServerCommand_f (void)
+static void SV_ServerCommand_f (void)
 {
 	if (!ge)
 	{

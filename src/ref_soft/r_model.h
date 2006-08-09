@@ -225,7 +225,7 @@ typedef struct model_s
 	byte		*lightdata;
 
 	// for alias models and sprites
-	image_t		*skins[MAX_MD2SKINS];
+	image_t		*skins[MD2_MAX_SKINS];
 	void		*extradata;
 	int			extradatasize;
 	struct model_s *hashNext;
@@ -235,10 +235,6 @@ typedef struct model_s
 //============================================================================
 
 void	Mod_Init (void);
-void	Mod_ClearAll (void);
-model_t *Mod_ForName (const char *name, qboolean crash);
-void	*Mod_Extradata (model_t *mod);	// handles caching
-void	Mod_TouchModel (char *name);
 
 mleaf_t *Mod_PointInLeaf (float *p, model_t *model);
 byte	*Mod_ClusterPVS (int cluster, model_t *model);

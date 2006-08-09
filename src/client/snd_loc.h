@@ -154,7 +154,7 @@ void	SNDDMA_BeginPainting (void);
 
 void	SNDDMA_Submit(void);
 
-#if defined(__linux__) || defined(__FreeBSD__)
+#if defined(__linux__) || defined(__FreeBSD__) || defined(MACOS_X)
 // custom Snd_Memset implementation for glibc memset bug workaround
 void Snd_Memset (void* dest, const int val, const size_t count);
 #else

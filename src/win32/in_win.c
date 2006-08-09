@@ -30,7 +30,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 extern	unsigned	sys_msg_time;
 
-qboolean	input_active = false;
+static qboolean	input_active = false;
 
 cvar_t	*in_mouse;
 
@@ -103,7 +103,7 @@ void Joy_AdvancedUpdate_f (void);
 void IN_JoyMove (usercmd_t *cmd);
 #endif
 
-qboolean	in_appactive;
+static qboolean	in_appactive;
 
 
 /*
@@ -120,23 +120,23 @@ cvar_t	*m_xpfix;
 cvar_t	*m_autosens;
 cvar_t	*m_accel;
 
-qboolean	mlooking;
+static qboolean	mlooking;
 
-void IN_MLookDown (void)
+static void IN_MLookDown (void)
 {
 	mlooking = true;
 }
 
-void IN_MLookUp (void)
+static void IN_MLookUp (void)
 {
 	mlooking = false;
 	if (!freelook->integer && lookspring->integer)
 		IN_CenterView ();
 }
 
-int		mouse_oldbuttonstate;
-POINT	current_pos;
-int		mouse_x = 0, mouse_y = 0, old_mouse_x = 0, old_mouse_y = 0;
+static int		mouse_oldbuttonstate;
+static POINT	current_pos;
+static int		mouse_x = 0, mouse_y = 0, old_mouse_x = 0, old_mouse_y = 0;
 
 static qboolean	mouseactive = false;	// false when not focus app
 
@@ -145,8 +145,8 @@ static qboolean	mouseinitialized = false;
 static int originalmouseparms[3], newmouseparms[3] = {0, 0, 1}, xpmouseparms[3] = {0, 0, 0};
 static qboolean	mouseparmsvalid = false;
 
-int		window_center_x, window_center_y;
-RECT	window_rect;
+static int	window_center_x, window_center_y;
+static RECT	window_rect;
 
 
 
@@ -232,7 +232,7 @@ static DIDATAFORMAT	df = {
 IN_InitDIMouse
 ========================
 */
-qboolean IN_InitDIMouse( void ) {
+static qboolean IN_InitDIMouse( void ) {
     HRESULT		hr;
 	DIPROPDWORD	dipdw = {
 		{
@@ -306,7 +306,7 @@ qboolean IN_InitDIMouse( void ) {
 	return true;
 }
 
-void IN_FreeDirectInput (void)
+static void IN_FreeDirectInput (void)
 {
 	if (g_pMouse) {
 		IDirectInputDevice_SetCooperativeLevel( g_pMouse, cl_hwnd, DISCL_NONEXCLUSIVE | DISCL_BACKGROUND );
@@ -328,7 +328,7 @@ void IN_FreeDirectInput (void)
 	DIMouse = false;
 }
 
-void IN_ReadBufferedData( int *mx, int *my )
+static void IN_ReadBufferedData( int *mx, int *my )
 {
     DIDEVICEOBJECTDATA	od[ DX_MOUSE_BUFFER_SIZE ];  // Receives buffered data 
 	DIMOUSESTATE2		state;
@@ -413,7 +413,7 @@ IN_ActivateMouse
 Called when the window gains focus or changes in some way
 ===========
 */
-void IN_ActivateMouse (void)
+static void IN_ActivateMouse (void)
 {
 	int		width, height;
 
@@ -459,8 +459,8 @@ void IN_ActivateMouse (void)
 	if (window_rect.bottom >= height-1)
 		window_rect.bottom = height-1;
 
-	window_center_x = (window_rect.right + window_rect.left)*0.5;
-	window_center_y = (window_rect.top + window_rect.bottom)*0.5;
+	window_center_x = (window_rect.right + window_rect.left)*0.5f;
+	window_center_y = (window_rect.top + window_rect.bottom)*0.5f;
 
 	SetCursorPos (window_center_x, window_center_y);
 
@@ -479,7 +479,7 @@ IN_DeactivateMouse
 Called when the window loses focus
 ===========
 */
-void IN_DeactivateMouse (void)
+static void IN_DeactivateMouse (void)
 {
 	if (!mouseinitialized)
 		return;
@@ -508,7 +508,7 @@ void IN_DeactivateMouse (void)
 IN_StartupMouse
 ===========
 */
-void IN_StartupMouse (void)
+static void IN_StartupMouse (void)
 {
 
 	if ( !in_mouse->integer ) 
@@ -527,7 +527,7 @@ void IN_StartupMouse (void)
 	mouseinitialized = true;
 }
 
-void IN_Restart_f(void)
+static void IN_Restart_f(void)
 {
 	if (!input_active)
 		return;
@@ -623,8 +623,8 @@ void IN_MouseMove (usercmd_t *cmd)
 
 	if (m_autosens->integer)
 	{
-		mouse_x *= cl.refdef.fov_x/90.0;
-		mouse_y *= cl.refdef.fov_y/90.0;
+		mouse_x *= cl.refdef.fov_x/90.0f;
+		mouse_y *= cl.refdef.fov_y/90.0f;
 	}
 
 // add mouse X/Y movement to cmd

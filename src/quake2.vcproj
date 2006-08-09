@@ -48,9 +48,8 @@
 				Name="VCCLCompilerTool"
 				Optimization="0"
 				AdditionalIncludeDirectories="./win32/lib"
-				PreprocessorDefinitions="WIN32;_DEBUG;_WINDOWS;GL_QUAKE;USE_CURL"
+				PreprocessorDefinitions="_DEBUG;WIN32;_WINDOWS;GL_QUAKE;USE_CURL"
 				ExceptionHandling="0"
-				BasicRuntimeChecks="0"
 				RuntimeLibrary="0"
 				EnableFunctionLevelLinking="true"
 				FloatingPointModel="2"
@@ -193,7 +192,10 @@
 				AdditionalLibraryDirectories="./win32/lib"
 				GenerateManifest="false"
 				IgnoreDefaultLibraryNames=""
+				GenerateDebugInformation="true"
 				ProgramDatabaseFile=".\release/aq2.pdb"
+				GenerateMapFile="true"
+				MapFileName=".\release/aq2.map"
 				SubSystem="2"
 				OptimizeReferences="2"
 				EnableCOMDATFolding="2"
@@ -809,7 +811,7 @@
 				</FileConfiguration>
 			</File>
 			<File
-				RelativePath=".\makefile"
+				RelativePath=".\Makefile"
 				>
 				<FileConfiguration
 					Name="Debug|Win32"
@@ -833,6 +835,14 @@
 				>
 				<FileConfiguration
 					Name="Debug|Win32"
+					ExcludedFromBuild="true"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|Win32"
 					ExcludedFromBuild="true"
 					>
 					<Tool
@@ -961,6 +971,26 @@
 				</FileConfiguration>
 			</File>
 			<File
+				RelativePath=".\linux\rw_sdl.c"
+				>
+				<FileConfiguration
+					Name="Debug|Win32"
+					ExcludedFromBuild="true"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|Win32"
+					ExcludedFromBuild="true"
+					>
+					<Tool
+						Name="VCCLCompilerTool"
+					/>
+				</FileConfiguration>
+			</File>
+			<File
 				RelativePath=".\linux\rw_x11.c"
 				>
 				<FileConfiguration
@@ -997,6 +1027,26 @@
 					>
 					<Tool
 						Name="VCCLCompilerTool"
+					/>
+				</FileConfiguration>
+			</File>
+			<File
+				RelativePath=".\linux\snd_alsa_funcs.h"
+				>
+				<FileConfiguration
+					Name="Debug|Win32"
+					ExcludedFromBuild="true"
+					>
+					<Tool
+						Name="VCCustomBuildTool"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|Win32"
+					ExcludedFromBuild="true"
+					>
+					<Tool
+						Name="VCCustomBuildTool"
 					/>
 				</FileConfiguration>
 			</File>
@@ -1125,6 +1175,14 @@
 				>
 				<FileConfiguration
 					Name="Debug|Win32"
+					ExcludedFromBuild="true"
+					>
+					<Tool
+						Name="VCCustomBuildTool"
+					/>
+				</FileConfiguration>
+				<FileConfiguration
+					Name="Release|Win32"
 					ExcludedFromBuild="true"
 					>
 					<Tool

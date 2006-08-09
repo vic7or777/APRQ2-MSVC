@@ -49,7 +49,6 @@ static DWORD	locksize;
 static LPDIRECTSOUND pDS;
 static LPDIRECTSOUNDBUFFER pDSBuf, pDSPBuf;
 static HINSTANCE hInstDS;
-static HPSTR		lpData;
 
 cvar_t	*s_wavonly;
 cvar_t	*s_forcesoft;
@@ -99,15 +98,13 @@ static qboolean DS_CreateBuffers( void )
 	int ret;
 	DSBUFFERDESC	dsbuf;
 	DSBCAPS			dsbcaps;
-	WAVEFORMATEX	pformat, format;
-	DWORD			dwWrite;
-	qboolean		primary_format_set;
+	WAVEFORMATEX	format;
 
 
 	Com_DPrintf( "Creating DS buffers\n" );
-	Com_DPrintf("...setting EXCLUSIVE coop level: " );
+	Com_DPrintf("...setting DSSCL_PRIORITY coop level: " );
 
-	ret = pDS->lpVtbl->SetCooperativeLevel(pDS, cl_hwnd, DSSCL_EXCLUSIVE);
+	ret = pDS->lpVtbl->SetCooperativeLevel(pDS, cl_hwnd, DSSCL_PRIORITY);
 	if ( ret != DS_OK  )
 	{
 		Com_Printf ("failed (%s)\n", DSoundError(ret));
@@ -122,94 +119,37 @@ static qboolean DS_CreateBuffers( void )
     format.wBitsPerSample = dma.samplebits;
     format.nSamplesPerSec = dma.speed;
     format.nBlockAlign = format.nChannels * format.wBitsPerSample / 8;
-    format.cbSize = sizeof(WAVEFORMATEX);
+    format.cbSize = 0;
     format.nAvgBytesPerSec = format.nSamplesPerSec*format.nBlockAlign; 
 
-// get access to the primary buffer, if possible, so we can set the
-// sound hardware format
+	// create the secondary buffer we'll actually work with
 	memset (&dsbuf, 0, sizeof(dsbuf));
 	dsbuf.dwSize = sizeof(DSBUFFERDESC);
-	dsbuf.dwFlags = DSBCAPS_PRIMARYBUFFER;
-	dsbuf.dwBufferBytes = 0;
-	dsbuf.lpwfxFormat = NULL;
+	dsbuf.dwFlags = DSBCAPS_LOCHARDWARE;
+	dsbuf.dwBufferBytes = SECONDARY_BUFFER_SIZE;
+	dsbuf.lpwfxFormat = &format;
 
-	primary_format_set = false;
-
-	Com_DPrintf( "...creating primary buffer: " );
-	ret = pDS->lpVtbl->CreateSoundBuffer (pDS, &dsbuf, &pDSPBuf, NULL);
-	if (DS_OK == ret)
+	Com_DPrintf( "...creating secondary buffer: " );
+	if (s_forcesoft->integer || DS_OK != pDS->lpVtbl->CreateSoundBuffer(pDS, &dsbuf, &pDSBuf, NULL))
 	{
-		pformat = format;
-
-		Com_DPrintf( "ok\n" );
-
-		ret = pDSPBuf->lpVtbl->SetFormat (pDSPBuf, &pformat);
+		dsbuf.dwFlags = DSBCAPS_LOCSOFTWARE;
+		ret = pDS->lpVtbl->CreateSoundBuffer(pDS, &dsbuf, &pDSBuf, NULL);
 		if (DS_OK != ret)
 		{
-			if (snd_firsttime)
-				Com_DPrintf ("...setting primary sound format: failed (%s)\n", DSoundError(ret));
-		}
-		else
-		{
-			if (snd_firsttime)
-				Com_DPrintf ("...setting primary sound format: ok\n");
-
-			primary_format_set = true;
-		}
-	}
-	else
-	{
-		Com_Printf ("failed (%s)\n", DSoundError(ret));
-	}
-
-	if ( !primary_format_set || !s_primary->integer)
-	{
-		// create the secondary buffer we'll actually work with
-		memset (&dsbuf, 0, sizeof(dsbuf));
-		dsbuf.dwSize = sizeof(DSBUFFERDESC);
-		dsbuf.dwFlags = DSBCAPS_CTRLFREQUENCY | DSBCAPS_LOCHARDWARE;
-		dsbuf.dwBufferBytes = SECONDARY_BUFFER_SIZE;
-		dsbuf.lpwfxFormat = &format;
-
-		Com_DPrintf( "...creating secondary buffer: " );
-		if (s_forcesoft->integer || DS_OK != pDS->lpVtbl->CreateSoundBuffer(pDS, &dsbuf, &pDSBuf, NULL))
-		{
-			dsbuf.dwFlags = DSBCAPS_CTRLFREQUENCY | DSBCAPS_LOCSOFTWARE;
-			ret = pDS->lpVtbl->CreateSoundBuffer(pDS, &dsbuf, &pDSBuf, NULL);
-			if (DS_OK != ret)
-			{
-				Com_DPrintf( "failed (%s)\n", DSoundError(ret));
-				SNDDMA_Shutdown ();
-				return false;
-			}
-
-			Com_DPrintf( "forced to software.  ok\n" );
-		}
-		else 
-		{
-			Com_DPrintf( "locked hardware.  ok\n" );
-		}
-		dma.channels = format.nChannels;
-		dma.samplebits = format.wBitsPerSample;
-		dma.speed = format.nSamplesPerSec;
-	}
-	else
-	{
-		Com_DPrintf( "...using primary buffer\n" );
-
-		Com_DPrintf( "...setting WRITEPRIMARY coop level: " );
-		ret = pDS->lpVtbl->SetCooperativeLevel (pDS, cl_hwnd, DSSCL_WRITEPRIMARY);
-		if (DS_OK != ret)
-		{
-			Com_Printf ("failed (%s)\n", DSoundError(ret));
+			Com_DPrintf( "failed (%s)\n", DSoundError(ret));
 			SNDDMA_Shutdown ();
 			return false;
 		}
-		Com_DPrintf( "ok\n" );
 
-		pDSBuf = pDSPBuf;
+		Com_DPrintf( "forced to software.  ok\n" );
+	}
+	else 
+	{
+		Com_DPrintf( "locked hardware.  ok\n" );
 	}
 
+
+	// get the returned buffer size
 	memset(&dsbcaps, 0, sizeof(dsbcaps));
 	dsbcaps.dwSize = sizeof(dsbcaps);
 	if (DS_OK != pDSBuf->lpVtbl->GetCaps (pDSBuf, &dsbcaps))
@@ -231,17 +171,20 @@ static qboolean DS_CreateBuffers( void )
 	gSndBufSize = dsbcaps.dwBufferBytes;
 
 	/* we don't want anyone to access the buffer directly w/o locking it first. */
-	lpData = NULL; 
-
-	pDSBuf->lpVtbl->Stop(pDSBuf);
-	pDSBuf->lpVtbl->GetCurrentPosition(pDSBuf, &mmstarttime.u.sample, &dwWrite);
-	pDSBuf->lpVtbl->Play(pDSBuf, 0, 0, DSBPLAY_LOOPING);
-
+	dma.channels = format.nChannels;
+	dma.samplebits = format.wBitsPerSample;
+	dma.speed = format.nSamplesPerSec;
 	dma.samples = gSndBufSize/(dma.samplebits/8);
 	dma.samplepos = 0;
 	dma.submission_chunk = 1;
-	dma.buffer = (unsigned char *) lpData;
+	dma.buffer = NULL;	// must be locked first
+
 	sample16 = (dma.samplebits/8) - 1;
+
+	SNDDMA_BeginPainting ();
+	if (dma.buffer)
+		memset(dma.buffer, 0, dma.samples * dma.samplebits/8);
+	SNDDMA_Submit ();
 
 	return true;
 }
@@ -455,19 +398,22 @@ how many sample are required to fill it up.
 int SNDDMA_GetDMAPos(void)
 {
 	MMTIME	mmtime;
-	int		s = 0;
+	int		s;
 	DWORD	dwWrite;
 
 	if (dsound_init) 
 	{
 		mmtime.wType = TIME_SAMPLES;
 		pDSBuf->lpVtbl->GetCurrentPosition(pDSBuf, &mmtime.u.sample, &dwWrite);
-		s = mmtime.u.sample - mmstarttime.u.sample;
+		//s = mmtime.u.sample - mmstarttime.u.sample;
+		s = mmtime.u.sample;
 	}
 	else if (wav_init)
 	{
 		s = snd_sent * WAV_BUFFER_SIZE;
 	}
+	else
+		return 0;
 
 
 	s >>= sample16;
@@ -579,10 +525,11 @@ void SNDDMA_Shutdown(void)
 
 	pDS = NULL;
 	pDSBuf = NULL;
-	lpData = NULL;
 	dsound_init = false;
 
 	SNDDMA_ShutdownWav();
+
+	memset ((void *)&dma, 0, sizeof (dma));
 }
 
 
@@ -602,13 +549,20 @@ void S_Activate (qboolean active)
 	Snd_Activate(active);
 	if ( active )
 	{
-		if ( pDS && cl_hwnd && snd_isdirect )
+		if ( pDS && cl_hwnd && snd_isdirect ) {
 			DS_CreateBuffers();
+	/*		if ( DS_OK != pDS->lpVtbl->SetCooperativeLevel( pDS, cl_hwnd, DSSCL_PRIORITY ) )	{
+				Com_Printf ("sound SetCooperativeLevel failed\n");
+				SNDDMA_Shutdown ();
+				SNDDMA_InitDirect ();
+			}*/
+		}
 	}
 	else
 	{
-		if ( pDS && cl_hwnd && snd_isdirect )
+		if ( pDS && cl_hwnd && snd_isdirect ) {
 			DS_DestroyBuffers();
+		}
 	}
 }
 
@@ -617,6 +571,7 @@ static HANDLE		hData;
 static HGLOBAL		hWaveHdr;
 static LPWAVEHDR	lpWaveHdr;
 static HWAVEOUT		hWaveOut; 
+static HPSTR		lpData;
 
 /*
 ==================
@@ -629,7 +584,7 @@ static qboolean SNDDMA_InitWav (void)
 {
 	WAVEFORMATEX  format; 
 	int				i;
-	HRESULT			hr;
+	MMRESULT		hr;
 
 	Com_Printf( "Initializing wave sound\n" );
 	
@@ -797,7 +752,7 @@ static void SNDDMA_ShutdownWav(void)
 
 	}
 
-
+	lpData = NULL;
 	hWaveOut = 0;
 	hData = 0;
 	hWaveHdr = 0;

@@ -27,15 +27,8 @@ key up events are sent even if in console mode
 
 int			anykeydown;
 
-int			key_waiting;
-char		*keybindings[256];
-qboolean	consolekeys[256];	// if true, can't be rebound while in console
-qboolean	menubound[256];		// if true, can't be rebound while in menu
-int			keyshift[256];		// key to map to if shift held down in console
-int			key_repeats[256];	// if > 1, it is autorepeating
-qboolean	keydown[256];
+qkey_t		keys[MAX_KEYS];
 
-qboolean	shift_down	= false;
 
 typedef struct
 {
@@ -163,10 +156,10 @@ Key_IsDown
 */
 qboolean Key_IsDown( int key )
 {
-	if( key < 0 || key > 255 )
+	if( key < 0 || key >= MAX_KEYS )
 		return false;
 
-	return keydown[key];
+	return keys[key].down;
 }
 
 /*
@@ -176,6 +169,9 @@ Key_StringToKeynum
 Returns a key number to be used to index keybindings[] by looking at
 the given string.  Single ascii characters return themselves, while
 the K_* names are matched up.
+
+0x11 will be interpreted as raw hex, which will allow new controlers
+to be configured even if they don't have defined names.
 ===================
 */
 static int Key_StringToKeynum (const char *str)
@@ -185,12 +181,37 @@ static int Key_StringToKeynum (const char *str)
 	if (!str || !str[0])
 		return -1;
 	if (!str[1])
-		return str[0];
+		return (int)(unsigned char)str[0];
 
 	for (kn=keynames ; kn->name ; kn++)
 	{
 		if (!Q_stricmp(str,kn->name))
 			return kn->keynum;
+	}
+
+	// check for hex code
+	if ( str[0] == '0' && str[1] == 'x' && strlen( str ) == 4) {
+		int		n1, n2;
+		
+		n1 = str[2];
+		if ( n1 >= '0' && n1 <= '9' ) {
+			n1 -= '0';
+		} else if ( n1 >= 'a' && n1 <= 'f' ) {
+			n1 = n1 - 'a' + 10;
+		} else {
+			n1 = 0;
+		}
+
+		n2 = str[3];
+		if ( n2 >= '0' && n2 <= '9' ) {
+			n2 -= '0';
+		} else if ( n2 >= 'a' && n2 <= 'f' ) {
+			n2 = n2 - 'a' + 10;
+		} else {
+			n2 = 0;
+		}
+
+		return n1 * 16 + n2;
 	}
 	return -1;
 }
@@ -207,22 +228,38 @@ FIXME: handle quote special (general escape sequence?)
 const char *Key_KeynumToString (int keynum)
 {
 	keyname_t	*kn;	
-	static	char	tinystr[2];
+	static	char	tinystr[5];
+	int			i, j;
 	
 	if (keynum == -1)
 		return "<KEY NOT FOUND>";
-	if (keynum > 32 && keynum < 127)
-	{	// printable ascii
+	
+	if ( keynum < 0 || keynum >= MAX_KEYS )
+		return "<OUT OF RANGE>";
+
+	// check for printable ascii (don't use quote)
+	if ( keynum > 32 && keynum < 127 && keynum != '"' && keynum != ';' ) {
 		tinystr[0] = keynum;
 		tinystr[1] = 0;
 		return tinystr;
 	}
-	
-	for (kn=keynames ; kn->name ; kn++)
+
+	for (kn=keynames ; kn->name ; kn++) {
 		if (keynum == kn->keynum)
 			return kn->name;
+	}
 
-	return "<UNKNOWN KEYNUM>";
+	// make a hex string
+	i = keynum >> 4;
+	j = keynum & 15;
+
+	tinystr[0] = '0';
+	tinystr[1] = 'x';
+	tinystr[2] = i > 9 ? i - 10 + 'a' : i + '0';
+	tinystr[3] = j > 9 ? j - 10 + 'a' : j + '0';
+	tinystr[4] = 0;
+
+	return tinystr;
 }
 
 
@@ -233,17 +270,15 @@ Key_SetBinding
 */
 void Key_SetBinding (int keynum, const char *binding)
 {
-			
 	if (keynum == -1)
 		return;
 
 	// free old bindings
-	if (keybindings[keynum]) {
-		Z_Free(keybindings[keynum]);
+	if (keys[keynum].binding) {
+		Z_Free(keys[keynum].binding);
 	}
-			
 	// allocate memory for new binding
-	keybindings[keynum] = CopyString(binding, TAGMALLOC_CLIENT_KEYBIND);
+	keys[keynum].binding = CopyString(binding, TAGMALLOC_CLIENT_KEYBIND);
 }
 
 /*
@@ -260,9 +295,9 @@ void Key_Unbind_f (void)
 		Com_Printf ("unbind <key> : remove commands from a key\n");
 		return;
 	}
-	
+
 	b = Key_StringToKeynum (Cmd_Argv(1));
-	if (b==-1)
+	if (b == -1)
 	{
 		Com_Printf ("\"%s\" isn't a valid key\n", Cmd_Argv(1));
 		return;
@@ -273,11 +308,12 @@ void Key_Unbind_f (void)
 
 void Key_Unbindall_f (void)
 {
-	int		i;
-	
-	for (i=0 ; i<256 ; i++)
-		if (keybindings[i])
+	int	i;
+
+	for (i=0 ; i<MAX_KEYS ; i++) {
+		if (keys[i].binding)
 			Key_SetBinding (i, "");
+	}
 }
 
 
@@ -298,7 +334,7 @@ void Key_Bind_f (void)
 		return;
 	}
 	b = Key_StringToKeynum (Cmd_Argv(1));
-	if (b==-1)
+	if (b == -1)
 	{
 		Com_Printf ("\"%s\" isn't a valid key\n", Cmd_Argv(1));
 		return;
@@ -306,8 +342,8 @@ void Key_Bind_f (void)
 
 	if (c == 2)
 	{
-		if (keybindings[b])
-			Com_Printf ("\"%s\" = \"%s\"\n", Cmd_Argv(1), keybindings[b] );
+		if (keys[b].binding)
+			Com_Printf ("\"%s\" = \"%s\"\n", Cmd_Argv(1), keys[b].binding );
 		else
 			Com_Printf ("\"%s\" is not bound\n", Cmd_Argv(1) );
 		return;
@@ -327,9 +363,9 @@ void Key_WriteBindings (FILE *f)
 {
 	int		i;
 
-	for (i=0 ; i<256 ; i++) {
-		if (keybindings[i] && keybindings[i][0])
-			fprintf (f, "bind %s \"%s\"\n", Key_KeynumToString(i), keybindings[i]);
+	for (i = 0; i < MAX_KEYS; i++) {
+		if (keys[i].binding && keys[i].binding[0])
+			fprintf (f, "bind %s \"%s\"\n", Key_KeynumToString(i), keys[i].binding);
 	}
 }
 
@@ -344,9 +380,9 @@ void Key_Bindlist_f (void)
 {
 	int		i;
 
-	for (i=0 ; i<256 ; i++) {
-		if (keybindings[i] && keybindings[i][0])
-			Com_Printf ("%s \"%s\"\n", Key_KeynumToString(i), keybindings[i]);
+	for (i = 0; i < MAX_KEYS; i++) {
+		if (keys[i].binding && keys[i].binding[0])
+			Com_Printf ("%s \"%s\"\n", Key_KeynumToString(i), keys[i].binding);
 	}
 }
 
@@ -362,74 +398,74 @@ void Key_Init (void)
 	
 // init ascii characters in console mode
 	for (i = 32; i < 128; i++)
-		consolekeys[i] = true;
-	consolekeys[K_ENTER] = true;
-	consolekeys[K_KP_ENTER] = true;
-	consolekeys[K_TAB] = true;
-	consolekeys[K_LEFTARROW] = true;
-	consolekeys[K_KP_LEFTARROW] = true;
-	consolekeys[K_RIGHTARROW] = true;
-	consolekeys[K_KP_RIGHTARROW] = true;
-	consolekeys[K_UPARROW] = true;
-	consolekeys[K_KP_UPARROW] = true;
-	consolekeys[K_DOWNARROW] = true;
-	consolekeys[K_KP_DOWNARROW] = true;
-	consolekeys[K_BACKSPACE] = true;
-	consolekeys[K_HOME] = true;
-	consolekeys[K_KP_HOME] = true;
-	consolekeys[K_END] = true;
-	consolekeys[K_KP_END] = true;
-	consolekeys[K_PGUP] = true;
-	consolekeys[K_KP_PGUP] = true;
-	consolekeys[K_PGDN] = true;
-	consolekeys[K_KP_PGDN] = true;
-	consolekeys[K_SHIFT] = true;
-	consolekeys[K_INS] = true;
-	consolekeys[K_KP_INS] = true;
-	consolekeys[K_KP_DEL] = true;
-	consolekeys[K_KP_SLASH] = true;
-	consolekeys[K_KP_PLUS] = true;
-	consolekeys[K_KP_MINUS] = true;
-	consolekeys[K_KP_5] = true;
+		keys[i].consolekey = true;
+	keys[K_ENTER].consolekey = true;
+	keys[K_KP_ENTER].consolekey = true;
+	keys[K_TAB].consolekey = true;
+	keys[K_LEFTARROW].consolekey = true;
+	keys[K_KP_LEFTARROW].consolekey = true;
+	keys[K_RIGHTARROW].consolekey = true;
+	keys[K_KP_RIGHTARROW].consolekey = true;
+	keys[K_UPARROW].consolekey = true;
+	keys[K_KP_UPARROW].consolekey = true;
+	keys[K_DOWNARROW].consolekey = true;
+	keys[K_KP_DOWNARROW].consolekey = true;
+	keys[K_BACKSPACE].consolekey = true;
+	keys[K_HOME].consolekey = true;
+	keys[K_KP_HOME].consolekey = true;
+	keys[K_END].consolekey = true;
+	keys[K_KP_END].consolekey = true;
+	keys[K_PGUP].consolekey = true;
+	keys[K_KP_PGUP].consolekey = true;
+	keys[K_PGDN].consolekey = true;
+	keys[K_KP_PGDN].consolekey = true;
+	keys[K_SHIFT].consolekey = true;
+	keys[K_INS].consolekey = true;
+	keys[K_KP_INS].consolekey = true;
+	keys[K_KP_DEL].consolekey = true;
+	keys[K_KP_SLASH].consolekey = true;
+	keys[K_KP_PLUS].consolekey = true;
+	keys[K_KP_MINUS].consolekey = true;
+	keys[K_KP_5].consolekey = true;
 
-	consolekeys[K_MWHEELUP] = true;
-	consolekeys[K_MWHEELDOWN] = true;
-	consolekeys[K_DEL] = true;
+	keys[K_MWHEELUP].consolekey = true;
+	keys[K_MWHEELDOWN].consolekey = true;
+	keys[K_DEL].consolekey = true;
 
-	consolekeys[K_CTRL] = true;
+	keys[K_CTRL].consolekey = true;
 
-	consolekeys['`'] = false;
-	consolekeys['~'] = false;
+	keys['`'].consolekey = false;
+	keys['~'].consolekey = false;
 
 	for (i = 0; i < 256; i++)
-		keyshift[i] = i;
+		keys[i].keyshift = i;
 	for (i = 'a'; i <= 'z'; i++)
-		keyshift[i] = i - 'a' + 'A';
-	keyshift['1'] = '!';
-	keyshift['2'] = '@';
-	keyshift['3'] = '#';
-	keyshift['4'] = '$';
-	keyshift['5'] = '%';
-	keyshift['6'] = '^';
-	keyshift['7'] = '&';
-	keyshift['8'] = '*';
-	keyshift['9'] = '(';
-	keyshift['0'] = ')';
-	keyshift['-'] = '_';
-	keyshift['='] = '+';
-	keyshift[','] = '<';
-	keyshift['.'] = '>';
-	keyshift['/'] = '?';
-	keyshift[';'] = ':';
-	keyshift['\''] = '"';
-	keyshift['['] = '{';
-	keyshift[']'] = '}';
-	keyshift['`'] = '~';
-	keyshift['\\'] = '|';
+		keys[i].keyshift = i - 'a' + 'A';
+	keys['1'].keyshift = '!';
+	keys['2'].keyshift = '@';
+	keys['3'].keyshift = '#';
+	keys['4'].keyshift = '$';
+	keys['5'].keyshift = '%';
+	keys['6'].keyshift = '^';
+	keys['7'].keyshift = '&';
+	keys['8'].keyshift = '*';
+	keys['9'].keyshift = '(';
+	keys['0'].keyshift = ')';
+	keys['-'].keyshift = '_';
+	keys['='].keyshift = '+';
+	keys[','].keyshift = '<';
+	keys['.'].keyshift = '>';
+	keys['/'].keyshift = '?';
+	keys[';'].keyshift = ':';
+	keys['\''].keyshift = '"';
+	keys['['].keyshift = '{';
+	keys[']'].keyshift = '}';
+	keys['`'].keyshift = '~';
+	keys['\\'].keyshift = '|';
 
-	menubound[K_ESCAPE] = true;
+	keys[K_ESCAPE].menubound = true;
 	for (i = 0; i < 12; i++)
-		menubound[K_F1+i] = true;
+		keys[K_F1+i].menubound = true;
 
 // register our functions
 	Cmd_AddCommand ("bind",Key_Bind_f);
@@ -451,56 +487,24 @@ void Key_Event (int key, qboolean down, unsigned time)
 	char	*kb;
 	char	cmd[1024];
 
-	// hack for modal presses
-	if (key_waiting == -1)
-	{
-		if (down)
-			key_waiting = key;
-		return;
-	}
-
 	// update auto-repeat status
 	if (down)
 	{
-		key_repeats[key]++;
-		if ((cls.key_dest == key_game ||
-			(cls.key_dest == key_menu && key != K_UPARROW && key != K_DOWNARROW))
-			&& key != K_BACKSPACE && key != K_PAUSE 
-			&& key != K_PGUP && key != K_KP_PGUP 
-			&& key != K_PGDN && key != K_KP_PGDN
-			&& key_repeats[key] > 1)
-			return;	// ignore most autorepeats
+		keys[key].repeats++;
+		if (keys[key].repeats > 1)
+		{
+			if ((cls.key_dest == key_game ||
+				(cls.key_dest == key_menu && key != K_UPARROW && key != K_DOWNARROW))
+				&& key != K_BACKSPACE && key != K_PAUSE 
+				&& key != K_PGUP && key != K_KP_PGUP 
+				&& key != K_PGDN && key != K_KP_PGDN)
+				return;	// ignore most autorepeats
+		}
 	}
 	else
 	{
-		key_repeats[key] = 0;
+		keys[key].repeats = 0;
 	}
-
-	if (key == K_SHIFT)
-		shift_down = down;
-
-
-#if defined(__linux__) || defined(__FreeBSD__)
-	if (key == K_ENTER)
-	{
-		if (down && keydown[K_ALT])
-		{
-			Key_ClearStates();
-			if (Cvar_VariableIntValue("vid_fullscreen") == 0)
-			{
-				Com_Printf("Switching to fullscreen rendering\n");
-				Cvar_Set("vid_fullscreen", "1");
-			}
-			else
-			{
-				Com_Printf("Switching to windowed rendering\n");
-				Cvar_Set("vid_fullscreen", "0");
-			}
-			//Cbuf_ExecuteText( EXEC_APPEND, "vid_restart\n");
-			return;
-		}
-	}
-#endif
 
 	// console key is hardcoded, so the user can never unbind it
 	if (key == '`' || key == '~')
@@ -510,13 +514,6 @@ void Key_Event (int key, qboolean down, unsigned time)
 
 		return;
 	}
-
-	// any key during the attract mode will bring up the menu
-	/*
-	if (cl.attractloop && cls.key_dest != key_menu &&
-		!(key >= K_F1 && key <= K_F12))
-		key = K_ESCAPE;
-	*/
 
 	// menu key is hardcoded, so the user can never unbind it
 	if (key == K_ESCAPE)
@@ -547,20 +544,6 @@ void Key_Event (int key, qboolean down, unsigned time)
 		return;
 	}
 
-	// track if any key is down for BUTTON_ANY
-	keydown[key] = down;
-	if (down)
-	{
-		if (key_repeats[key] == 1)
-			anykeydown++;
-	}
-	else
-	{
-		anykeydown--;
-		if (anykeydown < 0)
-			anykeydown = 0;
-	}
-
 //
 // key up events only generate commands if the game key binding is
 // a button command (leading + sign).  These will occur even in console mode,
@@ -568,20 +551,31 @@ void Key_Event (int key, qboolean down, unsigned time)
 // switch.  Button commands include the kenum as a parameter, so multiple
 // downs can be matched with ups
 //
-	if (!down)
+	// Track if any key is down for BUTTON_ANY
+	keys[key].down = down;
+	if (down)
 	{
+		if (keys[key].repeats == 1)
+			anykeydown++;
+	}
+	else
+	{
+		anykeydown--;
+		if (anykeydown < 0)
+			anykeydown = 0;
+
 		if(key == K_MOUSE1 && cls.key_dest == key_menu)
 			M_Keydown (key, down);
 
-		kb = keybindings[key];
+		kb = keys[key].binding;
 		if (kb && kb[0] == '+')
 		{
 			Com_sprintf (cmd, sizeof(cmd), "-%s %i %i\n", kb+1, key, time);
 			Cbuf_AddText (cmd);
 		}
-		if (keyshift[key] != key)
+		if (keys[key].keyshift != key)
 		{
-			kb = keybindings[keyshift[key]];
+			kb = keys[keys[key].keyshift].binding;
 			if (kb && kb[0] == '+')
 			{
 				Com_sprintf (cmd, sizeof(cmd), "-%s %i %i\n", kb+1, key, time);
@@ -592,14 +586,32 @@ void Key_Event (int key, qboolean down, unsigned time)
 		return; // other systems only care about key down events
 	}
 
+#if defined(__linux__) || defined(__FreeBSD__)
+	if (key == K_ENTER && keys[K_ALT].down)
+	{
+		Key_ClearStates();
+		if (Cvar_VariableIntValue("vid_fullscreen") == 0)
+		{
+			Com_Printf("Switching to fullscreen rendering\n");
+			Cvar_Set("vid_fullscreen", "1");
+		}
+		else
+		{
+			Com_Printf("Switching to windowed rendering\n");
+			Cvar_Set("vid_fullscreen", "0");
+		}
+		//Cbuf_ExecuteText( EXEC_APPEND, "vid_restart\n");
+		return;
+	}
+#endif
 //
 // if not a consolekey, send to the interpreter no matter what mode is
 //
-	if ( (cls.key_dest == key_menu && menubound[key])
-	|| (cls.key_dest == key_console && !consolekeys[key])
-	|| (cls.key_dest == key_game && ( cls.state == ca_active || !consolekeys[key] ) ) )
+	if ( (cls.key_dest == key_menu && keys[key].menubound)
+	|| (cls.key_dest == key_console && !keys[key].consolekey)
+	|| (cls.key_dest == key_game && ( cls.state == ca_active || !keys[key].consolekey ) ) )
 	{
-		kb = keybindings[key];
+		kb = keys[key].binding;
 		if (kb)
 		{
 			if (kb[0] == '+')
@@ -616,8 +628,8 @@ void Key_Event (int key, qboolean down, unsigned time)
 		return;
 	}
 
-	if (shift_down)
-		key = keyshift[key];
+	if (keys[K_SHIFT].down)
+		key = keys[key].keyshift;
 
 	switch (cls.key_dest)
 	{
@@ -646,29 +658,15 @@ void Key_ClearStates (void)
 {
 	int		i;
 
-	anykeydown = false;
+	anykeydown = 0;
 
-	for (i=0 ; i<256 ; i++)
+	for (i = 0; i < MAX_KEYS; i++)
 	{
-		if ( keydown[i] || key_repeats[i] )
+		//if ( keys[i].down || keys[i].repeats )
+		if ( keys[i].down )
 			Key_Event( i, false, 0 );
-		keydown[i] = 0;
-		key_repeats[i] = 0;
+		keys[i].down = false;
+		keys[i].repeats = 0;
 	}
 }
 
-
-/*
-===================
-Key_GetKey
-===================
-*/
-int Key_GetKey (void)
-{
-	key_waiting = -1;
-
-	while (key_waiting == -1)
-		Sys_SendKeyEvents ();
-
-	return key_waiting;
-}

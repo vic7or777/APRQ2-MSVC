@@ -18,39 +18,51 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 */
 
+#ifdef __cplusplus
+# define QGL_EXTERN extern "C"
+#else
+# define QGL_EXTERN extern
+#endif
+
 #ifdef _WIN32
-#define WIN32_LEAN_AND_MEAN
-#define VC_LEANMEAN
-#  include <windows.h>
+# define WIN32_LEAN_AND_MEAN
+# define VC_LEANMEAN
+# include <windows.h>
+
+# define QGL_WGL(type,name,params) QGL_EXTERN type (APIENTRY * q##name) params;
+# define QGL_WGL_EXT(type,name,params) QGL_EXTERN type (APIENTRY * q##name) params;
+# define QGL_GLX(type,name,params)
+# define QGL_GLX_EXT(type,name,params)
 #endif
 
 #include <GL/gl.h>
 
-#ifdef __linux__
-#  include <GL/glx.h>
-#else
-# include <GL/glu.h>
-#endif
+#if defined( __linux__ ) || defined( __FreeBSD__ ) || defined(MACOS_X)
+# include <GL/glx.h>
 
-#ifdef SOLARIS
-#  ifndef GL_COLOR_INDEX8_EXT
-	 #define GL_COLOR_INDEX8_EXT GL_COLOR_INDEX
-#  endif
+# define QGL_WGL(type,name,params)
+# define QGL_WGL_EXT(type,name,params)
+# define QGL_GLX(type,name,params) QGL_EXTERN type (APIENTRY * q##name) params;
+# define QGL_GLX_EXT(type,name,params) QGL_EXTERN type (APIENTRY * q##name) params;
 #endif
 
 #include "../client/ref.h"
+
+#define QGL_FUNC(type,name,params) QGL_EXTERN type (APIENTRY * q##name) params;
+#define QGL_EXT(type,name,params) QGL_EXTERN type (APIENTRY * q##name) params;
+
 #include "qgl.h"
+
+#undef QGL_GLX_EXT
+#undef QGL_GLX
+#undef QGL_WGL_EXT
+#undef QGL_WGL
+#undef QGL_EXT
+#undef QGL_FUNC
 
 #define	REF_VERSION	"GL 0.01"
 
-// up / down
-#define	PITCH	0
-
-// left / right
-#define	YAW		1
-
-// fall over
-#define	ROLL	2
+extern unsigned int QGL_TEXTURE0, QGL_TEXTURE1;
 
 #ifndef __VIDDEF_T
 #define __VIDDEF_T
@@ -61,7 +73,6 @@ typedef struct
 #endif
 
 extern	viddef_t	vid;
-
 
 /*
 
@@ -167,10 +178,8 @@ extern	int			gl_filter_min, gl_filter_max;
 //
 // view origin
 //
-extern	vec3_t	vup;
-extern	vec3_t	vpn;
-extern	vec3_t	vright;
 extern	vec3_t	r_origin;
+extern	vec3_t	viewAxis[3];
 
 //
 // screen size info
@@ -211,7 +220,7 @@ extern	cvar_t	*gl_mode;
 extern	cvar_t	*gl_lightmap;
 extern	cvar_t	*gl_shadows;
 extern	cvar_t	*gl_dynamic;
-extern  cvar_t  *gl_monolightmap;
+//extern  cvar_t  *gl_monolightmap;
 extern	cvar_t	*gl_nobind;
 extern	cvar_t	*gl_round_down;
 extern	cvar_t	*gl_picmip;
@@ -233,8 +242,7 @@ extern	cvar_t	*gl_3dlabs_broken;
 extern  cvar_t  *gl_driver;
 extern	cvar_t	*gl_swapinterval;
 extern	cvar_t	*gl_texturemode;
-extern	cvar_t	*gl_texturealphamode;
-extern	cvar_t	*gl_texturesolidmode;
+extern	cvar_t	*gl_texturebits;
 extern  cvar_t  *gl_saturatelighting;
 extern  cvar_t  *gl_lockpvs;
 
@@ -249,6 +257,7 @@ extern  cvar_t  *skydistance; // DMP - skybox size change
 
 extern	cvar_t	*gl_replacewal;
 extern	cvar_t	*gl_replacepcx;
+extern	cvar_t	*gl_replacemd2;
 extern	cvar_t	*gl_screenshot_quality;
 extern  cvar_t	*gl_stainmaps;
 extern	cvar_t	*gl_waterwaves;
@@ -360,8 +369,7 @@ void	GL_ShutdownImages (void);
 
 void	GL_FreeUnusedImages (void);
 
-void GL_TextureAlphaMode( const char *string );
-void GL_TextureSolidMode( const char *string );
+void	GL_TextureBits(void);
 
 /*
 ** GL extension emulation functions
@@ -432,7 +440,7 @@ typedef struct
 
 	int     prev_mode;
 
-	unsigned char *d_16to8table;
+	//unsigned char *d_16to8table;
 
 	int lightmap_textures;
 
@@ -446,6 +454,7 @@ typedef struct
 	int				maxtexsize; //max texture size -Maniac
 	qboolean		texture_compression; // Heffo - ARB Texture Compression
 	qboolean		stencil;
+	qboolean		compiledVertexArray;
 
 	qboolean		tex_rectangle;
 

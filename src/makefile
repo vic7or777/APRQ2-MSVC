@@ -10,10 +10,12 @@
 # (Note: not all options are available for all platforms).
 BUILD_GLX=YES		# X11 GLX client
 BUILD_X11=NO		# X11 software client
-BUILD_EVDEV=NO		# build evdev mouse input support
-BUILD_XMMS=YES		# buildin xmms remote commands
-BUILD_MPD=NO		# buildin mpd remote commands, cant use with BUILD_XMMS
+BUILD_GAME=YES		# Build game library
+BUILD_EVDEV=NO		# Build evdev mouse input support
+BUILD_XMMS=YES		# Buildin xmms remote commands
+BUILD_MPD=NO		# Buildin mpd remote commands, cant use with BUILD_XMMS
 BUILD_SDLSOUND=NO	# Using sdl for sounds
+BUILD_SDL=NO		# Using sdl for keyboard/mouse/windows for both sw/gl
 BUILD_HTTP=NO		# Build support for http downloads. You need libcurl.
 BUILD_OPENAL=YES	# Build support for openAL sounds
 #--------------------------------------------------------
@@ -23,7 +25,9 @@ PLATFORM=$(shell uname -s|tr A-Z a-z)
 
 ifneq ($(PLATFORM),linux)
 ifneq ($(PLATFORM),freebsd)
+ifneq ($(PLATFORM),darwin)
   $(error OS $(PLATFORM) is currently not supported)
+endif
 endif
 endif
 
@@ -32,6 +36,9 @@ ARCH:=$(shell uname -m | sed -e s/i.86/i386/ -e s/sun4u/sparc/ -e s/sparc64/spar
  
 #COMPILATION TOOLS
 CC=gcc
+
+SHLIBEXT=so
+GAME_NAME=game$(ARCH).$(SHLIBEXT)
 
 #BASE CFLAGS
 BASE_CFLAGS= -funsigned-char -pipe
@@ -51,6 +58,10 @@ ifeq ($(strip $(BUILD_HTTP)),YES)
  BASE_CFLAGS += -DUSE_CURL
 endif
  
+ ifeq ($(strip $(BUILD_SDL)),YES)
+  BASE_CFLAGS += -DUSE_SDL
+ endif
+ 
 ifeq ($(strip $(BUILD_EVDEV)),YES)
  BASE_CFLAGS += -DWITH_EVDEV
 endif
@@ -59,20 +70,20 @@ ifeq ($(strip $(BUILD_OPENAL)),YES)
  BASE_CFLAGS += -DUSE_OPENAL
 endif
 
-ifeq ($(strip $(BUILD_SDLSOUND)),YES)
-	BASE_CFLAGS += $(shell sdl-config --cflags)
+ifeq ($(PLATFORM),darwin)
+ BASE_CFLAGS += -DMACOS_X -I/Developer/SDKs/MacOSX10.4u.sdk/usr/X11R6/include -I../jpeg -I/Library/Frameworks/SDL.framework/Headers
 endif
 
 DEBUG_CFLAGS=$(BASE_CFLAGS) -g -Wall -Wimplicit
 RELEASE_CFLAGS=$(BASE_CFLAGS) -DNDEBUG
 
 ifeq ($(ARCH),axp)
-  RELEASE_CFLAGS += -O3 -ffast-math -funroll-loops -fomit-frame-pointer -fexpensive-optimizations
+  RELEASE_CFLAGS += -O3 -funroll-loops -fomit-frame-pointer -fexpensive-optimizations
 else
 ifeq ($(ARCH),ppc)
-  RELEASE_CFLAGS += -O3 -ffast-math -funroll-loops -fomit-frame-pointer -fno-strict-aliasing -falign-loops=2 -falign-jumps=2 -falign-functions=2 -fexpensive-optimizations
+  RELEASE_CFLAGS += -O3 -funroll-loops -fomit-frame-pointer -fno-strict-aliasing -falign-loops=2 -falign-jumps=2 -falign-functions=2 -fexpensive-optimizations
 else
-  RELEASE_CFLAGS += -O3 -ffast-math -funroll-loops -fomit-frame-pointer -fno-strict-aliasing -falign-loops=2 -falign-jumps=2 -falign-functions=2 -fexpensive-optimizations
+  RELEASE_CFLAGS += -O3 -funroll-loops -fomit-frame-pointer -fno-strict-aliasing -falign-loops=2 -falign-jumps=2 -falign-functions=2 -fexpensive-optimizations
 endif
 endif
 
@@ -89,19 +100,68 @@ ifeq ($(strip $(BUILD_HTTP)),YES)
  LDFLAGS += -lcurl
 endif
 
-ifeq ($(strip $(BUILD_SDLSOUND)),YES)
- LDFLAGS += $(shell sdl-config --libs)
+ifeq ($(PLATFORM),linux)
+ SDL_CONFIG=sdl-config
 endif
+ifeq ($(PLATFORM),freebsd)
+ SDL_CONFIG=sdl11-config
+endif
+ifeq ($(PLATFORM),darwin)
+ SDL_CONFIG=/sw/bin/sdl-config
+endif
+
+SDLCFLAGS=$(shell $(SDL_CONFIG) --cflags)
+SDLLDFLAGS=$(shell $(SDL_CONFIG) --libs)
+
+ifeq ($(strip $(BUILD_SDLSOUND)),YES)
+ LDFLAGS += $(SDLLDFLAGS)
+else
+ ifeq ($(strip $(BUILD_SDL)),YES)
+  LDFLAGS += $(SDLLDFLAGS)
+ endif
+endif
+
+ifeq ($(PLATFORM),darwin)
+ LDFLAGS += -L../jpeg -framework SDL
+endif
+
+LIBDIR=lib
+
+ifeq ($(ARCH),x86_64)
+ LIBDIR=lib64
+else
+ifeq ($(ARCH),ppc64)
+ LIBDIR=lib64
+else
+ifeq ($(ARCH),s390x)
+ LIBDIR=lib64
+endif
+endif
+endif
+
+SHLIBCFLAGS=-fPIC
+SHLIBLDFLAGS=-shared
+
+DO_SHLIB_CC=$(CC) $(CFLAGS) $(SHLIBCFLAGS) -o $@ -c $<
 
 #FOR X11 BUILDS
 XCFLAGS=-I/usr/X11R6/include
-XLDFLAGS=-L/usr/X11R6/lib -lX11 -lXext -lXxf86dga -lXxf86vm -lz
+
+ifeq ($(PLATFORM),darwin)
+XLDFLAGS=-L/usr/X11R6/$(LIBDIR) -lX11 -lXext -lXxf86vm -lz
+else
+XLDFLAGS=-L/usr/X11R6/$(LIBDIR) -lX11 -lXext -lXxf86dga -lXxf86vm -lz
+endif
 DO_CC=$(CC) $(CFLAGS) -o $@ -c $<
 DO_AS=$(CC) $(CFLAGS) -DELF -x assembler-with-cpp -o $@ -c $<
 
 #FOR GLX BUILDS
 GLXCFLAGS=$(XCFLAGS)
+ifeq ($(PLATFORM),darwin)
+GLXLDFLAGS=$(XLDFLAGS) -ljpeg
+else
 GLXLDFLAGS=$(XLDFLAGS) -ljpeg -lpng
+endif
 DO_GL_CC=$(CC) $(CFLAGS) -DGL_QUAKE -o $@ -c $<
 DO_GL_AS=$(CC) $(CFLAGS) -DGL_QUAKE -DELF -x assembler-with-cpp -o $@ -c $<
 
@@ -129,14 +189,18 @@ ifeq ($(strip $(BUILD_X11)),YES)
  TARGETS += $(BUILDDIR)/aq2sw
 endif
 
-.PHONY : targets build_debug build_release makedirs clean clean-debug clean-release clean2
+ifeq ($(strip $(BUILD_GAME)),YES)
+ TARGETS += $(BUILDDIR)/$(GAME_NAME)
+endif
 
-all: build_debug build_release
+.PHONY : targets debug release makedirs clean clean-debug clean-release clean2
 
-build_debug:
+all: release
+
+debug:
 	$(MAKE) targets BUILDDIR=$(BUILD_DEBUG_DIR) CFLAGS="$(DEBUG_CFLAGS)"
 
-build_release:
+release:
 	$(MAKE) targets BUILDDIR=$(BUILD_RELEASE_DIR) CFLAGS="$(RELEASE_CFLAGS)"
 
 targets: makedirs $(TARGETS)
@@ -145,6 +209,7 @@ makedirs:
 	@if [ ! -d $(BUILDDIR) ];then mkdir $(BUILDDIR);fi
 	@if [ ! -d $(BUILDDIR)/q2glx ];then mkdir $(BUILDDIR)/q2glx;fi
 	@if [ ! -d $(BUILDDIR)/q2swx ];then mkdir $(BUILDDIR)/q2swx;fi
+	@if [ ! -d $(BUILDDIR)/game ];then mkdir $(BUILDDIR)/game;fi
 	
 #############################################################################
 # GLX CLIENT
@@ -234,13 +299,20 @@ QUAKE2GLX_OBJS = \
 	$(BUILDDIR)/q2glx/gl_decal.o \
 	\
 	$(BUILDDIR)/q2glx/qgl_linux.o \
-	$(BUILDDIR)/q2glx/gl_glx.o \
 	$(BUILDDIR)/q2glx/rw_linux.o \
 	$(BUILDDIR)/q2glx/xmms.o \
 	$(BUILDDIR)/q2glx/mpd.o \
 	$(BUILDDIR)/q2glx/libmpdclient.o \
 	$(BUILDDIR)/q2glx/snd_openal.o
 	
+ifeq ($(strip $(BUILD_SDL)),YES)
+QUAKE2GLX_OBJS += \
+	$(BUILDDIR)/q2glx/rw_sdl.o
+else
+QUAKE2GLX_OBJS += \
+	$(BUILDDIR)/q2glx/gl_glx.o
+endif
+
 ifeq ($(strip $(BUILD_SDLSOUND)),YES)
 QUAKE2GLX_OBJS += \
 	$(BUILDDIR)/q2glx/snd_sdl.o
@@ -250,12 +322,11 @@ QUAKE2GLX_OBJS += \
 	$(BUILDDIR)/q2glx/snd_oss.o \
 	$(BUILDDIR)/q2glx/snd_alsa.o
 endif
-	
+
 ifeq ($(ARCH),i386)
 QUAKE2GLX_OBJS += \
 	$(BUILDDIR)/q2glx/snd_mixa.o
 endif
-
 
 $(BUILDDIR)/aq2 : $(QUAKE2GLX_OBJS)
 	$(CC) -o $@ $(QUAKE2GLX_OBJS) $(LDFLAGS) $(GLXLDFLAGS)
@@ -311,6 +382,9 @@ $(BUILDDIR)/q2glx/qgl_linux.o :  $(LINUX_DIR)/qgl_linux.c
 $(BUILDDIR)/q2glx/gl_glx.o :     $(LINUX_DIR)/gl_glx.c
 	$(DO_GL_CC) $(GLXCFLAGS)
 	
+$(BUILDDIR)/q2glx/rw_sdl.o :     $(LINUX_DIR)/rw_sdl.c
+	$(DO_GL_CC) $(SDLCFLAGS)
+	
 $(BUILDDIR)/q2glx/snd_oss.o :    $(LINUX_DIR)/snd_oss.c
 	$(DO_GL_CC)
 	
@@ -318,7 +392,7 @@ $(BUILDDIR)/q2glx/snd_alsa.o :   $(LINUX_DIR)/snd_alsa.c
 	$(DO_GL_CC)
 
 $(BUILDDIR)/q2glx/snd_sdl.o :    $(LINUX_DIR)/snd_sdl.c
-	$(DO_GL_CC)
+	$(DO_GL_CC) $(SDLCFLAGS)
 	
 $(BUILDDIR)/q2glx/xmms.o :       $(LINUX_DIR)/xmms.c
 	$(DO_GL_CC)
@@ -423,13 +497,20 @@ QUAKE2SWX_OBJS = \
 	$(BUILDDIR)/q2swx/r_sprite.o \
 	$(BUILDDIR)/q2swx/r_surf.o \
 	\
-	$(BUILDDIR)/q2swx/rw_x11.o \
 	$(BUILDDIR)/q2swx/rw_linux.o \
 	$(BUILDDIR)/q2swx/xmms.o \
 	$(BUILDDIR)/q2swx/mpd.o \
 	$(BUILDDIR)/q2swx/libmpdclient.o \
 	$(BUILDDIR)/q2swx/snd_openal.o
 	
+ifeq ($(strip $(BUILD_SDL)),YES)
+QUAKE2SWX_OBJS += \
+	$(BUILDDIR)/q2swx/rw_sdl.o
+else
+QUAKE2SWX_OBJS += \
+	$(BUILDDIR)/q2swx/rw_x11.o
+endif
+
 ifeq ($(strip $(BUILD_SDLSOUND)),YES)
 QUAKE2SWX_OBJS += \
 	$(BUILDDIR)/q2swx/snd_sdl.o
@@ -505,6 +586,9 @@ $(BUILDDIR)/q2swx/rw_linux.o :   $(LINUX_DIR)/rw_linux.c
 
 $(BUILDDIR)/q2swx/rw_x11.o :     $(LINUX_DIR)/rw_x11.c
 	$(DO_CC) $(XCFLAGS)
+	
+$(BUILDDIR)/q2swx/rw_sdl.o :     $(LINUX_DIR)/rw_sdl.c
+	$(DO_CC) $(SDLCFLAGS)
 
 $(BUILDDIR)/q2swx/snd_oss.o :    $(LINUX_DIR)/snd_oss.c
 	$(DO_CC)
@@ -513,12 +597,12 @@ $(BUILDDIR)/q2swx/snd_alsa.o :   $(LINUX_DIR)/snd_alsa.c
 	$(DO_CC)
 
 $(BUILDDIR)/q2swx/snd_sdl.o :    $(LINUX_DIR)/snd_sdl.c
-	$(DO_CC)
+	$(DO_CC) $(SDLCFLAGS)
 	
 $(BUILDDIR)/q2swx/xmms.o :       $(LINUX_DIR)/xmms.c
 	$(DO_CC)
 
-$(BUILDDIR)/q2swx/mpd.o :       $(LINUX_DIR)/mpd.c
+$(BUILDDIR)/q2swx/mpd.o :        $(LINUX_DIR)/mpd.c
 	$(DO_CC)
 
 $(BUILDDIR)/q2swx/libmpdclient.o : $(LINUX_DIR)/libmpdclient.c
@@ -527,6 +611,66 @@ $(BUILDDIR)/q2swx/libmpdclient.o : $(LINUX_DIR)/libmpdclient.c
 $(BUILDDIR)/q2swx/%.o :          $(LINUX_DIR)/%.s
 	$(DO_AS)
 
+
+#############################################################################
+# GAME
+#############################################################################
+
+GAME_OBJS = \
+	$(BUILDDIR)/game/q_shared.o \
+	$(BUILDDIR)/game/g_ai.o \
+	$(BUILDDIR)/game/p_client.o \
+	$(BUILDDIR)/game/g_cmds.o \
+	$(BUILDDIR)/game/g_svcmds.o \
+	$(BUILDDIR)/game/g_chase.o \
+	$(BUILDDIR)/game/g_combat.o \
+	$(BUILDDIR)/game/g_func.o \
+	$(BUILDDIR)/game/g_items.o \
+	$(BUILDDIR)/game/g_main.o \
+	$(BUILDDIR)/game/g_misc.o \
+	$(BUILDDIR)/game/g_monster.o \
+	$(BUILDDIR)/game/g_phys.o \
+	$(BUILDDIR)/game/g_save.o \
+	$(BUILDDIR)/game/g_spawn.o \
+	$(BUILDDIR)/game/g_target.o \
+	$(BUILDDIR)/game/g_trigger.o \
+	$(BUILDDIR)/game/g_turret.o \
+	$(BUILDDIR)/game/g_utils.o \
+	$(BUILDDIR)/game/g_weapon.o \
+	$(BUILDDIR)/game/m_actor.o \
+	$(BUILDDIR)/game/m_berserk.o \
+	$(BUILDDIR)/game/m_boss2.o \
+	$(BUILDDIR)/game/m_boss3.o \
+	$(BUILDDIR)/game/m_boss31.o \
+	$(BUILDDIR)/game/m_boss32.o \
+	$(BUILDDIR)/game/m_brain.o \
+	$(BUILDDIR)/game/m_chick.o \
+	$(BUILDDIR)/game/m_flipper.o \
+	$(BUILDDIR)/game/m_float.o \
+	$(BUILDDIR)/game/m_flyer.o \
+	$(BUILDDIR)/game/m_gladiator.o \
+	$(BUILDDIR)/game/m_gunner.o \
+	$(BUILDDIR)/game/m_hover.o \
+	$(BUILDDIR)/game/m_infantry.o \
+	$(BUILDDIR)/game/m_insane.o \
+	$(BUILDDIR)/game/m_medic.o \
+	$(BUILDDIR)/game/m_move.o \
+	$(BUILDDIR)/game/m_mutant.o \
+	$(BUILDDIR)/game/m_parasite.o \
+	$(BUILDDIR)/game/m_soldier.o \
+	$(BUILDDIR)/game/m_supertank.o \
+	$(BUILDDIR)/game/m_tank.o \
+	$(BUILDDIR)/game/p_hud.o \
+	$(BUILDDIR)/game/p_trail.o \
+	$(BUILDDIR)/game/p_view.o \
+	$(BUILDDIR)/game/p_weapon.o \
+	$(BUILDDIR)/game/m_flash.o
+
+$(BUILDDIR)/$(GAME_NAME) : $(GAME_OBJS)
+	$(CC) $(CFLAGS) $(SHLIBLDFLAGS) -o $@ $(GAME_OBJS)
+
+$(BUILDDIR)/game/%.o :    $(GAME_DIR)/%.c
+	$(DO_SHLIB_CC)
 
 #############################################################################
 # MISC
@@ -541,7 +685,7 @@ clean-release:
 	$(MAKE) clean2 BUILDDIR=$(BUILD_RELEASE_DIR) CFLAGS="$(DEBUG_CFLAGS)"
 
 clean2:
-	rm -f $(QUAKE2GLX_OBJS)	$(QUAKE2SWX_OBJS)
+	rm -f $(QUAKE2GLX_OBJS)	$(QUAKE2SWX_OBJS) $(GAME_OBJS)
 
 distclean:
 	@-rm -rf $(BUILD_DEBUG_DIR) $(BUILD_RELEASE_DIR)

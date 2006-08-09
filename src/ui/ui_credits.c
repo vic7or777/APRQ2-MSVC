@@ -385,7 +385,7 @@ void M_Credits_MenuDraw( menuframework_s *self )
 	/*
 	** draw the credits
 	*/
-	for ( i = 0, y = viddef.height - ( ( cls.realtime - credits_start_time ) / 40.0F ); credits[i] && y < viddef.height; y += 10, i++ )
+	for ( i = 0, y = viddef.height - ( ( cls.realtime - credits_start_time ) / 40 ); credits[i] && y < viddef.height; y += 10, i++ )
 	{
 		int j, stringoffset = 0;
 		int bold = false;

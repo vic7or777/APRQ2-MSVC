@@ -557,7 +557,7 @@ void NET_Sleep(int msec)
 	extern cvar_t *dedicated;
 	int i;
 
-	if (dedicated && !dedicated->integer)
+	if (!dedicated->integer)
 		return; // we're not a server, just run full speed
 
 	FD_ZERO(&fdset);

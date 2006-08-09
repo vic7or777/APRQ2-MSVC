@@ -29,12 +29,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 //===============================================================================
 
-int		hunkcount;
+//static int	hunkcount;
 
-
-byte	*membase;
-int		hunkmaxsize;
-int		cursize;
+static byte	*membase;
+static int	hunkmaxsize;
+static int	cursize;
 
 #define	VIRTUAL_ALLOC
 
@@ -70,7 +69,8 @@ void *Hunk_Alloc (int size)
 	if (!buf)
 	{
 		FormatMessage(FORMAT_MESSAGE_ALLOCATE_BUFFER | FORMAT_MESSAGE_FROM_SYSTEM, NULL, GetLastError(), MAKELANGID(LANG_NEUTRAL, SUBLANG_DEFAULT), (LPTSTR) &buf, 0, NULL);
-		Sys_Error ("VirtualAlloc commit failed.\n%s", buf);
+		Sys_Error ("VirtualAlloc commit failed.\n%s", (char *)buf);
+		LocalFree(buf);
 	}
 #endif
 	cursize += size;
@@ -93,7 +93,7 @@ int Hunk_End (void)
 		Sys_Error ("VirtualAlloc commit failed");
 #endif
 
-	hunkcount++;
+	//hunkcount++;
 //Com_Printf ("hunkcount: %i\n", hunkcount);
 	return cursize;
 }
@@ -107,7 +107,7 @@ void Hunk_Free (void *base)
 		free (base);
 #endif
 
-	hunkcount--;
+	//hunkcount--;
 }
 
 //===============================================================================
@@ -143,32 +143,31 @@ void Sys_Mkdir (const char *path)
 
 //============================================
 
-char	findbase[MAX_OSPATH];
-char	findpath[MAX_OSPATH];
-int		findhandle = -1;
+static char	findbase[MAX_OSPATH];
+static char	findpath[MAX_OSPATH];
+static HANDLE	findhandle = INVALID_HANDLE_VALUE;
 
 static qboolean CompareAttributes( unsigned found, unsigned musthave, unsigned canthave )
 {
-	if ( ( found & _A_RDONLY ) && ( canthave & SFF_RDONLY ) )
-		return false;
-	if ( ( found & _A_HIDDEN ) && ( canthave & SFF_HIDDEN ) )
-		return false;
-	if ( ( found & _A_SYSTEM ) && ( canthave & SFF_SYSTEM ) )
-		return false;
-	if ( ( found & _A_SUBDIR ) && ( canthave & SFF_SUBDIR ) )
-		return false;
-	if ( ( found & _A_ARCH ) && ( canthave & SFF_ARCH ) )
+	if (found & FILE_ATTRIBUTE_DIRECTORY) {
+		if (canthave & SFF_SUBDIR)
+			return false;
+	}
+	else if (musthave & SFF_SUBDIR)
 		return false;
 
-	if ( ( musthave & SFF_RDONLY ) && !( found & _A_RDONLY ) )
+	if (found & FILE_ATTRIBUTE_HIDDEN) {
+		if (canthave & SFF_HIDDEN)
+			return false;
+	}
+	else if (musthave & SFF_HIDDEN)
 		return false;
-	if ( ( musthave & SFF_HIDDEN ) && !( found & _A_HIDDEN ) )
-		return false;
-	if ( ( musthave & SFF_SYSTEM ) && !( found & _A_SYSTEM ) )
-		return false;
-	if ( ( musthave & SFF_SUBDIR ) && !( found & _A_SUBDIR ) )
-		return false;
-	if ( ( musthave & SFF_ARCH ) && !( found & _A_ARCH ) )
+
+	if (found & FILE_ATTRIBUTE_SYSTEM) {
+		if (canthave & SFF_SYSTEM)
+			return false;
+	}
+	else if (musthave & SFF_SYSTEM)
 		return false;
 
 	return true;
@@ -176,44 +175,42 @@ static qboolean CompareAttributes( unsigned found, unsigned musthave, unsigned c
 
 char *Sys_FindFirst (const char *path, unsigned musthave, unsigned canthave )
 {
-	struct _finddata_t findinfo;
+	WIN32_FIND_DATA	findinfo;
 
-	if (findhandle != -1)
-		Sys_Error ("Sys_BeginFind without close");
-	findhandle = 0;
+	if (findhandle != INVALID_HANDLE_VALUE)
+		Sys_Error ("Sys_FindFirst without close");
 
 	COM_FilePath (path, findbase);
-	findhandle = _findfirst(path, &findinfo);
+	findhandle = FindFirstFile(path, &findinfo);
 
-	while (findhandle != -1)
+	if (findhandle == INVALID_HANDLE_VALUE)
+		return NULL;
+
+	do
 	{
-		if (!CompareAttributes(findinfo.attrib, musthave, canthave))
+		if (CompareAttributes(findinfo.dwFileAttributes, musthave, canthave))
 		{
-			_findclose(findhandle);
-			findhandle =  _findnext ( findhandle, &findinfo );
-		}
-		else
-		{
-			Com_sprintf (findpath, sizeof(findpath), "%s/%s", findbase, findinfo.name);
+			Com_sprintf (findpath, sizeof(findpath), "%s/%s", findbase, findinfo.cFileName);
 			return findpath;
 		}
 	}
+	while(FindNextFile(findhandle, &findinfo));
 
 	return NULL; 
 }
 
 char *Sys_FindNext ( unsigned musthave, unsigned canthave )
 {
-	struct _finddata_t findinfo;
+	WIN32_FIND_DATA	findinfo;
 
-	if (findhandle == -1)
+	if (findhandle == INVALID_HANDLE_VALUE)
 		return NULL;
 
-	while (_findnext(findhandle, &findinfo) != -1)
+	while (FindNextFile(findhandle, &findinfo))
 	{
-		if (CompareAttributes(findinfo.attrib, musthave, canthave))
+		if (CompareAttributes(findinfo.dwFileAttributes, musthave, canthave))
 		{
-			Com_sprintf (findpath, sizeof(findpath), "%s/%s", findbase, findinfo.name);
+			Com_sprintf (findpath, sizeof(findpath), "%s/%s", findbase, findinfo.cFileName);
 			return findpath;
 		}
 	}
@@ -224,9 +221,10 @@ char *Sys_FindNext ( unsigned musthave, unsigned canthave )
 
 void Sys_FindClose (void)
 {
-	if (findhandle != -1)
-		_findclose (findhandle);
-	findhandle = -1;
+	if (findhandle != INVALID_HANDLE_VALUE)
+		FindClose(findhandle);
+
+	findhandle = INVALID_HANDLE_VALUE;
 }
 
 

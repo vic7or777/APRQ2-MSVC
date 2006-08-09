@@ -29,6 +29,8 @@ static cvar_t *cvarHash[CVAR_HASH_SIZE];
 static qboolean userCreated = false;
 qboolean CL_CheatsOK(void);
 
+static cvar_t *Cvar_Set2 (const char *var_name, const char *value, qboolean force);
+
 /*
 ============
 Cvar_InfoValidate
@@ -76,7 +78,7 @@ float Cvar_VariableValue (const char *var_name)
 	
 	var = Cvar_FindVar (var_name);
 	if (!var)
-		return 0;
+		return 0.0f;
 	return var->value;
 }
 
@@ -158,8 +160,22 @@ cvar_t *Cvar_Get (const char *var_name, const char *var_value, int flags)
 			var->flags &= ~CVAR_USER_CREATED;
 			Z_Free( var->resetString );
 			var->resetString = CopyString ( var_value, TAGMALLOC_CVAR );
+
+			if (flags & CVAR_ROM) { //Users cant change these
+				Cvar_Set2( var_name, var_value, true );
+			}
 		}
 		var->flags |= flags;
+
+		// if we have a latched string, take that value now
+		if ( var->latched_string ) {
+			char *s;
+
+			s = var->latched_string;
+			var->latched_string = NULL;	// otherwise cvar_set2 would free it
+			Cvar_Set2( var_name, s, true );
+			Z_Free( s );
+		}
 
 		return var;
 	}
@@ -241,6 +257,11 @@ static cvar_t *Cvar_Set2 (const char *var_name, const char *value, qboolean forc
 
 	if (!force)
 	{
+		if (var->flags & CVAR_ROM)
+		{
+			Com_Printf ("%s is read only.\n", var_name);
+			return var;
+		}
 		if (var->flags & CVAR_NOSET)
 		{
 			Com_Printf ("%s is write protected.\n", var_name);
@@ -270,7 +291,7 @@ static cvar_t *Cvar_Set2 (const char *var_name, const char *value, qboolean forc
 				if (!strcmp(var->name, "game"))
 				{
 					FS_SetGamedir (var->string);
-					FS_ExecAutoexec ();
+					FS_ExecConfig ("autoexec.cfg");
 				}
 			}
 			return var;
@@ -373,6 +394,10 @@ cvar_t *Cvar_FullSet (const char *var_name, const char *value, int flags)
 	}
 
 	if(userCreated) {
+		if (var->flags & CVAR_ROM)
+		{
+			return var;
+		}
 		if (var->flags & CVAR_NOSET) {
 			var->flags |= flags;
 			return var;
@@ -480,10 +505,11 @@ void Cvar_GetLatchedVars (int flags)
 		var->latched_string = NULL;
 		var->value = (float)atof(var->string);
 		var->integer = Q_rint(var->value);
+		var->modified = true;
 		if (!strcmp(var->name, "game"))
 		{
 			FS_SetGamedir (var->string);
-			FS_ExecAutoexec ();
+			FS_ExecConfig ("autoexec.cfg");
 		}
 	}
 }
@@ -495,7 +521,7 @@ Cvar_Command
 Handles variable inspection and changing from the console
 ============
 */
-qboolean Cvar_Command (char *name, unsigned int hash)
+qboolean Cvar_Command (const char *name, unsigned int hash)
 {
 	const cvar_t			*v;
 
@@ -629,8 +655,6 @@ static void Cvar_Toggle_f (void)
 	Cvar_Set2(Cmd_Argv(1), Cmd_Argv(2), false);
 }
 
-qboolean Q_IsNumeric (const char *string);
-
 static void Cvar_Increase_f (void)
 {
 	cvar_t	*var;
@@ -653,15 +677,60 @@ static void Cvar_Increase_f (void)
 		return;
 	}
 
-	if(Cmd_Argc() > 2)
-		value = var->value + (float)atof(Cmd_Argv(2));
+	if(Cmd_Argc() > 2) {
+		if(!Q_IsNumeric(Cmd_Argv(2))) {
+			Com_Printf( "\"%s\" is not numeric\n", Cmd_Argv(2));
+			return;
+		}
+		value = (float)atof(Cmd_Argv(2));
+	}
 	else
-		value = var->value + 1;
+		value = 1.0f;
+
+	if(!Q_stricmp(Cmd_Argv(0), "dec"))
+		value = var->value - value;
+	else
+		value = var->value + value;
 
 	if (value == (int)value)
 		Com_sprintf (val, sizeof(val), "%i", (int)value);
 	else
 		Com_sprintf (val, sizeof(val), "%g", value);
+
+	Cvar_Set2(Cmd_Argv(1), val, false);
+}
+
+static void Cvar_Random_f (void)
+{
+	cvar_t	*var;
+	char	val[32];
+	int		from, to;
+
+	if (Cmd_Argc() != 4) {
+		Com_Printf ("Usage: %s <cvar> <from> <to>\n", Cmd_Argv(0));
+		return;
+	}
+
+	var = Cvar_FindVar(Cmd_Argv(1));
+	if (!var) {
+		Com_Printf ("Unknown cvar '%s'\n", Cmd_Argv(1));
+		return;
+	}
+	
+	if(!Q_IsNumeric(Cmd_Argv(2))) {
+		Com_Printf( "\"%s\" is not numeric\n", Cmd_Argv(2));
+		return;
+	}
+
+	if(!Q_IsNumeric(Cmd_Argv(3))) {
+		Com_Printf( "\"%s\" is not numeric\n", Cmd_Argv(3));
+		return;
+	}
+
+	from = atoi(Cmd_Argv(2));
+	to = atoi(Cmd_Argv(3));
+
+	Com_sprintf (val, sizeof(val), "%i", (int)brandom(from, to));
 
 	Cvar_Set2(Cmd_Argv(1), val, false);
 }
@@ -706,7 +775,7 @@ static int CvarSort( const cvar_t *a, const cvar_t *b )
 static void Cvar_List_f (void)
 {
     const cvar_t  *var;
-    char    *filter = NULL;
+    const char    *filter = NULL;
 	int		i, total = 0, matching = 0;
 	cvar_t	*sortedList;
 
@@ -813,7 +882,9 @@ void Cvar_Init (void)
 	Cmd_AddCommand ("set", Cvar_Set_f);
 	Cmd_AddCommand ("toggle", Cvar_Toggle_f);
 	Cmd_AddCommand ("inc", Cvar_Increase_f);
+	Cmd_AddCommand ("dec", Cvar_Increase_f);
 	Cmd_AddCommand ("cvarlist", Cvar_List_f);
+	Cmd_AddCommand ("random", Cvar_Random_f);
 	Cmd_AddCommand ("reset",	Cvar_Reset_f);
 }
 

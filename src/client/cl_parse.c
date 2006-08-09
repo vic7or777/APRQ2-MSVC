@@ -27,7 +27,6 @@ cvar_t	*cl_highlight;
 cvar_t	*cl_highlightmode;
 cvar_t	*cl_highlightcolor;
 cvar_t	*cl_highlightnames;
-cvar_t	*ignorewaves;
 cvar_t	*cl_textcolors;
 cvar_t	*cl_mychatcolor;
 
@@ -77,7 +76,7 @@ const char *svc_strings[256] =
 
 //=============================================================================
 
-void CL_DownloadFileName(char *dest, int destlen, char *fn)
+static void CL_DownloadFileName(char *dest, int destlen, const char *fn)
 {
 	//if (strncmp(fn, "players", 7) == 0)
 	//	Com_sprintf (dest, destlen, "%s/%s", BASEDIRNAME, fn);
@@ -85,7 +84,7 @@ void CL_DownloadFileName(char *dest, int destlen, char *fn)
 		Com_sprintf (dest, destlen, "%s/%s", FS_Gamedir(), fn);
 }
 
-void CL_FinishDownload (void)
+static void CL_FinishDownload (void)
 {
 	int r;
 	char	oldn[MAX_OSPATH];
@@ -282,15 +281,15 @@ CL_ParseDownload
 A download message has been received from the server
 =====================
 */
-void CL_ParseDownload (qboolean dataIsCompressed)
+void CL_ParseDownload (sizebuf_t *msg, qboolean dataIsCompressed)
 {
 	int		size, percent;
 	char	name[MAX_OSPATH];
 //	int		r;
 
 	// read the data
-	size = MSG_ReadShort (&net_message);
-	percent = MSG_ReadByte (&net_message);
+	size = MSG_ReadShort (msg);
+	percent = MSG_ReadByte (msg);
 	if (size < 0)
 	{
 		if (size == -1)
@@ -315,10 +314,10 @@ void CL_ParseDownload (qboolean dataIsCompressed)
 	// open the file if not opened yet
 	if (!cls.download)
 	{
-		if (!*cls.downloadtempname)
+		if (!cls.downloadtempname[0])
 		{
 			Com_Printf ("Received download packet without request. Ignored.\n");
-			net_message.readcount += size;
+			msg->readcount += size;
 			return;
 		}
 
@@ -329,7 +328,7 @@ void CL_ParseDownload (qboolean dataIsCompressed)
 		cls.download = fopen (name, "wb");
 		if (!cls.download)
 		{
-			net_message.readcount += size;
+			msg->readcount += size;
 			Com_Printf ("Failed to open %s\n", cls.downloadtempname);
 			CL_RequestNextDownload ();
 			return;
@@ -342,25 +341,25 @@ void CL_ParseDownload (qboolean dataIsCompressed)
 		uint16		uncompressedLen;
 		byte		uncompressed[0xFFFF];
 
-		uncompressedLen = MSG_ReadShort (&net_message);
+		uncompressedLen = MSG_ReadShort (msg);
 
 		if (!uncompressedLen)
 			Com_Error (ERR_DROP, "uncompressedLen == 0");
 
-		ZLibDecompress (net_message_buffer + net_message.readcount, size, uncompressed, uncompressedLen, -15);
+		ZLibDecompress (msg->data + msg->readcount, size, uncompressed, uncompressedLen, -15);
 		fwrite (uncompressed, 1, uncompressedLen, cls.download);
 		Com_DPrintf ("svc_zdownload(%s): %d -> %d\n", cls.downloadname, size, uncompressedLen);
 	}
 	else
 	{
 #endif
-		fwrite (net_message_buffer + net_message.readcount, 1, size, cls.download);
+		fwrite (msg->data + msg->readcount, 1, size, cls.download);
 #ifdef R1Q2_PROTOCOL
 	}
 #endif
 
 	//fwrite (net_message.data + net_message.readcount, 1, size, cls.download);
-	net_message.readcount += size;
+	msg->readcount += size;
 
 	if (percent != 100)
 	{
@@ -395,7 +394,7 @@ void CL_ParseDownload (qboolean dataIsCompressed)
 CL_ParseServerData
 ==================
 */
-qboolean CL_ParseServerData (void)
+qboolean CL_ParseServerData (sizebuf_t *msg)
 {
 	extern cvar_t	*fs_gamedirvar;
 	char	*str;
@@ -409,13 +408,19 @@ qboolean CL_ParseServerData (void)
 	cls.state = ca_connected;
 
 // parse protocol version number
-	i = MSG_ReadLong (&net_message);
+	i = MSG_ReadLong (msg);
 	cls.serverProtocol = i;
+
+	cl.servercount = MSG_ReadLong (msg);
+	cl.attractloop = MSG_ReadByte (msg);
 
 	if (cl.attractloop)
 	{
+#ifndef R1Q2_PROTOCOL
 		if(i == ENHANCED_PROTOCOL_VERSION)
 			Com_Error (ERR_DROP, "This demo was recorded with R1Q2 protocol. Use R1Q2 to playback.\n");
+#endif
+		//cls.serverProtocol = ORIGINAL_PROTOCOL_VERSION;
 	}
 #ifdef R1Q2_PROTOCOL
 	else if (i != ORIGINAL_PROTOCOL_VERSION && i != ENHANCED_PROTOCOL_VERSION)
@@ -425,22 +430,27 @@ qboolean CL_ParseServerData (void)
 		Com_Error (ERR_DROP, "Server is using unknown protocol %d.", i);
 #endif
 
-	cl.servercount = MSG_ReadLong (&net_message);
-	cl.attractloop = MSG_ReadByte (&net_message);
-
 	// game directory
-	str = MSG_ReadString (&net_message);
+	str = MSG_ReadString (msg);
 	Q_strncpyz (cl.gamedir, str, sizeof(cl.gamedir));
+	str = cl.gamedir;
 
 	// set gamedir
-	if ((*str && (!fs_gamedirvar->string || !*fs_gamedirvar->string || strcmp(fs_gamedirvar->string, str))) || (!*str && (fs_gamedirvar->string || *fs_gamedirvar->string)))
-		Cvar_SetLatched("game", str);
+	if (strcmp(fs_gamedirvar->string, str)) {
+		if (cl.attractloop) {
+			Cvar_Set("game", str);
+			FS_SetGamedir(str);
+		}
+		else {
+			Cvar_SetLatched("game", str);
+		}
+	}
 
 	// parse player entity number
-	cl.playernum = MSG_ReadShort (&net_message);
+	cl.playernum = MSG_ReadShort (msg);
 
 	// get the full level name
-	str = MSG_ReadString (&net_message);
+	str = MSG_ReadString (msg);
 
 	pm_enhanced = false;
 	pm_strafehack = false;
@@ -448,25 +458,35 @@ qboolean CL_ParseServerData (void)
 	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
 	{
 		int		newVersion;
-		cl.enhancedServer = MSG_ReadByte (&net_message);
 
-		newVersion = MSG_ReadShort (&net_message);
+		cl.enhancedServer = MSG_ReadByte (msg);
+		newVersion = MSG_ReadShort (msg);
 		if (newVersion != CURRENT_ENHANCED_COMPATIBILITY_NUMBER &&
 			newVersion != 1902) //this version works also
 		{
-			Com_Printf ("Protocol 35 version mismatch (%d != %d), falling back to 34.\n", newVersion, CURRENT_ENHANCED_COMPATIBILITY_NUMBER);
-			CL_Disconnect();
-			cls.serverProtocol = ORIGINAL_PROTOCOL_VERSION;
-			CL_Reconnect_f ();
-			return false;
+			if (cl.attractloop)
+			{
+				if (newVersion < CURRENT_ENHANCED_COMPATIBILITY_NUMBER)
+					Com_Printf ("This demo was recorded with an earlier version of the R1Q2 protocol. It may not play back properly.\n");
+				else
+					Com_Printf ("This demo was recorded with a later version of the R1Q2 protocol. It may not play back properly.\n");
+			}
+			else
+			{
+				Com_Printf ("Protocol 35 version mismatch (%d != %d), falling back to 34.\n", newVersion, CURRENT_ENHANCED_COMPATIBILITY_NUMBER);
+				CL_Disconnect();
+				cls.serverProtocol = ORIGINAL_PROTOCOL_VERSION;
+				CL_Reconnect_f ();
+				return false;
+			}
 		}
 
 		if (newVersion >= 1903)
 		{
 			qboolean advancedDeltas = false;
 
-			advancedDeltas = MSG_ReadByte (&net_message);
-			pm_strafehack = MSG_ReadByte (&net_message);
+			advancedDeltas = MSG_ReadByte (msg);
+			pm_strafehack = MSG_ReadByte (msg);
 			if(advancedDeltas)
 			{
 				Com_Printf ("Server have advanced deltas enabled, those arent supported yet. Falling back to 34 protocol.\n");
@@ -503,7 +523,7 @@ qboolean CL_ParseServerData (void)
 CL_ParseBaseline
 ==================
 */
-void CL_ParseBaseline (void)
+void CL_ParseBaseline (sizebuf_t *msg)
 {
 	entity_state_t	*es;
 	unsigned int	bits;
@@ -512,20 +532,20 @@ void CL_ParseBaseline (void)
 
 	memset (&nullstate, 0, sizeof(nullstate));
 
-	newnum = CL_ParseEntityBits (&bits);
+	newnum = CL_ParseEntityBits(msg, &bits);
 
 	es = &cl_entities[newnum].baseline;
-	CL_ParseDelta (&nullstate, es, newnum, bits);
+	CL_ParseDelta (msg, &nullstate, es, newnum, bits);
 }
 
 #ifdef R1Q2_PROTOCOL
-void CL_ParseZPacket (void)
+void CL_ParseZPacket (sizebuf_t *msg)
 {
 	byte buff_in[MAX_MSGLEN];
 	byte buff_out[0xFFFF];
-	sizebuf_t sb, old;
-	uint16 compressed_len = MSG_ReadShort (&net_message);
-	uint16 uncompressed_len = MSG_ReadShort (&net_message);
+	sizebuf_t sb;
+	uint16 compressed_len = MSG_ReadShort (msg);
+	uint16 uncompressed_len = MSG_ReadShort (msg);
 	
 	if (uncompressed_len <= 0)
 		Com_Error (ERR_DROP, "CL_ParseZPacket: uncompressed_len <= 0");
@@ -533,15 +553,12 @@ void CL_ParseZPacket (void)
 	if (compressed_len <= 0)
 		Com_Error (ERR_DROP, "CL_ParseZPacket: compressed_len <= 0");
 
-	MSG_ReadData (&net_message, buff_in, compressed_len);
+	MSG_ReadData (msg, buff_in, compressed_len);
 
 	SZ_Init (&sb, buff_out, uncompressed_len);
 	sb.cursize = ZLibDecompress (buff_in, compressed_len, buff_out, uncompressed_len, -15);
 
-	old = net_message;
-	net_message = sb;
-	CL_ParseServerMessage ();
-	net_message = old;
+	CL_ParseServerMessage(&sb);
 
 	Com_DPrintf ("Got a ZPacket, %d->%d\n", uncompressed_len + 4, compressed_len);
 }
@@ -571,7 +588,7 @@ void CL_LoadClientinfo (clientinfo_t *ci, char *s)
 	t = strchr(s, '\\');
 	if (t)
 	{
-		if (t - s >= sizeof(ci->name))
+		if (t - s >= sizeof(ci->name)-1)
 		{
 			i = -1;
 		}
@@ -717,16 +734,16 @@ void CL_ParseClientinfo (int player)
 CL_ParseConfigString
 ================
 */
-void CL_ParseConfigString (void)
+void CL_ParseConfigString (sizebuf_t *msg)
 {
 	int		i, length;
 	char	*s;
 	char	olds[MAX_QPATH];
 
-	i = MSG_ReadShort (&net_message);
+	i = MSG_ReadShort (msg);
 	if (i < 0 || i >= MAX_CONFIGSTRINGS)
 		Com_Error (ERR_DROP, "configstring > MAX_CONFIGSTRINGS");
-	s = MSG_ReadString(&net_message);
+	s = MSG_ReadString(msg);
 
 	Q_strncpyz (olds, cl.configstrings[i], sizeof(olds));
 
@@ -749,7 +766,7 @@ void CL_ParseConfigString (void)
 	}
 	else
 	{
-		strcpy (cl.configstrings[i], s);
+		Q_strncpyz (cl.configstrings[i], s, (sizeof(cl.configstrings[i]) * (MAX_CONFIGSTRINGS - i)));
 	}
 
 	// do something apropriate
@@ -824,7 +841,7 @@ ACTION MESSAGES
 CL_ParseStartSoundPacket
 ==================
 */
-void CL_ParseStartSoundPacket(void)
+void CL_ParseStartSoundPacket(sizebuf_t *msg)
 {
     vec3_t  pos_v;
 	float	*pos;
@@ -832,27 +849,27 @@ void CL_ParseStartSoundPacket(void)
     int 	sound_num, flags;
     float 	volume, attenuation, ofs;
 
-	flags = MSG_ReadByte (&net_message);
-	sound_num = MSG_ReadByte (&net_message);
+	flags = MSG_ReadByte (msg);
+	sound_num = MSG_ReadByte (msg);
 
     if (flags & SND_VOLUME)
-		volume = MSG_ReadByte (&net_message) * ONEDIV255;
+		volume = MSG_ReadByte (msg) * ONEDIV255;
 	else
 		volume = DEFAULT_SOUND_PACKET_VOLUME;
 	
     if (flags & SND_ATTENUATION)
-		attenuation = MSG_ReadByte (&net_message) * ONEDIV64;
+		attenuation = MSG_ReadByte (msg) * ONEDIV64;
 	else
 		attenuation = DEFAULT_SOUND_PACKET_ATTENUATION;	
 
     if (flags & SND_OFFSET)
-		ofs = MSG_ReadByte (&net_message) / 1000.0f;
+		ofs = MSG_ReadByte (msg) / 1000.0f;
 	else
 		ofs = 0;
 
 	if (flags & SND_ENT)
 	{	// entity reletive
-		channel = MSG_ReadShort(&net_message); 
+		channel = MSG_ReadShort(msg); 
 		ent = channel>>3;
 		if (ent < 0 || ent > MAX_EDICTS)
 			Com_Error (ERR_DROP,"CL_ParseStartSoundPacket: ent = %i", ent);
@@ -867,7 +884,7 @@ void CL_ParseStartSoundPacket(void)
 
 	if (flags & SND_POS)
 	{	// positioned in space
-		MSG_ReadPos (&net_message, pos_v);
+		MSG_ReadPos (msg, pos_v);
  
 		pos = pos_v;
 	}
@@ -881,10 +898,10 @@ void CL_ParseStartSoundPacket(void)
 }       
 
 
-void SHOWNET(const char *s)
+void SHOWNET(sizebuf_t *msg, const char *s)
 {
 	if (cl_shownet->integer >= 2)
-		Com_Printf ("%3i:%s\n", net_message.readcount-1, s);
+		Com_Printf ("%3i:%s\n", msg->readcount-1, s);
 }
 
 static void CL_ParsePrint( char *s, int i )
@@ -895,10 +912,8 @@ static void CL_ParsePrint( char *s, int i )
 	int c, l = 0;
 
 	string = s;
-	while(*string && l < sizeof(text)-1) {
-		c = *string++ & 127;
-		if( c > 31 )
-			text[l++] = tolower(c);
+	while((c = *string++ & 127) > 31 && l < sizeof(text)-1) {
+		text[l++] = tolower(c);
 	}
 	text[l] = 0;
 
@@ -966,15 +981,6 @@ static void CL_ParsePrint( char *s, int i )
 		return;
 	}
 
-	if (i == PRINT_HIGH)
-	{
-		if (ignorewaves->integer && (!strcmp(s, "flipoff\n") || !strcmp(s, "salute\n") || !strcmp(s, "taunt\n") || !strcmp(s, "wave\n") || !strcmp(s, "point\n")))
-			return;
-
-		if(!cl.attractloop)
-			CL_ParseAutoScreenshot(text);		
-	}
-
 	CL_HighlightNames(s);
 
 	timestamp = CL_Timestamp(false);
@@ -983,8 +989,12 @@ static void CL_ParsePrint( char *s, int i )
 	else
 		Com_Printf("%s", s);
 
-	if(!cl.attractloop)
+	if(!cl.attractloop) {
+		if (i == PRINT_HIGH)
+			CL_ParseAutoScreenshot(text);		
+	
 		Cmd_ExecTrigger(text); //Triggers
+	}
 }
 
 void CL_ParseCenterPrint(const char *s)
@@ -993,18 +1003,16 @@ void CL_ParseCenterPrint(const char *s)
 	const char *string;
 	int c, l = 0;
 
+	SCR_CenterPrint (s);
+
 	string = s;
-	while(*string && l < sizeof(text)-1) {
-		c = *string++ & 127;
-		if(c > 31)
-			text[l++] = c;
+	while((c = *string++ & 127) > 31 && l < sizeof(text)-1) {
+		text[l++] = c;
 	}
 	text[l] = 0;
 
 	if (!strcmp(text, "ACTION!")) //Hack to show roundtime in aq2 mod
 		cls.roundtime = cl.time;
-
-	SCR_CenterPrint (s);
 
 	if(!cl.attractloop)
 		Cmd_ExecTrigger(text); //Triggers
@@ -1018,12 +1026,12 @@ CL_ParseServerMessage
 #ifdef R1Q2_PROTOCOL
 #define WRITEDEMOMSG \
 	if(cls.demorecording && cls.serverProtocol != ORIGINAL_PROTOCOL_VERSION) \
-		CL_WriteDemoMessage (net_message.data + oldReadCount, net_message.readcount - oldReadCount, false);
+		CL_WriteDemoMessage (msg->data + oldReadCount, msg->readcount - oldReadCount, false);
 #else
 #define WRITEDEMOMSG
 #endif
 
-void CL_ParseServerMessage (void)
+void CL_ParseServerMessage (sizebuf_t *msg)
 {
 	int			cmd, extrabits = 0;
 	char		*s;
@@ -1043,7 +1051,7 @@ void CL_ParseServerMessage (void)
 // if recording demos, copy the message out
 //
 	if (cl_shownet->integer == 1)
-		Com_Printf ("%i ",net_message.cursize);
+		Com_Printf ("%i ", msg->cursize);
 	else if (cl_shownet->integer >= 2)
 		Com_Printf ("------------------\n");
 
@@ -1052,19 +1060,18 @@ void CL_ParseServerMessage (void)
 //
 	while (1)
 	{
-		if (net_message.readcount > net_message.cursize)
+		if (msg->readcount > msg->cursize)
 		{
-			Com_Error (ERR_DROP,"CL_ParseServerMessage: Bad server message (%d>%d)", net_message.readcount, net_message.cursize);
+			Com_Error (ERR_DROP,"CL_ParseServerMessage: Bad server message (%d>%d)", msg->readcount, msg->cursize);
 			break;
 		}
 
-		oldReadCount = net_message.readcount;
+		oldReadCount = msg->readcount;
 
-		cmd = MSG_ReadByte (&net_message);
-
+		cmd = MSG_ReadByte(msg);
 		if (cmd == -1)
 		{
-			SHOWNET("END OF MESSAGE");
+			SHOWNET(msg, "END OF MESSAGE");
 			break;
 		}
 
@@ -1077,87 +1084,88 @@ void CL_ParseServerMessage (void)
 		if (cl_shownet->integer >= 2)
 		{
 			if (!svc_strings[cmd])
-				Com_Printf ("%3i:BAD CMD %i\n", net_message.readcount-1,cmd);
+				Com_Printf ("%3i:BAD CMD %i\n", msg->readcount-1, cmd);
 			else
-				SHOWNET(svc_strings[cmd]);
+				SHOWNET(msg, svc_strings[cmd]);
 		}
 	
 	// other commands
 		switch (cmd)
 		{
 		case svc_frame:
-			CL_ParseFrame (extrabits);
+			CL_ParseFrame (msg, extrabits);
 			//CL_ParseFrame ();
 			break;
 
 		case svc_muzzleflash:
-			CL_ParseMuzzleFlash ();
+			CL_ParseMuzzleFlash (msg);
 			WRITEDEMOMSG
 			break;
 
 		case svc_muzzleflash2:
-			CL_ParseMuzzleFlash2 ();
+			CL_ParseMuzzleFlash2 (msg);
 			WRITEDEMOMSG
 			break;
 
 		case svc_temp_entity:
-			CL_ParseTEnt ();
+			CL_ParseTEnt (msg);
 			WRITEDEMOMSG
 			break;
 
 		case svc_sound:
-			CL_ParseStartSoundPacket();
+			CL_ParseStartSoundPacket(msg);
 			WRITEDEMOMSG
 			break;
 
 		case svc_print:
-			i = MSG_ReadByte( &net_message );
-			s = MSG_ReadString( &net_message );
+			i = MSG_ReadByte( msg );
+			s = MSG_ReadString( msg );
 			WRITEDEMOMSG
 			CL_ParsePrint(s, i);
 			break;
 			
 		case svc_centerprint:
-			s = MSG_ReadString (&net_message);
+			s = MSG_ReadString (msg);
 			CL_ParseCenterPrint(s);
 			WRITEDEMOMSG
 			break;
 			
 		case svc_stufftext:
-			s = MSG_ReadString (&net_message);
+			s = MSG_ReadString (msg);
 			Com_DPrintf ("stufftext: %s\n", s);
-			Cbuf_AddText (s);
+			Cbuf_AddText(s);
+			WRITEDEMOMSG
 			break;
 			
 		case svc_serverdata:
 			Cbuf_Execute ();		// make sure any stuffed commands are done
-			if (!CL_ParseServerData())
+			if (!CL_ParseServerData(msg))
 				return;
 			WRITEDEMOMSG
 			break;
 			
 		case svc_configstring:
-			CL_ParseConfigString ();
+			CL_ParseConfigString (msg);
 			WRITEDEMOMSG
 			break;
 			
 		case svc_spawnbaseline:
-			CL_ParseBaseline ();
+			CL_ParseBaseline (msg);
 			WRITEDEMOMSG
 			break;
 
 		case svc_download:
-			CL_ParseDownload (false);
+			CL_ParseDownload (msg, false);
 			WRITEDEMOMSG
 			break;
 
 		case svc_inventory:
-			CL_ParseInventory ();
+			CL_ParseInventory (msg);
 			WRITEDEMOMSG
 			break;
 
 		case svc_layout:
-			s = MSG_ReadString (&net_message);
+			s = MSG_ReadString (msg);
 			WRITEDEMOMSG
 			Q_strncpyz (cl.layout, s, sizeof(cl.layout));
 			break;
@@ -1165,11 +1173,19 @@ void CL_ParseServerMessage (void)
 #ifdef R1Q2_PROTOCOL
 		// ************** r1q2 specific BEGIN ****************
 		case svc_zpacket:
-			CL_ParseZPacket();
+			if(cls.serverProtocol == 134)
+				Com_Error(ERR_FATAL, "Q2PRO svc_unicast?");
+			else if(cls.serverProtocol == 135)
+				Com_Error(ERR_FATAL, "Q2PRO cvs_unicast 2?");
+			CL_ParseZPacket(msg);
 			break;
 
 		case svc_zdownload:
-			CL_ParseDownload(true);
+			if(cls.serverProtocol == 134)
+				Com_Error(ERR_FATAL, "Q2PRO svc_multicast?");
+			else if(cls.serverProtocol == 135)
+				Com_Error(ERR_FATAL, "Q2PRO svc_multicast 2?");
+			CL_ParseDownload(msg, true);
 			break;
 		// ************** r1q2 specific END ******************
 #endif
@@ -1201,8 +1217,8 @@ void CL_ParseServerMessage (void)
 			break;
 
 		case svc_disconnect:
-			Com_Error (ERR_DISCONNECT, "Server disconnected\n");
 			WRITEDEMOMSG
+			Com_Error (ERR_DISCONNECT, "Server disconnected\n");
 
 			SCR_ClearChatHUD_f();
 			break;
@@ -1235,15 +1251,15 @@ void CL_VersionReply (const char *s)
 qboolean CL_ChatParse (const char *s, int *clinu, int *skip2, int *mm2) //Seperates nick & msg from chat msg
 {
 	int i, client = -1, skip = 0, nLen;
-	char *tmp, *start = NULL;
+	const char *tmp, *start = NULL;
 
-	for( i = 0; i < cl.maxclients; i++ ) 
+	for(i = 0; i < cl.maxclients; i++)
 	{ 
 		if(cl.clientinfo[i].name[0])
 		{
-			tmp = strstr( s, cl.clientinfo[i].name ); 
+			tmp = strstr(s, cl.clientinfo[i].name);
 
-			if( tmp && ( tmp < start || client == -1 || ( tmp == start && strlen(cl.clientinfo[i].name) > strlen(cl.clientinfo[client].name) ) ) )
+			if(tmp && (!start || tmp < start || (tmp == start && strlen(cl.clientinfo[i].name) > strlen(cl.clientinfo[client].name))) )
 			{ 
 				client = i; 
 				start = tmp; 
@@ -1311,10 +1327,10 @@ void CL_HighlightNames( char *s )
 	{
 		char *tmp = strstr( s, cl.clientinfo[ord[i]].name );
 
-		if( tmp )
+		if(tmp)
 		{
 			len = strlen(cl.clientinfo[ord[i]].name);
-			for( t = tmp; t < tmp + len; t++ )
+			for(t = tmp; t < tmp + len; t++)
 				*t |= 128;
 		}
 	}
@@ -1333,8 +1349,8 @@ static highlight_t *cl_highlights = NULL;
 static void CL_Highlight_f( void )
 {
 	highlight_t *entry;
-	char *s;
-	int color = -1;
+	const char *s;
+	int color = -1, tLen;
 
 	if (Cmd_Argc() != 2 && Cmd_Argc() != 3)
 	{
@@ -1347,15 +1363,15 @@ static void CL_Highlight_f( void )
 		return;
 	}
 	
-	if(Cmd_Argc() > 2)
-		color = atoi(Cmd_Argv(2))&7;
-
 	s = Cmd_Argv(1);
-	if(strlen(s) < 3)
-	{
+	tLen = strlen(s);
+	if(tLen < 3) {
 		Com_Printf("Text is too short.\n");
 		return;
 	}
+
+	if(Cmd_Argc() > 2)
+		color = atoi(Cmd_Argv(2))&7;
 
 	for(entry = cl_highlights; entry; entry = entry->next) {
 		if(!strcmp(entry->text, s))
@@ -1368,7 +1384,7 @@ static void CL_Highlight_f( void )
 		}
 	}
 
-	entry = Z_TagMalloc(sizeof(highlight_t) + strlen(s)+1, TAGMALLOC_CLIENT_IGNORE);
+	entry = Z_TagMalloc(sizeof(highlight_t) + tLen+1, TAGMALLOC_CLIENT_IGNORE);
 	entry->text = (char *)((byte *)entry + sizeof(highlight_t));
 	strcpy(entry->text, s);
 	entry->color = color;
@@ -1380,10 +1396,9 @@ static void CL_UnHighlight_f( void )
 {
 	highlight_t *entry, *next, **back;
 	int count = 0;
-	char *s;
+	const char *s;
 
-	if(!cl_highlights)
-	{
+	if(!cl_highlights) {
 		Com_Printf("No text highlights\n");
 		return;
 	}
@@ -1813,7 +1828,6 @@ void CL_InitParse( void )
 	//hacky shit from q2ace
 	cl_autoscreenshot = Cvar_Get ("cl_autoscreenshot", "0", 0);
 	cl_customlimitmsg = Cvar_Get ("cl_customlimitmsg", "timelimit hit", 0);
-	ignorewaves = Cvar_Get ("ignorewaves", "0", 0);
 
 	Cmd_AddCommand ("highlight", CL_Highlight_f);
 	Cmd_AddCommand ("unhighlight", CL_UnHighlight_f);

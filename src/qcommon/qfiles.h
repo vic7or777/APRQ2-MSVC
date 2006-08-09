@@ -86,11 +86,13 @@ typedef struct
 #define IDALIASHEADER		(('2'<<24)+('P'<<16)+('D'<<8)+'I')
 #define ALIAS_VERSION	8
 
-#define	MAX_TRIANGLES	4096
-#define MAX_VERTS		2048
-#define MAX_FRAMES		512
-#define MAX_MD2SKINS	32
-#define	MAX_SKINNAME	64
+#define	MD2_MAX_TRIANGLES	4096
+#define MD2_MAX_VERTS		2048
+#define MD2_MAX_FRAMES		512
+#define MD2_MAX_SKINS		32
+#define	MD2_MAX_SKINNAME	64
+
+#define	MAX_SKINNAME		64
 
 typedef struct
 {
@@ -159,6 +161,105 @@ typedef struct
 
 } dmdl_t;
 
+
+/*
+========================================================================
+
+.MD3 model file format
+
+========================================================================
+*/
+
+#define IDMD3HEADER		(('3'<<24)+('P'<<16)+('D'<<8)+'I')
+
+#define MD3_ALIAS_VERSION	15
+#define MD3_ALIAS_MAX_LODS	4
+
+#define	MD3_MAX_TRIANGLES	8192	// per mesh
+#define MD3_MAX_VERTS		4096	// per mesh
+#define MD3_MAX_SHADERS		256		// per mesh
+#define MD3_MAX_FRAMES		1024	// per model
+#define	MD3_MAX_MESHES		32		// per model
+#define MD3_MAX_TAGS		16		// per frame
+#define MD3_MAX_PATH		64
+
+// vertex scales
+#define	MD3_XYZ_SCALE		(1.0f/64.0f)
+
+typedef struct
+{
+	float			st[2];
+} dmd3coord_t;
+
+typedef struct
+{
+	int16			point[3];
+	unsigned char	norm[2];
+} dmd3vertex_t;
+
+typedef struct
+{
+    float			mins[3];
+	float			maxs[3];
+    float			translate[3];
+    float			radius;
+    char			creator[16];
+} dmd3frame_t;
+
+typedef struct
+{
+	char			name[MD3_MAX_PATH];		// tag name
+	float			origin[3];
+	float			axis[3][3];
+} dmd3tag_t;
+
+typedef struct 
+{
+	char			name[MD3_MAX_PATH];
+	int32			unused;					// shader
+} dmd3skin_t;
+
+typedef struct
+{
+    char			id[4];
+
+    char			name[MD3_MAX_PATH];
+
+	int32			flags;
+
+    int32			num_frames;
+    int32			num_skins;
+    int32			num_verts;
+    int32			num_tris;
+
+    int32			ofs_indexes;
+    int32			ofs_skins;
+    int32			ofs_tcs;
+    int32			ofs_verts;
+
+    int32			meshsize;
+} dmd3mesh_t;
+
+typedef struct
+{
+    int32			id;
+    int32			version;
+
+    char			filename[MD3_MAX_PATH];
+
+	int32			flags;
+
+    int32			num_frames;
+    int32			num_tags;
+    int32			num_meshes;
+    int32			num_skins;
+
+    int32			ofs_frames;
+    int32			ofs_tags;
+    int32			ofs_meshes;
+    int32			ofs_end;
+} dmd3header_t;
+
 /*
 ========================================================================
 
@@ -171,11 +272,14 @@ typedef struct
 		// little-endian "IDS2"
 #define SPRITE_VERSION	2
 
+#define SPRITE_MAX_NAME		64
+#define SPRITE_MAX_FRAMES	32
+
 typedef struct
 {
 	int32	width, height;
 	int32	origin_x, origin_y;		// raster coordinates inside pic
-	char	name[MAX_SKINNAME];		// name of pcx file
+	char	name[SPRITE_MAX_NAME];	// name of pcx file
 } dsprframe_t;
 
 typedef struct {

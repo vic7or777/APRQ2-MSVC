@@ -33,6 +33,7 @@ cvar_t		*con_notifylines;	//Notifylines
 cvar_t		*con_notifyfade;	//Notifyfade
 cvar_t		*con_alpha;			//transparent console
 cvar_t		*con_scrlines;
+cvar_t		*con_mwheel;		//disable mwheel scrolling
 cvar_t		*con_cmdcomplete;
 
 typedef struct
@@ -384,6 +385,7 @@ void Con_Init (void)
 	con_notifylines = Cvar_Get("con_notifylines","4", CVAR_ARCHIVE); //Notifylines -Maniac
 	con_notifyfade = Cvar_Get("con_notifyfade","0", CVAR_ARCHIVE); //Notify fade
 	con_scrlines = Cvar_Get("con_scrlines", "2", CVAR_ARCHIVE);
+	con_mwheel = Cvar_Get("con_mwheel", "1", 0);
 	con_cmdcomplete = Cvar_Get("con_cmdcomplete", "2", 0);
 	con_scrlines->OnChange = OnChange_scrlines;
 	OnChange_scrlines(con_scrlines, con_scrlines->resetString);
@@ -532,7 +534,7 @@ void Con_CenteredPrint (const char *text)
 	char	buffer[1024];
 
 	l = strlen(text);
-	l = (con.linewidth-l)*0.5;
+	l = (con.linewidth-l)/2;
 	if (l < 0)
 		l = 0;
 	memset (buffer, ' ', l);
@@ -613,8 +615,6 @@ void Con_DrawNotify (void)
 	float	alpha = 1;
 	int		lines = 0;
 
-	v = 0;
-	
 	lines = con_notifylines->integer;
 	clamp(lines, 0, MAX_CON_TIMES);
 
@@ -633,7 +633,7 @@ void Con_DrawNotify (void)
 			text = con.text + (i % con.totallines)*con.linewidth;
 			
 			if (con_notifyfade->value)
-				alpha = 0.1 + (time + con_notifytime->value*1000 - cls.realtime)*0.001f;
+				alpha = 0.1f + (time + con_notifytime->value*1000 - cls.realtime)*0.001f;
 
 			Draw_StringLen (8, v, text, con.linewidth, alpha);
 
@@ -1226,6 +1226,9 @@ void Key_Console (int key)
 
 	if (key == K_PGUP || key == K_KP_PGUP || key == K_MWHEELUP)
 	{
+		if(!con_mwheel->integer && key == K_MWHEELUP)
+			return;
+
 		con.display -= con_scrlines->integer;
 		if (con.display < con.current - con.totallines + 1)
 			con.display = con.current - con.totallines + 1;
@@ -1234,6 +1237,9 @@ void Key_Console (int key)
 
 	if (key == K_PGDN || key == K_KP_PGDN || key == K_MWHEELDOWN)
 	{
+		if(!con_mwheel->integer && key == K_MWHEELDOWN)
+			return;
+
 		con.display += con_scrlines->integer;
 		if (con.display > con.current)
 			con.display = con.current;

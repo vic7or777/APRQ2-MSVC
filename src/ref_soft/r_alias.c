@@ -35,7 +35,7 @@ int				r_amodels_drawn;
 
 affinetridesc_t	r_affinetridesc;
 
-vec3_t          r_lerped[MAX_VERTS];
+vec3_t          r_lerped[MD2_MAX_VERTS];
 vec3_t          r_lerp_frontv, r_lerp_backv, r_lerp_move;
 
 int				r_ambientlight;
@@ -605,7 +605,7 @@ void R_AliasSetupLighting (void)
 
 	// save off light value for server to look at (BIG HACK!)
 	if ( currententity->flags & RF_WEAPONMODEL )
-		r_lightlevel->integer = 150.0 * light[0];
+		r_lightlevel->value = 150.0f * light[0];
 
 
 	if ( currententity->flags & RF_MINLIGHT )

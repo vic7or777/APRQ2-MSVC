@@ -41,6 +41,49 @@ byte *membase;
 int maxhunksize;
 int curhunksize;
 
+#if defined(MACOS_X)
+void *Hunk_Begin (int maxsize)
+{
+	// reserve a huge chunk of memory, but don't commit any yet
+	maxhunksize = maxsize;
+	curhunksize = 0;
+	membase = malloc(maxhunksize);
+	if (membase == NULL)
+		Sys_Error(ERR_FATAL, "unable to allocate %d bytes", maxsize);
+
+	memset( membase, 0, maxhunksize );
+	return membase;
+}
+
+void *Hunk_Alloc (int size)
+{
+	byte *buf;
+
+	size = (size+31)&~31; 	// round to cacheline
+	if (curhunksize + size > maxhunksize)
+		Sys_Error(ERR_FATAL, "Hunk_Alloc overflow");
+	buf = membase + curhunksize;
+	curhunksize += size;
+	return buf;
+}
+
+int Hunk_End (void)
+{
+	byte *n;
+
+	n = realloc(membase, curhunksize);
+	if (n != membase)
+		Sys_Error(ERR_FATAL, "Hunk_End:  Could not remap virtual block (%d)", errno);
+
+	return curhunksize;
+}
+void Hunk_Free (void *base)
+{
+	if (base)
+		free(base);
+}
+#else //maxosx
+
 #ifdef __FreeBSD__
 #define MMAP_ANON MAP_ANON
 #else
@@ -117,7 +160,7 @@ void Hunk_Free (void *base)
 			Sys_Error("Hunk_Free: munmap failed (%d)", errno);
 	}
 }
-
+#endif
 //===============================================================================
 
 
@@ -127,24 +170,49 @@ Sys_Milliseconds
 ================
 */
 int curtime;
+static unsigned long sys_timeBase = 0;
+
 int Sys_Milliseconds (void)
 {
 	struct timeval tp;
-	struct timezone tzp;
-	static int		secbase;
+	//struct timezone tzp;
+	//static unsigned int	secbase = 0;
 
-	gettimeofday(&tp, &tzp);
+	gettimeofday(&tp, NULL);
 	
-	if (!secbase)
+	if (!sys_timeBase)
 	{
-		secbase = tp.tv_sec;
+		sys_timeBase = tp.tv_sec;
 		return tp.tv_usec/1000;
 	}
 
-	curtime = (tp.tv_sec - secbase)*1000 + tp.tv_usec/1000;
+	curtime = (tp.tv_sec - sys_timeBase)*1000 + tp.tv_usec/1000;
 	
 	return curtime;
 }
+
+#if 0
+extern cvar_t *in_subframe;
+int Sys_XTimeToSysTime (unsigned long xtime)
+{
+	int ret, time, test;
+
+	if (!in_subframe->value) // if you don't want to do any event times corrections
+		return Sys_Milliseconds();
+
+	// some X servers (like suse 8.1's) report weird event times
+	// if the game is loading, resolving DNS, etc. we are also getting old events
+	// so we only deal with subframe corrections that look 'normal'
+	ret = xtime - (unsigned long)(sys_timeBase*1000);
+	time = Sys_Milliseconds();
+	test = time - ret;
+	//printf("delta: %d\n", test);
+	if (test < 0 || test > 30) // in normal conditions I've never seen this go above
+		return time;
+
+	return ret;
+}
+#endif
 
 void Sys_Mkdir (const char *path)
 {
@@ -173,10 +241,10 @@ static qboolean CompareAttributes(const char *path, const char *name,
 	if (stat(fn, &st) == -1)
 		return false; // shouldn't happen
 
-	if ( ( canthave & SFF_SUBDIR ) && S_ISDIR(st.st_mode) )
+	if ( ( canthave & SFF_SUBDIR ) &&  ( st.st_mode & S_IFDIR ) )
 		return false;
 
-	if ( ( musthave & SFF_SUBDIR ) && !S_ISDIR(st.st_mode) )
+	if ( ( musthave & SFF_SUBDIR ) && !( st.st_mode & S_IFDIR ) )
 		return false;
 
 	return true;

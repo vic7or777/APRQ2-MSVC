@@ -136,7 +136,7 @@ void Netchan_OutOfBandPrint (int net_socket, const netadr_t *adr, const char *fo
 	static char		string[MAX_MSGLEN - 4];
 	
 	va_start (argptr, format);
-	vsnprintf (string, MAX_MSGLEN - 4, format, argptr);
+	vsnprintf (string, sizeof(string), format, argptr);
 	va_end (argptr);
 
 	Netchan_OutOfBand (net_socket, adr, strlen(string), (byte *)string);
@@ -226,7 +226,7 @@ int Netchan_Transmit (netchan_t *chan, int length, const byte *data)
 // check for message overflow
 	if (chan->message.overflowed || chan->message.cursize >= MAX_MSGLEN)
 	{
-		chan->fatal_error = true;
+		//chan->fatal_error = true;
 		Com_Printf ("%s:Outgoing message overflow\n"
 			, NET_AdrToString (&chan->remote_address));
 		return -2;
@@ -355,7 +355,7 @@ qboolean Netchan_Process (netchan_t *chan, sizebuf_t *msg)
 	reliable_message = sequence >> 31;
 	reliable_ack = sequence_ack >> 31;
 
-//	chan->got_reliable = reliable_message;
+	chan->got_reliable = reliable_message;
 
 	sequence &= ~(1<<31);
 	sequence_ack &= ~(1<<31);	

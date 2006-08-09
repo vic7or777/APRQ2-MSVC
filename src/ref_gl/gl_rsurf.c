@@ -200,32 +200,9 @@ static void R_BlendLightmaps (void)
 		qglEnable(GL_BLEND);
 
 		if ( gl_saturatelighting->integer )
-		{
 			qglBlendFunc( GL_ONE, GL_ONE );
-		}
 		else
-		{
-			if ( gl_monolightmap->string[0] != '0' )
-			{
-				switch ( toupper( gl_monolightmap->string[0] ) )
-				{
-				case 'I':
-					qglBlendFunc (GL_ZERO, GL_SRC_COLOR );
-					break;
-				case 'L':
-					qglBlendFunc (GL_ZERO, GL_SRC_COLOR );
-					break;
-				case 'A':
-				default:
-					qglBlendFunc( GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA );
-					break;
-				}
-			}
-			else
-			{
-				qglBlendFunc (GL_ZERO, GL_SRC_COLOR );
-			}
-		}
+			qglBlendFunc (GL_ZERO, GL_SRC_COLOR );
 	}
 
 	if ( currentmodel == r_worldmodel )
@@ -366,9 +343,9 @@ static void R_RenderBrushPoly (msurface_t *fa)
 
 	if(fa->texinfo->flags & SURF_FLOWING)
 	{
-		scroll = -64 * ( (r_newrefdef.time / 40.0) - (int)(r_newrefdef.time / 40.0) );
-		if (scroll == 0.0)
-			scroll = -64.0;
+		scroll = -64.0f * ( (r_newrefdef.time / 40.0f) - (int)(r_newrefdef.time / 40.0f) );
+		if (scroll == 0.0f)
+			scroll = -64.0f;
 	}
 
 	DrawGLPoly (fa->polys, scroll);
@@ -496,7 +473,7 @@ static void DrawTextureChains (void)
 
 	c_visible_textures = 0;
 
-	if ( !qglSelectTextureSGIS && !qglActiveTextureARB )
+	if ( !qglActiveTextureARB && !qglSelectTextureSGIS )
 	{
 		for ( i = 0, image=gltextures ; i<numgltextures ; i++,image++)
 		{
@@ -710,9 +687,9 @@ dynamic:
 
 	if (surf->texinfo->flags & SURF_FLOWING)
 	{
-		scroll = -64 * ( (r_newrefdef.time / 40.0) - (int)(r_newrefdef.time / 40.0) );
-		if(scroll == 0.0)
-			scroll = -64.0;
+		scroll = -64.0f * ( (r_newrefdef.time / 40.0f) - (int)(r_newrefdef.time / 40.0f) );
+		if(scroll == 0.0f)
+			scroll = -64.0f;
 	}
 
 	if(gl_eff_world_bg_type->integer)
@@ -844,7 +821,6 @@ R_DrawBrushModel
 void R_DrawBrushModel (void)
 {
 	vec3_t		mins, maxs;
-	int			i;
 	qboolean	rotated;
 
 	if (currentmodel->nummodelsurfaces == 0)
@@ -855,11 +831,12 @@ void R_DrawBrushModel (void)
 	if (currententity->angles[0] || currententity->angles[1] || currententity->angles[2])
 	{
 		rotated = true;
-		for (i=0 ; i<3 ; i++)
-		{
-			mins[i] = currententity->origin[i] - currentmodel->radius;
-			maxs[i] = currententity->origin[i] + currentmodel->radius;
-		}
+		mins[0] = currententity->origin[0] - currentmodel->radius;
+		mins[1] = currententity->origin[1] - currentmodel->radius;
+		mins[2] = currententity->origin[2] - currentmodel->radius;
+		maxs[0] = currententity->origin[0] + currentmodel->radius;
+		maxs[1] = currententity->origin[1] + currentmodel->radius;
+		maxs[2] = currententity->origin[2] + currentmodel->radius;
 	}
 	else
 	{
@@ -936,19 +913,17 @@ static void R_RecursiveWorldNode (mnode_t *node, int clipflags)
 	if (node->visframe != r_visframecount)
 		return;
 
-	if (!r_nocull->integer)	
-	{
-		int i, clipped;
-		cplane_t *clipplane;
-
-		for (i=0,clipplane=frustum ; i<4 ; i++,clipplane++)
-		{
+	if( clipflags ) {
+		int			i, clipped;
+		cplane_t	*clipplane;
+		for (i=0,clipplane=frustum ; i<4 ; i++,clipplane++) {
+			if(!(clipflags & (1<<i)))
+				continue;
 			clipped = BOX_ON_PLANE_SIDE(node->minmaxs, node->minmaxs+3, clipplane);
-
-			if (clipped == 1)
-				clipflags &= ~(1<<i);   // node is entirely on screen
-			else if (clipped == 2)
-				return;                                 // fully clipped
+			if( clipped == 2 )
+				return;
+			else if( clipped == 1 )
+				clipflags &= ~(1<<i);	// node is entirely on screen
 		}	
 	}
 	
@@ -1083,13 +1058,13 @@ void R_DrawWorld (void)
 		else 
 			GL_TexEnv( GL_MODULATE );
 
-		R_RecursiveWorldNode (r_worldmodel->nodes, 15);
+		R_RecursiveWorldNode (r_worldmodel->nodes, (r_nocull->integer ? 0 : 15));
 
 		GL_EnableMultitexture( false );
 	}
 	else
 	{
-		R_RecursiveWorldNode (r_worldmodel->nodes, 15);
+		R_RecursiveWorldNode (r_worldmodel->nodes, (r_nocull->integer ? 0 : 15));
 	}
 
 	// theoretically nothing should happen in the next two functions if multitexture is enabled
@@ -1442,42 +1417,7 @@ void GL_BeginBuildingLightmaps (void) //(model_t *m)
 
 	gl_lms.current_lightmap_texture = 1;
 
-	/*
-	** if mono lightmaps are enabled and we want to use alpha
-	** blending (a,1-a) then we're likely running on a 3DLabs
-	** Permedia2.  In a perfect world we'd use a GL_ALPHA lightmap
-	** in order to conserve space and maximize bandwidth, however 
-	** this isn't a perfect world.
-	**
-	** So we have to use alpha lightmaps, but stored in GL_RGBA format,
-	** which means we only get 1/16th the color resolution we should when
-	** using alpha lightmaps.  If we find another board that supports
-	** only alpha lightmaps but that can at least support the GL_ALPHA
-	** format then we should change this code to use real alpha maps.
-	*/
-	if ( toupper( gl_monolightmap->string[0] ) == 'A' )
-	{
-		gl_lms.internal_format = gl_tex_alpha_format;
-	}
-	/*
-	** try to do hacked colored lighting with a blended texture
-	*/
-	else if ( toupper( gl_monolightmap->string[0] ) == 'C' )
-	{
-		gl_lms.internal_format = gl_tex_alpha_format;
-	}
-	else if ( toupper( gl_monolightmap->string[0] ) == 'I' )
-	{
-		gl_lms.internal_format = GL_INTENSITY8;
-	}
-	else if ( toupper( gl_monolightmap->string[0] ) == 'L' ) 
-	{
-		gl_lms.internal_format = GL_LUMINANCE8;
-	}
-	else
-	{
-		gl_lms.internal_format = gl_tex_solid_format;
-	}
+	gl_lms.internal_format = gl_tex_solid_format;
 
 	/*
 	** initialize the dynamic lightmap texture

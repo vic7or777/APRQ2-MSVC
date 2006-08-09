@@ -44,10 +44,10 @@ static void StartGame( void )
 	// disable updates and start the cinematic going
 	cl.servercount = -1;
 	M_ForceMenuOff ();
-	Cvar_SetValue( "deathmatch", 0 );
-	Cvar_SetValue( "coop", 0 );
+	Cvar_SetLatched( "deathmatch", 0 );
+	Cvar_SetLatched( "coop", 0 );
 
-	Cvar_SetValue( "gamerules", 0 );		//PGM
+	Cvar_SetLatched( "gamerules", 0 );		//PGM
 
 	Cbuf_AddText ("loading ; killserver ; wait ; newgame\n");
 	cls.key_dest = key_game;

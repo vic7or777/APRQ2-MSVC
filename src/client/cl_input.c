@@ -476,12 +476,12 @@ void CL_SendCmd (void)
 
 	//cl.cmd = *cmd;
 
-	if (cls.state == ca_disconnected || cls.state == ca_connecting)
+	if (cls.state <= ca_connecting || cls.demoplaying)
 		return;
 
 	if ( cls.state == ca_connected)
 	{
-		if (cls.netchan.message.cursize	|| curtime - cls.netchan.last_sent > 1000 )
+		if (cls.netchan.got_reliable || cls.netchan.message.cursize	|| curtime - cls.netchan.last_sent > 100 )
 			Netchan_Transmit (&cls.netchan, 0, NULL);	
 		return;
 	}
@@ -508,7 +508,7 @@ void CL_SendCmd (void)
 
 	// save the position for a checksum byte
 #ifdef R1Q2_PROTOCOL
-	if (cls.serverProtocol == ORIGINAL_PROTOCOL_VERSION)
+	if (cls.serverProtocol != ENHANCED_PROTOCOL_VERSION)
 	{
 #endif
 		checksumIndex = buf.cursize;
@@ -543,7 +543,7 @@ void CL_SendCmd (void)
 
 	// calculate a checksum over the move commands
 #ifdef R1Q2_PROTOCOL
-	if (cls.serverProtocol == ORIGINAL_PROTOCOL_VERSION)
+	if (cls.serverProtocol != ENHANCED_PROTOCOL_VERSION)
 	{
 #endif
 	buf.data[checksumIndex] = COM_BlockSequenceCRCByte(
@@ -561,7 +561,7 @@ void CL_SendCmd (void)
 	// If we drop more, server will reuse our last command multiple times,
 	// and this will probably result in prediction error (see sv_user.c)
 	//
-	if( cl_maxpackets->integer ) {
+	if(cl_maxpackets->integer) {
 		if( cl_maxpackets->integer < cl_maxfps->integer/3 )
 			Cvar_SetValue( "cl_maxpackets", cl_maxfps->integer/3 );
 		else if( cl_maxpackets->value > cl_maxfps->integer )

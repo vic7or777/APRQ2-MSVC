@@ -437,7 +437,7 @@ void NET_Sleep(int msec)
 	extern cvar_t *dedicated;
 	extern qboolean stdin_active;
 
-	if (!ip_sockets[NS_SERVER] || !dedicated || !dedicated->integer)
+	if (!ip_sockets[NS_SERVER] || !dedicated->integer)
 		return; // we're not a server, just run full speed
 
 	FD_ZERO(&fdset);

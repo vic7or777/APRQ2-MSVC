@@ -42,7 +42,7 @@ viddef_t	viddef;				// global video state; used by other modules
 static qboolean vid_restart = false;
 static qboolean vid_active = false;
 
-#define VID_NUM_MODES ( sizeof( vid_modes ) / sizeof( vid_modes[0] ) )
+//#define VID_NUM_MODES ( sizeof( vid_modes ) / sizeof( vid_modes[0] ) )
 
 
 //==========================================================================
@@ -85,6 +85,7 @@ void VID_CheckChanges (void)
 
 	if ( vid_restart )
 	{
+		cl.force_refdef = true;		// can't use a paused refdef
 		S_StopAllSounds();
 
 		/*

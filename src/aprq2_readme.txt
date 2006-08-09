@@ -76,7 +76,6 @@ con_cmdcomplete			0-4		Change between different commandcomplete.
 net_port			0 ...		Allows you to select the local port (default 27901). The value 0 means it will choose a random port.
 cl_maxpackets			0 ...		Control how many packets client send max at per frame to the servers (default 0). More info later in this readme.
 fs_allpakloading		0 | 1		Enables *.pak loading.
-ignorewaves			0 | 1		Ignores those wave echos.
 cfg_save			filename	Write all binds, settings and aliases to given file.
 serverstatus		    [server address]	Gives you the info about server. What map its running, players and theyr ping & score. Without parameter it gives the current server status.
 
@@ -86,12 +85,16 @@ aliaslist			[text]		list aliases
 trigger				<cmd> <string>	If string match to print msg from server, trigger execute cmd. Wildcard support.
 untrigger			<cmd> <string>	Removes specified trigger. Parameter "all" removes all.
 macrolist					List all current macros.
-toggle	  		<cvar> [val1] [val2]	Toggle the variable var between 0 and 1. if val1 and val2 are supplied then var will be toggled between those two values.
-inc			     <cvar> <value>	Increase a cvar by the specified value (can be negative to decrease).
+toggle	  		<cvar> [val1 .. val2]	Toggle the variable var between given values. If no values are supplied then var will be toggled between 0 & 1.
+inc			     <cvar> [value]	Increase a cvar by the specified value. If no value supplied, it will increase by 1.
+dec			     <cvar> [value]	Decrease a cvar by the specified value. If no value supplied, it will decrease by 1.
+random 			<cvar> <from> <to> 	Sets cvar a random value between from and to.
+
 
 r_customheight			<height>	Custom resolution height value.
 r_customwidth			<width>		Custom resolution widht value.
 modelist					List all vid mode values.
+vid_minimize					Minimize the game.
 
 -GL MODE-
 skydistance			0 .. 16384	Sky box size (default 2300).
@@ -99,6 +102,7 @@ screenshotjpg					Takes screenshot in JPG format.
 gl_screenshot_quality		0 .. 100	Screenshot jpg quality (default 85).
 gl_replacetga			0 | 1		If enabled it tries to replace ALL wal files with png, tga or jpg ones if found any. Sequence is png->tga->jpg->wal.
 gl_replacepcx			0 | 1		If enabled it tries to replace ALL pcx files with png, tga or jpg ones if found any. Sequence is png->tga->jpg->pcx.
+gl_replacemd2			0 | 1		If enebled it tries to replace ALL md2 files with md3.
 gl_shadows			0 | 1 | 2	1 enables standard Quake 2 shadows, 2 enables improved stencil buffered shadows if your video card supports it.
 gl_waterwaves			0 ... 4		Enables water wave effect to still water.
 gl_motionblur			0 | 1		Enables motion blur effect if your hardware support it.
@@ -117,7 +121,9 @@ gl_gammapics			0 | 1		(default 1) 0 to disable vid_gamma to added hud images
 vid_displayfrequency 		0 .. 		(default 0 disabled) set displayfrequency wich game will use WARNING: set this so you monitor can handle it!!!!
 gl_shelleffect			0 | 1		New shell effect.
 gl_ext_texture_filter_anisotropic 0 | 1		Allow user to set anisotropic level.
-gl_ext_max_anisotropy t		0 ..		Set the anisotropy level.
+gl_ext_max_anisotropy 		0 ..		Set the anisotropy level.
+gl_coloredlightmaps		0 .. 1		Change the lightmap level.
+
 
 -openAL-
 s_initsound 2 to enable
@@ -131,6 +137,10 @@ avirecord			<fps>		Start recording avi while in demo playback. Names avi with 'd
 avistop						Stop exporting avi.
 avi_codec			<codec>		Select codec. Use fourCC to specify the codec (ec 'xvid')
 avi_codecmenu			0|1		Enable window list to select avi codec.
+
+-screenshot dumping (gl)-
+cl_avidump			0...		This enables the dumping and is also the fps.
+cl_avidemoformat		0|1		Screenshot format, 0 tga, 1 jpg.
 
 -Winamp controls-
 winampnext					Next Track 
@@ -150,7 +160,7 @@ winampsearch			<text>		List all songs with track number in playlist wich got giv
 cl_winampmessages		0 | 1		Winamp console messages (On-Default).
 cl_winamp_dir			<dir>		Directory where winamp is. (default: 'C:/program files/winamp')
 
-xmms/mpd controls have allmoust all same as above, exept all start with 'xmms_'/'mpd_'
+xmms/mpd controls have almoust all same as above, exept all start with 'xmms_'/'mpd_'
 
 ===============================================================================================================
 
@@ -276,10 +286,10 @@ Credits
 ========
 Heffo, MrG, Idle, Echon, R1CH, [SkulleR], Vic and all other who have made these features in first place.
 
-Uses: Zlib 1.2.31 Library, Copyright (C) 1995-2004 Jean-loup Gailly and Mark Adler,
-      libpng 1.2.8 Library, Copyright (c) 1998-2004 Glenn Randers-Pehrson,
-      JPEG Library 6, Copyright (C) 1991-1998, Thomas G. Lane,
-      Libcurl 7.15.1 Library, Copyright (c) 1996 - 2005 Daniel Stenberg, <daniel@haxx.se>.
+Uses: Zlib 1.2.31 Library, Copyright (C) 1995-2004 Jean-loup Gailly and Mark Adler.
+      libpng 1.2.8 Library, Copyright (c) 1998-2004 Glenn Randers-Pehrson.
+      JPEG Library 6, Copyright (C) 1991-1998, Thomas G. Lane.
+      Libcurl 7.15.1 Library, Copyright (c) 1996 - 2005 Daniel Stenberg.
 
 Other
 =======

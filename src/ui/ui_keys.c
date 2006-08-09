@@ -94,9 +94,9 @@ static void M_UnbindCommand (char *command)
 
 	l = strlen(command);
 
-	for (j=0 ; j<256 ; j++)
+	for (j=0 ; j<MAX_KEYS ; j++)
 	{
-		b = keybindings[j];
+		b = keys[j].binding;
 		if (!b)
 			continue;
 		if (!strncmp (b, command, l) )
@@ -115,9 +115,9 @@ static void M_FindKeysForCommand (char *command, int *twokeys)
 	l = strlen(command);
 	count = 0;
 
-	for (j=0 ; j<256 ; j++)
+	for (j=0 ; j<MAX_KEYS ; j++)
 	{
-		b = keybindings[j];
+		b = keys[j].binding;
 		if (!b)
 			continue;
 		if (!strncmp (b, command, l) )
@@ -140,12 +140,12 @@ static void KeyCursorDrawFunc( menuframework_s *menu )
 
 static void DrawKeyBindingFunc( void *self )
 {
-	int keys[2];
+	int mkeys[2];
 	menuaction_s *a = ( menuaction_s * ) self;
 
-	M_FindKeysForCommand( bindnames[a->generic.localdata[0]][0], keys);
+	M_FindKeysForCommand( bindnames[a->generic.localdata[0]][0], mkeys);
 		
-	if (keys[0] == -1)
+	if (mkeys[0] == -1)
 	{
 		Menu_DrawString( a->generic.x + a->generic.parent->x + 16, a->generic.y + a->generic.parent->y, "???" );
 	}
@@ -154,16 +154,16 @@ static void DrawKeyBindingFunc( void *self )
 		int x;
 		const char *name;
 
-		name = Key_KeynumToString (keys[0]);
+		name = Key_KeynumToString (mkeys[0]);
 
 		Menu_DrawString( a->generic.x + a->generic.parent->x + 16, a->generic.y + a->generic.parent->y, name );
 
 		x = strlen(name) * 8;
 
-		if (keys[1] != -1)
+		if (mkeys[1] != -1)
 		{
 			Menu_DrawString( a->generic.x + a->generic.parent->x + 24 + x, a->generic.y + a->generic.parent->y, "or" );
-			Menu_DrawString( a->generic.x + a->generic.parent->x + 48 + x, a->generic.y + a->generic.parent->y, Key_KeynumToString (keys[1]) );
+			Menu_DrawString( a->generic.x + a->generic.parent->x + 48 + x, a->generic.y + a->generic.parent->y, Key_KeynumToString (mkeys[1]) );
 		}
 	}
 }
@@ -171,11 +171,11 @@ static void DrawKeyBindingFunc( void *self )
 static void KeyBindingFunc( void *self )
 {
 	menuaction_s *a = ( menuaction_s * ) self;
-	int keys[2];
+	int mkeys[2];
 
-	M_FindKeysForCommand( bindnames[a->generic.localdata[0]][0], keys );
+	M_FindKeysForCommand( bindnames[a->generic.localdata[0]][0], mkeys );
 
-	if (keys[1] != -1)
+	if (mkeys[1] != -1)
 		M_UnbindCommand( bindnames[a->generic.localdata[0]][0]);
 
 	bind_grab = true;

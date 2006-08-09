@@ -78,7 +78,6 @@ void CL_LoadLoc(void)
 		return;
 
 	Com_sprintf(fileName, sizeof(fileName), "%s/%s.loc", locDir, cls.mapname);
-	COM_FixPath(fileName);
 
 	fileLen = FS_LoadFile( fileName, (void **)&buffer );
 	if (!buffer) {
@@ -131,8 +130,7 @@ static cl_location_t *CL_Loc_Get (const vec3_t org)
 
 	for(loc = cl_locations; loc; loc = loc->next)
 	{
-		length = (int)Distance(loc->location, org);
-
+		length = (unsigned int)Distance(loc->location, org);
 		if (length < bestlength)
 		{
 			best = loc;
@@ -327,13 +325,13 @@ static void CL_LocThere_m( char *buffer, int bufferSize )
 		return;
 	}
 
-	end[0] = cl.refdef.vieworg[0] + cl.v_forward[0] * 65556 + cl.v_right[0];
-	end[1] = cl.refdef.vieworg[1] + cl.v_forward[1] * 65556 + cl.v_right[1];
-	end[2] = cl.refdef.vieworg[2] + cl.v_forward[2] * 65556 + cl.v_right[2];
+	end[0] = cl.refdef.vieworg[0] + cl.v_forward[0] * 65556.0f + cl.v_right[0];
+	end[1] = cl.refdef.vieworg[1] + cl.v_forward[1] * 65556.0f + cl.v_right[1];
+	end[2] = cl.refdef.vieworg[2] + cl.v_forward[2] * 65556.0f + cl.v_right[2];
 
 	tr = CM_BoxTrace(cl.refdef.vieworg, end, vec3_origin, vec3_origin, 0, MASK_SOLID);
 
-	if (tr.fraction != 1.0)
+	if (tr.fraction != 1.0f)
 		loc = CL_Loc_Get(tr.endpos);
 	else
 		loc = CL_Loc_Get(end);

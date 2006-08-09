@@ -26,6 +26,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 static cvar_t *mpd_port;
 static cvar_t *mpd_host;
+static cvar_t *mpd_pass;
 static cvar_t *mpd_volhop;
 
 static mpd_Connection *conn;
@@ -61,6 +62,12 @@ void MPD_Connect(void)
 	} 
 	
 	mpdConnection = true;
+
+	// send da password if we're using one
+	if(mpd_pass->string[0]) {
+		mpd_sendPasswordCommand(conn, mpd_pass->string);
+		mpd_finishCommand(conn);
+	}
 }
 
 static qboolean MP3_Status(void)
@@ -94,23 +101,24 @@ void MPD_Help(void)
 					"           Default: localhost\n"
 					"mpd_port - port number to connect\n"
 					"           Default: 3000\n"
+					"mpd_pass - password for mpd\n"
 					"mpd_volhop - how many precent mincvol\n"
 					"             and mdecvol will do\n"
 					"             Default: 5\n"
 					"=====================================\n");
 	} else {
 		Com_Printf( "mpd_play [song num] - start playback\n"
-					"mpd_mstop - stop playback\n"
-					"mpd_mpause - pause playback\n"
-					"mpd_mstatus - status info\n"
-					"mpd_mvolume <0-100> - set volume precent\n"
-					"mpd_mincvol - increase volume\n"
-					"mpd_mdecvol - decrease volume\n"
-					"mpd_mnext - play next song in playlist\n"
-					"mpd_mprev - play prev song in playlist\n"
-					"mpd_mplaylist - list songs in playlist\n"
+					"mpd_stop - stop playback\n"
+					"mpd_pause - pause playback\n"
+					"mpd_status - status info\n"
+					"mpd_volume <0-100> - set volume precent\n"
+					"mpd_incvol - increase volume\n"
+					"mpd_decvol - decrease volume\n"
+					"mpd_next - play next song in playlist\n"
+					"mpd_prev - play prev song in playlist\n"
+					"mpd_playlist - list songs in playlist\n"
 					"=====================================\n"
-					"Also see mhelp cvar\n");
+					"Also see mpd_help cvar\n");
 	}
 }
 
@@ -515,6 +523,7 @@ void MP3_Init(void)
 	/* Set the default settings for MPD cvars if they are not given in autoexec.cfg */
 	mpd_port = Cvar_Get("mpd_port", "6600", 0);
 	mpd_host = Cvar_Get("mpd_host", "localhost", 0);
+	mpd_pass = Cvar_Get("mpd_pass", "", 0);
 	mpd_volhop = Cvar_Get("mpd_volhop", "5", 0);
 	mpd_port->OnChange = OnChange_MPDAddress;
 	mpd_host->OnChange = OnChange_MPDAddress;

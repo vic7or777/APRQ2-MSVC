@@ -1,4 +1,3 @@
-
 /*
 Copyright (C) 1997-2001 Id Software, Inc.
 
@@ -18,8 +17,6 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 */
-// Quake is a trademark of Id Software, Inc., (c) 1996 Id Software, Inc. All
-// rights reserved.
 #include "client.h"
 #ifdef AVI_EXPORT
 #define WIN32_LEAN_AND_MEAN
@@ -27,32 +24,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <windows.h>
 #include <vfw.h>
 #include "snd_loc.h"
-
-static void (CALLBACK *qAVIFileInit)(void);
-static HRESULT (CALLBACK *qAVIFileOpen)(PAVIFILE *, LPCTSTR, UINT, LPCLSID);
-static HRESULT (CALLBACK *qAVIFileCreateStream)(PAVIFILE, PAVISTREAM *, AVISTREAMINFO *);
-static HRESULT (CALLBACK *qAVIMakeCompressedStream)(PAVISTREAM *, PAVISTREAM, AVICOMPRESSOPTIONS *, CLSID *);
-static HRESULT (CALLBACK *qAVIStreamSetFormat)(PAVISTREAM, LONG, LPVOID, LONG);
-static HRESULT (CALLBACK *qAVIStreamWrite)(PAVISTREAM, LONG, LONG, LPVOID, LONG, DWORD, LONG *, LONG *);
-static BOOL	 (CALLBACK *qAVISaveOptions)(HWND, UINT, int, PAVISTREAM *, LPAVICOMPRESSOPTIONS *);
-static LONG	 (CALLBACK *qAVISaveOptionsFree)(int, LPAVICOMPRESSOPTIONS *);
-static ULONG (CALLBACK *qAVIStreamRelease)(PAVISTREAM);
-static ULONG (CALLBACK *qAVIFileRelease)(PAVIFILE);
-static void (CALLBACK *qAVIFileExit)(void);
-
-static MMRESULT (ACMAPI *qacmDriverOpen)(LPHACMDRIVER, HACMDRIVERID, DWORD);
-static MMRESULT (ACMAPI *qacmDriverDetails)(HACMDRIVERID, LPACMDRIVERDETAILS, DWORD);
-static MMRESULT (ACMAPI *qacmDriverEnum)(ACMDRIVERENUMCB, DWORD, DWORD);
-static MMRESULT (ACMAPI *qacmFormatTagDetails)(HACMDRIVER, LPACMFORMATTAGDETAILS, DWORD);
-static MMRESULT (ACMAPI *qacmStreamOpen)(LPHACMSTREAM, HACMDRIVER, LPWAVEFORMATEX, LPWAVEFORMATEX, LPWAVEFILTER, DWORD, DWORD, DWORD);
-static MMRESULT (ACMAPI *qacmStreamSize)(HACMSTREAM, DWORD, LPDWORD, DWORD);
-static MMRESULT (ACMAPI *qacmStreamPrepareHeader)(HACMSTREAM, LPACMSTREAMHEADER, DWORD);
-static MMRESULT (ACMAPI *qacmStreamUnprepareHeader)(HACMSTREAM, LPACMSTREAMHEADER, DWORD);
-static MMRESULT (ACMAPI *qacmStreamConvert)(HACMSTREAM, LPACMSTREAMHEADER, DWORD);
-static MMRESULT (ACMAPI *qacmStreamClose)(HACMSTREAM, DWORD);
-static MMRESULT (ACMAPI *qacmDriverClose)(HACMDRIVER, DWORD);
-
-static HINSTANCE handle_avi = NULL, handle_acm = NULL;
 
 typedef struct
 {
@@ -71,7 +42,6 @@ typedef struct
 
 static avi_Data_t avi;
 
-static qboolean movie_acm_loaded = false, movie_avi_loaded = false;
 static HACMDRIVER		had;
 static HACMSTREAM		hstr;
 static MPEGLAYER3WAVEFORMAT mp3_format;
@@ -98,6 +68,85 @@ static int captured_audio_samples = 0;
 
 extern cvar_t *fixedtime;
 
+#define AVI_FUNC(ret, func, params) static ret (CALLBACK *q##func) params;
+#define ACM_FUNC(ret, func, params) static ret (ACMAPI *q##func) params;
+#include "AVI_funcs.h"
+#undef AVI_FUNC
+#undef ACM_FUNC
+
+static HINSTANCE handle_avi = NULL, handle_acm = NULL;
+
+static void Capture_InitAVI (void)
+{
+	handle_avi = LoadLibrary("avifil32.dll");
+	if (!handle_avi) {
+		Com_Printf ("Avi capturing module 'avifil32.dll' not found\nAviexporting disabled\n");
+		handle_avi = NULL;
+		return;
+	}
+
+#define AVI_FUNC(type,name,params) (q##name) = (void *)GetProcAddress(handle_avi, #name); \
+	if( !(q##name) )  {\
+        Com_Printf("Couldn't load AVI function %s\n Aviexporting disabled\n", #name); \
+		FreeLibrary (handle_avi); \
+		handle_avi = NULL; \
+        return; \
+    }
+
+#include "AVI_funcs.h"
+
+#undef AVI_FUNC
+}
+
+static void Capture_InitACM (void)
+{
+	if(!handle_avi) //No need to load if aviexport is disabled
+		return;
+
+	handle_acm = LoadLibrary("msacm32.dll");
+	if (!handle_acm) {
+		Com_Printf ("ACM module 'msacm32.dll' not found\nAVI mp3 compression disabled\n");
+		handle_acm = NULL;
+		return;
+	}
+
+#define ACM_FUNC(type,name,params) (q##name) = (void *)GetProcAddress(handle_acm, #name); \
+	if( !(q##name) )  {\
+        Com_Printf("Couldn't load ACM function %s\nAVI mp3 compression disabled\n", #name); \
+		FreeLibrary (handle_acm); \
+		handle_avi = NULL; \
+        return; \
+    }
+#include "AVI_funcs.h"
+
+#undef ACM_FUNC
+}
+
+static qboolean aviModulesInitialized = false;
+
+static void AVI_InitModules(void)
+{
+	if(aviModulesInitialized)
+		return;
+
+	Capture_InitAVI();
+	Capture_InitACM();
+	aviModulesInitialized = true;
+}
+
+static void AVI_ShutdownModules(void)
+{
+	if(handle_avi)
+		FreeLibrary (handle_avi);
+
+	if(handle_acm)
+		FreeLibrary (handle_acm);
+
+	handle_avi = NULL;
+	handle_acm = NULL;
+	aviModulesInitialized = false;
+}
+
 static char *FourccToString (unsigned long fourcc)
 {
 	static char s[8];
@@ -110,103 +159,6 @@ static char *FourccToString (unsigned long fourcc)
 	return s;
 }
 
-static void Capture_InitAVI (void)
-{
-	handle_avi = LoadLibrary("avifil32.dll");
-	if (!handle_avi)
-	{
-		Com_Printf ("Avi capturing module 'avifil32.dll' not found\n");
-		Com_Printf ("Aviexporting disabled\n");
-		handle_avi = NULL;
-		return;
-	}
-
-#define AVI_GETFUNC(func) \
-	if ( !(qAVI##func = (void *)GetProcAddress(handle_avi, "AVI" #func)) ) \
-	{ \
-        Com_Printf("Couldn't load AVI function %s\n", #func); \
-		Com_Printf ("Avi capturing module not initialized\n"); \
-		FreeLibrary (handle_avi); \
-		handle_avi = NULL; \
-        return; \
-    }
-
-	AVI_GETFUNC(FileInit);
-	AVI_GETFUNC(FileOpen);
-	AVI_GETFUNC(FileCreateStream);
-	AVI_GETFUNC(MakeCompressedStream);
-	AVI_GETFUNC(StreamSetFormat);
-	AVI_GETFUNC(StreamWrite);
-	AVI_GETFUNC(StreamRelease);
-	AVI_GETFUNC(FileRelease);
-	AVI_GETFUNC(FileExit);
-	AVI_GETFUNC(SaveOptions);
-	AVI_GETFUNC(SaveOptionsFree);
-
-	Com_Printf ("Avi capturing module initialized\n");
-	movie_avi_loaded = true;
-}
-
-static void Capture_InitACM (void)
-{
-	if(!movie_avi_loaded) //No need to load if aviexport is disabled
-		return;
-
-	handle_acm = LoadLibrary("msacm32.dll");
-	if (!handle_acm)
-	{
-		Com_Printf ("ACM module 'msacm32.dll' not found\n");
-		Com_Printf ("AVI mp3 compression disabled\n");
-		handle_acm = NULL;
-		return;
-	}
-
-#define ACM_GETFUNC(func) \
-	if ( !(qacm##func = (void *)GetProcAddress(handle_acm, "acm" #func)) ) \
-	{ \
-        Com_Printf("Couldn't load acm function %s\n", #func); \
-		Com_Printf ("ACM module not initialized\n"); \
-		FreeLibrary (handle_acm); \
-		handle_acm = NULL; \
-        return; \
-    }
-
-	ACM_GETFUNC(DriverOpen);
-	ACM_GETFUNC(DriverEnum);
-	ACM_GETFUNC(StreamOpen);
-	ACM_GETFUNC(StreamSize);
-	ACM_GETFUNC(StreamPrepareHeader);
-	ACM_GETFUNC(StreamUnprepareHeader);
-	ACM_GETFUNC(StreamConvert);
-	ACM_GETFUNC(StreamClose);
-	ACM_GETFUNC(DriverClose);
-	qacmDriverDetails = (void *)GetProcAddress (handle_acm, "acmDriverDetailsA");
-	qacmFormatTagDetails = (void *)GetProcAddress (handle_acm, "acmFormatTagDetailsA");
-
-	if (!qacmDriverDetails || !qacmFormatTagDetails)
-	{
-		Com_Printf ("ACM module not initialized\n");
-		FreeLibrary (handle_acm);
-		handle_acm = NULL;
-		return;
-	}
-
-	Com_Printf ("ACM module initialized\n");
-	movie_acm_loaded = true;
-}
-
-static void InitModules(void)
-{
-	static qboolean aviInitialized = false;
-
-	if(aviInitialized)
-		return;
-
-	Capture_InitAVI();
-	Capture_InitACM();
-	aviInitialized = true;
-}
-
 BOOL CALLBACK acmDriverEnumCallback (HACMDRIVERID hadid, DWORD dwInstance, DWORD fdwSupport)
 {
 	if (fdwSupport & ACMDRIVERDETAILS_SUPPORTF_CODEC)
@@ -215,7 +167,7 @@ BOOL CALLBACK acmDriverEnumCallback (HACMDRIVERID hadid, DWORD dwInstance, DWORD
 		ACMDRIVERDETAILS details;
 
 		details.cbStruct = sizeof(details);
-		qacmDriverDetails (hadid, &details, 0);
+		qacmDriverDetailsA (hadid, &details, 0);
 		qacmDriverOpen (&had, hadid, 0);
 	
 		for (i = 0 ; i < details.cFormatTags ; i++)
@@ -225,7 +177,7 @@ BOOL CALLBACK acmDriverEnumCallback (HACMDRIVERID hadid, DWORD dwInstance, DWORD
 			memset (&fmtDetails, 0, sizeof(fmtDetails));
 			fmtDetails.cbStruct = sizeof(fmtDetails);
 			fmtDetails.dwFormatTagIndex = i;
-			qacmFormatTagDetails (had, &fmtDetails, ACM_FORMATTAGDETAILSF_INDEX);
+			qacmFormatTagDetailsA (had, &fmtDetails, ACM_FORMATTAGDETAILSF_INDEX);
 			if (fmtDetails.dwFormatTag == WAVE_FORMAT_MPEGLAYER3)
 			{
 				Com_DPrintf ("MP3-capable ACM codec found: %s\n", details.szLongName);
@@ -240,7 +192,7 @@ BOOL CALLBACK acmDriverEnumCallback (HACMDRIVERID hadid, DWORD dwInstance, DWORD
 	return true;
 }
 
-PAVISTREAM Capture_VideoStream (void)
+static PAVISTREAM Capture_VideoStream (void)
 {
 	return avi.m_codec_fourcc ? avi.m_compressed_video_stream : avi.m_uncompressed_video_stream;
 }
@@ -254,10 +206,13 @@ static  qboolean AVI_InitExporter (const char *filename, float fps)
 	if(!filename)
 		return false;
 
-	avi.m_fps = avi.m_video_frame_counter = avi.m_audio_frame_counter = 0;
+	avi.m_fps = 0.0f;
+	avi.m_video_frame_counter = avi.m_audio_frame_counter = 0;
 	avi.m_file = NULL;
 	avi.m_codec_fourcc = 0;
-	avi.m_compressed_video_stream = avi.m_uncompressed_video_stream = avi.m_audio_stream = NULL;
+	avi.m_compressed_video_stream = NULL;
+	avi.m_uncompressed_video_stream = NULL;
+	avi.m_audio_stream = NULL;
 
 	qAVIFileInit();
 	hr = qAVIFileOpen(&avi.m_file, filename, OF_WRITE|OF_CREATE, NULL);
@@ -353,13 +308,21 @@ static  qboolean AVI_InitExporter (const char *filename, float fps)
 		return false;
 	}
 
+	avi_recording = 1;
+
 	if(!avi_sound->integer) //No sounds
 		return true;
 
 #ifdef USE_OPENAL
-	if(alSound) //Not supported
+	if(alSound) {//Not supported
+		Com_Printf("Audio exporting is not supported with OpenAL\n");
 		return true;
+	}
 #endif
+	if (dma.samplebits != 16 || dma.channels != 2) {
+		Com_Printf("Audio exporting is only available with samplebits 16 with 2 channels\n");
+		return true;
+	}
 
 	// initialize audio data
 	memset (&avi.m_wave_format, 0, sizeof(avi.m_wave_format));
@@ -384,11 +347,7 @@ static  qboolean AVI_InitExporter (const char *filename, float fps)
 	}
 
 	m_audio_is_mp3 = false;
-	if (avi_sound->integer == 2 && !movie_acm_loaded)
-	{
-		Com_Printf("MP3 decoder disabled, setting uncompressed format\n");
-	}
-	else if (avi_sound->integer == 2 && movie_acm_loaded)
+	if (avi_sound->integer == 2 && handle_acm)
 	{
 		MMRESULT	mmr;
 
@@ -446,6 +405,9 @@ static  qboolean AVI_InitExporter (const char *filename, float fps)
 	}
 	else
 	{
+		if (avi_sound->integer == 2 && !handle_acm)
+			Com_Printf("MP3 decoder disabled, setting uncompressed format\n");
+
 		hr = qAVIStreamSetFormat (avi.m_audio_stream, 0, &avi.m_wave_format, sizeof(WAVEFORMATEX));
 		if (FAILED(hr))
 		{
@@ -454,6 +416,7 @@ static  qboolean AVI_InitExporter (const char *filename, float fps)
 		}
 	}
 
+	avi_recording = 2;
 	return true;
 }
 
@@ -487,8 +450,7 @@ static void AVI_ReleaseExporter(void)
 
 void AVI_StopExport(void)
 {
-	if(avi_recording)
-	{
+	if(avi_recording) {
 		AVI_ReleaseExporter();
 		Cvar_Set("fixedtime", "0");
 		avi_recording = 0;
@@ -497,13 +459,10 @@ void AVI_StopExport(void)
 
 void AVI_ProcessFrame (void)
 {
-
 	if (!avi_recording || cls.state != ca_active || !cl.refresh_prepped)
 		return;
 
-	if(avi.m_video_frame_size != viddef.width * viddef.height * 3)
-	{
-		//resolution changed?
+	if(avi.m_video_frame_size != viddef.width * viddef.height * 3) {
 		AVI_StopExport ();
 		Com_Printf("AVI_ProcessFrame: Wrong framesize, changed resolution?\n");
 		Com_Printf("AVI export stopped\n");
@@ -520,8 +479,7 @@ static void AVI_WriteAudio (int samples, byte *sample_buffer)
 	HRESULT		hr = 0;
 	unsigned long	sample_bufsize;
 
-	if (!avi.m_audio_stream)
-	{
+	if (!avi.m_audio_stream) {
 		Com_Printf ("ERROR: Audio stream is NULL\n");
 		return;
 	}
@@ -587,47 +545,38 @@ static void AVI_WriteAudio (int samples, byte *sample_buffer)
 
 void SV_Map (qboolean attractloop, char *levelstring, qboolean loadgame);
 
-void AVI_StartExporting(const char *name, float fps)
+static void AVI_StartExporting(const char *name, float fps)
 {
 	char aviName[MAX_OSPATH];
 
 	Q_strncpyz(aviName, name, sizeof(aviName));
 	COM_DefaultExtension(aviName, sizeof(aviName), ".avi");
-	if( !AVI_InitExporter(aviName, fps) )
-	{
+	if(!AVI_InitExporter(aviName, fps)) {
 		AVI_ReleaseExporter();
 		return;
 	}
 
 	aviFrameBuf = Z_TagMalloc(avi.m_video_frame_size, TAGMALLOC_AVIEXPORT);
 
-	avi_recording = 1;
-	if(avi_sound->integer) {
-#ifdef USE_OPENAL
-		if(alSound) //Not supported
-			Com_Printf("Sound exporting not supported with openAL\n");
-		else
-#endif
-			avi_recording = 2;
-	}
-
 	if(avi.m_codec_fourcc)
 		Com_Printf("Exporting %s using %s codec ", aviName, FourccToString(avi.m_codec_fourcc));
 	else
 		Com_Printf("Exporting uncompressed %s ", aviName);
 
-	if(m_audio_is_mp3)
-		Com_Printf("with mp3 compressed sound\n"); 
+	if(avi_recording == 2)
+		Com_Printf("with %s sound\n", (m_audio_is_mp3) ? "mp3 compressed" : "uncompressed"); 
 	else
-		Com_Printf("%s\n", (avi_recording == 2) ? "with uncompressed sound" : "without sound");
+		Com_Printf("without sound\n");
 
     Cvar_SetValue("fixedtime", (int)(0.5f + 1000.0f / avi.m_fps));
-    if (avi_recording == 2 && Cvar_VariableValue("s_mixahead") < 1.0f / avi.m_fps) {
+
+    if (avi_recording == 2 && Cvar_VariableValue("s_mixahead") < 1.0f / avi.m_fps)
         Com_Printf("Warning: you may want to increase s_mixahead to %g!\n", 1.0f / avi.m_fps);
-    }
-    if (Cvar_VariableValue("cl_maxfps") < avi.m_fps) {
+
+    if (Cvar_VariableValue("cl_maxfps") < avi.m_fps)
         Com_Printf("Warning: you may need to increase cl_maxfps!\n");
-    }
+
+	Cvar_Set("cl_avidemo", "0");
 }
 
 void AVI_Export_f (void)
@@ -635,9 +584,8 @@ void AVI_Export_f (void)
 	char		demoName[MAX_QPATH];
 	FILE		*f;
 
-	InitModules();
-	if(!movie_avi_loaded)
-	{
+	AVI_InitModules();
+	if(!handle_avi)	{
 		Com_Printf("Aviexport unavailable\n");
 		return;
 	}
@@ -647,9 +595,7 @@ void AVI_Export_f (void)
 		return;
 	}
 
-	// Check we have the correct number of arguments
-	if(Cmd_Argc() != 4)
-	{
+	if(Cmd_Argc() != 4)	{
 		Com_Printf("Usage: aviexport <framerate> <demo> <avi name>\n"
 				   "For Example 'aviexport 25 demo1.dm2 demo1.avi'\n");
 		return;
@@ -680,9 +626,8 @@ void AVI_Record_f(void)
 	FILE	*f;
 	int		i;
 
-	InitModules();
-	if(!movie_avi_loaded)
-	{
+	AVI_InitModules();
+	if(!handle_avi) {
 		Com_Printf("Aviexport unavailable\n");
 		return;
 	}
@@ -692,16 +637,13 @@ void AVI_Record_f(void)
 		return;
 	}
 
-	// Check we have the correct number of arguments
-	if(Cmd_Argc() != 2)
-	{
+	if(Cmd_Argc() != 2)	{
 		Com_Printf("Usage: avirecord <framerate>\n"
 				   "For Example 'avirecord 16'\n");
 		return;
 	}
 
-	if(cls.state < ca_connected || !cl.attractloop)
-	{
+	if(cls.state < ca_connected || !cl.attractloop)	{
 		Com_Printf("This command is only available on demo playback\n");
 		return;
 	}
@@ -746,6 +688,15 @@ void CL_InitAVIExport( void )
 	Cmd_AddCommand ("avistop", AVI_Stop_f);
 }
 
+void CL_ShutdownAVIExport( void )
+{
+	Cmd_RemoveCommand("aviexport");
+	Cmd_RemoveCommand("avirecord");
+	Cmd_RemoveCommand("avistop");
+	AVI_StopExport();
+	AVI_ShutdownModules();
+}
+
 static float VideoFps(void)
 {
     if (fixedtime->value)
@@ -777,5 +728,10 @@ qboolean Movie_GetSoundtime(void)
 
 	soundtime += (int)(0.5f + (float)dma.speed / VideoFps());
 	return true;
+}
+
+qboolean CL_AviRecording(void)
+{
+	return (avi_recording);
 }
 #endif

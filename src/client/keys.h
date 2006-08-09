@@ -136,8 +136,21 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #define K_MWHEELDOWN	244
 #define K_MWHEELUP		245
 
-extern char		*keybindings[256];
-extern	int		key_repeats[256];
+#define	MAX_KEYS		256
+
+typedef struct {
+	qboolean	down;
+	int			repeats;		// if > 1, it is autorepeating
+	char		*binding;
+	qboolean	consolekey;		// if true, can't be rebound while in console
+	qboolean	menubound;		// if true, can't be rebound while in menu
+	int			keyshift;		// key to map to if shift held down in console
+} qkey_t;
+
+extern	qkey_t		keys[MAX_KEYS];
+
+//extern char		*keybindings[256];
+//extern	int		key_repeats[256];
 
 extern	int	anykeydown;
 
@@ -146,7 +159,6 @@ void Key_Init (void);
 void Key_WriteBindings (FILE *f);
 void Key_SetBinding (int keynum, const char *binding);
 void Key_ClearStates (void);
-int Key_GetKey (void);
 
 void Key_Message( int key );
 void Key_Console( int key );

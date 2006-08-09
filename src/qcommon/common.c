@@ -32,13 +32,15 @@ int		realtime;
 static jmp_buf abortframe;		// an ERR_DROP occured, exit the entire frame
 
 
+cvar_t	uninitialized_cvar;
+
 cvar_t	*host_speeds;
-cvar_t	*developer;
+cvar_t	*developer = &uninitialized_cvar;
 cvar_t	*timescale;
 cvar_t	*fixedtime;
-cvar_t	*logfile_active;	// 1 = buffer log, 2 = flush after each print
+cvar_t	*logfile_active = &uninitialized_cvar;	// 1 = buffer log, 2 = flush after each print
 cvar_t	*showtrace;
-cvar_t	*dedicated;
+cvar_t	*dedicated = &uninitialized_cvar;
 
 static FILE	*logfile;
 
@@ -116,7 +118,8 @@ void Com_BeginRedirect (int target, char *buffer, int buffersize, void (*flush))
 
 void Com_EndRedirect (void)
 {
-	rd_flush(rd_target, rd_buffer);
+	if(rd_flush && rd_buffer)
+		rd_flush(rd_target, rd_buffer);
 
 	rd_target = 0;
 	rd_buffer = NULL;
@@ -140,7 +143,7 @@ void Com_Printf (const char *fmt, ...)
 	qboolean	colors = false;
 
 	va_start (argptr,fmt);
-	vsnprintf(msg, MAXPRINTMSG, fmt, argptr);
+	vsnprintf(msg, sizeof(msg), fmt, argptr);
 	va_end (argptr);
 
 	if (rd_target)
@@ -183,7 +186,7 @@ void Com_Printf (const char *fmt, ...)
 	Sys_ConsoleOutput (msg+skip);
 
 	// logfile
-	if (logfile_active && logfile_active->integer)
+	if (logfile_active->integer)
 	{
 		char	name[MAX_QPATH];
 		
@@ -210,16 +213,16 @@ Com_DPrintf
 A Com_Printf that only shows up if the "developer" cvar is set
 ================
 */
-void Com_DPrintf (const char *fmt, ...)
+void _Com_DPrintf (const char *fmt, ...)
 {
 	va_list		argptr;
 	char		msg[MAXPRINTMSG];
 		
-	if (!developer || !developer->integer)
+	if (!developer->integer)
 		return;			// don't confuse non-developers with techie stuff...
 
 	va_start (argptr,fmt);
-	vsnprintf(msg, MAXPRINTMSG, fmt, argptr);
+	vsnprintf(msg, sizeof(msg), fmt, argptr);
 	va_end (argptr);
 	
 	Com_Printf ("%s", msg);
@@ -245,7 +248,7 @@ void Com_Error (int code, const char *fmt, ...)
 	recursive = true;
 
 	va_start (argptr,fmt);
-	vsnprintf(msg, MAXPRINTMSG, fmt, argptr);
+	vsnprintf(msg, sizeof(msg), fmt, argptr);
 	va_end (argptr);
 	
 	if (code == ERR_DISCONNECT)
@@ -270,6 +273,8 @@ void Com_Error (int code, const char *fmt, ...)
 
 	if (logfile)
 	{
+		fprintf (logfile, "Fatal Error\n*****************************\n"
+						  "%s\n*****************************\n", msg);
 		fclose (logfile);
 		logfile = NULL;
 	}
@@ -331,11 +336,6 @@ Handles byte ordering and avoids alignment errors
 ==============================================================================
 */
 
-const vec3_t	bytedirs[NUMVERTEXNORMALS] =
-{
-#include "../client/anorms.h"
-};
-
 //
 // writing functions
 //
@@ -362,7 +362,7 @@ void MSG_WriteByte (sizebuf_t *sb, int c)
 		Com_Error (ERR_FATAL, "MSG_WriteByte: range error");
 #endif
 
-	buf = SZ_GetSpace (sb, 1);
+	buf = SZ_GetSpace(sb, 1);
 	buf[0] = c;
 }
 
@@ -395,12 +395,12 @@ void MSG_WriteFloat (sizebuf_t *sb, float f)
 {
 	union
 	{
-		float	f;
+		float f1;
 		int	l;
 	} dat;
 	
 	
-	dat.f = f;
+	dat.f1 = f;
 	dat.l = LittleLong (dat.l);
 	
 	SZ_Write (sb, &dat.l, 4);
@@ -487,36 +487,12 @@ void MSG_WriteDeltaUsercmd (sizebuf_t *buf, const usercmd_t *from, const usercmd
 
 void MSG_WriteDir (sizebuf_t *sb, const vec3_t dir)
 {
-	int		i, best = 0;
-	float	d, bestd = 0;
-	
-	if (!dir)
-	{
-		MSG_WriteByte (sb, 0);
-		return;
-	}
-
-	for (i=0 ; i<NUMVERTEXNORMALS ; i++)
-	{
-		d = DotProduct (dir, bytedirs[i]);
-		if (d > bestd)
-		{
-			bestd = d;
-			best = i;
-		}
-	}
-	MSG_WriteByte (sb, best);
+	MSG_WriteByte (sb, DirToByte(dir));
 }
-
 
 void MSG_ReadDir (sizebuf_t *sb, vec3_t dir)
 {
-	int		b;
-
-	b = MSG_ReadByte (sb);
-	if (b >= NUMVERTEXNORMALS)
-		Com_Error (ERR_DROP, "MSF_ReadDir: out of range");
-	VectorCopy (bytedirs[b], dir);
+	ByteToDir (MSG_ReadByte (sb), dir);
 }
 
 
@@ -614,14 +590,8 @@ void MSG_WriteDeltaEntity (const entity_state_t *from, const entity_state_t *to,
 	if ( to->sound != from->sound )
 		bits |= U_SOUND;
 
-	//if (newentity || (to->renderfx & RF_BEAM))
-	//	bits |= U_OLDORIGIN;
-
 	if (newentity || (to->renderfx & RF_BEAM))
-	{
-		if (!VectorCompare (from->old_origin, to->old_origin))
-			bits |= U_OLDORIGIN;
-	}
+		bits |= U_OLDORIGIN;
 
 	// write the message
 	if (!bits && !force)
@@ -1578,7 +1548,7 @@ byte	COM_BlockSequenceCRCByte (byte *base, int length, int sequence)
 	const byte	*p;
 	byte		chkb[60 + 4];
 	uint16		crc;
-
+	byte		r;
 
 	if (sequence < 0)
 		Sys_Error("sequence < 0, this shouldn't happen\n");
@@ -1601,9 +1571,9 @@ byte	COM_BlockSequenceCRCByte (byte *base, int length, int sequence)
 	for (x=0, n=0; n<length; n++)
 		x += chkb[n];
 
-	crc = (crc ^ x) & 0xff;
+	r = (crc ^ x) & 0xff;
 
-	return crc;
+	return r;
 }
 
 //========================================================
@@ -1649,6 +1619,9 @@ void Com_Error_f (void)
 }
 */
 
+void Cbuf_ExecuteAll(qboolean insertDefer);
+void Cmd_Echo_f (void);
+
 /*
 =================
 Qcommon_Init
@@ -1680,16 +1653,18 @@ void Qcommon_Init (int argc, char **argv)
 	// config files, but we want other parms to override
 	// the settings of the config files
 	Cbuf_AddEarlyCommands (false);
-	Cbuf_Execute ();
+	Cbuf_ExecuteAll(false);
 
 	FS_InitFilesystem ();
 
 	Cbuf_AddText ("exec default.cfg\n");
 	Cbuf_AddText ("exec aprconfig.cfg\n");
+	FS_ExecConfig("autoexec.cfg");
 
 	Cbuf_AddEarlyCommands (true);
-	Cbuf_Execute ();
+	Cbuf_ExecuteAll(true);
 
+	Cmd_AddCommand ("echo", Cmd_Echo_f);
 	// init commands and vars
     Cmd_AddCommand ("z_stats", Z_Stats_f);
     //Cmd_AddCommand ("error", Com_Error_f);
@@ -1701,7 +1676,7 @@ void Qcommon_Init (int argc, char **argv)
 	logfile_active = Cvar_Get ("logfile", "0", 0);
 	showtrace = Cvar_Get ("showtrace", "0", 0);
 #ifdef DEDICATED_ONLY
-	dedicated = Cvar_Get ("dedicated", "1", CVAR_NOSET);
+	dedicated = Cvar_Get ("dedicated", "1", CVAR_ROM);
 #else
 	dedicated = Cvar_Get ("dedicated", "0", CVAR_NOSET);
 #endif
@@ -1710,7 +1685,7 @@ void Qcommon_Init (int argc, char **argv)
 	OnChange_Timescale(timescale, timescale->resetString);
 
 	s = va("AprQ2 v%s %s %s %s", APR_VERSION, CPUSTRING, __DATE__, BUILDSTRING);
-	Cvar_Get ("version", s, CVAR_SERVERINFO|CVAR_NOSET);
+	Cvar_Get ("version", s, CVAR_SERVERINFO|CVAR_ROM);
 
 
 	Cmd_AddMacro( "date", Com_Date_m );
@@ -1727,6 +1702,10 @@ void Qcommon_Init (int argc, char **argv)
 	SV_Init ();
 	CL_Init ();
 
+	Cbuf_InsertFromDefer(); //Execute commands which was initialized after loading autoexec (ignore, highlight etc)
+	FS_ExecConfig ("postinit.cfg");
+	Cbuf_ExecuteAll(false);
+
 	// add + commands from command line
 	if (!Cbuf_AddLateCommands ())
 	{	// if the user didn't give any commands, run default action
@@ -1742,7 +1721,7 @@ void Qcommon_Init (int argc, char **argv)
 		SCR_EndLoadingPlaque ();
 	}
 
-	Com_Printf ("====== Quake2 Initialized ======\n\n");	
+	Com_Printf ("====== " APPLICATION " Initialized ======\n\n");	
 }
 
 /*
@@ -1750,25 +1729,32 @@ void Qcommon_Init (int argc, char **argv)
 Qcommon_Frame
 =================
 */
+#ifdef GL_QUAKE
+cvar_t *cl_avidemo;
+#endif
+
 void Qcommon_Frame (int msec)
 {
-	char	*s;
-	int		time_before = 0, time_between = 0, time_after = 0;
-	static float frac = 0;
 
 	if (setjmp (abortframe) )
 		return;			// an ERR_DROP was thrown
 
-	if (fixedtime->integer)
-		msec = fixedtime->integer;
-	if (timescale->value)
+#ifdef GL_QUAKE
+	if(cl_avidemo->integer)
 	{
-		frac = (float)msec * timescale->value;
-		msec = frac;
-		frac -= msec;
-		if (msec < 1)
-			msec = 1;
+		msec = (int)(1000 / cl_avidemo->integer * timescale->value);
 	}
+	else
+#endif
+	{
+		if (fixedtime->integer)
+			msec = fixedtime->integer;
+
+		msec = (int)(msec * timescale->value);
+	}
+
+	if (msec < 1)
+		msec = 1;
 
 	if (showtrace->integer)
 	{
@@ -1783,6 +1769,7 @@ void Qcommon_Frame (int msec)
 
 	if (dedicated->integer)
 	{
+		char	*s;
 		do
 		{
 			s = Sys_ConsoleInput ();
@@ -1792,23 +1779,25 @@ void Qcommon_Frame (int msec)
 		Cbuf_Execute ();
 	}
 
-	if (host_speeds->integer)
+	if (!host_speeds->integer)
+	{
+		SV_Frame (msec);
+		CL_Frame (msec);
+	}
+	else
+	{
+		int		time_before = 0, time_between = 0, time_after = 0;
+		int		all, sv, gm, cl, rf;
+
 		time_before = Sys_Milliseconds ();
 
-	SV_Frame (msec);
+		SV_Frame (msec);
 
-	if (host_speeds->integer)
-		time_between = Sys_Milliseconds ();		
+		time_between = Sys_Milliseconds ();
 
-	CL_Frame (msec);
+		CL_Frame (msec);
 
-	if (host_speeds->integer)
-		time_after = Sys_Milliseconds ();		
-
-
-	if (host_speeds->integer)
-	{
-		int			all, sv, gm, cl, rf;
+		time_after = Sys_Milliseconds ();
 
 		all = time_after - time_before;
 		sv = time_between - time_before;
@@ -1817,8 +1806,7 @@ void Qcommon_Frame (int msec)
 		rf = time_after_ref - time_before_ref;
 		sv -= gm;
 		cl -= rf;
-		Com_Printf ("all:%3i sv:%3i gm:%3i cl:%3i rf:%3i\n",
-			all, sv, gm, cl, rf);
+		Com_Printf ("all:%3i sv:%3i gm:%3i cl:%3i rf:%3i\n", all, sv, gm, cl, rf);
 	}	
 }
 

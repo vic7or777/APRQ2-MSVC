@@ -23,14 +23,13 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "snd_loc.h"
 
 #define	PAINTBUFFER_SIZE	2048
-portable_samplepair_t paintbuffer[PAINTBUFFER_SIZE];
-int		snd_scaletable[32][256];
-int 	*snd_p, snd_linear_count, snd_vol;
+static portable_samplepair_t paintbuffer[PAINTBUFFER_SIZE];
+static int		snd_scaletable[32][256], snd_vol;
+int 	*snd_p, snd_linear_count;
 int16	*snd_out;
 
 void S_WriteLinearBlastStereo16 (void);
 void S_WriteSwappedLinearBlastStereo16 (void);
-
 
 #if	!id386
 void S_WriteLinearBlastStereo16 (void)
@@ -155,7 +154,7 @@ __declspec( naked ) void S_WriteSwappedLinearBlastStereo16 (void)
 }
 #endif
 
-void S_TransferStereo16 (unsigned long *pbuf, int endtime)
+static void S_TransferStereo16 (unsigned long *pbuf, int endtime)
 {
 	int		lpos, lpaintedtime;
 	
@@ -389,6 +388,11 @@ void S_InitScaletable (void)
 {
 	int		i, j;
 	int		scale;
+
+	if (s_volume->value > 2.0f)
+		Cvar_Set ("s_volume", "2");
+	else if (s_volume->value < 0)
+		Cvar_Set  ("s_volume", "0");
 
 	s_volume->modified = false;
 	for (i=0 ; i<32 ; i++)

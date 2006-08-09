@@ -67,8 +67,8 @@ static qboolean ALSA_LoadLibrary(void)
 {
 	if(!(alsa_handle = dlopen("libasound.so.2", RTLD_GLOBAL | RTLD_NOW)) )
 	{
-		Com_Printf("Could open 'libasound.so.2'\n");
-        return false;
+		Com_Printf("Could not open 'libasound.so.2'\n");
+		return false;
 	}
 
 #define ALSA_FUNC(ret, func, params) \
@@ -87,7 +87,7 @@ static qboolean ALSA_LoadLibrary(void)
 qboolean SNDDMA_Init_ALSA (void)
 {
 	int err;
-	int rate, rrate = 0;
+	unsigned int rate, rrate = 0;
 	snd_pcm_hw_params_t *hw_params;
 	snd_pcm_uframes_t   period_size = 1024, buffer_size = 4096;
 	char *sdevice;
@@ -160,10 +160,19 @@ qboolean SNDDMA_Init_ALSA (void)
 		}
 	}
 
-	if(sndspeed->integer)
+	switch(sndspeed->integer) {
+	case 11025:
+	case 22050:
+	case 44100:
+	case 48000:
 		rate = sndspeed->integer;
-	else
+		break;
+	default:
+		Com_Printf("ALSA: rate %i not supported, trying 44100.\n", sndspeed->integer);
+	case 0:
 		rate = 44100;
+		break;
+	}
 
 	rrate = rate;
 
@@ -193,7 +202,7 @@ qboolean SNDDMA_Init_ALSA (void)
         return false;
 	}
 
-	period_size = 1024;
+	period_size = 2048;
 	//period_size = 8 * dma.samplebits * dma.speed / 11025;
     err = alsa_snd_pcm_hw_params_set_period_size_near(playback_handle, hw_params, &period_size, 0);
     if(err < 0)
@@ -205,8 +214,8 @@ qboolean SNDDMA_Init_ALSA (void)
         return false;
     }
 
-	buffer_size = 4096;
-	//buffer_size = period_size * 4;
+	//buffer_size = 8192;
+	buffer_size = period_size * 4;
     err = alsa_snd_pcm_hw_params_set_buffer_size_near(playback_handle, hw_params, &buffer_size);
     if(err < 0)
     {
@@ -236,6 +245,8 @@ qboolean SNDDMA_Init_ALSA (void)
 	memset(dma.buffer, 0, buffer_bytes);
 
 	dma.samplepos = 0;
+
+	alsa_snd_pcm_prepare(playback_handle);
 
 	Com_Printf("ALSA: period size %d, buffer size %d\n", (int)period_size, (int)buffer_size);
     Com_Printf("%5d stereo\n", dma.channels - 1);
@@ -269,15 +280,16 @@ Send sound to device if buffer isn't really the dma buffer
 */
 void SNDDMA_Submit_ALSA (void)
 {
-	int s, w, frames;
+	int s, w;
+	snd_pcm_uframes_t nframes;
 	void *start;
 		
 	s = dma.samplepos * sample_bytes;
 	start = (void *) &dma.buffer[s];
 	
-	frames = dma.submission_chunk / dma.channels;
+	nframes = dma.submission_chunk / dma.channels;
 	
-	if((w = alsa_snd_pcm_writei(playback_handle, start, frames)) < 0){  //write to card
+	if((w = alsa_snd_pcm_writei(playback_handle, start, nframes)) < 0){  //write to card
 		alsa_snd_pcm_prepare(playback_handle);  //xrun occured
 		return;
 	}

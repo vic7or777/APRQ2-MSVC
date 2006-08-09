@@ -57,6 +57,9 @@ void Sys_ConsoleOutput (const char *string)
 	if (nostdout && nostdout->integer)
 		return;
 
+	if(!string)
+		return;
+
 	fputs(string, stdout);
 }
 
@@ -67,7 +70,7 @@ void Sys_Printf (const char *fmt, ...)
 	unsigned char		*p;
 
 	va_start (argptr,fmt);
-	vsnprintf (text,1024,fmt,argptr);
+	vsnprintf (text,sizeof(text),fmt,argptr);
 	va_end (argptr);
 
     if (nostdout && nostdout->integer)
@@ -84,9 +87,9 @@ void Sys_Printf (const char *fmt, ...)
 
 void Sys_Quit (void)
 {
-    fcntl (0, F_SETFL, fcntl (0, F_GETFL, 0) & ~FNDELAY);
 	CL_Shutdown ();
 	Qcommon_Shutdown ();
+    fcntl (0, F_SETFL, fcntl (0, F_GETFL, 0) & ~FNDELAY);
 	_exit(0);
 }
 
@@ -109,7 +112,7 @@ void Sys_Error (const char *error, ...)
 	Qcommon_Shutdown ();
     
     va_start (argptr,error);
-    vsnprintf (string,1024,error,argptr);
+    vsnprintf (string,sizeof(string),error,argptr);
     va_end (argptr);
 	fprintf(stderr, "Error: %s\n", string);
 
@@ -123,7 +126,7 @@ void Sys_Warn (char *warning, ...)
     char        string[1024];
     
     va_start (argptr,warning);
-    vsnprintf (string,1024,warning,argptr);
+    vsnprintf (string,sizeof(string),warning,argptr);
     va_end (argptr);
 	fprintf(stderr, "Warning: %s", string);
 } 
@@ -158,7 +161,7 @@ char *Sys_ConsoleInput(void)
 	fd_set	fdset;
     struct timeval timeout;
 
-	if (!dedicated || !dedicated->integer)
+	if (!dedicated->integer)
 		return NULL;
 
 	if (!stdin_active)
@@ -334,82 +337,3 @@ int main (int argc, char **argv)
     }
 }
 
-#if 0
-void Sys_CopyProtect(void)
-{
-	FILE *mnt;
-	struct mntent *ent;
-	char path[MAX_OSPATH];
-	struct stat st;
-	qboolean found_cd = false;
-
-	static qboolean checked = false;
-
-	if (checked)
-		return;
-
-	if ((mnt = setmntent("/etc/mtab", "r")) == NULL)
-		Com_Error(ERR_FATAL, "Can't read mount table to determine mounted cd location.");
-
-	while ((ent = getmntent(mnt)) != NULL) {
-		if (strcmp(ent->mnt_type, "iso9660") == 0) {
-			// found a cd file system
-			found_cd = true;
-			sprintf(path, "%s/%s", ent->mnt_dir, "install/data/quake2.exe");
-			if (stat(path, &st) == 0) {
-				// found it
-				checked = true;
-				endmntent(mnt);
-				return;
-			}
-			sprintf(path, "%s/%s", ent->mnt_dir, "Install/Data/quake2.exe");
-			if (stat(path, &st) == 0) {
-				// found it
-				checked = true;
-				endmntent(mnt);
-				return;
-			}
-			sprintf(path, "%s/%s", ent->mnt_dir, "quake2.exe");
-			if (stat(path, &st) == 0) {
-				// found it
-				checked = true;
-				endmntent(mnt);
-				return;
-			}
-		}
-	}
-	endmntent(mnt);
-
-	if (found_cd)
-		Com_Error (ERR_FATAL, "Could not find a Quake2 CD in your CD drive.");
-	Com_Error (ERR_FATAL, "Unable to find a mounted iso9660 file system.\n"
-		"You must mount the Quake2 CD in a cdrom drive in order to play.");
-}
-#endif
-
-#if 0
-/*
-================
-Sys_MakeCodeWriteable
-================
-*/
-void Sys_MakeCodeWriteable (unsigned long startaddr, unsigned long length)
-{
-
-	int r;
-	unsigned long addr;
-	int psize = getpagesize();
-
-	addr = (startaddr & ~(psize-1)) - psize;
-
-//	fprintf(stderr, "writable code %lx(%lx)-%lx, length=%lx\n", startaddr,
-//			addr, startaddr+length, length);
-
-	r = mprotect((char*)addr, length + startaddr - addr + psize, 7);
-
-	if (r < 0)
-    		Sys_Error("Protection change failed\n");
-
-}
-
-#endif

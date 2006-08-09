@@ -26,12 +26,12 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 CL_ParseInventory
 ================
 */
-void CL_ParseInventory (void)
+void CL_ParseInventory (sizebuf_t *msg)
 {
 	int		i;
 
 	for (i=0 ; i<MAX_ITEMS ; i++)
-		cl.inventory[i] = MSG_ReadShort (&net_message);
+		cl.inventory[i] = MSG_ReadShort(msg);
 }
 
 
@@ -90,8 +90,8 @@ void CL_DrawInventory (void)
 		// search for a binding
 		Com_sprintf (binding, sizeof(binding), "use %s", cl.configstrings[CS_ITEMS+item]);
 		bind = "";
-		for (j=0 ; j<256 ; j++) {
-			if (keybindings[j] && !Q_stricmp (keybindings[j], binding))
+		for (j=0 ; j<MAX_KEYS ; j++) {
+			if (keys[i].binding && !Q_stricmp(keys[i].binding, binding))
 			{
 				bind = Key_KeynumToString(j);
 				break;

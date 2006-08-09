@@ -30,18 +30,18 @@ CL_WriteDemoMessage
 Dumps the current net message, prefixed by the length
 ====================
 */
-void CL_WriteDemoMessageFull( void )
+void CL_WriteDemoMessageFull( sizebuf_t *msg )
 {
 	int		len, swlen;
 
 	// the first eight bytes are just packet sequencing stuff
-	len = net_message.cursize - 8;
+	len = msg->cursize - 8;
 	swlen = LittleLong( len );
 
 	if(swlen > 0) // skip bad packets
 	{
 		fwrite( &swlen, 4, 1, cls.demofile);
-		fwrite( net_message.data + 8, len, 1, cls.demofile);
+		fwrite( msg->data + 8, len, 1, cls.demofile);
 	}
 }
 
@@ -341,21 +341,16 @@ CL_Demo_List_f
 void CL_Demo_List_f ( void )
 {
 
-	char	findname[1024];
+	char	findname[MAX_OSPATH], *tmp;
 	char	**dirnames;
 	int		ndirs;
-	char	*tmp;
 
 	Com_sprintf(findname, sizeof(findname), "%s/demos/*%s*.dm2", FS_Gamedir(), Cmd_Argv( 1 )) ;
 
 	tmp = findname;
+	while ((tmp = strchr(tmp, '\\')))
+		*tmp = '/';
 
-	while( *tmp != 0 )
-	{
-		if ( *tmp == '\\' ) 
-			*tmp = '/';
-		tmp++;
-	}
 	Com_Printf( "Directory of %s\n", findname );
 	Com_Printf( "----\n" );
 
@@ -374,8 +369,6 @@ void CL_Demo_List_f ( void )
 		}
 		Z_Free( dirnames );
 	}
-
-	Com_Printf( "\n" );
 }
 
 /*
@@ -386,15 +379,10 @@ CL_Demo_Play_f
 void CL_Demo_Play_f ( void )
 {
 
-	char	findname[1024];
+	char	findname[MAX_OSPATH], *tmp;
 	char	**dirnames;
-	int		ndirs;
-	int		find;
-	char	buf[1024] ;
-	int		found;
-	char	*tmp;
-
-	found = 0;
+	int		ndirs, find, found = 0;
+	char	buf[MAX_OSPATH];
 
 	if(Cmd_Argc() == 1)
 	{
@@ -407,13 +395,8 @@ void CL_Demo_Play_f ( void )
 	Com_sprintf (findname, sizeof(findname), "%s/demos/*%s*.dm2", FS_Gamedir(), Cmd_Argv( 2 ));
 
 	tmp = findname;
-
-	while( *tmp != 0 )
-	{
-		if ( *tmp == '\\' ) 
-			*tmp = '/';
-		tmp++;
-	}
+	while ((tmp = strchr(tmp, '\\')))
+		*tmp = '/';
 
 	Com_Printf( "Directory of %s\n", findname );
 	Com_Printf( "----\n" );
@@ -430,7 +413,7 @@ void CL_Demo_Play_f ( void )
 				{
 					Com_Printf( "%i %s\n", i, strrchr( dirnames[i], '/' ) + 1 );
 					found = 1;
-					sprintf(buf, "demomap \"%s\"\n", strrchr( dirnames[i], '/' ) + 1);
+					Com_sprintf(buf, sizeof(buf), "demo \"%s\"\n", strrchr( dirnames[i], '/' ) + 1);
 				}	
 				else
 					Com_Printf( "%i %s\n", i, dirnames[i] );
@@ -441,10 +424,201 @@ void CL_Demo_Play_f ( void )
 		Z_Free( dirnames );
 	}
 
-	Com_Printf( "\n" );
-
 	if (found)		
 		Cbuf_AddText(buf);
+}
+
+
+/*
+=================
+CL_DemoCompleted
+=================
+*/
+void CL_StopDemoFile( void ) {
+	if( cls.demofile ) {
+		fclose( cls.demofile );
+		
+		cls.demofile = NULL;
+	}
+	cls.demoplaying = false;
+}
+
+void CL_DemoCompleted( void ) {
+	if (cl_timedemo && cl_timedemo->integer) {
+		int	time;
+		
+		time = Sys_Milliseconds() - cls.timeDemoStart;
+		if ( time > 0 ) {
+			Com_Printf ("%i frames, %3.1f seconds: %3.1f fps\n", cls.timeDemoFrames,
+			time/1000.0, cls.timeDemoFrames*1000.0 / time);
+		}
+	}
+	CL_Disconnect();
+}
+
+/*
+=================
+CL_ReadDemoMessage
+=================
+*/
+#define MAX_MVD_MSGLEN	0x4000
+
+void CL_ReadDemoMessage( void ) {
+	int			r;
+	sizebuf_t	buf;
+	byte		bufData[ MAX_MVD_MSGLEN ];
+
+	if ( !cls.demofile ) {
+		CL_DemoCompleted ();
+		return;
+	}
+
+	// init the message
+	SZ_Init( &buf, bufData, sizeof( bufData ) );
+	buf.allowoverflow = true;
+
+	// get the length
+	r = FS_Read (&buf.cursize, 4, cls.demofile);
+	if ( r != 4 ) {
+		CL_DemoCompleted ();
+		return;
+	}
+	buf.cursize = LittleLong( buf.cursize );
+	if ( buf.cursize == -1 ) {
+		CL_DemoCompleted ();
+		return;
+	}
+	if ( buf.cursize > buf.maxsize ) {
+		Com_Error (ERR_DROP, "CL_ReadDemoMessage: demoMsglen > MAX_MSGLEN");
+	}
+	r = FS_Read( buf.data, buf.cursize, cls.demofile );
+	if ( r != buf.cursize ) {
+		Com_Printf( "Demo file was truncated.\n");
+		CL_DemoCompleted ();
+		return;
+	}
+
+	buf.readcount = 0;
+	CL_ParseServerMessage( &buf );
+}
+
+/*
+====================
+CL_PlayDemo_f
+
+demo <demoname>
+====================
+*/
+qboolean skipFirst = false;
+
+void CL_PlayDemo_f( void ) {
+	char		name[MAX_OSPATH];
+	char		*arg;
+	int			len;
+	FILE		*demofile;
+
+	if (Cmd_Argc() != 2) {
+		Com_Printf("Usage: %s <name>\n", Cmd_Argv(0));
+		return;
+	}
+
+	// open the demo file
+	arg = Cmd_Argv(1);
+
+	Com_sprintf( name, sizeof( name ), "demos/%s", arg);
+	COM_DefaultExtension(name, sizeof(name), ".dm2");
+
+	len = FS_FOpenFile (name, &demofile);
+	if (!demofile) {
+		Com_Printf( "couldn't open %s\n", name);
+		return;
+	}
+
+	// make sure a local server is killed
+	if( Com_ServerState() ) {
+		SV_Shutdown( "Server quit\n", false );
+	}
+
+	CL_Disconnect();
+
+//	Con_Close();
+
+	cls.state = ca_connected;
+	cls.demofile = demofile;
+	cls.demoplaying = true;
+	Q_strncpyz( cls.servername, COM_SkipPath(name), sizeof( cls.servername ) );
+
+	if( cl_timedemo->integer ) {
+		cls.timeDemoFrames = 0;
+		cls.timeDemoStart = Sys_Milliseconds();
+	}
+
+	// read demo messages until connected
+	do {
+		CL_ReadDemoMessage();
+	} while( cls.state == ca_connected );
+
+	Cbuf_Execute();
+
+	// don't get the first snapshot this frame, to prevent the long
+	// time from the gamestate load from messing causing a time skip
+	//clc.firstDemoFrameSkipped = qfalse;
+	//cl.serverTime = -1;
+	skipFirst = true;
+}
+
+cvar_t *cl_demotimescale;
+
+void CL_DemoFrame( int msec ) {
+	static float frac;
+	int dt;
+
+	if( !cls.demoplaying ) {
+		cl.time += msec;
+		return;
+	}
+
+	if( cls.state < ca_connected ) {
+		return;
+	}
+
+	if( cls.state != ca_active ) {
+		CL_ReadDemoMessage();
+		return;
+	}
+
+	if( cl_timedemo->integer ) {
+		CL_ReadDemoMessage();
+		cl.time = cl.serverTime;
+		cls.timeDemoFrames++;
+		return;
+	}
+
+	if( cl_demotimescale->value < 0 ) {
+		Cvar_Set( "cl_demotimescale", "0" );
+	} else if( cl_demotimescale->value > 1000 ) {
+		Cvar_Set( "cl_demotimescale", "1000" );
+	}
+
+	if( cl_demotimescale->value ) {
+		frac += msec * cl_demotimescale->value;
+		dt = frac;
+		frac -= dt;
+
+		cl.time += dt;
+	}
+
+	// Skip the first frame
+	if( skipFirst) {
+		//cl.serverTime = cl.time;
+		skipFirst = false;
+		return;
+	}
+
+	while( cl.serverTime < cl.time ) {
+		CL_ReadDemoMessage();
+	}
+
 }
 
 /*
@@ -454,12 +628,15 @@ CL_InitDemos
 */
 void CL_InitDemos( void )
 {
+	cl_demotimescale = Cvar_Get( "cl_demotimescale", "1", 0 );
 	cl_clan = Cvar_Get ("cl_clan", "", 0);
 	Cmd_AddCommand( "record", CL_Record_f );
 	Cmd_AddCommand( "stop", CL_Stop_f );
 
 	Cmd_AddCommand ("demolist", CL_Demo_List_f );
 	Cmd_AddCommand ("demoplay", CL_Demo_Play_f );
+
+	Cmd_AddCommand ("demo", CL_PlayDemo_f);
 
 	cl_autorecord = Cvar_Get("cl_autorecord", "0", 0);
 	cl_autorecord->OnChange = OnChange_AutoRecord;

@@ -135,7 +135,7 @@ CMod_LoadSubmodels
 */
 static void CMod_LoadSubmodels (const lump_t *l)
 {
-	dmodel_t	*in;
+	const dmodel_t	*in;
 	cmodel_t	*out;
 	int			i, j, count;
 
@@ -173,7 +173,7 @@ CMod_LoadSurfaces
 */
 static void CMod_LoadSurfaces (const lump_t *l)
 {
-	texinfo_t	*in;
+	const texinfo_t	*in;
 	mapsurface_t	*out;
 	int			i, count;
 
@@ -207,7 +207,7 @@ CMod_LoadNodes
 */
 static void CMod_LoadNodes (const lump_t *l)
 {
-	dnode_t		*in;
+	const dnode_t		*in;
 	int			child;
 	cnode_t		*out;
 	int			i, j, count;
@@ -246,7 +246,7 @@ CMod_LoadBrushes
 */
 static void CMod_LoadBrushes (const lump_t *l)
 {
-	dbrush_t	*in;
+	const dbrush_t	*in;
 	cbrush_t	*out;
 	int			i, count;
 	
@@ -280,7 +280,7 @@ static void CMod_LoadLeafs (const lump_t *l)
 {
 	int			i;
 	cleaf_t		*out;
-	dleaf_t 	*in;
+	const dleaf_t 	*in;
 	int			count;
 	
 	in = (void *)(cmod_base + l->fileofs);
@@ -323,7 +323,7 @@ static void CMod_LoadPlanes (const lump_t *l)
 {
 	int			i, j;
 	cplane_t	*out;
-	dplane_t 	*in;
+	const dplane_t 	*in;
 	int			count;
 	int			bits;
 	
@@ -366,7 +366,7 @@ static void CMod_LoadLeafBrushes (const lump_t *l)
 {
 	int			i;
 	uint16		*out;
-	uint16	 	*in;
+	const uint16	 	*in;
 	int			count;
 	
 	in = (void *)(cmod_base + l->fileofs);
@@ -396,7 +396,7 @@ static void CMod_LoadBrushSides (const lump_t *l)
 {
 	int			i, j;
 	cbrushside_t	*out;
-	dbrushside_t 	*in;
+	const dbrushside_t 	*in;
 	int			count;
 	int			num;
 
@@ -434,7 +434,7 @@ static void CMod_LoadAreas (const lump_t *l)
 {
 	int			i;
 	carea_t		*out;
-	darea_t 	*in;
+	const darea_t 	*in;
 	int			count;
 
 	in = (void *)(cmod_base + l->fileofs);
@@ -466,7 +466,7 @@ static void CMod_LoadAreaPortals (const lump_t *l)
 {
 	int			i;
 	dareaportal_t		*out;
-	dareaportal_t 	*in;
+	const dareaportal_t *in;
 	int			count;
 
 	in = (void *)(cmod_base + l->fileofs);
@@ -804,8 +804,8 @@ CM_PointLeafnum_r
 static int CM_PointLeafnum_r (const vec3_t p, int num)
 {
 	float		d;
-	cnode_t		*node;
-	cplane_t	*plane;
+	const cnode_t	*node;
+	const cplane_t	*plane;
 
 	while (num >= 0)
 	{
@@ -850,8 +850,8 @@ static int		leaf_topnode;
 
 static void CM_BoxLeafnums_r (int nodenum)
 {
-	cplane_t	*plane;
-	cnode_t		*node;
+	const cplane_t	*plane;
+	const cnode_t	*node;
 	int		s;
 
 	while (1)
@@ -989,18 +989,18 @@ static qboolean	trace_ispoint;		// optimized case
 CM_ClipBoxToBrush
 ================
 */
-static void CM_ClipBoxToBrush (vec3_t mins, vec3_t maxs, vec3_t p1, vec3_t p2,
-					  trace_t *trace, cbrush_t *brush)
+static void CM_ClipBoxToBrush (const vec3_t mins, const vec3_t maxs, const vec3_t p1, const vec3_t p2,
+					  trace_t *trace, const cbrush_t *brush)
 {
 	int			i, j;
-	cplane_t	*plane, *clipplane;
+	const cplane_t	*plane, *clipplane;
 	float		dist;
 	float		enterfrac, leavefrac;
 	vec3_t		ofs;
 	float		d1, d2;
 	qboolean	getout, startout;
 	float		f;
-	cbrushside_t	*side, *leadside;
+	const cbrushside_t	*side, *leadside;
 
 	enterfrac = -1;
 	leavefrac = 1;
@@ -1046,16 +1046,16 @@ static void CM_ClipBoxToBrush (vec3_t mins, vec3_t maxs, vec3_t p1, vec3_t p2,
 		d1 = DotProduct (p1, plane->normal) - dist;
 		d2 = DotProduct (p2, plane->normal) - dist;
 
-		if (d2 > 0)
+		if (d2 > 0.0f)
 			getout = true;	// endpoint is not in solid
-		if (d1 > 0)
+		if (d1 > 0.0f)
 			startout = true;
 
 		// if completely in front of face, no intersection
-		if (d1 > 0 && d2 >= d1)
+		if (d1 > 0.0f && d2 >= d1)
 			return;
 
-		if (d1 <= 0 && d2 <= 0)
+		if (d1 <= 0.0f && d2 <= 0.0f)
 			continue;
 
 		// crosses face
@@ -1088,7 +1088,7 @@ static void CM_ClipBoxToBrush (vec3_t mins, vec3_t maxs, vec3_t p1, vec3_t p2,
 	{
 		if (enterfrac > -1 && enterfrac < trace->fraction)
 		{
-			if (enterfrac < 0)
+			if (enterfrac < 0.0f)
 				enterfrac = 0;
 			trace->fraction = enterfrac;
 			trace->plane = *clipplane;
@@ -1103,15 +1103,15 @@ static void CM_ClipBoxToBrush (vec3_t mins, vec3_t maxs, vec3_t p1, vec3_t p2,
 CM_TestBoxInBrush
 ================
 */
-static void CM_TestBoxInBrush (vec3_t mins, vec3_t maxs, vec3_t p1,
-					  trace_t *trace, cbrush_t *brush)
+static void CM_TestBoxInBrush (const vec3_t mins, const vec3_t maxs, const vec3_t p1,
+					  trace_t *trace, const cbrush_t *brush)
 {
 	int			i, j;
-	cplane_t	*plane;
+	const cplane_t	*plane;
 	float		dist;
 	vec3_t		ofs;
 	float		d1;
-	cbrushside_t	*side;
+	const cbrushside_t	*side;
 
 	if (!brush->numsides)
 		return;
@@ -1141,7 +1141,7 @@ static void CM_TestBoxInBrush (vec3_t mins, vec3_t maxs, vec3_t p1,
 		d1 = DotProduct (p1, plane->normal) - dist;
 
 		// if completely in front of face, no intersection
-		if (d1 > 0)
+		if (d1 > 0.0f)
 			return;
 
 	}
@@ -1162,7 +1162,7 @@ static void CM_TraceToLeaf (int leafnum)
 {
 	int			k;
 	int			brushnum;
-	cleaf_t		*leaf;
+	const cleaf_t		*leaf;
 	cbrush_t	*b;
 
 	leaf = &map_leafs[leafnum];
@@ -1196,7 +1196,7 @@ static void CM_TestInLeaf (int leafnum)
 {
 	int			k;
 	int			brushnum;
-	cleaf_t		*leaf;
+	const cleaf_t		*leaf;
 	cbrush_t	*b;
 
 	leaf = &map_leafs[leafnum];
@@ -1229,12 +1229,11 @@ CM_RecursiveHullCheck
 */
 static void CM_RecursiveHullCheck (int num, float p1f, float p2f, const vec3_t p1, const vec3_t p2)
 {
-	cnode_t		*node;
-	cplane_t	*plane;
+	const cnode_t		*node;
+	const cplane_t	*plane;
 	float		t1, t2, offset;
 	float		frac, frac2;
 	float		idist;
-	int			i;
 	vec3_t		mid;
 	int			side;
 	float		midf;
@@ -1290,14 +1289,14 @@ static void CM_RecursiveHullCheck (int num, float p1f, float p2f, const vec3_t p
 	// put the crosspoint DIST_EPSILON pixels on the near side
 	if (t1 < t2)
 	{
-		idist = 1.0/(t1-t2);
+		idist = 1.0f/(t1-t2);
 		side = 1;
 		frac2 = (t1 + offset + DIST_EPSILON)*idist;
 		frac = (t1 - offset + DIST_EPSILON)*idist;
 	}
 	else if (t1 > t2)
 	{
-		idist = 1.0/(t1-t2);
+		idist = 1.0f/(t1-t2);
 		side = 0;
 		frac2 = (t1 - offset - DIST_EPSILON)*idist;
 		frac = (t1 + offset + DIST_EPSILON)*idist;
@@ -1310,27 +1309,29 @@ static void CM_RecursiveHullCheck (int num, float p1f, float p2f, const vec3_t p
 	}
 
 	// move up to the node
-	if (frac < 0)
-		frac = 0;
-	if (frac > 1)
-		frac = 1;
+	if (frac < 0.0f)
+		frac = 0.0f;
+	if (frac > 1.0f)
+		frac = 1.0f;
 		
 	midf = p1f + (p2f - p1f)*frac;
-	for (i=0 ; i<3 ; i++)
-		mid[i] = p1[i] + frac*(p2[i] - p1[i]);
+	mid[0] = p1[0] + frac*(p2[0] - p1[0]);
+	mid[1] = p1[1] + frac*(p2[1] - p1[1]);
+	mid[2] = p1[2] + frac*(p2[2] - p1[2]);
 
 	CM_RecursiveHullCheck (node->children[side], p1f, midf, p1, mid);
 
-
 	// go past the node
-	if (frac2 < 0)
-		frac2 = 0;
-	if (frac2 > 1)
-		frac2 = 1;
+	if (frac2 < 0.0f)
+		frac2 = 0.0f;
+	if (frac2 > 1.0f)
+		frac2 = 1.0f;
 		
 	midf = p1f + (p2f - p1f)*frac2;
-	for (i=0 ; i<3 ; i++)
-		mid[i] = p1[i] + frac2*(p2[i] - p1[i]);
+	mid[0] = p1[0] + frac2*(p2[0] - p1[0]);
+	mid[1] = p1[1] + frac2*(p2[1] - p1[1]);
+	mid[2] = p1[2] + frac2*(p2[2] - p1[2]);
+
 
 	CM_RecursiveHullCheck (node->children[side^1], midf, p2f, mid, p2);
 }
@@ -1348,7 +1349,6 @@ trace_t		CM_BoxTrace (const vec3_t start, const vec3_t end,
 						  const vec3_t mins, const vec3_t maxs,
 						  int headnode, int brushmask)
 {
-	int		i;
 
 	checkcount++;		// for multi-check avoidance
 
@@ -1374,17 +1374,18 @@ trace_t		CM_BoxTrace (const vec3_t start, const vec3_t end,
 	if (start[0] == end[0] && start[1] == end[1] && start[2] == end[2])
 	{
 		int		leafs[1024];
-		int		numleafs;
+		int		i, numleafs, topnode;
 		vec3_t	c1, c2;
-		int		topnode;
 
 		VectorAdd (start, mins, c1);
 		VectorAdd (start, maxs, c2);
-		for (i=0 ; i<3 ; i++)
-		{
-			c1[i] -= 1;
-			c2[i] += 1;
-		}
+
+		c1[0] -= 1;
+		c2[0] += 1;
+		c1[1] -= 1;
+		c2[1] += 1;
+		c1[2] -= 1;
+		c2[2] += 1;
 
 		numleafs = CM_BoxLeafnums_headnode (c1, c2, leafs, 1024, headnode, &topnode);
 		for (i=0 ; i<numleafs ; i++)
@@ -1419,14 +1420,15 @@ trace_t		CM_BoxTrace (const vec3_t start, const vec3_t end,
 	//
 	CM_RecursiveHullCheck (headnode, 0, 1, start, end);
 
-	if (trace_trace.fraction == 1)
+	if (trace_trace.fraction == 1.0f)
 	{
 		VectorCopy (end, trace_trace.endpos);
 	}
 	else
 	{
-		for (i=0 ; i<3 ; i++)
-			trace_trace.endpos[i] = start[i] + trace_trace.fraction * (end[i] - start[i]);
+		trace_trace.endpos[0] = start[0] + trace_trace.fraction * (end[0] - start[0]);
+		trace_trace.endpos[1] = start[1] + trace_trace.fraction * (end[1] - start[1]);
+		trace_trace.endpos[2] = start[2] + trace_trace.fraction * (end[2] - start[2]);
 	}
 	return trace_trace;
 }
@@ -1482,7 +1484,7 @@ trace_t		CM_TransformedBoxTrace (const vec3_t start, const vec3_t end,
 	// sweep the box through the model
 	trace = CM_BoxTrace (start_l, end_l, mins, maxs, headnode, brushmask);
 
-	if (rotated && trace.fraction != 1.0)
+	if (rotated && trace.fraction != 1.0f)
 	{
 		// FIXME: figure out how to do this with existing angles
 		VectorNegate (angles, a);
@@ -1595,7 +1597,7 @@ AREAPORTALS
 static void FloodArea_r (carea_t *area, int floodnum)
 {
 	int		i;
-	dareaportal_t	*p;
+	const dareaportal_t	*p;
 
 	if (area->floodvalid == floodvalid)
 	{
@@ -1642,22 +1644,28 @@ static void	FloodAreaConnections (void)
 
 }
 
-void	CM_SetAreaPortalState (int portalnum, qboolean open)
+void CM_SetAreaPortalState (int portalnum, qboolean open)
 {
-	if (portalnum > numareaportals)
-		Com_Error (ERR_DROP, "areaportal > numareaportals");
+	if (portalnum >= numareaportals)
+		Com_Error (ERR_DROP, "CM_SetAreaPortalState: areaportal >= numareaportals");
+
+	if (portalnum < 0)
+		Com_Error (ERR_DROP, "CM_SetAreaPortalState: areaportal < 0");
 
 	portalopen[portalnum] = open;
 	FloodAreaConnections ();
 }
 
-qboolean	CM_AreasConnected (int area1, int area2)
+qboolean CM_AreasConnected (int area1, int area2)
 {
 	if (map_noareas->integer)
 		return true;
 
-	if (area1 > numareas || area2 > numareas)
-		Com_Error (ERR_DROP, "area > numareas");
+	if (area1 >= numareas || area2 >= numareas)
+		Com_Error (ERR_DROP, "CM_AreasConnected: area >= numareas");
+
+	if (area1 < 0 || area2 < 0)
+		Com_Error (ERR_DROP, "CM_AreasConnected: area < 0");
 
 	if (map_areas[area1].floodnum == map_areas[area2].floodnum)
 		return true;
@@ -1741,7 +1749,7 @@ qboolean CM_HeadnodeVisible (int nodenum, const byte *visbits)
 {
 	int		leafnum;
 	int		cluster;
-	cnode_t	*node;
+	const cnode_t	*node;
 
 	if (nodenum < 0)
 	{

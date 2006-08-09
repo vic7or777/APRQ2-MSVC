@@ -107,7 +107,7 @@ void MP3_SetVolume_f (void)
 
 	percent = atoi(Cmd_Args());
 
-	vol = (percent * 0.01f) * 255;
+	vol = (percent / 100) * 255;
 	clamp(vol, 0, 255);
 
 	SendMessage(mywinamp.hWnd, WM_USER, vol, 122);
@@ -368,7 +368,8 @@ static char *MP3_SongTitle (qboolean tracknum)
 
    GetWindowText(mywinamp.hWnd, title, sizeof(title)); 
    
-   if ((s = strrchr(title, '-')) && s > title) 
+   s = strrchr(title, '-');
+   if (s && s > title) 
       *(s - 1) = 0;
 
    if(!tracknum)
@@ -686,6 +687,9 @@ MP3_Shutdown
 */
 void MP3_Shutdown (void)
 {
+	if(!cl_winampmessages)
+		return;
+
 	Cmd_RemoveCommand ( "winampnext" );
 	Cmd_RemoveCommand ( "winamppause" );
 	Cmd_RemoveCommand ( "winampplay" );
