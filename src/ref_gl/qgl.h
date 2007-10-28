@@ -56,6 +56,10 @@ QGL_EXTERN	void	 *qglGetProcAddress( const GLubyte * );
 #define GL_TEXTURE0_SGIS					0x835E
 #define GL_TEXTURE1_SGIS					0x835F
 
+#ifndef GL_MAX_TEXTURE_UNITS
+#define GL_MAX_TEXTURE_UNITS				0x84E2
+#endif
+
 #ifndef GL_POLYGON_OFFSET
 #define GL_POLYGON_OFFSET					0x8037
 
@@ -115,6 +119,7 @@ QGL_FUNC(void, glClearStencil, (GLint s))
 QGL_FUNC(void, glClipPlane, (GLenum plane, const GLdouble *equation))
 QGL_FUNC(void, glColor3f, (GLfloat red, GLfloat green, GLfloat blue))
 QGL_FUNC(void, glColor3fv, (const GLfloat *v))
+QGL_FUNC(void, glColor3ubv, (const GLubyte *v))
 QGL_FUNC(void, glColor4f, (GLfloat red, GLfloat green, GLfloat blue, GLfloat alpha))
 QGL_FUNC(void, glColor4fv, (const GLfloat *v))
 QGL_FUNC(void, glColor4ubv, (const GLubyte *v))
@@ -136,6 +141,7 @@ QGL_FUNC(void, glFinish, (void))
 QGL_FUNC(void, glFlush, (void))
 QGL_FUNC(void, glFrontFace, (GLenum mode))
 QGL_FUNC(GLenum, glGetError, (void))
+QGL_FUNC(void, glGetFloatv, (GLenum pname, GLfloat *params))
 QGL_FUNC(void, glGetIntegerv, (GLenum pname, GLint *params))
 QGL_FUNC(const GLubyte *, glGetString, (GLenum name))
 QGL_FUNC(void, glLoadIdentity, (void))
@@ -177,7 +183,7 @@ QGL_FUNC(void, glFogi, (GLenum pname, GLint param))
 QGL_FUNC(void, glFogiv, (GLenum pname, const GLint *params))
 QGL_FUNC(void, glGenTextures, (GLsizei n, GLuint *textures))
 QGL_FUNC(void, glCopyTexImage2D, (GLenum target, GLint level, GLenum internalFormat, GLint x, GLint y, GLsizei width, GLsizei height, GLint border))
-//QGL_FUNC(void, glCopyTexSubImage2D, (GLenum target, GLint level, GLint xoffset , GLint yoffset , GLint x , GLint y , GLsizei width , GLsizei height))
+QGL_FUNC(void, glCopyTexSubImage2D, (GLenum target, GLint level, GLint xoffset , GLint yoffset , GLint x , GLint y , GLsizei width , GLsizei height))
 QGL_FUNC(void, glHint, (GLenum target, GLenum mode))
 QGL_FUNC(void, glTexCoord2fv, (const GLfloat *v))
 QGL_FUNC(void, glVertex2i, (GLint x, GLint y))

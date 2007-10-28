@@ -87,6 +87,13 @@ extern	viddef_t	vid;
 
 */
 
+#define IT_TRANS		1
+#define IT_PALETTED		2
+#define IT_SCRAP		4
+#define IT_REPLACE_WAL	8
+#define IT_REPLACE_PCX	16
+
+
 typedef enum 
 {
 	it_skin,
@@ -98,8 +105,8 @@ typedef enum
 
 typedef struct image_s
 {
-	char	name[MAX_QPATH];			// game path, not including extension
-	char	extension[8];				//extension
+	char	name[MAX_QPATH];			// game path without extension
+	char	*extension;					// extension
 	imagetype_t	type;
 	int		width, height;				// source image
 	int		upload_width, upload_height;	// after power of two and picmip
@@ -107,19 +114,18 @@ typedef struct image_s
 	struct msurface_s	*texturechain;	// for sort-by-texture world drawing
 	int		texnum;						// gl texture binding
 	float	sl, tl, sh, th;				// 0,0 - 1,1 unless part of the scrap
-	qboolean	scrap;
-	qboolean	has_alpha;
 
-	int		bits;
+	int		flags;
 	struct image_s	*hashNext;
-	qboolean paletted;
 } image_t;
+
+#define MAX_TEXTURE_UNITS	2
 
 #define	TEXNUM_LIGHTMAPS	1024
 #define	TEXNUM_SCRAPS		1152
 #define	TEXNUM_IMAGES		1153
 
-#define		MAX_GLTEXTURES	1024
+#define	MAX_GLTEXTURES		1024
 
 //===================================================================
 
@@ -160,6 +166,7 @@ extern	int			numgltextures;
 
 
 extern	image_t		*r_notexture;
+extern	image_t		*r_whitetexture;
 extern	image_t		*r_particletexture;
 extern	image_t		*r_caustictexture;
 extern	image_t		*r_bholetexture;
@@ -202,7 +209,6 @@ extern	cvar_t	*r_lightlevel;	// FIXME: This is a HACK to get the client's light 
 extern cvar_t	*gl_vertex_arrays;
 
 extern cvar_t	*gl_ext_swapinterval;
-extern cvar_t	*gl_ext_palettedtexture;
 extern cvar_t	*gl_ext_multitexture;
 extern cvar_t	*gl_ext_pointparameters;
 extern cvar_t	*gl_ext_compiled_vertex_array;
@@ -249,7 +255,7 @@ extern  cvar_t  *gl_lockpvs;
 extern	cvar_t	*vid_fullscreen;
 extern	cvar_t	*vid_gamma;
 
-extern	cvar_t		*intensity;
+//extern	cvar_t		*intensity;
 
 
 //Added gl_variables -Maniac
@@ -267,8 +273,6 @@ extern	cvar_t	*gl_scale;
 extern	cvar_t	*gl_watercaustics;
 extern	cvar_t	*gl_fog;
 
-extern	cvar_t	*gl_decals;
-extern	cvar_t	*gl_decals_time;
 extern	cvar_t	*gl_coloredlightmaps;
 extern	cvar_t	*gl_shelleffect;
 //End
@@ -283,23 +287,23 @@ extern	int		c_visible_lightmaps;
 extern	int		c_visible_textures;
 
 extern	float	r_WorldViewMatrix[16];
+extern	float	r_ModelViewMatrix[16];
 
 void R_TranslatePlayerSkin (int playernum);
 void GL_Bind (int texnum);
-void GL_MBind( GLenum target, int texnum );
+void GL_MBind( int tmu, int texnum );
 void GL_TexEnv( GLenum value );
 void GL_EnableMultitexture( qboolean enable );
-void GL_SelectTexture( GLenum );
+void GL_SelectTexture( int tmu );
 
 void R_LightPoint (const vec3_t p, vec3_t color);
 void R_PushDlights (void);
 
 //====================================================================
 
-extern	model_t	*r_worldmodel;
+extern	bspModel_t	*r_worldmodel;
 
-extern	unsigned	d_8to24table[256];
-extern	float		d_8to24tablef[256][3];
+extern	uint32	d_8to24table[256];
 
 extern	int		registration_sequence;
 
@@ -312,8 +316,8 @@ void	R_Shutdown( void );
 //void R_RenderView (refdef_t *fd);
 
 void GL_ScreenShot_f (void);
-void R_DrawAliasModel (void);
-void R_DrawBrushModel (void);
+void R_DrawAliasModel (model_t *model);
+void R_DrawBrushModel (bspSubmodel_t *subModel);
 //void R_DrawSpriteModel (void);
 void R_DrawBeam( void );
 void R_DrawWorld (void);
@@ -323,7 +327,7 @@ void R_DrawAlphaSurfaces (void);
 void R_InitParticleTexture (void);
 void Draw_InitLocal (void);
 qboolean R_CullBox (const vec3_t mins, const vec3_t maxs);
-void R_RotateForEntity (const entity_t *e);
+
 void R_MarkLeaves (void);
 
 glpoly_t *WaterWarpPolyVerts (glpoly_t *p);
@@ -348,7 +352,7 @@ void	R_BeginFrame( float camera_separation );
 void	R_SwapBuffers( int );
 void	R_CinematicSetPalette ( const unsigned char *palette);
 
-int		Draw_GetPalette (void);
+void	Draw_GetPalette (void);
 
 //void GL_ResampleTexture (unsigned *in, int inwidth, int inheight, unsigned *out,  int outwidth, int outheight);
 
@@ -357,7 +361,7 @@ struct image_s *R_RegisterSkin (const char *name);
 
 //void LoadPCX (const char *filename, byte **pic, byte **palette, int *width, int *height);
 
-image_t *GL_LoadPic (const char *name, byte *pic, int width, int height, imagetype_t type, int bits, int scale);
+image_t *GL_LoadPic (const char *name, byte *pic, int width, int height, imagetype_t type, int flags, int samples);
 image_t	*GL_FindImage (const char *name, imagetype_t type);
 void	GL_TextureMode( const char *string );
 void	GL_ImageList_f (void);
@@ -394,7 +398,7 @@ void	GL_TextureBits(void);
 #define GL_RENDERER_GLINT_MX	0x00000200
 #define GL_RENDERER_GLINT_TX	0x00000400
 #define GL_RENDERER_3DLABS_MISC	0x00000800
-#define	GL_RENDERER_3DLABS	0x00000F00
+#define	GL_RENDERER_3DLABS		0x00000F00
 
 #define GL_RENDERER_REALIZM		0x00001000
 #define GL_RENDERER_REALIZM2	0x00002000
@@ -429,50 +433,72 @@ typedef struct
 
 	qboolean	allow_cds;
 
+	int			maxTextureSize;
+	int			maxTextureUnits;
+
 	qboolean	anisotropic;
 	int			maxAnisotropic;
 } glconfig_t;
 
 typedef struct
 {
-	float inverse_intensity;
-	qboolean fullscreen;
+	float		inverse_intensity;
+	qboolean	fullscreen;
 
-	int     prev_mode;
+	int			prev_mode;
 
 	//unsigned char *d_16to8table;
 
-	int lightmap_textures;
+	int			lightmap_textures;
 
-	int	currenttextures[2];
-	int currenttmu;
+	int			currentTMU;
+	int			currentTextures[MAX_TEXTURE_UNITS];
+	int			currentEnvModes[MAX_TEXTURE_UNITS];
 
-	float camera_separation;
-	qboolean stereo_enabled;
+	float		camera_separation;
+	qboolean	stereo_enabled;
 
-	qboolean		sgis_mipmap; //sgis mipmap -Maniac
-	int				maxtexsize; //max texture size -Maniac
-	qboolean		texture_compression; // Heffo - ARB Texture Compression
-	qboolean		stencil;
-	qboolean		compiledVertexArray;
+	qboolean	multiTexture;
+	qboolean	sgis_mipmap;
+	qboolean	texture_compression;
+	qboolean	stencil;
+	qboolean	compiledVertexArray;
 
-	qboolean		tex_rectangle;
+	qboolean	tex_rectangle;
+
+	qboolean	registering;
 
 } glstate_t;
+
+// vertex arrays
+#define TESS_MAX_VERTICES   4096
+#define TESS_MAX_INDICES    ( 3 * TESS_MAX_VERTICES )
+
+typedef struct vArrays_s {
+    int		numVertices;
+    int		numIndices;
+
+    vec_t	vertices[4*TESS_MAX_VERTICES];
+    vec_t	colors[4*TESS_MAX_VERTICES];
+    vec2_t	tcoords[TESS_MAX_VERTICES];
+    int		indices[TESS_MAX_INDICES];
+	
+	int		texnum;
+} vArrays_t;
+extern vArrays_t r_arrays;
 
 extern glconfig_t  gl_config;
 extern glstate_t   gl_state;
 
-
-#define MAX_ARRAY MAX_PARTICLES*4
-
 #include "gl_decal.h"
-void R_RotateForEntity2 (const entity_t *e);
+
+void R_TranslateForEntity (const vec3_t origin);
+void R_RotateForEntity (const vec3_t origin, vec3_t axis[3]);
 
 qboolean R_GetModeInfo( int *width, int *height, int mode );
 
-extern const vec3_t color_table[8];
 extern const vec4_t	colorWhite;
+extern vec4_t	colorBlack;
 
 /*
 ====================================================================

@@ -11,6 +11,8 @@ New cvars/commands:
 
 Cvar / Command			Value		Description
 ==============			=====		===========
+cl_async			0 | 1		Enables asyncronous network/rendering FPS.
+r_maxfps			5 ..		Changes the renderer maxfps when using cl_async 1.
 m_xpfix 			0 | 1		Apply the mouse XP fix.
 m_restart					Restarts the mouse subsystem.
 m_autosens			0 | 1		1 to enable Mouse FOV Sensitivity Autoscaling.
@@ -44,11 +46,23 @@ ch_health			0 | 1		crosshair color change when your health change. This ignores 
 ch_x				0 ..		Adjust crosshair x position.
 ch_y				0 ..		Adjust crosshair y position.
 cl_gunalpha			0.0 .. 1	Adjust your weapon transparenty.
+cl_gun_x			0.0 ..		Adjust the gun x position.
+cl_gun_y			0.0 ..		Adjust the gun y position.
+cl_gun_z			0.0 ..		Adjust the gun z position.
+cl_wsfov			0 | 1		Sets automaticly correct fov for widescreen modes.
+
 scr_drawlagometer		0|1|2|3		Enables lagometer. value 1 draw ping and 2 draw ping, upload and download speed also.
+scr_drawlagometer_x		0 ..		Adjust lagometer x position.
+scr_drawlagometer_y		0 ..		Adjust lagometer y position.
 scr_draw2d			0 | 1		You can disable hud with this (default 1).
+
+draw 		<name> <x> <y> [color [time]]	Add drawing cvar/macro string to screen.
+undraw				<name>		Remove drawing cvar/macro.
 
 s_swapstereo			0 | 1		Swap stereo.
 s_ambient			0 | 1		Disable/enable ambient sounds.
+s_oldresample			0 | 1		When enabled, uses the old sound resamble code from original q2.
+
 
 cl_highlight			0|1|2|3		Enables highlight. 1 different sound (talk1.wav), 2 different colour, 3 do both.
 cl_highlightmode		0 | 1		0 - check only from msg highlight texts, 1 - also nick is included.
@@ -116,6 +130,7 @@ gl_scale			1 ..		(default 1). This allow you to scale font text and hud pictures
 gl_fog				0 | 1		Enables fog effect.
 gl_fog_density			0 ..		Controls fog density.
 gl_decals			0 | 1		Enable bullet hole decals.
+gl_decals_max			256 - 4096	Maximum decals count.
 gl_decals_time			1 .. 		Controls how long decals stays.
 gl_gammapics			0 | 1		(default 1) 0 to disable vid_gamma to added hud images
 vid_displayfrequency 		0 .. 		(default 0 disabled) set displayfrequency wich game will use WARNING: set this so you monitor can handle it!!!!
@@ -287,7 +302,7 @@ Credits
 Heffo, MrG, Idle, Echon, R1CH, [SkulleR], Vic and all other who have made these features in first place.
 
 Uses: Zlib 1.2.31 Library, Copyright (C) 1995-2004 Jean-loup Gailly and Mark Adler.
-      libpng 1.2.8 Library, Copyright (c) 1998-2004 Glenn Randers-Pehrson.
+      libpng 1.2.20 Library, Copyright (c) 1998-2004 Glenn Randers-Pehrson.
       JPEG Library 6, Copyright (C) 1991-1998, Thomas G. Lane.
       Libcurl 7.15.1 Library, Copyright (c) 1996 - 2005 Daniel Stenberg.
 

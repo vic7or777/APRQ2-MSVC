@@ -22,8 +22,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 typedef struct cl_location_s
 {
 	struct cl_location_s	*next;
-	char					*name;
 	vec3_t					location;
+	char					name[1];
 } cl_location_t;
 
 static cl_location_t	*cl_locations = NULL;
@@ -36,27 +36,21 @@ void CL_FreeLocs(void)
 {
 	cl_location_t	*loc, *next;
 
-	if(!cl_locations)
-		return;
-
-	for(loc = cl_locations; loc; loc = next)
-	{
+	for(loc = cl_locations; loc; loc = next) {
 		next = loc->next;
 		Z_Free(loc);
 	}
-
 	cl_locations = NULL;
 }
 
 static void CL_AddLoc (const vec3_t location, const char *name)
 {
 	cl_location_t	*loc;
-	int len;
+	int length;
 
-	len = strlen(name);
+	length = strlen(name);
 
-	loc = Z_TagMalloc (sizeof(cl_location_t) + len + 1, TAGMALLOC_CLIENT_LOC);
-	loc->name = (char *)((byte *)loc + sizeof(cl_location_t));
+	loc = Z_TagMalloc (sizeof(cl_location_t) + length, TAG_CL_LOC);
 	strcpy(loc->name, name);
 	VectorCopy(location, loc->location);
 	loc->next = cl_locations;
@@ -66,8 +60,7 @@ static void CL_AddLoc (const vec3_t location, const char *name)
 void CL_LoadLoc(void)
 {
 
-	char fileName[MAX_OSPATH];
-	char *buffer = NULL;
+	char fileName[MAX_OSPATH], *buffer = NULL;
 	int line = 0, fileLen = 0, count = 0;
 	char *s, *p;
 	vec3_t	origin;
@@ -115,8 +108,7 @@ void CL_LoadLoc(void)
 		s = p + 1;
 	}
 
-	if(count)
-		Com_Printf("Loaded %i locations from '%s'\n", count, fileName);
+	Com_Printf("Loaded %i locations from '%s'\n", count, fileName);
 
 	FS_FreeFile( buffer );
 }
@@ -127,12 +119,10 @@ static cl_location_t *CL_Loc_Get (const vec3_t org)
 	unsigned int	length, bestlength = 0xFFFFFFFF;
 	cl_location_t	*loc, *best = cl_locations;
 
-
 	for(loc = cl_locations; loc; loc = loc->next)
 	{
 		length = (unsigned int)Distance(loc->location, org);
-		if (length < bestlength)
-		{
+		if (length < bestlength) {
 			best = loc;
 			bestlength = length;
 		}
@@ -148,23 +138,22 @@ void CL_AddViewLocs(void)
 	entity_t ent;
 	unsigned int dist;
 
-	if (!cl_drawlocs->integer)
-		return;
-
-	if(!cl_locations)
+	if (!cl_drawlocs->integer || !cl_locations)
 		return;
 
 	memset( &ent, 0, sizeof(ent) );
 	ent.skin = NULL;
 	ent.model = NULL;
+#ifdef GL_QUAKE
+	AxisClear(ent.axis);
+#endif
 
 	nearestLoc = CL_Loc_Get(cl.refdef.vieworg);
 
 	for(loc = cl_locations; loc; loc = loc->next)
 	{
 		dist = (int)Distance(loc->location, cl.refdef.vieworg);
-
-		if (dist > 4000 * 4000)
+		if (dist > 16000)
 			continue;
 
 		VectorCopy(loc->location, ent.origin);
@@ -172,7 +161,6 @@ void CL_AddViewLocs(void)
 		if (loc == nearestLoc)
 			ent.origin[2] += (float)sin(cl.time * 0.01f) * 10.0f;
 
-		//AnglesToAxis(ent.angles, ent.axis);
 		V_AddEntity(&ent);
 	}
 }
@@ -192,8 +180,7 @@ static void CL_LocList_f(void)
 		return;
 	}
 
-	if (cls.state != ca_active)
-	{
+	if (cls.state != ca_active) {
 		Com_Printf("Must be in level to use this command\n");
 		return;
 	}
@@ -205,14 +192,12 @@ static void CL_LocList_f(void)
 
 static void CL_LocAdd_f(void)
 {
-	if(Cmd_Argc() < 2)
-	{
+	if(Cmd_Argc() < 2) {
 		Com_Printf("Usage: %s <label>\n", Cmd_Argv(0));
 		return;
 	}
 
-	if (cls.state != ca_active)
-	{
+	if (cls.state != ca_active) {
 		Com_Printf("Must be in level to use this command\n");
 		return;
 	}
@@ -230,8 +215,7 @@ static void CL_LocDel_f(void)
 		return;
 	}
 
-	if (cls.state != ca_active)
-	{
+	if (cls.state != ca_active) {
 		Com_Printf("Must be in level to use this command\n");
 		return;
 	}
@@ -241,13 +225,11 @@ static void CL_LocDel_f(void)
 	while(1)
 	{
 		loc = *back;
-		if (!loc)
-		{
+		if (!loc) {
 			Com_Printf ("Cant find location.\n");
 			return;
 		}
-		if(loc == entry)
-		{
+		if(loc == entry) {
 			*back = loc->next;
 			Com_Printf ("Removed location (%d, %d, %d) = %s\n", (int)loc->location[0], (int)loc->location[1], (int)loc->location[2], loc->name);
 			Z_Free (loc);
@@ -269,19 +251,16 @@ static void CL_LocSave_f (void)
 		return;
 	}
 
-	if (cls.state != ca_active)
-	{
+	if (cls.state != ca_active) {
 		Com_Printf("Must be in level to use this command\n");
 		return;
 	}
 
-	if(Cmd_Argc() == 2)
-	{
-		Com_sprintf (fileName, sizeof(fileName), "%s/%s/%s", FS_Gamedir(), locDir, Cmd_Argv(1));
-		COM_DefaultExtension(fileName, sizeof(fileName), ".loc");
-	}
-	else
+	if(Cmd_Argc() == 2) {
+		Com_sprintf (fileName, sizeof(fileName), "%s/%s/%s.loc", FS_Gamedir(), locDir, Cmd_Argv(1));
+	} else {
 		Com_sprintf (fileName, sizeof(fileName), "%s/%s/%s.loc", FS_Gamedir(), locDir, cls.mapname);
+	}
 
 	FS_CreatePath(fileName);
 
@@ -292,7 +271,7 @@ static void CL_LocSave_f (void)
 	}
 
 	for(loc = cl_locations; loc; loc = loc->next) {
-		fprintf (f, "%i %i %i %s\n", (int)loc->location[0]*8, (int)loc->location[1]*8, (int)loc->location[2]*8, loc->name);
+		fprintf (f, "%i %i %i %s\n", (int)(loc->location[0]*8), (int)(loc->location[1]*8), (int)(loc->location[2]*8), loc->name);
 		count++;
 	}
 
@@ -304,7 +283,7 @@ static void CL_LocHere_m( char *buffer, int bufferSize )
 {
 	const cl_location_t	*loc;
 
-	if (!cl_locations) {
+	if (!cl_locations || cls.state != ca_active) {
 		Q_strncpyz ( buffer, "%L", bufferSize );
 		return;
 	}
@@ -320,7 +299,7 @@ static void CL_LocThere_m( char *buffer, int bufferSize )
 	trace_t		tr;
 	vec3_t		end;
 
-	if (!cl_locations) {
+	if (!cl_locations || cls.state != ca_active) {
 		Q_strncpyz(buffer, "%S", bufferSize);
 		return;
 	}

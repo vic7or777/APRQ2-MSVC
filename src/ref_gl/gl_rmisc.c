@@ -21,88 +21,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "gl_local.h"
 
-/*
-==================
-R_InitParticleTexture
-==================
-*/
-static const byte	dottexture[8][8] =
-{
-	{0,0,0,0,0,0,0,0},
-	{0,0,1,1,0,0,0,0},
-	{0,1,1,1,1,0,0,0},
-	{0,1,1,1,1,0,0,0},
-	{0,0,1,1,0,0,0,0},
-	{0,0,0,0,0,0,0,0},
-	{0,0,0,0,0,0,0,0},
-	{0,0,0,0,0,0,0,0}
-};
-
-void R_InitParticleTexture (void)
-{
-	int		x,y;
-	byte	data[8][8][4];
-	byte	data1[16][16][4];
-	int		dx2, dy, d;
-
-	//
-	// particle texture
-	//
-
-	for (x = 0; x < 16; x++) {
-		dx2 = x - 8;
-		dx2 *= dx2;
-		for (y = 0; y < 16; y++) {
-			dy = y - 8;
-			d = 255 - 4 * (dx2 + (dy * dy));
-			if (d <= 0) {
-				d = 0;
-				data1[y][x][0] = 0;
-				data1[y][x][1] = 0;
-				data1[y][x][2] = 0;
-			} else {
-				data1[y][x][0] = 255;
-				data1[y][x][1] = 255;
-				data1[y][x][2] = 255;
-			}
-
-			data1[y][x][3] = (byte) d;
-		}
-	}
-
-	//r_particletexture = GL_FindImage("pics/particle.tga",it_sprite);
-	//if(!r_particletexture)
-		r_particletexture = GL_LoadPic ("***particle***", (byte *)data1, 16, 16, 0, 32, 0);
-
-	r_shelltexture = GL_FindImage("pics/shell.tga", it_pic);
-	if(!r_shelltexture)
-		r_shelltexture = r_particletexture;
-
-	//
-	// also use this for bad textures, but without alpha
-	//
-	for (x=0 ; x<8 ; x++)
-	{
-		for (y=0 ; y<8 ; y++)
-		{
-			data[y][x][0] = dottexture[x&3][y&3]*255;
-			data[y][x][1] = 0; // dottexture[x&3][y&3]*255;
-			data[y][x][2] = 0; //dottexture[x&3][y&3]*255;
-			data[y][x][3] = 255;
-		}
-	}
-	r_notexture = GL_LoadPic ("***r_notexture***", (byte *)data, 8, 8, it_wall, 32, 0);
-
-	r_caustictexture = GL_FindImage("pics/caustic.png", it_wall);
-	if(!r_caustictexture)
-		r_caustictexture = r_notexture;
-
-	r_bholetexture = GL_FindImage("pics/bullethole.png", it_sprite);
-	if(!r_bholetexture)
-		r_bholetexture = r_notexture;
-
-}
-
 /* 
 ============================================================================== 
  
@@ -127,7 +45,6 @@ void GL_ScreenShot_f (void)
 	char	picname[80], checkname[MAX_OSPATH];
 	char	date[32], map[32] = "\0";
 	time_t	clock;
-
 
 	if(CL_Mapname()[0])
 		Com_sprintf(map, sizeof(map), "_%s", CL_Mapname());
@@ -171,7 +88,7 @@ void GL_ScreenShot_f (void)
 		Com_sprintf( checkname, sizeof(checkname), "%s/scrnshot/%s", FS_Gamedir(), picname );
 	}
 
-	buffer = Z_TagMalloc(vid.width * vid.height * 3 + offset, TAGMALLOC_RENDER_SCRSHOT);
+	buffer = Z_TagMalloc(vid.width * vid.height * 3 + offset, TAG_RENDER_SCRSHOT);
 	qglReadPixels( 0, 0, vid.width, vid.height, GL_RGB, GL_UNSIGNED_BYTE, buffer + offset );
 
 	if( picType == 1 )
@@ -216,8 +133,25 @@ void GL_Strings_f( void )
 */
 void GL_SetDefaultState( void )
 {
+	int i;
+
 	qglClearColor (1, 0.2f, 0, 1);
-	qglCullFace(GL_FRONT);
+
+	qglColor4fv(colorWhite);
+
+	qglPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+
+	// properly disable multitexturing at startup
+	for( i = gl_config.maxTextureUnits-1; i > 0; i-- ) {
+		GL_SelectTexture( i );
+		GL_TexEnv( GL_MODULATE );
+		qglDisable( GL_BLEND );
+		qglDisable( GL_TEXTURE_2D );
+	}
+
+	GL_SelectTexture( 0 );
+	GL_TexEnv( GL_REPLACE );
+	qglDisable (GL_BLEND);
 	qglEnable(GL_TEXTURE_2D);
 
 	qglEnable(GL_ALPHA_TEST);
@@ -225,15 +159,11 @@ void GL_SetDefaultState( void )
 
 	qglDisable (GL_DEPTH_TEST);
 	qglDisable (GL_CULL_FACE);
-	qglDisable (GL_BLEND);
+	qglCullFace (GL_FRONT);
+	if (gl_state.stencil)
+		qglDisable (GL_STENCIL_TEST);
 
 	qglDisable(GL_FOG);
-
-	qglColor4fv(colorWhite);
-
-	qglPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
-	qglShadeModel(GL_SMOOTH);
-	qglDepthMask(GL_TRUE);
 
 	GL_TextureMode( gl_texturemode->string );
 	GL_TextureBits();
@@ -245,8 +175,6 @@ void GL_SetDefaultState( void )
 	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
 
 	qglBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-
-	GL_TexEnv( GL_REPLACE );
 
 	if ( gl_ext_pointparameters->integer && qglPointParameterfEXT )
 	{
@@ -262,6 +190,7 @@ void GL_SetDefaultState( void )
 		qglPointParameterfvEXT( GL_DISTANCE_ATTENUATION_EXT, attenuations );
 	}
 
+	gl_swapinterval->modified = true;
 	GL_UpdateSwapInterval();
 }
 

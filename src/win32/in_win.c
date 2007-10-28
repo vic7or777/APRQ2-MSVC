@@ -21,8 +21,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // 02/21/97 JCB Added extended DirectInput code to support external controllers.
 
 #include "../client/client.h"
-#define WIN32_LEAN_AND_MEAN
-#define VC_LEANMEAN
 #include "winquake.h"
 
 #define DIRECTINPUT_VERSION	0x0700
@@ -254,6 +252,7 @@ static qboolean IN_InitDIMouse( void ) {
 			Com_Printf ("Couldn't load dinput.dll\n");
 			return false;
 		}
+		pDirectInputCreate = NULL;
 	}
 
 	if (!pDirectInputCreate) {
@@ -373,14 +372,12 @@ static void IN_ReadBufferedData( int *mx, int *my )
 
         case DIMOFS_Z:
 			value = (int)od[i].dwData;
-			if(value == 0) {
-			}
-			else if (value > 0)
+			if (value > 0)
 			{
 				Key_Event (K_MWHEELUP, true, od[i].dwTimeStamp);
 				Key_Event (K_MWHEELUP, false, od[i].dwTimeStamp);
 			}
-			else
+			else if (value < 0)
 			{
 				Key_Event (K_MWHEELDOWN, true, od[i].dwTimeStamp);
 				Key_Event (K_MWHEELDOWN, false, od[i].dwTimeStamp);
@@ -459,8 +456,8 @@ static void IN_ActivateMouse (void)
 	if (window_rect.bottom >= height-1)
 		window_rect.bottom = height-1;
 
-	window_center_x = (window_rect.right + window_rect.left)*0.5f;
-	window_center_y = (window_rect.top + window_rect.bottom)*0.5f;
+	window_center_x = (window_rect.right + window_rect.left)/2;
+	window_center_y = (window_rect.top + window_rect.bottom)/2;
 
 	SetCursorPos (window_center_x, window_center_y);
 
@@ -570,14 +567,16 @@ IN_MouseMove
 */
 void IN_MouseMove (usercmd_t *cmd)
 {
-	int mx = 0, my = 0;
+	int mx, my;
 
 	if (!mouseactive)
 		return;
 
-	if (g_pMouse)
-	{
+	if (g_pMouse) {
+		mx = my = 0;
 		IN_ReadBufferedData (&mx, &my);
+		//if (!mx && !my)
+		//	return;
 	}
 	else
 	{
@@ -585,11 +584,14 @@ void IN_MouseMove (usercmd_t *cmd)
 		if (!GetCursorPos (&current_pos))
 			return;
 
-		// force the mouse to the center, so there's room to move
-		SetCursorPos (window_center_x, window_center_y);
-
 		mx = current_pos.x - window_center_x;
 		my = current_pos.y - window_center_y;
+
+		//if (!mx && !my)
+		//	return;
+
+		// force the mouse to the center, so there's room to move
+		SetCursorPos (window_center_x, window_center_y);
 	}
 
 	if( cls.key_dest == key_menu ) {
@@ -654,11 +656,7 @@ cvar_t	*v_centerspeed;
 
 static void OnChange_IN_Restart (cvar_t *self, const char *oldValue)
 {
-	int value = 0;
-
-	value = atoi(oldValue);
-
-	if(!value || !self->integer)
+	if(!atoi(oldValue) || !self->integer)
 		IN_Restart_f();
 }
 

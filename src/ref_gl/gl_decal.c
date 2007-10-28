@@ -58,11 +58,104 @@ typedef struct
 	msurface_t	*surf;
 } fragment_t;
 
-static cdecal_t	decals[MAX_DECALS];
+static int maxDecals;
+static cdecal_t	*decals;
 static cdecal_t	active_decals, *free_decals;
 
 static int R_GetClippedFragments (vec3_t origin, float radius, mat3_t axis, int maxfverts, vec3_t *fverts, int maxfragments, fragment_t *fragments);
 //void R_DrawDecal (int numverts, vec3_t *verts, vec2_t *stcoords, vec4_t color, int type, int flags);
+
+static cvar_t	*gl_decals;
+static cvar_t	*gl_decals_time;
+static cvar_t	*gl_decals_max;
+
+static qboolean loadedDecalImages;
+
+image_t		*r_bholetexture;
+
+void GL_InitDecalImages (void)
+{
+	r_bholetexture = GL_FindImage("pics/bullethole.png", it_sprite);
+	if(!r_bholetexture)
+		r_bholetexture = r_notexture;
+
+	loadedDecalImages = true;
+}
+
+void GL_FreeUnusedDecalImages(void)
+{
+	if (!gl_decals->integer) {
+		loadedDecalImages = false;
+		return;
+	}
+
+	if(!loadedDecalImages) {
+		GL_InitDecalImages();
+		return;
+	}
+
+	r_bholetexture->registration_sequence = registration_sequence;
+}
+
+static void GL_AllocDecals(void)
+{
+	maxDecals = gl_decals_max->integer;
+	decals = Z_TagMalloc(maxDecals * sizeof(cdecal_t), TAG_RENDER_SCRSHOT);
+	GL_ClearDecals();
+}
+
+static void OnChange_Decals(cvar_t *self, const char *oldValue)
+{
+	if (!self->integer)
+		return;
+
+	if (!decals) {
+		GL_AllocDecals();
+	}
+	if(!loadedDecalImages)
+		GL_InitDecalImages();
+
+}
+
+static void OnChange_DecalsMax(cvar_t *self, const char *oldValue)
+{
+	if (self->integer < 256)
+		Cvar_Set(self->name, "256");
+	else if (self->integer > 4096)
+		Cvar_Set(self->name, "4096");
+
+	if (maxDecals == self->integer)
+		return;
+
+	GL_ShutDownDecals();
+	OnChange_Decals(gl_decals, gl_decals->resetString);
+}
+
+void GL_InitDecals (void)
+{
+	gl_decals = Cvar_Get( "gl_decals", "0", CVAR_ARCHIVE );
+	gl_decals_time = Cvar_Get( "gl_decals_time", "30", CVAR_ARCHIVE );
+	gl_decals_max = Cvar_Get( "gl_decals_max", "256", CVAR_ARCHIVE );
+
+	gl_decals->OnChange = OnChange_Decals;
+	gl_decals_max->OnChange = OnChange_DecalsMax;
+
+	loadedDecalImages = false;
+
+	OnChange_DecalsMax(gl_decals_max, gl_decals_max->resetString);
+}
+
+void GL_ShutDownDecals (void)
+{
+	if (decals)
+		Z_Free(decals);
+
+	maxDecals = 0;
+	decals = NULL;
+
+	gl_decals->OnChange = NULL;
+	gl_decals_max->OnChange = NULL;
+}
 
 /*
 =================
@@ -73,13 +166,16 @@ void GL_ClearDecals (void)
 {
 	int i;
 
-	memset ( decals, 0, sizeof(decals) );
+	if (!decals)
+		return;
+
+	memset ( decals, 0, maxDecals * sizeof(cdecal_t) );
 
 	// link decals
 	free_decals = decals;
 	active_decals.prev = &active_decals;
 	active_decals.next = &active_decals;
-	for ( i = 0; i < MAX_DECALS - 1; i++ )
+	for ( i = 0; i < maxDecals - 1; i++ )
 		decals[i].next = &decals[i+1];
 }
 
@@ -168,8 +264,9 @@ void R_AddDecal	(vec3_t origin, vec3_t dir, float red, float green, float blue, 
 	if (!numfragments)
 		return;
 
-	VectorScale (axis[1], 0.5f / size, axis[1]);
-	VectorScale (axis[2], 0.5f / size, axis[2]);
+	size = 0.5f / size;
+	VectorScale (axis[1], size, axis[1]);
+	VectorScale (axis[2], size, axis[2]);
 
 	for (i=0, fr=fragments ; i<numfragments ; i++, fr++)
 	{
@@ -229,7 +326,7 @@ void R_AddDecals (void)
 {
 	cdecal_t	*dl, *next,	*active;
 	float		mindist, time;
-	int			i, r_numdecals = 0;
+	int			i;
 	vec3_t		v;
 	vec4_t		color;
 
@@ -280,16 +377,12 @@ void R_AddDecals (void)
 		qglColor4fv (color);
 
 		qglBegin (GL_TRIANGLE_FAN);
-		for (i=0 ; i<dl->numverts ; i++)
+		for (i = 0; i < dl->numverts; i++)
 		{
 			qglTexCoord2fv (dl->stcoords[i]);
 			qglVertex3fv (dl->verts[i]);
 		}
 		qglEnd ();
-
-		r_numdecals++;
-		if (r_numdecals >= MAX_DECALS)
-			break;
 	}
 
 	GL_TexEnv(GL_REPLACE);

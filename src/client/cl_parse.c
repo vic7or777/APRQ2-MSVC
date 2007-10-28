@@ -29,10 +29,11 @@ cvar_t	*cl_highlightcolor;
 cvar_t	*cl_highlightnames;
 cvar_t	*cl_textcolors;
 cvar_t	*cl_mychatcolor;
+cvar_t	*cl_chat_notify;
 
 cvar_t	*cl_autoscreenshot;
 
-extern cvar_t *name;
+extern cvar_t *info_name;
 
 void CL_VersionReply (const char *s);
 qboolean CL_ChatParse (const char *s, int *clinu, int *skip2, int *mm2);
@@ -86,9 +87,7 @@ static void CL_DownloadFileName(char *dest, int destlen, const char *fn)
 
 static void CL_FinishDownload (void)
 {
-	int r;
-	char	oldn[MAX_OSPATH];
-	char	newn[MAX_OSPATH];
+	char	oldn[MAX_OSPATH], newn[MAX_OSPATH];
 
 	fclose (cls.download);
 
@@ -96,8 +95,7 @@ static void CL_FinishDownload (void)
 	CL_DownloadFileName(oldn, sizeof(oldn), cls.downloadtempname);
 	CL_DownloadFileName(newn, sizeof(newn), cls.downloadname);
 
-	r = rename (oldn, newn);
-	if (r)
+	if (!FS_RenameFile(oldn, newn))
 		Com_Printf ("failed to rename.\n");
 
 	cls.failed_download = false;
@@ -193,11 +191,10 @@ qboolean	CL_CheckOrDownloadFile (const char *filename)
 		Com_Printf ("Resuming %s\n", cls.downloadname);
 
 		MSG_WriteByte (&cls.netchan.message, clc_stringcmd);
-#ifdef R1Q2_PROTOCOL
-		if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
+		
+		if (cls.serverProtocol == PROTOCOL_VERSION_R1Q2)
 			MSG_WriteString (&cls.netchan.message, va("download \"%s\" %i udp-zlib", cls.downloadname, len));
 		else
-#endif
 			MSG_WriteString (&cls.netchan.message, va("download \"%s\" %i", cls.downloadname, len));
 	}
 	else
@@ -205,11 +202,10 @@ qboolean	CL_CheckOrDownloadFile (const char *filename)
 		Com_Printf ("Downloading %s\n", cls.downloadname);
 
 		MSG_WriteByte (&cls.netchan.message, clc_stringcmd);
-#ifdef R1Q2_PROTOCOL
-		if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
+
+		if (cls.serverProtocol == PROTOCOL_VERSION_R1Q2)
 			MSG_WriteString (&cls.netchan.message, va("download \"%s\" 0 udp-zlib", cls.downloadname));
 		else
-#endif
 			MSG_WriteString (&cls.netchan.message, va("download \"%s\"", cls.downloadname));
 	}
 
@@ -335,7 +331,6 @@ void CL_ParseDownload (sizebuf_t *msg, qboolean dataIsCompressed)
 		}
 	}
 
-#ifdef R1Q2_PROTOCOL
 	if (dataIsCompressed)
 	{
 		uint16		uncompressedLen;
@@ -352,11 +347,8 @@ void CL_ParseDownload (sizebuf_t *msg, qboolean dataIsCompressed)
 	}
 	else
 	{
-#endif
 		fwrite (msg->data + msg->readcount, 1, size, cls.download);
-#ifdef R1Q2_PROTOCOL
 	}
-#endif
 
 	//fwrite (net_message.data + net_message.readcount, 1, size, cls.download);
 	msg->readcount += size;
@@ -396,7 +388,6 @@ CL_ParseServerData
 */
 qboolean CL_ParseServerData (sizebuf_t *msg)
 {
-	extern cvar_t	*fs_gamedirvar;
 	char	*str;
 	int		i;
 	
@@ -414,21 +405,12 @@ qboolean CL_ParseServerData (sizebuf_t *msg)
 	cl.servercount = MSG_ReadLong (msg);
 	cl.attractloop = MSG_ReadByte (msg);
 
-	if (cl.attractloop)
-	{
-#ifndef R1Q2_PROTOCOL
-		if(i == ENHANCED_PROTOCOL_VERSION)
-			Com_Error (ERR_DROP, "This demo was recorded with R1Q2 protocol. Use R1Q2 to playback.\n");
-#endif
-		//cls.serverProtocol = ORIGINAL_PROTOCOL_VERSION;
+	if (cl.attractloop) {
+		//cls.serverProtocol = PROTOCOL_VERSION_DEFAULT;
 	}
-#ifdef R1Q2_PROTOCOL
-	else if (i != ORIGINAL_PROTOCOL_VERSION && i != ENHANCED_PROTOCOL_VERSION)
+	else if (i != PROTOCOL_VERSION_DEFAULT && i != PROTOCOL_VERSION_R1Q2) {
 		Com_Error (ERR_DROP, "Server is using unknown protocol %d.", i);
-#else
-	else if (i != ORIGINAL_PROTOCOL_VERSION)
-		Com_Error (ERR_DROP, "Server is using unknown protocol %d.", i);
-#endif
+	}
 
 	// game directory
 	str = MSG_ReadString (msg);
@@ -436,13 +418,10 @@ qboolean CL_ParseServerData (sizebuf_t *msg)
 	str = cl.gamedir;
 
 	// set gamedir
-	if (strcmp(fs_gamedirvar->string, str)) {
-		if (cl.attractloop) {
-			Cvar_Set("game", str);
-			FS_SetGamedir(str);
-		}
-		else {
-			Cvar_SetLatched("game", str);
+	if (!Com_ServerState()) {
+		Cvar_SetLatched("game", str);
+		if( FS_NeedRestart() ) {
+			CL_RestartFilesystem(true);
 		}
 	}
 
@@ -452,53 +431,52 @@ qboolean CL_ParseServerData (sizebuf_t *msg)
 	// get the full level name
 	str = MSG_ReadString (msg);
 
-	pm_enhanced = false;
-	pm_strafehack = false;
-#ifdef R1Q2_PROTOCOL
-	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
-	{
-		int		newVersion;
+	cl.pmp.strafeHack = false;
+	cl.pmp.speedMultiplier = 1;
+	cl.pmp.airaccelerate = 0;
+	cls.protocolVersion = 0;
 
-		cl.enhancedServer = MSG_ReadByte (msg);
-		newVersion = MSG_ReadShort (msg);
-		if (newVersion != CURRENT_ENHANCED_COMPATIBILITY_NUMBER &&
-			newVersion != 1902) //this version works also
+	if (cls.serverProtocol == PROTOCOL_VERSION_R1Q2)
+	{
+		i = MSG_ReadByte(msg);
+		if( i ) {
+			Com_Printf("'Enhanced' R1Q2 servers are not supported, falling back to protocol 34.\n" );
+			CL_Disconnect();		
+			cls.serverProtocol = PROTOCOL_VERSION_DEFAULT;
+			CL_Reconnect_f ();
+			return false;
+		}
+		i = MSG_ReadShort(msg);
+		if (i < PROTOCOL_VERSION_R1Q2_MINIMUM || i > PROTOCOL_VERSION_R1Q2_CURRENT)
 		{
 			if (cl.attractloop)
 			{
-				if (newVersion < CURRENT_ENHANCED_COMPATIBILITY_NUMBER)
-					Com_Printf ("This demo was recorded with an earlier version of the R1Q2 protocol. It may not play back properly.\n");
+				if ( i < PROTOCOL_VERSION_R1Q2_MINIMUM )
+					Com_Printf("This demo was recorded with an earlier version of the R1Q2 protocol. It may not play back properly.\n");
 				else
-					Com_Printf ("This demo was recorded with a later version of the R1Q2 protocol. It may not play back properly.\n");
+					Com_Printf("This demo was recorded with a later version of the R1Q2 protocol. It may not play back properly.\n");
 			}
 			else
 			{
-				Com_Printf ("Protocol 35 version mismatch (%d != %d), falling back to 34.\n", newVersion, CURRENT_ENHANCED_COMPATIBILITY_NUMBER);
-				CL_Disconnect();
-				cls.serverProtocol = ORIGINAL_PROTOCOL_VERSION;
-				CL_Reconnect_f ();
-				return false;
+				if( i < PROTOCOL_VERSION_R1Q2_MINIMUM ) {
+					Com_Printf("Server uses OLDER minor R1Q2 protocol version than minimum supported (%i < %i), falling back to protocol 34.\n", i, PROTOCOL_VERSION_R1Q2_MINIMUM);
+					CL_Disconnect();
+					cls.serverProtocol = PROTOCOL_VERSION_DEFAULT;
+					CL_Reconnect_f ();
+					return false;
+				}
+				Com_Printf("Server uses NEWER minor R1Q2 protocol version (%i > %i), some features will be unavailable.\n", i, PROTOCOL_VERSION_R1Q2_CURRENT);
 			}
 		}
 
-		if (newVersion >= 1903)
-		{
-			qboolean advancedDeltas = false;
-
-			advancedDeltas = MSG_ReadByte (msg);
-			pm_strafehack = MSG_ReadByte (msg);
-			if(advancedDeltas)
-			{
-				Com_Printf ("Server have advanced deltas enabled, those arent supported yet. Falling back to 34 protocol.\n");
-				CL_Disconnect();
-				cls.serverProtocol = ORIGINAL_PROTOCOL_VERSION;
-				CL_Reconnect_f ();
-				return false;
-			}
+		if (i >= 1903) {
+			MSG_ReadByte(msg);
+			cl.pmp.strafeHack = MSG_ReadByte(msg);
 		}
-		pm_enhanced = cl.enhancedServer;
+
+		cl.pmp.speedMultiplier = 2;
+		cls.protocolVersion = i;
 	}
-#endif
 
 
 	if (cl.playernum == -1)
@@ -513,6 +491,10 @@ qboolean CL_ParseServerData (sizebuf_t *msg)
 
 		// need to prep refresh at next oportunity
 		cl.refresh_prepped = false;
+
+        if((unsigned)cl.playernum >= MAX_CLIENTS) {
+            cl.playernum = ( MAX_CLIENTS - 1 );
+        }
 	}
 
 	return true;
@@ -528,17 +510,13 @@ void CL_ParseBaseline (sizebuf_t *msg)
 	entity_state_t	*es;
 	unsigned int	bits;
 	int				newnum;
-	entity_state_t	nullstate;
-
-	memset (&nullstate, 0, sizeof(nullstate));
 
 	newnum = CL_ParseEntityBits(msg, &bits);
 
 	es = &cl_entities[newnum].baseline;
-	CL_ParseDelta (msg, &nullstate, es, newnum, bits);
+	MSG_ParseDeltaEntity(msg, NULL, es, newnum, bits);
 }
 
-#ifdef R1Q2_PROTOCOL
 void CL_ParseZPacket (sizebuf_t *msg)
 {
 	byte buff_in[MAX_MSGLEN];
@@ -562,7 +540,6 @@ void CL_ParseZPacket (sizebuf_t *msg)
 
 	Com_DPrintf ("Got a ZPacket, %d->%d\n", uncompressed_len + 4, compressed_len);
 }
-#endif
 
 /*
 ================
@@ -586,25 +563,17 @@ void CL_LoadClientinfo (clientinfo_t *ci, char *s)
 	Q_strncpyz (ci->name, s, sizeof(ci->name));
 
 	t = strchr(s, '\\');
-	if (t)
-	{
-		if (t - s >= sizeof(ci->name)-1)
-		{
+	if (t) {
+		if (t - s >= sizeof(ci->name)-1) {
 			i = -1;
-		}
-		else
-		{
+		} else {
 			ci->name[t-s] = 0;
 			s = t+1;
 		}
 	}
-
 	t = s;
-	while (*t)
-	{
-		//if (!isprint (*t))
-		if (*t <= 32)
-		{
+	while (*t) {
+		if (*t <= 32) {
 			i = -1;
 			break;
 		}
@@ -631,18 +600,16 @@ void CL_LoadClientinfo (clientinfo_t *ci, char *s)
 		if (!t)
 			t = strchr(model_name, '\\');
 		
-		if (!t)
-		{
+		if (!t) {
 			memcpy (model_name, "male\0grunt\0\0\0\0\0\0", 16);
 			s = "male\\grunt\0";
 		}
-		else
-		{
+		else {
 			*t = 0;
 		}
 
 		// isolate the skin name
-		Q_strncpyz (skin_name, s + strlen(model_name) + 1, sizeof(skin_name));
+		Q_strncpyz(skin_name, s + strlen(model_name) + 1, sizeof(skin_name));
 
 		// model file
 		Com_sprintf (model_filename, sizeof(model_filename), "players/%s/tris.md2", model_name);
@@ -741,13 +708,12 @@ void CL_ParseConfigString (sizebuf_t *msg)
 	char	olds[MAX_QPATH];
 
 	i = MSG_ReadShort (msg);
-	if (i < 0 || i >= MAX_CONFIGSTRINGS)
+	if ((unsigned)i >= MAX_CONFIGSTRINGS)
 		Com_Error (ERR_DROP, "configstring > MAX_CONFIGSTRINGS");
-	s = MSG_ReadString(msg);
 
 	Q_strncpyz (olds, cl.configstrings[i], sizeof(olds));
 
-	//Q_strncpyz (cl.configstrings[i], s, sizeof(cl.configstrings[i]));
+	s = MSG_ReadString(msg);
 
 	length = strlen(s);
 
@@ -755,24 +721,24 @@ void CL_ParseConfigString (sizebuf_t *msg)
 	{
 		if (i >= CS_STATUSBAR && i < CS_AIRACCEL)
 		{
-			Q_strncpyz (cl.configstrings[i], s, (sizeof(cl.configstrings[i]) * (CS_AIRACCEL - i)));
+			Q_strncpyz(cl.configstrings[i], s, MAX_QPATH * (CS_AIRACCEL - i));
 		}
 		else
 		{
 			if (length >= MAX_QPATH)
 				Com_Printf ("WARNING: Configstring %d of length %d exceeds MAX_QPATH.\n", i, length);
-			Q_strncpyz (cl.configstrings[i], s, sizeof(cl.configstrings[i]));
+			Q_strncpyz(cl.configstrings[i], s, MAX_QPATH);
 		}
 	}
 	else
 	{
-		Q_strncpyz (cl.configstrings[i], s, (sizeof(cl.configstrings[i]) * (MAX_CONFIGSTRINGS - i)));
+		Q_strncpyz(cl.configstrings[i], s, MAX_QPATH * (MAX_CONFIGSTRINGS - i));
 	}
 
 	// do something apropriate
 	if(i == CS_AIRACCEL)
 	{
-		pm_airaccelerate = (float)atof(cl.configstrings[CS_AIRACCEL]);
+		cl.pmp.airaccelerate = atoi(cl.configstrings[CS_AIRACCEL]) ? true : false;
 	}
 	else if (i >= CS_LIGHTS && i < CS_LIGHTS+MAX_LIGHTSTYLES)
 	{
@@ -815,10 +781,8 @@ void CL_ParseConfigString (sizebuf_t *msg)
 	}
 	else if (i == CS_MAXCLIENTS)
 	{
-		if (!cl.attractloop) {
-			cl.maxclients = atoi(cl.configstrings[CS_MAXCLIENTS]);
-			clamp(cl.maxclients, 0, MAX_CLIENTS);
-		}
+		cl.maxclients = atoi(cl.configstrings[CS_MAXCLIENTS]);
+		clamp(cl.maxclients, 0, MAX_CLIENTS);
 	}
 	else if (i >= CS_PLAYERSKINS && i < CS_PLAYERSKINS+MAX_CLIENTS)
 	{
@@ -851,19 +815,22 @@ void CL_ParseStartSoundPacket(sizebuf_t *msg)
 
 	flags = MSG_ReadByte (msg);
 	sound_num = MSG_ReadByte (msg);
+	if( sound_num == -1 ) {
+		Com_Error( ERR_DROP, "CL_ParseStartSoundPacket: read past end of message" );
+	}
 
     if (flags & SND_VOLUME)
-		volume = MSG_ReadByte (msg) * ONEDIV255;
+		volume = MSG_ReadByte(msg) * ONEDIV255;
 	else
 		volume = DEFAULT_SOUND_PACKET_VOLUME;
 	
     if (flags & SND_ATTENUATION)
-		attenuation = MSG_ReadByte (msg) * ONEDIV64;
+		attenuation = MSG_ReadByte(msg) * ONEDIV64;
 	else
 		attenuation = DEFAULT_SOUND_PACKET_ATTENUATION;	
 
     if (flags & SND_OFFSET)
-		ofs = MSG_ReadByte (msg) / 1000.0f;
+		ofs = MSG_ReadByte(msg) / 1000.0f;
 	else
 		ofs = 0;
 
@@ -871,7 +838,7 @@ void CL_ParseStartSoundPacket(sizebuf_t *msg)
 	{	// entity reletive
 		channel = MSG_ReadShort(msg); 
 		ent = channel>>3;
-		if (ent < 0 || ent > MAX_EDICTS)
+		if ((unsigned)ent >= MAX_EDICTS)
 			Com_Error (ERR_DROP,"CL_ParseStartSoundPacket: ent = %i", ent);
 
 		channel &= 7;
@@ -912,89 +879,79 @@ static void CL_ParsePrint( char *s, int i )
 	int c, l = 0;
 
 	string = s;
-	while((c = *string++ & 127) > 31 && l < sizeof(text)-1) {
-		text[l++] = tolower(c);
+	while((c = *string++ & 127) && l < sizeof(text)-1) {
+		if(c > 31)
+			text[l++] = tolower(c);
 	}
 	text[l] = 0;
 
-	if (i == PRINT_CHAT)
+	if (i != PRINT_CHAT)
 	{
-		if(CL_ChatParse(s, &client, &skip, &mm2))
-		{
-			clamp(skip, 0, l);
+		CL_HighlightNames(s);
 
-			if(!strcmp(cl.clientinfo[client].name, name->string)) //Own chat text
-			{
-				if(cl_mychatcolor->integer && cl_textcolors->integer)
-					color = cl_mychatcolor->integer;
-			}
-			else
-			{
-				if(CL_IgnoreNick(cl.clientinfo[client].name)) //do not show ignored msg
-					return;
-				
-				if(CL_IgnoreText(text))
-					return;
+		Com_Printf("%s%s", CL_Timestamp(false), s);
 
-				if(cl_highlightmode->integer)
-					highlight = CL_Highlight(text, &color);
-				else
-					highlight = CL_Highlight(text+skip, &color);
-			}
-			if(!cl.attractloop)
-				CL_VersionReply(text+skip);
+		if(!cl.attractloop) {
+			if (i == PRINT_HIGH)
+				CL_ParseAutoScreenshot(text);		
+		
+			Cmd_ExecTrigger(text); //Triggers
 		}
-		else if (!cl.attractloop)
-		{
-			if(CL_IgnoreText(text))
-				return;
-			
-			highlight = CL_Highlight(text, &color);
-			CL_VersionReply(text);
-		}
-
-		if(highlight & 1)
-			S_StartLocalSound ("misc/talk1.wav");
-		else
-			S_StartLocalSound ("misc/talk.wav");
-
-		timestamp = CL_Timestamp(true);
-		if(color > -1) {
-			clamp (color, 0, 7);
-			SCR_AddToChatHUD(s, color, mm2); //Chathud
-			con.ormask = 0;
-			if(timestamp)
-				Com_Printf (S_ONE_COLOR "^%i%s %s", color, timestamp, s);
-			else
-				Com_Printf (S_ONE_COLOR "^%i%s", color, s);
-		}
-		else {
-			SCR_AddToChatHUD(s, 7, mm2); //Chathud
-			con.ormask = 128;
-			if(timestamp)
-				Com_Printf("%s %s", timestamp, s);
-			else
-				Com_Printf("%s", s);
-		}
-
-		con.ormask = 0;
 		return;
 	}
 
-	CL_HighlightNames(s);
+	if(CL_ChatParse(s, &client, &skip, &mm2))
+	{
+		clamp(skip, 0, l);
+		if(!strcmp(cl.clientinfo[client].name, info_name->string)) //Own chat text
+		{
+			if(cl_mychatcolor->integer && cl_textcolors->integer)
+				color = cl_mychatcolor->integer;
+		}
+		else
+		{
+			if(CL_IgnoreNick(cl.clientinfo[client].name)) //do not show ignored msg
+				return;
+			
+			if(CL_IgnoreText(text))
+				return;
 
-	timestamp = CL_Timestamp(false);
-	if(timestamp)
-		Com_Printf("%s %s", timestamp, s);
-	else
-		Com_Printf("%s", s);
-
-	if(!cl.attractloop) {
-		if (i == PRINT_HIGH)
-			CL_ParseAutoScreenshot(text);		
-	
-		Cmd_ExecTrigger(text); //Triggers
+			if(cl_highlightmode->integer)
+				highlight = CL_Highlight(text, &color);
+			else
+				highlight = CL_Highlight(text+skip, &color);
+		}
+		if(!cl.attractloop)
+			CL_VersionReply(text+skip);
 	}
+	else if (!cl.attractloop)
+	{
+		if(CL_IgnoreText(text))
+			return;
+		
+		highlight = CL_Highlight(text, &color);
+		CL_VersionReply(text);
+	}
+
+	if(highlight & 1)
+		S_StartLocalSound ("misc/talk1.wav");
+	else
+		S_StartLocalSound ("misc/talk.wav");
+
+	if (!cl_chat_notify->integer)
+		Con_SkipNotify( true );
+
+	timestamp = CL_Timestamp(true);
+	if(color > -1) {
+		clamp (color, 0, 7);
+		SCR_AddToChatHUD(s, color, mm2); //Chathud
+		Com_Printf (S_ONE_COLOR "^%i%s%s", color, timestamp, s);
+	} else {
+		SCR_AddToChatHUD(s, 7, mm2); //Chathud
+		Com_Printf("\1%s%s", timestamp, s);
+	}
+
+	Con_SkipNotify( false );
 }
 
 void CL_ParseCenterPrint(const char *s)
@@ -1006,8 +963,9 @@ void CL_ParseCenterPrint(const char *s)
 	SCR_CenterPrint (s);
 
 	string = s;
-	while((c = *string++ & 127) > 31 && l < sizeof(text)-1) {
-		text[l++] = c;
+	while((c = *string++ & 127) && l < sizeof(text)-1) {
+		if(c > 31)
+			text[l++] = c;
 	}
 	text[l] = 0;
 
@@ -1018,18 +976,27 @@ void CL_ParseCenterPrint(const char *s)
 		Cmd_ExecTrigger(text); //Triggers
 }
 
+static void CL_ParseSetting (void)
+{
+	uint32	setting, value;
+
+	setting = MSG_ReadLong (&net_message);
+	value = MSG_ReadLong (&net_message);
+
+	if (setting >= SVSET_MAX)
+		return;
+
+	cl.settings[setting] = value;
+}
+
 /*
 =====================
 CL_ParseServerMessage
 =====================
 */
-#ifdef R1Q2_PROTOCOL
 #define WRITEDEMOMSG \
-	if(cls.demorecording && cls.serverProtocol != ORIGINAL_PROTOCOL_VERSION) \
+	if(cls.demorecording && cls.serverProtocol > PROTOCOL_VERSION_DEFAULT) \
 		CL_WriteDemoMessage (msg->data + oldReadCount, msg->readcount - oldReadCount, false);
-#else
-#define WRITEDEMOMSG
-#endif
 
 void CL_ParseServerMessage (sizebuf_t *msg)
 {
@@ -1060,8 +1027,7 @@ void CL_ParseServerMessage (sizebuf_t *msg)
 //
 	while (1)
 	{
-		if (msg->readcount > msg->cursize)
-		{
+		if (msg->readcount > msg->cursize) {
 			Com_Error (ERR_DROP,"CL_ParseServerMessage: Bad server message (%d>%d)", msg->readcount, msg->cursize);
 			break;
 		}
@@ -1069,20 +1035,16 @@ void CL_ParseServerMessage (sizebuf_t *msg)
 		oldReadCount = msg->readcount;
 
 		cmd = MSG_ReadByte(msg);
-		if (cmd == -1)
-		{
+		if (cmd == -1) {
 			SHOWNET(msg, "END OF MESSAGE");
 			break;
 		}
 
-#ifdef R1Q2_PROTOCOL
 		//r1: more hacky bit stealing in the name of bandwidth
-		extrabits = cmd & 0xE0;
-		cmd &= 0x1F;
-#endif
+		extrabits = cmd >> SVCMD_BITS;
+		cmd &= SVCMD_MASK;
 
-		if (cl_shownet->integer >= 2)
-		{
+		if (cl_shownet->integer > 1) {
 			if (!svc_strings[cmd])
 				Com_Printf ("%3i:BAD CMD %i\n", msg->readcount-1, cmd);
 			else
@@ -1132,9 +1094,17 @@ void CL_ParseServerMessage (sizebuf_t *msg)
 			
 		case svc_stufftext:
 			s = MSG_ReadString (msg);
-			Com_DPrintf ("stufftext: %s\n", s);
-			Cbuf_AddText(s);
-			WRITEDEMOMSG
+			if (Q_stristr( s, "loc_save" ) || Q_stristr( s, "cfg_save" ) ) {
+				Com_DPrintf( "ignored stufftext: %s\n", s );
+			} else if (cl.attractloop && 
+				Q_stricmp( s, "precache\n" ) && Q_stricmp( s, "changing\n" ) &&
+				Q_stricmp( s, "reconnect\n" ) && Q_strnicmp( s, "play ", 5 ) ) {
+				Com_DPrintf ("WARNING: Demo tried to execute command '%s', ignored.\n", s);
+			} else {
+				Com_DPrintf ("stufftext: %s\n", s);
+				Cbuf_AddText(s);
+				WRITEDEMOMSG
+			}
 			break;
 			
 		case svc_serverdata:
@@ -1170,25 +1140,22 @@ void CL_ParseServerMessage (sizebuf_t *msg)
 			Q_strncpyz (cl.layout, s, sizeof(cl.layout));
 			break;
 
-#ifdef R1Q2_PROTOCOL
 		// ************** r1q2 specific BEGIN ****************
 		case svc_zpacket:
-			if(cls.serverProtocol == 134)
-				Com_Error(ERR_FATAL, "Q2PRO svc_unicast?");
-			else if(cls.serverProtocol == 135)
-				Com_Error(ERR_FATAL, "Q2PRO cvs_unicast 2?");
 			CL_ParseZPacket(msg);
 			break;
 
 		case svc_zdownload:
-			if(cls.serverProtocol == 134)
-				Com_Error(ERR_FATAL, "Q2PRO svc_multicast?");
-			else if(cls.serverProtocol == 135)
-				Com_Error(ERR_FATAL, "Q2PRO svc_multicast 2?");
 			CL_ParseDownload(msg, true);
 			break;
+
+		case svc_playerupdate:
+			break;
+
+		case svc_setting:
+			CL_ParseSetting ();
+			break;
 		// ************** r1q2 specific END ******************
-#endif
 
 		case svc_playerinfo:
 		case svc_packetentities:
@@ -1229,11 +1196,9 @@ void CL_ParseServerMessage (sizebuf_t *msg)
 		}
 	}
 
-#ifdef R1Q2_PROTOCOL
 	//flush this frame
-	if(cls.demorecording && cls.serverProtocol != ORIGINAL_PROTOCOL_VERSION)
+	if(cls.demorecording && cls.serverProtocol > PROTOCOL_VERSION_DEFAULT)
 		CL_WriteDemoMessage (NULL, 0, true);
-#endif
 }
 
 //  reply to !version
@@ -1244,7 +1209,7 @@ void CL_VersionReply (const char *s)
 	
 	if (cls.lastSpamTime == 0 || cls.realtime > cls.lastSpamTime + 150000)
 	{
-		cls.spamTime = cls.realtime + (int)(random() * 1500);
+		cls.spamTime = cls.realtime + (unsigned int)(random() * 1500);
 	}
 }
 
@@ -1384,7 +1349,7 @@ static void CL_Highlight_f( void )
 		}
 	}
 
-	entry = Z_TagMalloc(sizeof(highlight_t) + tLen+1, TAGMALLOC_CLIENT_IGNORE);
+	entry = Z_TagMalloc(sizeof(highlight_t) + tLen+1, TAG_CL_IGNORE);
 	entry->text = (char *)((byte *)entry + sizeof(highlight_t));
 	strcpy(entry->text, s);
 	entry->color = color;
@@ -1482,10 +1447,11 @@ char *CL_Timestamp( qboolean chat )
     time_t clock;
 
 	if(!cl_timestamps->integer || (!chat && cl_timestamps->integer < 2))
-		return NULL;
+		return "";
 
 	time( &clock );
 	strftime( timebuf, sizeof(timebuf), cl_timestampsformat->string, localtime( &clock ) );
+	Q_strncatz(timebuf, " ", sizeof(timebuf));
 	return timebuf;
 }
 
@@ -1514,7 +1480,7 @@ void CL_AddIgnore(ignore_t **ignoreList, const char *text)
 {
 	ignore_t *entry;
 
-	entry = Z_TagMalloc(sizeof(ignore_t) + strlen(text)+1, TAGMALLOC_CLIENT_IGNORE);
+	entry = Z_TagMalloc(sizeof(ignore_t) + strlen(text)+1, TAG_CL_IGNORE);
 	entry->text = (char *)((byte *)entry + sizeof(ignore_t));
 	strcpy(entry->text, text);
 	entry->next = *ignoreList;
@@ -1701,7 +1667,7 @@ static void CL_IgnoreNick_f(void)
 		Com_Printf("--  ---------------  -------\n");
 		for (i=0;i<cl.maxclients;i++) 
 		{ 
-			if (cl.clientinfo[i].name[0] && strcmp(cl.clientinfo[i].name, name->string)) 
+			if (cl.clientinfo[i].name[0] && strcmp(cl.clientinfo[i].name, info_name->string)) 
 			{ 
 				Com_Printf("%2i  %-15s", i, cl.clientinfo[i].name);
 
@@ -1715,27 +1681,23 @@ static void CL_IgnoreNick_f(void)
 	}
 
 	num = atoi(Cmd_Argv(1));
-	if(num < 0 || num >= cl.maxclients)
-	{
+	if((unsigned)num >= cl.maxclients) {
 		Com_Printf("Bad player id\n");
 		return;
 	}
 
 	nick = cl.clientinfo[num].name;
-	if (!*nick) 
-	{ 
+	if (!*nick) { 
 		Com_Printf("Cant find player with id '%i'\n", num);
 		return;
 	}
 
-	if(!strcmp(nick, name->string))
-	{
+	if(!strcmp(nick, info_name->string)) {
 		Com_Printf("You cant ignore yourself!\n");
 		return;
 	}
 
-	if(CL_IgnoreNick(nick))
-	{
+	if(CL_IgnoreNick(nick)) {
 		Com_Printf("Player [%s] is already ignored.\n", nick);
 		return;
 	}
@@ -1746,14 +1708,12 @@ static void CL_IgnoreNick_f(void)
 
 static void CL_UnignoreNick_f(void)
 {
-	if(!cl_nickIgnores)
-	{
+	if(!cl_nickIgnores) {
 		Com_Printf("Ignorelist is empty.\n");
 		return;
 	}
 
-	if (Cmd_Argc() != 2)
-	{
+	if (Cmd_Argc() != 2) {
 		Com_Printf("Usage: %s <id/all>\n", Cmd_Argv(0));
 		Com_Printf("Current ignores:\n");
 		Com_Printf("id  Name\n");
@@ -1762,8 +1722,7 @@ static void CL_UnignoreNick_f(void)
 		return; 
 	}
 
-	if(!Q_stricmp(Cmd_Argv(1), "all"))
-	{
+	if(!Q_stricmp(Cmd_Argv(1), "all")) {
 		CL_RemoveIgnoreAll(&cl_nickIgnores);
 		return;
 	}
@@ -1775,8 +1734,7 @@ qboolean CL_IgnoreNick(const char *s)
 {
 	ignore_t *list;
 
-	for (list = cl_nickIgnores; list; list = list->next) 
-	{ 
+	for (list = cl_nickIgnores; list; list = list->next) { 
 		if(!strcmp(s, list->text))
 			return true;
 	}
@@ -1809,16 +1767,18 @@ static void OnChange_Color (cvar_t *self, const char *oldValue)
 
 void CL_InitParse( void )
 {
-	cl_timestamps		= Cvar_Get("cl_timestamps","0", CVAR_ARCHIVE);
-	cl_timestampsformat = Cvar_Get("cl_timestampsformat", "[%H:%M:%S]", 0);
+	cl_timestamps		= Cvar_Get( "cl_timestamps","0", CVAR_ARCHIVE );
+	cl_timestampsformat = Cvar_Get( "cl_timestampsformat", "[%H:%M:%S]", 0 );
 
-	cl_highlight	  = Cvar_Get ("cl_highlight",  "0", CVAR_ARCHIVE);
-	cl_highlightmode  = Cvar_Get ("cl_highlightmode", "0", CVAR_ARCHIVE);
-	cl_highlightcolor = Cvar_Get ("cl_highlightcolor", "0", CVAR_ARCHIVE);
-	cl_highlightnames = Cvar_Get ("cl_highlightnames",  "0", CVAR_ARCHIVE);
+	cl_ignoremode		= Cvar_Get( "cl_ignoremode", "1", 0 );
+	cl_highlight		= Cvar_Get( "cl_highlight",  "0", CVAR_ARCHIVE );
+	cl_highlightmode	= Cvar_Get( "cl_highlightmode", "0", CVAR_ARCHIVE );
+	cl_highlightcolor	= Cvar_Get( "cl_highlightcolor", "0", CVAR_ARCHIVE );
+	cl_highlightnames	= Cvar_Get( "cl_highlightnames",  "0", CVAR_ARCHIVE );
 
-	cl_textcolors  = Cvar_Get ("cl_textcolors", "0", CVAR_ARCHIVE);
-	cl_mychatcolor = Cvar_Get ("cl_mychatcolor", "0", CVAR_ARCHIVE);
+	cl_textcolors		= Cvar_Get( "cl_textcolors", "0", CVAR_ARCHIVE );
+	cl_mychatcolor		= Cvar_Get( "cl_mychatcolor", "0", CVAR_ARCHIVE );
+	cl_chat_notify		= Cvar_Get( "cl_chat_notify", "1", 0 );
 
 	cl_highlightcolor->OnChange = OnChange_Color;
 	cl_mychatcolor->OnChange = OnChange_Color;
@@ -1826,16 +1786,15 @@ void CL_InitParse( void )
 	OnChange_Color(cl_mychatcolor, cl_mychatcolor->resetString);
 
 	//hacky shit from q2ace
-	cl_autoscreenshot = Cvar_Get ("cl_autoscreenshot", "0", 0);
-	cl_customlimitmsg = Cvar_Get ("cl_customlimitmsg", "timelimit hit", 0);
+	cl_autoscreenshot = Cvar_Get( "cl_autoscreenshot", "0", 0 );
+	cl_customlimitmsg = Cvar_Get( "cl_customlimitmsg", "timelimit hit", 0 );
 
-	Cmd_AddCommand ("highlight", CL_Highlight_f);
-	Cmd_AddCommand ("unhighlight", CL_UnHighlight_f);
+	Cmd_AddCommand( "highlight", CL_Highlight_f );
+	Cmd_AddCommand( "unhighlight", CL_UnHighlight_f );
 
-	cl_ignoremode = Cvar_Get("cl_ignoremode", "1", 0);
-	Cmd_AddCommand ("ignoretext", CL_IgnoreText_f);
-	Cmd_AddCommand ("unignoretext", CL_UnIgnoreText_f);
+	Cmd_AddCommand( "ignoretext", CL_IgnoreText_f );
+	Cmd_AddCommand( "unignoretext", CL_UnIgnoreText_f );
 
-	Cmd_AddCommand ("ignorenick", CL_IgnoreNick_f);
-	Cmd_AddCommand ("unignorenick", CL_UnignoreNick_f);
+	Cmd_AddCommand( "ignorenick", CL_IgnoreNick_f );
+	Cmd_AddCommand( "unignorenick", CL_UnignoreNick_f );
 }

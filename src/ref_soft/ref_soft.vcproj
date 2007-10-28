@@ -77,7 +77,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="winmm.lib wsock32.lib zlib.lib curllib.lib"
+				AdditionalDependencies="winmm.lib wsock32.lib zlib.lib curllib.lib version.lib"
 				OutputFile="d:\games\quake2\aq2swde.exe"
 				LinkIncremental="2"
 				SuppressStartupBanner="true"
@@ -160,6 +160,7 @@
 				StringPooling="true"
 				ExceptionHandling="0"
 				RuntimeLibrary="0"
+				BufferSecurityCheck="false"
 				FloatingPointModel="2"
 				RuntimeTypeInfo="false"
 				UsePrecompiledHeader="0"
@@ -184,7 +185,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
-				AdditionalDependencies="winmm.lib wsock32.lib zlib.lib curllib.lib"
+				AdditionalDependencies="winmm.lib wsock32.lib zlib.lib curllib.lib version.lib"
 				OutputFile="d:\games\quake2\aq2sw.exe"
 				LinkIncremental="1"
 				SuppressStartupBanner="false"
@@ -233,10 +234,6 @@
 			>
 			<File
 				RelativePath="adivtab.h"
-				>
-			</File>
-			<File
-				RelativePath="anorms.h"
 				>
 			</File>
 			<File
@@ -682,10 +679,6 @@
 				>
 			</File>
 			<File
-				RelativePath="..\win32\net_wins.c"
-				>
-			</File>
-			<File
 				RelativePath="..\win32\q2.ico"
 				>
 			</File>
@@ -782,11 +775,19 @@
 				>
 			</File>
 			<File
+				RelativePath="..\qcommon\net.c"
+				>
+			</File>
+			<File
 				RelativePath="..\qcommon\net_chan.c"
 				>
 			</File>
 			<File
 				RelativePath="..\qcommon\pmove.c"
+				>
+			</File>
+			<File
+				RelativePath="..\qcommon\q_msg.c"
 				>
 			</File>
 			<File
@@ -959,6 +960,26 @@
 			</File>
 			<File
 				RelativePath="..\ui\ui_video.c"
+				>
+			</File>
+		</Filter>
+		<Filter
+			Name="include"
+			>
+			<File
+				RelativePath="..\include\minizip\ioapi.c"
+				>
+			</File>
+			<File
+				RelativePath="..\include\minizip\ioapi.h"
+				>
+			</File>
+			<File
+				RelativePath="..\include\minizip\unzip.c"
+				>
+			</File>
+			<File
+				RelativePath="..\include\minizip\unzip.h"
 				>
 			</File>
 		</Filter>

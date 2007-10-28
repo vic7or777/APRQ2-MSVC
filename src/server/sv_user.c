@@ -42,7 +42,7 @@ void SV_BeginDemoserver (void)
 	char		name[MAX_OSPATH];
 
 	Com_sprintf (name, sizeof(name), "demos/%s", sv.name);
-	FS_FOpenFile (name, &sv.demofile);
+	FS_FOpenFile (name, &sv.demofile, FS_MODE_READ );
 	if (!sv.demofile)
 		Com_Error (ERR_DROP, "Couldn't open %s\n", name);
 }
@@ -82,7 +82,7 @@ void SV_New_f (void)
 
 	// send the serverdata
 	MSG_WriteByte (&sv_client->netchan.message, svc_serverdata);
-	MSG_WriteLong (&sv_client->netchan.message, PROTOCOL_VERSION);
+	MSG_WriteLong (&sv_client->netchan.message, PROTOCOL_VERSION_DEFAULT);
 	MSG_WriteLong (&sv_client->netchan.message, svs.spawncount);
 	MSG_WriteByte (&sv_client->netchan.message, sv.attractloop);
 	MSG_WriteString (&sv_client->netchan.message, gamedir);
@@ -119,7 +119,7 @@ SV_Configstrings_f
 */
 void SV_Configstrings_f (void)
 {
-	int			start;
+	int			start, len;
 
 	Com_DPrintf ("Configstrings() from %s\n", sv_client->name);
 
@@ -141,14 +141,18 @@ void SV_Configstrings_f (void)
 
 	// write a packet full of data
 
-	while ( sv_client->netchan.message.cursize < MAX_MSGLEN/2 
-		&& start < MAX_CONFIGSTRINGS)
+	while ( sv_client->netchan.message.cursize < 700 && start < MAX_CONFIGSTRINGS)
 	{
 		if (sv.configstrings[start][0])
 		{
+			len = strlen(sv.configstrings[start]);
+			len = len > MAX_QPATH ? MAX_QPATH : len;
+
 			MSG_WriteByte (&sv_client->netchan.message, svc_configstring);
 			MSG_WriteShort (&sv_client->netchan.message, start);
-			MSG_WriteString (&sv_client->netchan.message, sv.configstrings[start]);
+
+			SZ_Write (&sv_client->netchan.message, sv.configstrings[start], len);
+			SZ_Write (&sv_client->netchan.message, "\0", 1);
 		}
 		start++;
 	}
@@ -175,7 +179,6 @@ SV_Baselines_f
 void SV_Baselines_f (void)
 {
 	int		start;
-	entity_state_t	nullstate;
 	entity_state_t	*base;
 
 	Com_DPrintf ("Baselines() from %s\n", sv_client->name);
@@ -196,18 +199,15 @@ void SV_Baselines_f (void)
 	
 	start = atoi(Cmd_Argv(2));
 
-	memset (&nullstate, 0, sizeof(nullstate));
-
 	// write a packet full of data
 
-	while ( sv_client->netchan.message.cursize <  MAX_MSGLEN/2
-		&& start < MAX_EDICTS)
+	while ( sv_client->netchan.message.cursize < 700 && start < MAX_EDICTS)
 	{
 		base = &sv.baselines[start];
 		if (base->modelindex || base->sound || base->effects)
 		{
 			MSG_WriteByte (&sv_client->netchan.message, svc_spawnbaseline);
-			MSG_WriteDeltaEntity (&nullstate, base, &sv_client->netchan.message, true, true);
+			MSG_WriteDeltaEntity (NULL, base, &sv_client->netchan.message, true, true);
 		}
 		start++;
 	}
@@ -303,7 +303,7 @@ void SV_BeginDownload_f(void)
 	extern	cvar_t *allow_download_models;
 	extern	cvar_t *allow_download_sounds;
 	extern	cvar_t *allow_download_maps;
-	extern	int		file_from_pak; // ZOID did file come from pak?
+	extern	qboolean fs_fileFromPak; // ZOID did file come from pak?
 	int offset = 0;
 
 	name = Cmd_Argv(1);
@@ -348,7 +348,7 @@ void SV_BeginDownload_f(void)
 	if (!sv_client->download
 		// special check for maps, if it came from a pak file, don't allow
 		// download  ZOID
-		|| (strncmp(name, "maps/", 5) == 0 && file_from_pak))
+		|| (strncmp(name, "maps/", 5) == 0 && fs_fileFromPak))
 	{
 		Com_DPrintf ("Couldn't download %s to %s\n", name, sv_client->name);
 		if (sv_client->download) {
@@ -530,8 +530,6 @@ void SV_ExecuteClientMessage (client_t *cl)
 {
 	int		c;
 	char	*s;
-
-	usercmd_t	nullcmd;
 	usercmd_t	oldest, oldcmd, newcmd;
 	int		net_drop;
 	int		stringCmdCount;
@@ -591,8 +589,7 @@ void SV_ExecuteClientMessage (client_t *cl)
 				}
 			}
 
-			memset (&nullcmd, 0, sizeof(nullcmd));
-			MSG_ReadDeltaUsercmd (&net_message, &nullcmd, &oldest);
+			MSG_ReadDeltaUsercmd (&net_message, NULL, &oldest);
 			MSG_ReadDeltaUsercmd (&net_message, &oldest, &oldcmd);
 			MSG_ReadDeltaUsercmd (&net_message, &oldcmd, &newcmd);
 

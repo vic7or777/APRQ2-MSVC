@@ -661,7 +661,7 @@ char *Sys_GetClipboardData()
 					   &type, &format, &len,
 					   &tmp, &data);
 			if (result == Success) {
-				ret = CopyString(data, TAGMALLOC_CLIPBOARD);
+				ret = CopyString(data, TAG_CLIPBOARD);
 			}
 			XFree(data);
 		}

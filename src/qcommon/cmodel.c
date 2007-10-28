@@ -540,12 +540,10 @@ Loads in the map and all submodels
 cmodel_t *CM_LoadMap (const char *name, qboolean clientload, uint32 *checksum)
 {
 	unsigned		*buf;
-#ifndef ENDIAN_LITTLE
-	int				i;
-#endif
-	dheader_t		header;
-	int				length;
+	int				i, length;
+	dheader_t		header;	
 	static uint32 last_checksum;
+	lump_t			*lump;
 
 	map_noareas = Cvar_Get ("map_noareas", "0", 0);
 
@@ -595,18 +593,29 @@ cmodel_t *CM_LoadMap (const char *name, qboolean clientload, uint32 *checksum)
 	*checksum = last_checksum;
 
 	header = *(dheader_t *)buf;
-#ifndef ENDIAN_LITTLE
-	for (i=0 ; i<sizeof(dheader_t)/4 ; i++)
-		((int *)&header)[i] = LittleLong ( ((int *)&header)[i]);
-#endif
-
+	header.ident = LittleLong( header.ident );
+	header.version = LittleLong( header.version );
 	if (header.version != BSPVERSION)
 	{
 		FS_FreeFile (buf);
-		Com_Error (ERR_DROP, "CMod_LoadBrushModel: %s has wrong version number (%i should be %i)"
+		Com_Error (ERR_DROP, "CM_LoadMap: %s has wrong version number (%i should be %i)"
 		, name, header.version, BSPVERSION);
 	}
 
+	// byte swap and validate lumps
+	for (lump = header.lumps, i = 0; i < HEADER_LUMPS; i++, lump++)
+	{
+		lump->fileofs = LittleLong( lump->fileofs );
+		lump->filelen = LittleLong( lump->filelen );
+		//for some reason there are unused lumps with invalid values
+		if (i == LUMP_POP)
+			continue;
+
+		if (lump->fileofs < 0 || lump->filelen < 0 || lump->fileofs + lump->filelen > length) {
+			FS_FreeFile (buf);
+			Com_Error (ERR_DROP, "CM_LoadMap: lump %d offset %d of size %d is out of bounds\n%s is probably truncated or otherwise corrupted", i, lump->fileofs, lump->filelen, name);
+		}
+	}
 	cmod_base = (byte *)buf;
 
 	// load into heap
@@ -1646,8 +1655,8 @@ static void	FloodAreaConnections (void)
 
 void CM_SetAreaPortalState (int portalnum, qboolean open)
 {
-	if (portalnum >= numareaportals)
-		Com_Error (ERR_DROP, "CM_SetAreaPortalState: areaportal >= numareaportals");
+	if (portalnum > numareaportals)
+		Com_Error (ERR_DROP, "CM_SetAreaPortalState: areaportal > numareaportals");
 
 	if (portalnum < 0)
 		Com_Error (ERR_DROP, "CM_SetAreaPortalState: areaportal < 0");
@@ -1661,8 +1670,8 @@ qboolean CM_AreasConnected (int area1, int area2)
 	if (map_noareas->integer)
 		return true;
 
-	if (area1 >= numareas || area2 >= numareas)
-		Com_Error (ERR_DROP, "CM_AreasConnected: area >= numareas");
+	if (area1 > numareas || area2 > numareas)
+		Com_Error (ERR_DROP, "CM_AreasConnected: area > numareas");
 
 	if (area1 < 0 || area2 < 0)
 		Com_Error (ERR_DROP, "CM_AreasConnected: area < 0");
@@ -1685,13 +1694,11 @@ This is used by the client refreshes to cull visibility
 */
 int CM_WriteAreaBits (byte *buffer, int area)
 {
-	int		i;
-	int		floodnum;
-	int		bytes;
+	int	i, floodnum, bytes;
 
 	bytes = (numareas+7)>>3;
 
-	if (map_noareas->integer)
+	if (map_noareas->integer || !area)
 	{	// for debugging, send everything
 		memset (buffer, 255, bytes);
 	}
@@ -1702,7 +1709,7 @@ int CM_WriteAreaBits (byte *buffer, int area)
 		floodnum = map_areas[area].floodnum;
 		for (i=0 ; i<numareas ; i++)
 		{
-			if (map_areas[i].floodnum == floodnum || !area)
+			if (map_areas[i].floodnum == floodnum)
 				buffer[i>>3] |= 1<<(i&7);
 		}
 	}
@@ -1718,9 +1725,9 @@ CM_WritePortalState
 Writes the portal state to a savegame file
 ===================
 */
-void	CM_WritePortalState (FILE *f)
+void CM_WritePortalState (fileHandle_t f)
 {
-	fwrite (portalopen, sizeof(portalopen), 1, f);
+	FS_Write( portalopen, sizeof(portalopen), f );
 }
 
 /*
@@ -1731,9 +1738,9 @@ Reads the portal state from a savegame file
 and recalculates the area connections
 ===================
 */
-void	CM_ReadPortalState (FILE *f)
+void CM_ReadPortalState (fileHandle_t f)
 {
-	FS_Read (portalopen, sizeof(portalopen), f);
+	FS_Read( portalopen, sizeof(portalopen), f );
 	FloodAreaConnections ();
 }
 

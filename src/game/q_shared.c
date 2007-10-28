@@ -48,10 +48,10 @@ int DirToByte( const vec3_t dir )
 
 void ByteToDir (int b, vec3_t dir)
 {
-	if (b < 0 || b >= NUMVERTEXNORMALS)
+	if ((unsigned)b >= NUMVERTEXNORMALS)
 		VectorClear(dir);
 	else
-		VectorCopy (bytedirs[b], dir);
+		VectorCopy(bytedirs[b], dir);
 }
 
 //============================================================================
@@ -157,10 +157,44 @@ void AngleVectors (const vec3_t angles, vec3_t forward, vec3_t right, vec3_t up)
 	}
 }
 
-#ifndef AnglesToAxis
+void VecToAngles (const vec3_t vec, vec3_t angles)
+{
+	float	forward, yaw, pitch;
+	
+	if (vec[1] == 0 && vec[0] == 0)
+	{
+		yaw = 0;
+		if (vec[2] > 0)
+			pitch = 90;
+		else
+			pitch = 270;
+	}
+	else
+	{
+		if (vec[0]) {
+			yaw = RAD2DEG( (float)atan2(vec[1], vec[0]) );
+			if (yaw < 0)
+				yaw += 360;
+		} else if (vec[1] > 0) {
+			yaw = 90;
+		} else {
+			yaw = 270;
+		}
+
+		forward = (float)sqrt(vec[0]*vec[0] + vec[1]*vec[1]);
+		pitch = RAD2DEG((float)atan2(vec[2], forward));
+		if (pitch < 0)
+			pitch += 360;
+	}
+
+	angles[PITCH] = -pitch;
+	angles[YAW] = yaw;
+	angles[ROLL] = 0;
+}
+
 void AnglesToAxis (const vec3_t angles, vec3_t axis[3])
 {
-	float	sp, sy, sr, cp, cy, cr;
+	float	sp, sy, sr, cp, cy, cr, t;
 
 	Q_sincos(DEG2RAD(angles[YAW]), &sy, &cy);
 	Q_sincos(DEG2RAD(angles[PITCH]), &sp, &cp);
@@ -169,26 +203,27 @@ void AnglesToAxis (const vec3_t angles, vec3_t axis[3])
 	axis[0][0] = cp*cy;
 	axis[0][1] = cp*sy;
 	axis[0][2] = -sp;
-	axis[1][0] = sr*sp*cy+cr*-sy;
-	axis[1][1] = sr*sp*sy+cr*cy;
+	t = sr*sp;
+	axis[1][0] = t*cy+cr*-sy;
+	axis[1][1] = t*sy+cr*cy;
 	axis[1][2] = sr*cp;
-	axis[2][0] = cr*sp*cy+sr*sy;
-	axis[2][1] = cr*sp*sy-sr*cy;
+	t = cr*sp;
+	axis[2][0] = t*cy+sr*sy;
+	axis[2][1] = t*sy-sr*cy;
 	axis[2][2] = cr*cp;
 }
-#endif
 
 void ProjectPointOnPlane( vec3_t dst, const vec3_t p, const vec3_t normal )
 {
-	float d, inv_denom;
+	float d;
 
-	inv_denom = 1.0f / DotProduct( normal, normal );
+	d = 1.0f / DotProduct( normal, normal );
 
-	d = DotProduct( normal, p ) * inv_denom;
+	d = DotProduct( normal, p ) * d * d;
 
-	dst[0] = p[0] - d * normal[0] * inv_denom;
-	dst[1] = p[1] - d * normal[1] * inv_denom;
-	dst[2] = p[2] - d * normal[2] * inv_denom;
+	dst[0] = p[0] - d * normal[0];
+	dst[1] = p[1] - d * normal[1];
+	dst[2] = p[2] - d * normal[2];
 }
 
 /*
@@ -207,8 +242,6 @@ void PerpendicularVector( vec3_t dst, const vec3_t src )
 		VectorNormalize(dst);
 	}
 }
-
-
 
 /*
 ================
@@ -282,7 +315,7 @@ float Q_RSqrt (float number)
 	if (number == 0.0f)
 		return 0.0f;
 	*((int *)&y) = 0x5f3759df - ((* (int *) &number) >> 1);
-	return y * (1.5f - (number * 0.5f * y * y));
+	return y * (1.5f - number * 0.5f * y * y);
 }
 
 /*
@@ -299,6 +332,21 @@ float LerpAngle (float a2, float a1, float frac)
 		a1 += 360;
 
 	return a2 + frac * (a1 - a2);
+}
+
+/*
+====================
+CalcFov
+====================
+*/
+float CalcFov (float fov_x, float width, float height)
+{
+	if (fov_x < 1 || fov_x > 179)
+		Com_Error (ERR_DROP, "Bad fov: %f", fov_x);
+
+	width = width/(float)tan(fov_x/360*M_PI);
+
+	return (float)atan2(height, width)*360/M_PI;
 }
 
 /*
@@ -582,7 +630,6 @@ Lerror:
 PlaneTypeForNormal
 =================
 */
-
 int	PlaneTypeForNormal (const vec3_t normal)
 {
 	vec_t	ax, ay, az;
@@ -624,6 +671,23 @@ void AddPointToBounds (const vec3_t v, vec3_t mins, vec3_t maxs)
 		maxs[2] = v[2];
 }
 
+float RadiusFromBounds (const vec3_t mins, const vec3_t maxs)
+{
+	vec3_t	corner;
+	float	val1, val2;
+
+	val1 = (float)fabs(mins[0]);
+	val2 = (float)fabs(maxs[0]);
+	corner[0] = (val1 > val2) ? val1 : val2;
+	val1 = (float)fabs(mins[1]);
+	val2 = (float)fabs(maxs[1]);
+	corner[1] = (val1 > val2) ? val1 : val2;
+	val1 = (float)fabs(mins[2]);
+	val2 = (float)fabs(maxs[2]);
+	corner[2] = (val1 > val2) ? val1 : val2;
+
+	return (float)VectorLength(corner);
+}
 
 vec_t VectorNormalize (vec3_t v)
 {
@@ -631,14 +695,13 @@ vec_t VectorNormalize (vec3_t v)
 
 	length = (float)sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]); // FIXME
 
-	if (length)
-	{
-		ilength = 1/length;
+	if (length) {
+		ilength = 1.0f/length;
 		v[0] *= ilength;
 		v[1] *= ilength;
 		v[2] *= ilength;
 	}
-		
+
 	return length;
 }
 
@@ -648,25 +711,21 @@ vec_t VectorNormalize2 (const vec3_t v, vec3_t out)
 
 	length = (float)sqrt(v[0]*v[0] + v[1]*v[1] + v[2]*v[2]); // FIXME
 
-	if (length)
-	{
-		ilength = 1/length;
+	if (length) {
+		ilength = 1.0f/length;
 		out[0] = v[0]*ilength;
 		out[1] = v[1]*ilength;
 		out[2] = v[2]*ilength;
-	}
-	else
-	{
-		VectorClear (out);
+	} else {
+		VectorClear(out);
 	}
 
 	return length;
 }
 
-
 void VectorNormalizeFast (vec3_t v)
 {
-	float ilength = Q_RSqrt (DotProduct(v,v));
+	float ilength = Q_RSqrt( DotProduct(v,v) );
 
 	v[0] *= ilength;
 	v[1] *= ilength;
@@ -680,8 +739,6 @@ int Q_log2(int val)
 		answer++;
 	return answer;
 }
-
-
 
 //====================================================================================
 /*
@@ -745,7 +802,6 @@ void COM_FixPath (char *path)
 
 	if (len && path[len-1] == '/')
 		path[len-1] = '\0';
-
 }
 
 /*
@@ -784,6 +840,29 @@ void COM_StripExtension (const char *in, char *out)
 	while (*in && in != dot)
 		*out++ = *in++;
 	*out = 0;
+}
+
+/*
+============
+COM_FileExtension
+============
+*/
+char *COM_FileExtension( const char *in )
+{
+	const char *s, *last;
+
+	last = s = in + strlen( in );
+	while( s != in ) {
+		if( *s == '/' ) {
+			break;
+		}
+		if( *s == '.' ) {
+			return (char *)s;
+		}
+		s--;
+	}
+
+	return (char *)last;
 }
 
 /*
@@ -1136,7 +1215,7 @@ unsigned int Com_HashValue (const char *name)
 	unsigned int hash = 0;
 
 	while(*name)
-		hash = hash * 33 + tolower(*name++);
+		hash = hash * 33 + Q_tolower(*name++);
 
 	return hash + (hash >> 5);
 }
@@ -1146,7 +1225,7 @@ unsigned int Com_HashValuePath (const char *name)
 	unsigned int c, hash = 0;
 
 	while(*name) {
-		c = tolower(*name++);
+		c = Q_tolower(*name++);
 		if( c == '\\' )
 			c = '/';
 		hash = hash * 33 + c;
@@ -1300,6 +1379,23 @@ char	*va(const char *format, ...)
 	return string[index];
 }
 
+
+int Q_tolower( int c ) {
+	if( Q_isupper( c ) ) {
+		c += ( 'a' - 'A' );
+	}
+
+	return c;
+}
+
+int Q_toupper( int c ) {
+	if( Q_islower( c ) ) {
+		c -= ( 'a' - 'A' );
+	}
+
+	return c;
+}
+
 /*
 ==============
 Q_strlwr
@@ -1310,8 +1406,20 @@ char *Q_strlwr( char *s )
 	char *p;
 
 	for( p = s; *s; s++ ) {
-		if(*s >= 'A' && *s <= 'Z')
+		if(Q_isupper(*s))
 			*s += 'a' - 'A';
+	}
+
+	return p;
+}
+
+char *Q_strupr( char *s )
+{
+	char *p;
+
+	for( p = s; *s; s++ ) {
+		if(Q_islower(*s))
+			*s -= 'a' - 'A';
 	}
 
 	return p;
@@ -1335,7 +1443,7 @@ qboolean Q_IsNumeric (const char *s)
 	dot = false;
 	do
 	{
-		if(*s < '0' || *s > '9') {
+		if(!Q_isdigit(*s)) {
 			if(*s == '.' && !dot)
 				dot = true;
 			else
@@ -1490,9 +1598,8 @@ void Info_RemoveKey (char *s, const char *key)
 		}
 		*o = 0;
 
-		if (!strcmp (key, pkey) )
-		{
-			strcpy (start, s);	// remove this part
+		if (!strcmp(key, pkey)) {
+			strcpy(start, s);	// remove this part
 			return;
 		}
 
@@ -1512,11 +1619,13 @@ can mess up the server's parsing
 */
 qboolean Info_Validate (const char *s)
 {
-  if (strchr(s, '"'))
-    return false;
-  if (strchr(s, ';'))
-    return false;
-  return true;
+	while( *s ) {
+		if( *s == '\"' || *s == ';' ) {
+			return false;
+		}
+		s++;
+	}
+	return true;
 }
 
 void Info_SetValueForKey (char *s, const char *key, const char *value)

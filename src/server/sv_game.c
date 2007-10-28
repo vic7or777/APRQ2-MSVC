@@ -309,6 +309,24 @@ void PF_StartSound (edict_t *entity, int channel, int sound_num, float volume,
 	SV_StartSound (NULL, entity, channel, sound_num, volume, attenuation, timeofs);
 }
 
+void PF_Pmove( pmove_t *pm )
+{
+	Pmove( pm, &sv.pmp );
+}
+
+cvar_t *PF_cvar( const char *name, const char *value, int flags ) {
+	cvar_t *var;
+
+	if( flags & CVAR_EXTENDED_MASK ) {
+		Com_DPrintf( "Game DLL attemped to set extended flags on variable '%s', cleared.\n", name );
+		flags &= ~CVAR_EXTENDED_MASK;
+	}
+
+	var = Cvar_Get( name, value, flags|CVAR_SYSTEM_GAME );
+
+	return var;
+}
+
 //==============================================
 
 /*
@@ -363,7 +381,7 @@ void SV_InitGameProgs (void)
 	import.setmodel = PF_setmodel;
 	import.inPVS = PF_inPVS;
 	import.inPHS = PF_inPHS;
-	import.Pmove = Pmove;
+	import.Pmove = PF_Pmove;
 
 	import.modelindex = SV_ModelIndex;
 	import.soundindex = SV_SoundIndex;
@@ -387,7 +405,7 @@ void SV_InitGameProgs (void)
 	import.TagFree = Z_FreeGame;
 	import.FreeTags = Z_FreeTagsGame;
 
-	import.cvar = Cvar_Get;
+	import.cvar = PF_cvar;
 	import.cvar_set = Cvar_SetLatched;
 	import.cvar_forceset = Cvar_Set;
 

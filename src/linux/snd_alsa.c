@@ -202,7 +202,7 @@ qboolean SNDDMA_Init_ALSA (void)
         return false;
 	}
 
-	period_size = 2048;
+	period_size = 1024;
 	//period_size = 8 * dma.samplebits * dma.speed / 11025;
     err = alsa_snd_pcm_hw_params_set_period_size_near(playback_handle, hw_params, &period_size, 0);
     if(err < 0)
@@ -214,8 +214,8 @@ qboolean SNDDMA_Init_ALSA (void)
         return false;
     }
 
-	//buffer_size = 8192;
-	buffer_size = period_size * 4;
+	buffer_size = 2048;
+	//buffer_size = period_size * 4;
     err = alsa_snd_pcm_hw_params_set_buffer_size_near(playback_handle, hw_params, &buffer_size);
     if(err < 0)
     {

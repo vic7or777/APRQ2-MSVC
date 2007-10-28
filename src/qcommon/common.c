@@ -32,64 +32,25 @@ int		realtime;
 static jmp_buf abortframe;		// an ERR_DROP occured, exit the entire frame
 
 
-cvar_t	uninitialized_cvar;
+cvar_t	nullCvar;
 
 cvar_t	*host_speeds;
-cvar_t	*developer = &uninitialized_cvar;
+cvar_t	*developer = &nullCvar;
 cvar_t	*timescale;
 cvar_t	*fixedtime;
-cvar_t	*logfile_active = &uninitialized_cvar;	// 1 = buffer log, 2 = flush after each print
+cvar_t	*logfile_active = &nullCvar;	// 1 = buffer log, 2 = flush after each print
 cvar_t	*showtrace;
-cvar_t	*dedicated = &uninitialized_cvar;
+cvar_t	*dedicated = &nullCvar;
 
 static FILE	*logfile;
 
 static int			server_state;
 
 // host_speeds times
-int		time_before_game;
-int		time_after_game;
-int		time_before_ref;
-int		time_after_ref;
-
-static tagmalloc_tag_t tagmalloc_tags[] =
-{
-	{TAGMALLOC_NOT_TAGGED, "NOT_TAGGED", 0},
-	{TAGMALLOC_CMDBUFF, "CMDBUFF", 0},
-	{TAGMALLOC_CMD, "CMD", 0},
-	{TAGMALLOC_ALIAS, "ALIAS", 0},
-	{TAGMALLOC_TRIGGER, "TRIGGER", 0},
-	{TAGMALLOC_MACRO, "MACRO", 0},
-	{TAGMALLOC_CVAR, "CVAR", 0},
-	{TAGMALLOC_FSLOADFILE, "FSLOADFILE", 0},
-	{TAGMALLOC_FSLOADPAK, "FSLOADPAK", 0},
-	{TAGMALLOC_FILELIST, "FILELIST", 0},
-	{TAGMALLOC_SEARCHPATH, "SEARCHPATH", 0},
-	{TAGMALLOC_CLIENTS, "CLIENTS", 0},
-	{TAGMALLOC_CL_ENTS, "CL_ENTS", 0},
-
-	{TAGMALLOC_CLIENT_KEYBIND, "CLIENT_KEYBIND", 0},
-	{TAGMALLOC_CLIENT_SFX, "CLIENT_SFX", 0},
-	{TAGMALLOC_CLIENT_SOUNDCACHE, "CLIENT_SOUNDCACHE", 0},
-	{TAGMALLOC_CLIENT_LOADPCX, "CLIENT_LOADPCX", 0},
-	{TAGMALLOC_CLIENT_CINEMA, "CLIENT_CINEMA", 0},
-	{TAGMALLOC_CLIENT_LOC, "CLIENT_LOC", 0},
-	{TAGMALLOC_CLIENT_IGNORE, "CLIENT_IGNORE", 0},
-	{TAGMALLOC_CLIENT_DOWNLOAD, "CLIENT_DOWNLOAD", 0},
-	{TAGMALLOC_X86, "X86CACHE", 0},
-	{TAGMALLOC_CLIPBOARD, "SYSTEM_CLIPB", 0},
-
-	{TAGMALLOC_MENU, "MENU", 0},
-	{TAGMALLOC_MP3LIST, "MP3_LIST", 0},
-	{TAGMALLOC_AVIEXPORT, "AVI_FRAMEBUFFER", 0},
-	{TAGMALLOC_RENDER_IMAGE, "RENDER_IMAGE", 0},
-	{TAGMALLOC_RENDER_IMGRESAMPLE, "RENDER_RESAMPLE", 0},
-	{TAGMALLOC_RENDER_SCRSHOT, "RENDER_SCRSHOT", 0},
-
-	{TAGMALLOC_DLL_GAME, "DLL_GAME", 0},
-	{TAGMALLOC_DLL_LEVEL, "DLL_LEVEL", 0},
-	{TAGMALLOC_MAX_TAGS, "*** UNDEFINED ***", 0}
-};
+unsigned int time_before_game;
+unsigned int time_after_game;
+unsigned int time_before_ref;
+unsigned int time_after_ref;
 
 /*
 ============================================================================
@@ -138,18 +99,15 @@ to the apropriate place.
 void Com_Printf (const char *fmt, ...)
 {
 	va_list		argptr;
-	char		msg[MAXPRINTMSG];
-	int			i, skip = 0;
-	qboolean	colors = false;
+	char		msg[MAXPRINTMSG], *s, *text;
 
 	va_start (argptr,fmt);
-	vsnprintf(msg, sizeof(msg), fmt, argptr);
+	vsnprintf(msg, MAXPRINTMSG, fmt, argptr);
 	va_end (argptr);
 
 	if (rd_target)
 	{
-		if ((strlen (msg) + strlen(rd_buffer)) > (rd_buffersize - 1))
-		{
+		if ((strlen (msg) + strlen(rd_buffer)) > (rd_buffersize - 1)) {
 			rd_flush(rd_target, rd_buffer);
 			*rd_buffer = 0;
 		}
@@ -159,49 +117,49 @@ void Com_Printf (const char *fmt, ...)
 
 	Con_Print (msg);
 
+	text = msg;
 	//Remove color triggers
-	if(Q_IsOneColorString(msg))
-	{
-		skip = 1;
-		if(Q_IsColorString( msg+skip ))
-			skip+=2;
-	}
-	else if(Q_IsColorEnabled(msg))
-	{
-		colors = true;
-		skip = 1;
-	}
+	switch (msg[0]) {
+	case 1:
+	case 2:
+		text++;
+	default:
+		for (s = text; *s; s++)
+			*s &= 127;
+		break;
+	case COLOR_ONE:
+		text++;
+		if (Q_IsColorString(text))
+			text += 2;
 
-	// Strip the last bit off
-	for( i = skip; msg[i]; i++ ) {
-		if(colors && Q_IsColorString(msg+i)) {
-			memmove( msg + i, msg + i + 2, sizeof(msg) - i - 2 );
-			i--;
-			continue;
+		for (s = text; *s; s++)
+			*s &= 127;
+		break;
+	case COLOR_ENABLE:
+		text++;
+		for (s = text; *s;) {
+			if(Q_IsColorString(s)) {
+				memmove( s, s + 2, MAXPRINTMSG - 2 - (s - msg));
+				continue;
+			}
+			*s++ &= 127;
 		}
-		msg[i] &= 127;
+		break;
 	}
 
 	// also echo to debugging console
-	Sys_ConsoleOutput (msg+skip);
+	Sys_ConsoleOutput (text);
 
 	// logfile
-	if (logfile_active->integer)
-	{
-		char	name[MAX_QPATH];
-		
-		if (!logfile)
-		{
-			Com_sprintf (name, sizeof(name), "%s/qconsole.log", FS_Gamedir ());
-			if (logfile_active->integer > 2)
-				logfile = fopen (name, "a");
-			else
-				logfile = fopen (name, "w");
+	if (logfile_active->integer) {
+		if (!logfile) {
+			logfile = fopen(va("%s/qconsole.log", FS_Gamedir()), (logfile_active->integer > 2) ? "a" : "w");
 		}
-		if (logfile)
-			fprintf (logfile, "%s", msg+skip);
-		if (logfile_active->integer > 1)
-			fflush (logfile);		// force it to save every time
+		if (logfile) {
+			fprintf(logfile, "%s", text);
+			if (logfile_active->integer > 1)
+				fflush(logfile);		// force it to save every time
+		}
 	}
 }
 
@@ -222,7 +180,7 @@ void _Com_DPrintf (const char *fmt, ...)
 		return;			// don't confuse non-developers with techie stuff...
 
 	va_start (argptr,fmt);
-	vsnprintf(msg, sizeof(msg), fmt, argptr);
+	vsnprintf(msg, MAXPRINTMSG, fmt, argptr);
 	va_end (argptr);
 	
 	Com_Printf ("%s", msg);
@@ -241,14 +199,14 @@ void Com_Error (int code, const char *fmt, ...)
 {
 	va_list		argptr;
 	static char		msg[MAXPRINTMSG];
-	static	qboolean	recursive;
+	static	qboolean	recursive = false;
 
 	if (recursive)
 		Sys_Error ("recursive error after: %s", msg);
 	recursive = true;
 
 	va_start (argptr,fmt);
-	vsnprintf(msg, sizeof(msg), fmt, argptr);
+	vsnprintf(msg, MAXPRINTMSG, fmt, argptr);
 	va_end (argptr);
 	
 	if (code == ERR_DISCONNECT)
@@ -296,8 +254,7 @@ void Com_Quit (void)
 	SV_Shutdown ("Server quit\n", false);
 	CL_Shutdown ();
 
-	if (logfile)
-	{
+	if (logfile) {
 		fclose (logfile);
 		logfile = NULL;
 	}
@@ -326,644 +283,6 @@ void Com_SetServerState (int state)
 	server_state = state;
 }
 
-
-/*
-==============================================================================
-
-			MESSAGE IO FUNCTIONS
-
-Handles byte ordering and avoids alignment errors
-==============================================================================
-*/
-
-//
-// writing functions
-//
-
-void MSG_WriteChar (sizebuf_t *sb, int c)
-{
-	byte	*buf;
-	
-#ifdef PARANOID
-	if (c < -128 || c > 127)
-		Com_Error (ERR_FATAL, "MSG_WriteChar: range error");
-#endif
-
-	buf = SZ_GetSpace (sb, 1);
-	buf[0] = c;
-}
-
-void MSG_WriteByte (sizebuf_t *sb, int c)
-{
-	byte	*buf;
-	
-#ifdef PARANOID
-	if (c < 0 || c > 255)
-		Com_Error (ERR_FATAL, "MSG_WriteByte: range error");
-#endif
-
-	buf = SZ_GetSpace(sb, 1);
-	buf[0] = c;
-}
-
-void MSG_WriteShort (sizebuf_t *sb, int c)
-{
-	byte	*buf;
-	
-#ifdef PARANOID
-	if (c < ((short)0x8000) || c > (short)0x7fff)
-		Com_Error (ERR_FATAL, "MSG_WriteShort: range error");
-#endif
-
-	buf = SZ_GetSpace (sb, 2);
-	buf[0] = c&0xff;
-	buf[1] = c>>8;
-}
-
-void MSG_WriteLong (sizebuf_t *sb, int c)
-{
-	byte	*buf;
-	
-	buf = SZ_GetSpace (sb, 4);
-	buf[0] = c&0xff;
-	buf[1] = (c>>8)&0xff;
-	buf[2] = (c>>16)&0xff;
-	buf[3] = c>>24;
-}
-
-void MSG_WriteFloat (sizebuf_t *sb, float f)
-{
-	union
-	{
-		float f1;
-		int	l;
-	} dat;
-	
-	
-	dat.f1 = f;
-	dat.l = LittleLong (dat.l);
-	
-	SZ_Write (sb, &dat.l, 4);
-}
-
-void MSG_WriteString (sizebuf_t *sb, const char *s)
-{
-	if (!s)
-		SZ_Write (sb, "", 1);
-	else
-		SZ_Write (sb, s, strlen(s)+1);
-}
-
-void MSG_WriteCoord (sizebuf_t *sb, float f)
-{
-	MSG_WriteShort (sb, (int)(f*8));
-}
-
-void MSG_WritePos (sizebuf_t *sb, const vec3_t pos)
-{
-	MSG_WriteShort (sb, (int)(pos[0]*8));
-	MSG_WriteShort (sb, (int)(pos[1]*8));
-	MSG_WriteShort (sb, (int)(pos[2]*8));
-}
-
-void MSG_WriteAngle (sizebuf_t *sb, float f)
-{
-	MSG_WriteByte (sb, (int)(f*256/360) & 255);
-}
-
-void MSG_WriteAngle16 (sizebuf_t *sb, float f)
-{
-	MSG_WriteShort (sb, ANGLE2SHORT(f));
-}
-
-
-void MSG_WriteDeltaUsercmd (sizebuf_t *buf, const usercmd_t *from, const usercmd_t *cmd)
-{
-	int		bits = 0;
-
-	// send the movement message
-	if (cmd->angles[0] != from->angles[0])
-		bits |= CM_ANGLE1;
-	if (cmd->angles[1] != from->angles[1])
-		bits |= CM_ANGLE2;
-	if (cmd->angles[2] != from->angles[2])
-		bits |= CM_ANGLE3;
-	if (cmd->forwardmove != from->forwardmove)
-		bits |= CM_FORWARD;
-	if (cmd->sidemove != from->sidemove)
-		bits |= CM_SIDE;
-	if (cmd->upmove != from->upmove)
-		bits |= CM_UP;
-	if (cmd->buttons != from->buttons)
-		bits |= CM_BUTTONS;
-	if (cmd->impulse != from->impulse)
-		bits |= CM_IMPULSE;
-
-    MSG_WriteByte (buf, bits);
-
-	if (bits & CM_ANGLE1)
-		MSG_WriteShort (buf, cmd->angles[0]);
-	if (bits & CM_ANGLE2)
-		MSG_WriteShort (buf, cmd->angles[1]);
-	if (bits & CM_ANGLE3)
-		MSG_WriteShort (buf, cmd->angles[2]);
-	
-	if (bits & CM_FORWARD)
-		MSG_WriteShort (buf, cmd->forwardmove);
-	if (bits & CM_SIDE)
-	  	MSG_WriteShort (buf, cmd->sidemove);
-	if (bits & CM_UP)
-		MSG_WriteShort (buf, cmd->upmove);
-
- 	if (bits & CM_BUTTONS)
-	  	MSG_WriteByte (buf, cmd->buttons);
- 	if (bits & CM_IMPULSE)
-	    MSG_WriteByte (buf, cmd->impulse);
-
-    MSG_WriteByte (buf, cmd->msec);
-	MSG_WriteByte (buf, cmd->lightlevel);
-}
-
-
-void MSG_WriteDir (sizebuf_t *sb, const vec3_t dir)
-{
-	MSG_WriteByte (sb, DirToByte(dir));
-}
-
-void MSG_ReadDir (sizebuf_t *sb, vec3_t dir)
-{
-	ByteToDir (MSG_ReadByte (sb), dir);
-}
-
-
-/*
-==================
-MSG_WriteDeltaEntity
-
-Writes part of a packetentities message.
-Can delta from either a baseline or a previous packet_entity
-==================
-*/
-void MSG_WriteDeltaEntity (const entity_state_t *from, const entity_state_t *to, sizebuf_t *msg, qboolean force, qboolean newentity)
-{
-	int		bits;
-
-	if (!to->number)
-		Com_Error (ERR_FATAL, "Unset entity number");
-	if (to->number >= MAX_EDICTS)
-		Com_Error (ERR_FATAL, "Entity number >= MAX_EDICTS");
-
-// send an update
-	bits = 0;
-
-	if (to->number >= 256)
-		bits |= U_NUMBER16;		// number8 is implicit otherwise
-
-	if (to->origin[0] != from->origin[0])
-		bits |= U_ORIGIN1;
-	if (to->origin[1] != from->origin[1])
-		bits |= U_ORIGIN2;
-	if (to->origin[2] != from->origin[2])
-		bits |= U_ORIGIN3;
-
-	if ( to->angles[0] != from->angles[0] )
-		bits |= U_ANGLE1;		
-	if ( to->angles[1] != from->angles[1] )
-		bits |= U_ANGLE2;
-	if ( to->angles[2] != from->angles[2] )
-		bits |= U_ANGLE3;
-		
-	if ( to->skinnum != from->skinnum )
-	{
-		if ((unsigned)to->skinnum < 256)
-			bits |= U_SKIN8;
-		else if ((unsigned)to->skinnum < 0x10000)
-			bits |= U_SKIN16;
-		else
-			bits |= (U_SKIN8|U_SKIN16);
-	}
-		
-	if ( to->frame != from->frame )
-	{
-		if (to->frame < 256)
-			bits |= U_FRAME8;
-		else
-			bits |= U_FRAME16;
-	}
-
-	if ( to->effects != from->effects )
-	{
-		if (to->effects < 256)
-			bits |= U_EFFECTS8;
-		else if (to->effects < 0x8000)
-			bits |= U_EFFECTS16;
-		else
-			bits |= U_EFFECTS8|U_EFFECTS16;
-	}
-	
-	if ( to->renderfx != from->renderfx )
-	{
-		if (to->renderfx < 256)
-			bits |= U_RENDERFX8;
-		else if (to->renderfx < 0x8000)
-			bits |= U_RENDERFX16;
-		else
-			bits |= U_RENDERFX8|U_RENDERFX16;
-	}
-	
-	if ( to->solid != from->solid )
-		bits |= U_SOLID;
-
-	// event is not delta compressed, just 0 compressed
-	if ( to->event  )
-		bits |= U_EVENT;
-	
-	if ( to->modelindex != from->modelindex )
-		bits |= U_MODEL;
-	if ( to->modelindex2 != from->modelindex2 )
-		bits |= U_MODEL2;
-	if ( to->modelindex3 != from->modelindex3 )
-		bits |= U_MODEL3;
-	if ( to->modelindex4 != from->modelindex4 )
-		bits |= U_MODEL4;
-
-	if ( to->sound != from->sound )
-		bits |= U_SOUND;
-
-	if (newentity || (to->renderfx & RF_BEAM))
-		bits |= U_OLDORIGIN;
-
-	// write the message
-	if (!bits && !force)
-		return;		// nothing to send!
-
-	//----------
-
-	if (bits & 0xff000000)
-		bits |= U_MOREBITS3 | U_MOREBITS2 | U_MOREBITS1;
-	else if (bits & 0x00ff0000)
-		bits |= U_MOREBITS2 | U_MOREBITS1;
-	else if (bits & 0x0000ff00)
-		bits |= U_MOREBITS1;
-
-	MSG_WriteByte (msg,	bits&255 );
-
-	if (bits & 0xff000000)
-	{
-		MSG_WriteByte (msg,	(bits>>8)&255 );
-		MSG_WriteByte (msg,	(bits>>16)&255 );
-		MSG_WriteByte (msg,	(bits>>24)&255 );
-	}
-	else if (bits & 0x00ff0000)
-	{
-		MSG_WriteByte (msg,	(bits>>8)&255 );
-		MSG_WriteByte (msg,	(bits>>16)&255 );
-	}
-	else if (bits & 0x0000ff00)
-	{
-		MSG_WriteByte (msg,	(bits>>8)&255 );
-	}
-
-	//----------
-
-	if (bits & U_NUMBER16)
-		MSG_WriteShort (msg, to->number);
-	else
-		MSG_WriteByte (msg,	to->number);
-
-	if (bits & U_MODEL)
-		MSG_WriteByte (msg,	to->modelindex);
-	if (bits & U_MODEL2)
-		MSG_WriteByte (msg,	to->modelindex2);
-	if (bits & U_MODEL3)
-		MSG_WriteByte (msg,	to->modelindex3);
-	if (bits & U_MODEL4)
-		MSG_WriteByte (msg,	to->modelindex4);
-
-	if (bits & U_FRAME8)
-		MSG_WriteByte (msg, to->frame);
-	if (bits & U_FRAME16)
-		MSG_WriteShort (msg, to->frame);
-
-	if ((bits & U_SKIN8) && (bits & U_SKIN16))		//used for laser colors
-		MSG_WriteLong (msg, to->skinnum);
-	else if (bits & U_SKIN8)
-		MSG_WriteByte (msg, to->skinnum);
-	else if (bits & U_SKIN16)
-		MSG_WriteShort (msg, to->skinnum);
-
-
-	if ( (bits & (U_EFFECTS8|U_EFFECTS16)) == (U_EFFECTS8|U_EFFECTS16) )
-		MSG_WriteLong (msg, to->effects);
-	else if (bits & U_EFFECTS8)
-		MSG_WriteByte (msg, to->effects);
-	else if (bits & U_EFFECTS16)
-		MSG_WriteShort (msg, to->effects);
-
-	if ( (bits & (U_RENDERFX8|U_RENDERFX16)) == (U_RENDERFX8|U_RENDERFX16) )
-		MSG_WriteLong (msg, to->renderfx);
-	else if (bits & U_RENDERFX8)
-		MSG_WriteByte (msg, to->renderfx);
-	else if (bits & U_RENDERFX16)
-		MSG_WriteShort (msg, to->renderfx);
-
-	if (bits & U_ORIGIN1)
-		MSG_WriteCoord (msg, to->origin[0]);		
-	if (bits & U_ORIGIN2)
-		MSG_WriteCoord (msg, to->origin[1]);
-	if (bits & U_ORIGIN3)
-		MSG_WriteCoord (msg, to->origin[2]);
-
-	if (bits & U_ANGLE1)
-		MSG_WriteAngle(msg, to->angles[0]);
-	if (bits & U_ANGLE2)
-		MSG_WriteAngle(msg, to->angles[1]);
-	if (bits & U_ANGLE3)
-		MSG_WriteAngle(msg, to->angles[2]);
-
-	if (bits & U_OLDORIGIN)
-	{
-		MSG_WriteCoord (msg, to->old_origin[0]);
-		MSG_WriteCoord (msg, to->old_origin[1]);
-		MSG_WriteCoord (msg, to->old_origin[2]);
-	}
-
-	if (bits & U_SOUND)
-		MSG_WriteByte (msg, to->sound);
-	if (bits & U_EVENT)
-		MSG_WriteByte (msg, to->event);
-	if (bits & U_SOLID)
-		MSG_WriteShort (msg, to->solid);
-}
-
-
-//============================================================
-
-// reading functions
-
-void MSG_BeginReading (sizebuf_t *msg)
-{
-	msg->readcount = 0;
-}
-
-// returns -1 if no more characters are available
-int MSG_ReadChar (sizebuf_t *msg_read)
-{
-	int	c;
-	
-	if (msg_read->readcount+1 > msg_read->cursize)
-		c = -1;
-	else
-		c = (signed char)msg_read->data[msg_read->readcount];
-	msg_read->readcount++;
-	
-	return c;
-}
-
-int MSG_ReadByte (sizebuf_t *msg_read)
-{
-	int	c;
-	
-	if (msg_read->readcount+1 > msg_read->cursize)
-		c = -1;
-	else
-		c = (unsigned char)msg_read->data[msg_read->readcount];
-	msg_read->readcount++;
-	
-	return c;
-}
-
-int MSG_ReadShort (sizebuf_t *msg_read)
-{
-	int	c;
-	
-	if (msg_read->readcount+2 > msg_read->cursize)
-		c = -1;
-	else		
-		c = (int16)(msg_read->data[msg_read->readcount]
-		+ (msg_read->data[msg_read->readcount+1]<<8));
-	
-	msg_read->readcount += 2;
-	
-	return c;
-}
-
-int MSG_ReadLong (sizebuf_t *msg_read)
-{
-	int	c;
-	
-	if (msg_read->readcount+4 > msg_read->cursize)
-		c = -1;
-	else
-		c = msg_read->data[msg_read->readcount]
-		+ (msg_read->data[msg_read->readcount+1]<<8)
-		+ (msg_read->data[msg_read->readcount+2]<<16)
-		+ (msg_read->data[msg_read->readcount+3]<<24);
-	
-	msg_read->readcount += 4;
-	
-	return c;
-}
-
-float MSG_ReadFloat (sizebuf_t *msg_read)
-{
-	union
-	{
-		byte	b[4];
-		float	f;
-		int	l;
-	} dat;
-	
-	if (msg_read->readcount+4 > msg_read->cursize)
-		dat.f = -1;
-	else
-	{
-		dat.b[0] =	msg_read->data[msg_read->readcount];
-		dat.b[1] =	msg_read->data[msg_read->readcount+1];
-		dat.b[2] =	msg_read->data[msg_read->readcount+2];
-		dat.b[3] =	msg_read->data[msg_read->readcount+3];
-	}
-	msg_read->readcount += 4;
-	
-	dat.l = LittleLong (dat.l);
-
-	return dat.f;	
-}
-
-char *MSG_ReadString (sizebuf_t *msg_read)
-{
-	static char	string[2048];
-	int		l = 0, c;
-	
-	do
-	{
-		c = MSG_ReadByte (msg_read);
-
-		if (c == -1 || c == 0)
-			break;
-		string[l] = c;
-		l++;
-	} while (l < sizeof(string)-1);
-	
-	string[l] = 0;
-	
-	return string;
-}
-
-char *MSG_ReadStringLine (sizebuf_t *msg_read)
-{
-	static char	string[2048];
-	int		l = 0, c;
-	
-	do
-	{
-		c = MSG_ReadByte (msg_read);
-
-		if (c == -1 || c == 0 || c == '\n')
-			break;
-		string[l] = c;
-		l++;
-	} while (l < sizeof(string)-1);
-	
-	string[l] = 0;
-	
-	return string;
-}
-
-float MSG_ReadCoord (sizebuf_t *msg_read)
-{
-	return MSG_ReadShort(msg_read) * 0.125f;
-}
-
-void MSG_ReadPos (sizebuf_t *msg_read, vec3_t pos)
-{
-	pos[0] = MSG_ReadShort(msg_read) * 0.125f;
-	pos[1] = MSG_ReadShort(msg_read) * 0.125f;
-	pos[2] = MSG_ReadShort(msg_read) * 0.125f;
-}
-
-float MSG_ReadAngle (sizebuf_t *msg_read)
-{
-	return MSG_ReadChar(msg_read) * 1.40625f;
-}
-
-float MSG_ReadAngle16 (sizebuf_t *msg_read)
-{
-	return SHORT2ANGLE(MSG_ReadShort(msg_read));
-}
-
-void MSG_ReadDeltaUsercmd (sizebuf_t *msg_read, const usercmd_t *from, usercmd_t *move)
-{
-	int bits;
-
-	memcpy (move, from, sizeof(*move));
-
-	bits = MSG_ReadByte (msg_read);
-		
-// read current angles
-	if (bits & CM_ANGLE1)
-		move->angles[0] = MSG_ReadShort (msg_read);
-	if (bits & CM_ANGLE2)
-		move->angles[1] = MSG_ReadShort (msg_read);
-	if (bits & CM_ANGLE3)
-		move->angles[2] = MSG_ReadShort (msg_read);
-		
-// read movement
-	if (bits & CM_FORWARD)
-		move->forwardmove = MSG_ReadShort (msg_read);
-	if (bits & CM_SIDE)
-		move->sidemove = MSG_ReadShort (msg_read);
-	if (bits & CM_UP)
-		move->upmove = MSG_ReadShort (msg_read);
-	
-// read buttons
-	if (bits & CM_BUTTONS)
-		move->buttons = MSG_ReadByte (msg_read);
-
-	if (bits & CM_IMPULSE)
-		move->impulse = MSG_ReadByte (msg_read);
-
-// read time to run command
-	move->msec = MSG_ReadByte (msg_read);
-
-// read the light level
-	move->lightlevel = MSG_ReadByte (msg_read);
-}
-
-
-void MSG_ReadData (sizebuf_t *msg_read, void *data, int len)
-{
-	int		i;
-
-	for (i=0 ; i<len ; i++)
-		((byte *)data)[i] = MSG_ReadByte (msg_read);
-}
-
-
-//===========================================================================
-
-void SZ_Init (sizebuf_t *buf, byte *data, int length)
-{
-	memset (buf, 0, sizeof(*buf));
-	buf->data = data;
-	buf->maxsize = length;
-}
-
-void SZ_Clear (sizebuf_t *buf)
-{
-	buf->cursize = 0;
-	buf->overflowed = false;
-}
-
-void *SZ_GetSpace (sizebuf_t *buf, int length)
-{
-	void	*data;
-	
-	if (buf->cursize + length > buf->maxsize)
-	{
-		if (!buf->allowoverflow)
-			Com_Error (ERR_FATAL, "SZ_GetSpace: overflow without allowoverflow set (%d+%d > %d)", buf->cursize, length, buf->maxsize);
-			
-		if (length > buf->maxsize)
-			Com_Error (ERR_FATAL, "SZ_GetSpace: %i is > full buffer size", length);
-
-		Com_DPrintf ("SZ_GetSpace: overflowed maxsize\n");
-		SZ_Clear (buf);
-		buf->overflowed = true;
-	}
-
-	data = buf->data + buf->cursize;
-	buf->cursize += length;
-	
-	return data;
-}
-
-void SZ_Write (sizebuf_t *buf, const void *data, int length)
-{
-	memcpy (SZ_GetSpace(buf,length),data,length);		
-}
-
-void SZ_Print (sizebuf_t *buf, const char *data)
-{
-	int		len;
-	
-	len = strlen(data)+1;
-
-	if (buf->cursize)
-	{
-		if (buf->data[buf->cursize-1])
-			memcpy ((byte *)SZ_GetSpace(buf, len),data,len); // no trailing 0
-		else
-			memcpy ((byte *)SZ_GetSpace(buf, len-1)-1,data,len); // write over trailing 0
-	}
-	else
-		memcpy ((byte *)SZ_GetSpace(buf, len),data,len);
-}
-
-
-//============================================================================
-
-
 /*
 ================
 COM_CheckParm
@@ -976,9 +295,8 @@ int COM_CheckParm (const char *parm)
 {
 	int		i;
 	
-	for (i=1 ; i<com_argc ; i++)
-	{
-		if (!strcmp (parm,com_argv[i]))
+	for (i = 1 ; i < com_argc ; i++) {
+		if (!strcmp(parm, com_argv[i]))
 			return i;
 	}
 		
@@ -992,14 +310,14 @@ int COM_Argc (void)
 
 char *COM_Argv (int arg)
 {
-	if (arg < 0 || arg >= com_argc || !com_argv[arg])
+	if ((unsigned)arg >= com_argc || !com_argv[arg])
 		return "";
 	return com_argv[arg];
 }
 
 void COM_ClearArgv (int arg)
 {
-	if (arg < 0 || arg >= com_argc || !com_argv[arg])
+	if ((unsigned)arg >= com_argc || !com_argv[arg])
 		return;
 	com_argv[arg] = "";
 }
@@ -1116,23 +434,108 @@ just cleared malloc with counters now...
 */
 
 #define	Z_MAGIC		0x1d1d
+#define	Z_TAIL		0x5b7b
 
-
-typedef struct zhead_s
-{
-	struct zhead_s	*prev, *next;
+typedef struct zhead_s {
 	int16	magic;
 	int16	tag;			// for group free
-	int		size;
+	uint32	size;
+	struct zhead_s	*prev, *next;
 } zhead_t;
 
 static zhead_t	z_chain = {0};
 
-static int	z_count = 0;
-static int	z_bytes = 0;
-
 #define	TAG_GAME	765	// clear when unloading the dll
 #define	TAG_LEVEL	766	// clear when loading a new level
+
+#pragma pack(push,1)
+typedef struct zstatic_s {
+	zhead_t	z;
+	char	data[2]; /* !!make sure 'tail' field is aligned properly */
+	uint16	tail;
+} zstatic_t;
+#pragma pack(pop)
+
+static zstatic_t		z_static[] = {
+	{ { Z_MAGIC, TAG_STATIC, sizeof( zstatic_t ) }, { '0', '\0' }, Z_TAIL },
+	{ { Z_MAGIC, TAG_STATIC, sizeof( zstatic_t ) }, { '1', '\0' }, Z_TAIL },
+	{ { Z_MAGIC, TAG_STATIC, sizeof( zstatic_t ) }, { '2', '\0' }, Z_TAIL },
+	{ { Z_MAGIC, TAG_STATIC, sizeof( zstatic_t ) }, { '3', '\0' }, Z_TAIL },
+	{ { Z_MAGIC, TAG_STATIC, sizeof( zstatic_t ) }, { '4', '\0' }, Z_TAIL },
+	{ { Z_MAGIC, TAG_STATIC, sizeof( zstatic_t ) }, { '5', '\0' }, Z_TAIL },
+	{ { Z_MAGIC, TAG_STATIC, sizeof( zstatic_t ) }, { '6', '\0' }, Z_TAIL },
+	{ { Z_MAGIC, TAG_STATIC, sizeof( zstatic_t ) }, { '7', '\0' }, Z_TAIL },
+	{ { Z_MAGIC, TAG_STATIC, sizeof( zstatic_t ) }, { '8', '\0' }, Z_TAIL },
+	{ { Z_MAGIC, TAG_STATIC, sizeof( zstatic_t ) }, { '9', '\0' }, Z_TAIL },
+	{ { Z_MAGIC, TAG_STATIC, sizeof( zstatic_t ) }, { '\0', '\0'}, Z_TAIL }
+};
+
+typedef struct zstats_s {
+	const char	*name;
+	uint32		count, bytes;
+} zstats_t;
+
+static zstats_t z_stats[TAG_MAX_TAGS] =
+{
+	{"Not tagged", 0, 0},
+	{"Static", 0, 0},
+	{"Temp", 0, 0},
+	{"Commands", 0, 0},
+	{"Aliases", 0, 0},
+	{"Triggers", 0, 0},
+	{"Macros", 0, 0},
+	{"Cvars", 0, 0},
+	{"FS_Files", 0, 0},
+	{"FS_Paks", 0, 0},
+	{"FS_Filelist", 0, 0},
+	{"FS_Searchpath", 0, 0},
+	{"CLIENTS", 0, 0},
+	{"CL_ENTS", 0, 0},
+
+	{"Keybindings", 0, 0},
+	{"CL_SFX", 0, 0},
+	{"CL_Soundcache", 0, 0},
+	{"CL_LoadPCX", 0, 0},
+	{"CL_CINEMA", 0, 0},
+	{"CL_Loc", 0, 0},
+	{"CL_Ignore", 0, 0},
+	{"CL_Drawstring", 0, 0},
+	{"CL_Download", 0, 0},
+
+	{"X86CACHE", 0, 0},
+	{"SYS_Clipboard", 0, 0},
+	{"MENU", 0, 0},
+	{"MP3_List", 0, 0},
+	{"AVI_Framebuffer", 0, 0},
+
+	{"R_Models", 0, 0},
+	{"R_Images", 0, 0},
+	{"R_Resample", 0, 0},
+	{"R_Screenshot", 0, 0},
+
+	{"DLL_GAME", 0, 0},
+	{"DLL_LEVEL", 0, 0}
+};
+
+void Z_Check( void )
+{
+	zhead_t	*z;
+
+	for( z = z_chain.next; z != &z_chain; z = z->next ) {
+		if( z->magic != Z_MAGIC ) {
+			Com_Error( ERR_FATAL, "Z_Check: bad magic" );
+        }
+
+		if( *( uint16 * )( ( byte * )z + z->size - sizeof( uint16 ) ) != Z_TAIL ) {
+			Com_Error( ERR_FATAL, "Z_Check: bad tail with tag %i", z->tag );
+        }
+
+		if( z->tag == TAG_NOT_TAGGED ) {
+			Com_Error( ERR_FATAL, "Z_Check: bad tag" );
+        }
+	}
+	Com_Printf("Z_Check: all ok\n");
+}
 
 /*
 ========================
@@ -1146,6 +549,7 @@ void Z_Free (void *ptr)
 #endif
 {
 	zhead_t	*z;
+	zstats_t *s;
 
 #ifndef NDEBUG
 	if (!ptr)
@@ -1154,30 +558,33 @@ void Z_Free (void *ptr)
 
 	z = ((zhead_t *)ptr) - 1;
 
+	if (z->magic != Z_MAGIC) {
 #ifndef NDEBUG
-	if (z->magic != Z_MAGIC)
 		Com_Error (ERR_FATAL, "Z_Free: bad magic (%s:%i)", filename, fileline);
 #else
-	if (z->magic != Z_MAGIC) {
-		if (z->tag < TAGMALLOC_MAX_TAGS)
-			Com_Error (ERR_FATAL, "Z_Free: bad magic from %s", tagmalloc_tags[z->tag].name);
-		else if (z->tag == TAGMALLOC_DLL_LEVEL)
-			Com_Error (ERR_FATAL, "Z_Free: bad magic from Game DLL (LEVEL)");
-		else if(z->tag == TAGMALLOC_DLL_GAME)
-			Com_Error (ERR_FATAL, "Z_Free: bad magic from Game DLL (GAME)");
-		else
-			Com_Error (ERR_FATAL, "Z_Free: bad magic");
-	}
+		Com_Error (ERR_FATAL, "Z_Free: bad magic");
 #endif
+	}
 
-	z->prev->next = z->next;
-	z->next->prev = z->prev;
+	s = &z_stats[(unsigned)z->tag < TAG_MAX_TAGS ? z->tag : TAG_NOT_TAGGED];
+#ifndef NDEBUG
+	if (s->count == 0 || s->bytes < z->size)
+		Com_Error(ERR_FATAL, "Z_Free: counters are screwed after free of %d bytes at %p tagged %d:%s (%s:%i)", z->size, z, z->tag, s->name, filename, fileline);
+#endif
+	s->count--;
+	s->bytes -= z->size;
 
-	z_count--;
-	z_bytes -= z->size;
-	free (z);
+	if( *( uint16 * )( ( byte * )z + z->size - sizeof( uint16 ) ) != Z_TAIL ) {
+		Com_Printf("Z_Free: bad tail, tagged %d:%s\n", z->tag, s->name);
+    }
+
+	if (z->tag != TAG_STATIC) {
+		z->prev->next = z->next;
+		z->next->prev = z->prev;
+
+		free( z );
+	}
 }
-
 
 /*
 ========================
@@ -1187,43 +594,19 @@ Z_Stats_f
 
 void Z_Stats_f (void)
 {
-	int i, total, num, bigtotal = 0, bignum = 0;
-	int otherSize = 0, otherCount = 0;
-	zhead_t	*z, *next;
+	int i, totalBytes = 0, totalCount = 0;
+	zstats_t *s;
 
-	for (i = 0; i < TAGMALLOC_MAX_TAGS; i++) {
-		total = num = 0;
-		for (z=z_chain.next ; z != &z_chain ; z=next)
-		{
-			next = z->next;
-			if (z->tag == i) {
-				total += z->size;
-				num++;
-			}
-			if (i == (TAGMALLOC_MAX_TAGS - 1)) {
-				if(z->tag > TAGMALLOC_MAX_TAGS)
-				{
-					otherSize += z->size;
-					otherCount++;
-				}
-			}
-		}
-		if(num > 0)
-		{
-			bigtotal += total;
-			bignum += num;
-			Com_Printf ("%14.14s: %8i bytes %5i blocks %8i allocs\n", tagmalloc_tags[i].name, total, num, tagmalloc_tags[i].allocs);
-		}
+	for (i = 0, s = z_stats; i < TAG_MAX_TAGS; i++, s++) {
+		if(!s->count)
+			continue;
+
+		totalBytes += s->bytes;
+		totalCount += s->count;
+		Com_Printf ("%14.14s: %8i bytes %5i blocks\n", s->name, s->bytes, s->count);
 	}
 
-	if(otherCount) {
-		bigtotal += otherSize;
-		bignum += otherCount;
-		Com_Printf ("%14.14s: %8i bytes %5i blocks\n\n", "GAME_OTHER", otherSize, otherCount);
-	}
-
-	Com_Printf ("\n  CALCED_TOTAL: %i bytes in %i blocks\n", bigtotal, bignum);
-	Com_Printf (" RUNNING_TOTAL: %i bytes in %i blocks\n", z_bytes, z_count);
+	Com_Printf (" RUNNING_TOTAL: %8i bytes %5i blocks\n", totalBytes, totalCount);
 }
 
 /*
@@ -1263,32 +646,29 @@ void *Z_TagMalloc (int size, int tag)
 #endif
 {
 	zhead_t	*z;
+	zstats_t *s;
+
+	s = &z_stats[(unsigned)tag < TAG_MAX_TAGS ? tag : TAG_NOT_TAGGED];
 
 #ifndef NDEBUG
 	if (size <= 0)
-		Com_Error (ERR_FATAL, "Z_TagMalloc: tried to allocate %i bytes (%s:%i)!", size, filename, fileline);
+		Com_Error (ERR_FATAL, "Z_TagMalloc: tried to allocate %i bytes, tagged %i%s (%s:%i)!", size, tag, s->name, filename, fileline);
 #endif
 
-	size = size + sizeof(zhead_t);
+	size += sizeof(zhead_t) + sizeof( uint16 );
 	z = malloc(size);
 	if (!z) {
 #ifndef NDEBUG
-		Com_Printf ("Z_TagMalloc: failed on allocation of %i bytes (%s:%i)!", size, filename, fileline);
+		Com_Error (ERR_FATAL, "Z_TagMalloc: failed on allocation of %i bytes, tagged %i%s (%s:%i)!", size, tag, s->name, filename, fileline);
 #else
-		if ((unsigned)tag < TAGMALLOC_MAX_TAGS)
-			Com_Error (ERR_FATAL, "Z_TagMalloc: failed on allocation of %i bytes (%s)", size, tagmalloc_tags[(unsigned)tag].name);
-		else
-			Com_Error (ERR_FATAL, "Z_TagMalloc: failed on allocation of %i bytes, tag: %i", size, tag);
+		Com_Error (ERR_FATAL, "Z_TagMalloc: failed on allocation of %i bytes, tagged %i%s", size, tag, s->name);
 #endif
 	}
 
 	//memset (z, 0, size);
-	z_count++;
+	s->count++;
+	s->bytes += size;
 
-	if ((unsigned)tag < TAGMALLOC_MAX_TAGS)
-		tagmalloc_tags[tag].allocs++;
-
-	z_bytes += size;
 	z->magic = Z_MAGIC;
 	z->tag = tag;
 	z->size = size;
@@ -1297,6 +677,8 @@ void *Z_TagMalloc (int size, int tag)
 	z->prev = &z_chain;
 	z_chain.next->prev = z;
 	z_chain.next = z;
+
+	*( uint16 * )( ( byte * )z + size - sizeof( uint16 ) ) = Z_TAIL;
 
 	return (void *)(z+1);
 }
@@ -1310,6 +692,11 @@ char *CopyString (const char *in, int tag)
 	char	*out;
 	int		len;
 
+#ifndef NDEBUG
+	if (!in)
+		Com_Error (ERR_FATAL, "CopyString: in == NULL, tagged %i:%s (%s:%i)!", tag, z_stats[(unsigned)tag < TAG_MAX_TAGS ? tag : TAG_NOT_TAGGED].name, filename, fileline);
+#endif
+
 	len = strlen(in);
 	
 #ifndef NDEBUG
@@ -1322,29 +709,63 @@ char *CopyString (const char *in, int tag)
 	return out;
 }
 
+char *Cvar_CopyString( const char *in, int tag ) {
+	char	*out;
+	int		len;
+    zstatic_t *z;
+
+#ifndef NDEBUG
+	if (!in)
+		Com_Error (ERR_FATAL, "CopyString: in == NULL, tagged %i:%s!", tag, z_stats[(unsigned)tag < TAG_MAX_TAGS ? tag : TAG_NOT_TAGGED].name);
+#endif
+
+	if( !in[0] ) {
+        z = &z_static[10];
+        z_stats[TAG_STATIC].count++;
+        z_stats[TAG_STATIC].bytes += z->z.size;
+		return z->data;
+	}
+
+	if( !in[1] && Q_isdigit( in[0] ) ) {
+        z = &z_static[ in[0] - '0' ];
+        z_stats[TAG_STATIC].count++;
+        z_stats[TAG_STATIC].bytes += z->z.size;
+		return z->data;
+	}
+
+	len = strlen(in);
+	
+#ifndef NDEBUG
+	out = _Z_TagMalloc (len+1, tag, "Cvar_CopyString", 1);
+#else
+	out = Z_TagMalloc (len+1, tag);
+#endif
+
+	strcpy( out, in );
+
+	return out;
+}
+
 void *Z_TagMallocGame (int size, int tag)
 {
 	byte		*b;
-	int			ntag;
 
 	if (size <= 0) {
-		Com_Printf ("Z_TagMallocGame: Game DLL tried to allocate %i bytes!\n", size);
+		Com_Printf ("Z_TagMallocGame: Game DLL tried to allocate %i bytes, tag %i!\n", size, tag);
 		return NULL;
 	}
 
-	if(tag == TAG_GAME)
-		ntag = TAGMALLOC_DLL_GAME;
-	else if(tag == TAG_LEVEL)
-		ntag = TAGMALLOC_DLL_LEVEL;
-	else if(tag <= TAGMALLOC_MAX_TAGS)
-		ntag = tag + 1000;
+	if (tag == TAG_GAME)
+		tag = TAG_DLL_GAME;
+	else if (tag == TAG_LEVEL)
+		tag = TAG_DLL_LEVEL;
 	else
-		ntag = tag;
+		tag = tag + TAG_MAX_TAGS;
 
 #ifndef NDEBUG
-	b = _Z_TagMalloc (size, ntag, "Game DLL", 0);
+	b = _Z_TagMalloc (size, tag, "Game DLL", 0);
 #else
-	b = Z_TagMalloc (size, ntag);
+	b = Z_TagMalloc (size, tag);
 #endif
 	memset (b, 0, size);
 
@@ -1365,21 +786,18 @@ void Z_FreeGame (void *ptr)
 
 void Z_FreeTagsGame (int tag)
 {
-	int ntag;
-
-	if(tag == TAG_GAME)
-		ntag = TAGMALLOC_DLL_GAME;
+	if (tag == TAG_GAME)
+		tag = TAG_DLL_GAME;
 	else if(tag == TAG_LEVEL)
-		ntag = TAGMALLOC_DLL_LEVEL;
-	else if(tag <= TAGMALLOC_MAX_TAGS)
-		ntag = tag + 1000;
+		tag = TAG_DLL_LEVEL;
 	else
-		ntag = tag;
+		tag = tag + TAG_MAX_TAGS;
+
 
 #ifndef NDEBUG
-	_Z_FreeTags(ntag, "Game DLL", 2);
+	_Z_FreeTags(tag, "Game DLL", 2);
 #else
-	Z_FreeTags(ntag);
+	Z_FreeTags(tag);
 #endif
 }
 
@@ -1532,7 +950,12 @@ static const byte chktbl[1024] = {
 0x48, 0xe5, 0x3a, 0x79, 0xc1, 0x69, 0x33, 0x53, 0x1b, 0x80, 0xb8, 0x91, 0x7d, 0xb4, 0xf6,
 0x17, 0x1a, 0x1d, 0x5a, 0x32, 0xd6, 0xcc, 0x71, 0x29, 0x3f, 0x28, 0xbb, 0xf3, 0x5e, 0x71,
 0xb8, 0x43, 0xaf, 0xf8, 0xb9, 0x64, 0xef, 0xc4, 0xa5, 0x6c, 0x08, 0x53, 0xc7, 0x00, 0x10,
-0x39, 0x4f, 0xdd, 0xe4, 0xb6, 0x19, 0x27, 0xfb, 0xb8, 0xf5, 0x32, 0x73, 0xe5, 0xcb, 0x32
+0x39, 0x4f, 0xdd, 0xe4, 0xb6, 0x19, 0x27, 0xfb, 0xb8, 0xf5, 0x32, 0x73, 0xe5, 0xcb, 0x32,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00,
+0x00, 0x00, 0x00, 0x00
 };
 
 /*
@@ -1604,6 +1027,8 @@ static void OnChange_Timescale (cvar_t *self, const char *oldValue)
 		Cvar_Set(self->name, "400");
 }
 
+#ifndef NDEBUG
+
 /*
 =============
 Com_Error_f
@@ -1612,15 +1037,41 @@ Just throw a fatal error to
 test error shutdown procedures
 =============
 */
-/*
-void Com_Error_f (void)
-{
-	Com_Error (ERR_FATAL, "%s", Cmd_Argv(1));
+static void Com_Error_f( void ) {
+	Com_Error( ERR_FATAL, "%s", Cmd_Argv( 1 ) );
 }
-*/
 
-void Cbuf_ExecuteAll(qboolean insertDefer);
+static void Com_ErrorDrop_f( void ) {
+	Com_Error( ERR_DROP, "%s", Cmd_Argv( 1 ) );
+}
+
+static void Com_Freeze_f( void ) {
+	int seconds;
+	unsigned int time;
+
+	if( Cmd_Argc() < 2 ) {
+		Com_Printf( "Usage: %s <seconds>\n", Cmd_Argv( 0 ) );
+		return;
+	}
+
+	seconds = atoi( Cmd_Argv( 1 ) );
+	if( seconds < 1 ) {
+		return;
+	}
+
+	time = Sys_Milliseconds() + seconds * 1000;
+	while( Sys_Milliseconds() < time )
+		;
+
+}
+
+static void Com_Crash_f( void ) {
+	*( uint32 * )0 = 0x123456;
+}
+#endif
+
 void Cmd_Echo_f (void);
+qboolean ComInitialized = false;
 
 /*
 =================
@@ -1629,7 +1080,7 @@ Qcommon_Init
 */
 void Qcommon_Init (int argc, char **argv)
 {
-	char	*s;
+	static const char	*apVersion = APPLICATION " v" VERSION " " CPUSTRING " " __DATE__ " " BUILDSTRING;
 
 	if (setjmp (abortframe) )
 		Sys_Error ("Error during initialization");
@@ -1653,21 +1104,24 @@ void Qcommon_Init (int argc, char **argv)
 	// config files, but we want other parms to override
 	// the settings of the config files
 	Cbuf_AddEarlyCommands (false);
-	Cbuf_ExecuteAll(false);
+	Cbuf_Execute();
 
 	FS_InitFilesystem ();
 
 	Cbuf_AddText ("exec default.cfg\n");
+	Cbuf_Execute();
 	Cbuf_AddText ("exec aprconfig.cfg\n");
+	Cbuf_Execute();
 	FS_ExecConfig("autoexec.cfg");
+	Cbuf_Execute();
 
 	Cbuf_AddEarlyCommands (true);
-	Cbuf_ExecuteAll(true);
+	Cbuf_Execute();
 
 	Cmd_AddCommand ("echo", Cmd_Echo_f);
 	// init commands and vars
     Cmd_AddCommand ("z_stats", Z_Stats_f);
-    //Cmd_AddCommand ("error", Com_Error_f);
+	Cmd_AddCommand( "z_check", Z_Check );
 
 	host_speeds = Cvar_Get ("host_speeds", "0", 0);
 	developer = Cvar_Get ("developer", "0", 0);
@@ -1684,9 +1138,7 @@ void Qcommon_Init (int argc, char **argv)
 	timescale->OnChange = OnChange_Timescale;
 	OnChange_Timescale(timescale, timescale->resetString);
 
-	s = va("AprQ2 v%s %s %s %s", APR_VERSION, CPUSTRING, __DATE__, BUILDSTRING);
-	Cvar_Get ("version", s, CVAR_SERVERINFO|CVAR_ROM);
-
+	Cvar_Get ("version", apVersion, CVAR_SERVERINFO|CVAR_ROM);
 
 	Cmd_AddMacro( "date", Com_Date_m );
 	Cmd_AddMacro( "time", Com_Time_m );
@@ -1694,7 +1146,16 @@ void Qcommon_Init (int argc, char **argv)
 	if (dedicated->integer)
 		Cmd_AddCommand ("quit", Com_Quit);
 
+#ifndef NDEBUG
+	Cmd_AddCommand( "error", Com_Error_f );
+	Cmd_AddCommand( "errordrop", Com_ErrorDrop_f );
+	Cmd_AddCommand( "freeze", Com_Freeze_f );
+	Cmd_AddCommand( "crash", Com_Crash_f );
+#endif
+
 	Sys_Init ();
+
+	srand(Sys_Milliseconds());
 
 	NET_Init ();
 	Netchan_Init ();
@@ -1702,9 +1163,11 @@ void Qcommon_Init (int argc, char **argv)
 	SV_Init ();
 	CL_Init ();
 
+	ComInitialized = true;
+
 	Cbuf_InsertFromDefer(); //Execute commands which was initialized after loading autoexec (ignore, highlight etc)
 	FS_ExecConfig ("postinit.cfg");
-	Cbuf_ExecuteAll(false);
+	Cbuf_Execute();
 
 	// add + commands from command line
 	if (!Cbuf_AddLateCommands ())
@@ -1713,12 +1176,12 @@ void Qcommon_Init (int argc, char **argv)
 			Cbuf_AddText ("toggleconsole\n");
 		else
 			Cbuf_AddText ("dedicated_start\n");
-		Cbuf_Execute ();
+		Cbuf_Execute();
 	}
 	else
 	{	// the user asked for something explicit
 		// so drop the loading plaque
-		SCR_EndLoadingPlaque ();
+		SCR_EndLoadingPlaque();
 	}
 
 	Com_Printf ("====== " APPLICATION " Initialized ======\n\n");	
@@ -1786,8 +1249,8 @@ void Qcommon_Frame (int msec)
 	}
 	else
 	{
-		int		time_before = 0, time_between = 0, time_after = 0;
-		int		all, sv, gm, cl, rf;
+		unsigned int time_before = 0, time_between = 0, time_after = 0;
+		unsigned int all, sv, gm, cl, rf;
 
 		time_before = Sys_Milliseconds ();
 
@@ -1820,7 +1283,6 @@ void Qcommon_Shutdown (void)
 	Z_FreeAll();
 }
 
-#ifdef R1Q2_PROTOCOL
 int ZLibDecompress (byte *in, int inlen, byte *out, int outlen, int wbits)
 {
 	z_stream zs;
@@ -1835,8 +1297,7 @@ int ZLibDecompress (byte *in, int inlen, byte *out, int outlen, int wbits)
 	zs.avail_out = outlen;
 
 	result = inflateInit2(&zs, wbits);
-	if (result != Z_OK)
-	{
+	if (result != Z_OK) {
 		Com_Error (ERR_DROP, "ZLib data error! Error %d on inflateInit.\nMessage: %s", result, zs.msg);
 		return 0;
 	}
@@ -1844,15 +1305,13 @@ int ZLibDecompress (byte *in, int inlen, byte *out, int outlen, int wbits)
 	zs.avail_in = inlen;
 
 	result = inflate(&zs, Z_FINISH);
-	if (result != Z_STREAM_END)
-	{
+	if (result != Z_STREAM_END) {
 		Com_Error (ERR_DROP, "ZLib data error! Error %d on inflate.\nMessage: %s", result, zs.msg);
 		zs.total_out = 0;
 	}
 
 	result = inflateEnd(&zs);
-	if (result != Z_OK)
-	{
+	if (result != Z_OK) {
 		Com_Error (ERR_DROP, "ZLib data error! Error %d on inflateEnd.\nMessage: %s", result, zs.msg);
 		return 0;
 	}
@@ -1897,5 +1356,5 @@ int ZLibCompressChunk(byte *in, int len_in, byte *out, int len_out, int method, 
 
 	return zs.total_out;
 }
-#endif
+
 

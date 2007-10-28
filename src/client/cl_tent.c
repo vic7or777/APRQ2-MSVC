@@ -552,7 +552,7 @@ static void CL_ParseLaser (sizebuf_t *msg, int colors)
 	MSG_ReadPos (msg, start);
 	MSG_ReadPos (msg, end);
 
-	for (i=0, l=cl_lasers ; i< MAX_LASERS ; i++, l++)
+	for (i = 0, l = cl_lasers; i < MAX_LASERS; i++, l++)
 	{
 		if (l->endtime < cl.time)
 		{
@@ -564,6 +564,9 @@ static void CL_ParseLaser (sizebuf_t *msg, int colors)
 			l->ent.model = NULL;
 			l->ent.frame = 4;
 			l->endtime = cl.time + 100;
+#ifdef GL_QUAKE
+			AxisClear(l->ent.axis);
+#endif
 			return;
 		}
 	}
@@ -574,11 +577,8 @@ static void CL_ParseLaser (sizebuf_t *msg, int colors)
 static void CL_ParseSteam (sizebuf_t *msg)
 {
 	vec3_t	pos, dir;
-	int		id, i;
-	int		r;
-	int		cnt;
-	int		color;
-	int		magnitude;
+	int		id, i, r, cnt;
+	int		color, magnitude;
 	cl_sustain_t	*s, *free_sustain;
 
 	id = MSG_ReadShort (msg);		// an id of -1 is an instant effect
@@ -740,7 +740,7 @@ void CL_ParseTEnt (sizebuf_t *msg)
 #endif
 			CL_SmokeAndFlash(pos);
 
-			V_AddStain(pos, 1, 5);
+			R_AddStain(pos, 1, 5);
 
 			// impact sound
 			cnt = rand()&15;
@@ -775,7 +775,7 @@ void CL_ParseTEnt (sizebuf_t *msg)
 		CL_ParticleEffect (pos, dir, 0, 20);
 		CL_SmokeAndFlash(pos);
 
-		V_AddStain(pos, 1, 9);
+		R_AddStain(pos, 1, 9);
 		break;
 
 	case TE_SPLASH:			// bullet hitting water
@@ -821,7 +821,7 @@ void CL_ParseTEnt (sizebuf_t *msg)
 		MSG_ReadDir (msg, dir);
 		CL_BlasterParticles (pos, dir);
 
-		V_AddStain(pos, 2, 10);
+		R_AddStain(pos, 2, 10);
 
 		ex = CL_AllocExplosion ();
 		VectorCopy (pos, ex->ent.origin);
@@ -857,7 +857,7 @@ void CL_ParseTEnt (sizebuf_t *msg)
 	case TE_GRENADE_EXPLOSION_WATER:
 		MSG_ReadPos (msg, pos);
 
-		V_AddStain(pos, 3, 35);
+		R_AddStain(pos, 3, 35);
 
 		ex = CL_AllocExplosion ();
 		VectorCopy (pos, ex->ent.origin);
@@ -901,7 +901,7 @@ void CL_ParseTEnt (sizebuf_t *msg)
 	case TE_EXPLOSION1_NP:						// PMM
 		MSG_ReadPos (msg, pos);
 
-		V_AddStain(pos, 3, 35);
+		R_AddStain(pos, 3, 35);
 
 		ex = CL_AllocExplosion ();
 		VectorCopy (pos, ex->ent.origin);
@@ -1067,7 +1067,7 @@ void CL_ParseTEnt (sizebuf_t *msg)
 	case TE_PLAIN_EXPLOSION:
 		MSG_ReadPos (msg, pos);
 
-		V_AddStain(pos, 3, 35);
+		R_AddStain(pos, 3, 35);
 
 		ex = CL_AllocExplosion ();
 		VectorCopy (pos, ex->ent.origin);
@@ -1270,7 +1270,9 @@ void CL_AddBeams (void)
 			ent.model = b->model;
 			ent.flags = RF_FULLBRIGHT;
 			VectorSet(ent.angles, pitch, yaw, rand()%360);
+#ifdef GL_QUAKE
 			AnglesToAxis(ent.angles, ent.axis);
+#endif
 			V_AddEntity (&ent);
 			return;
 		}
@@ -1278,15 +1280,17 @@ void CL_AddBeams (void)
 		{
 			VectorCopy (org, ent.origin);
 			ent.model = b->model;
-			if (b->model == cl_mod_lightning)
-			{
+			if (b->model == cl_mod_lightning) {
 				ent.flags = RF_FULLBRIGHT;
 				VectorSet(ent.angles, -pitch, yaw + 180.0f, rand()%360);
 			}
-			else
+			else {
 				VectorSet(ent.angles, pitch, yaw, rand()%360);
+			}
 			
+#ifdef GL_QUAKE
 			AnglesToAxis(ent.angles, ent.axis);
+#endif
 			V_AddEntity (&ent);
 
 			VectorMA (org, len, dist, org);
@@ -1296,7 +1300,7 @@ void CL_AddBeams (void)
 	}
 }
 
-extern cvar_t *hand;
+extern cvar_t *info_hand;
 
 /*
 =================
@@ -1317,18 +1321,17 @@ void CL_AddPlayerBeams (void)
 	int			framenum = 0;
 	float		model_length;
 	
-	float		hand_multiplier = 1;
+	float		hand_multiplier;
 	frame_t		*oldframe;
-	player_state_new_t	*ps, *ops;
+	player_state_t	*ps, *ops;
 
 //PMM
-	if (hand)
-	{
-		if (hand->integer == 2)
-			hand_multiplier = 0;
-		else if (hand->integer == 1)
-			hand_multiplier = -1;
-	}
+	if (info_hand->integer == 2)
+		hand_multiplier = 0;
+	else if (info_hand->integer == 1)
+		hand_multiplier = -1;
+	else
+		hand_multiplier = 1;
 //PMM
 
 // update beams
@@ -1360,7 +1363,7 @@ void CL_AddPlayerBeams (void)
 				VectorMA (b->start, (hand_multiplier * b->offset[0]), cl.v_right, org);
 				VectorMA (     org, b->offset[1], cl.v_forward, org);
 				VectorMA (     org, b->offset[2], cl.v_up, org);
-				if ((hand) && (hand->integer == 2)) {
+				if (info_hand->integer == 2) {
 					VectorMA (org, -1, cl.v_up, org);
 				}
 				// FIXME - take these out when final
@@ -1394,7 +1397,7 @@ void CL_AddPlayerBeams (void)
 			VectorMA (dist, (hand_multiplier * b->offset[0]), r, dist);
 			VectorMA (dist, b->offset[1], f, dist);
 			VectorMA (dist, b->offset[2], u, dist);
-			if ((hand) && (hand->integer == 2))
+			if (info_hand->integer == 2)
 				VectorMA (org, -1, cl.v_up, org);
 		}
 //PMM
@@ -1483,7 +1486,9 @@ void CL_AddPlayerBeams (void)
 			ent.model = b->model;
 			ent.flags = RF_FULLBRIGHT;
 			VectorSet(ent.angles, pitch, yaw, rand()%360);
+#ifdef GL_QUAKE
 			AnglesToAxis(ent.angles, ent.axis);
+#endif
 			V_AddEntity (&ent);			
 			return;
 		}
@@ -1506,8 +1511,9 @@ void CL_AddPlayerBeams (void)
 			{
 				VectorSet(ent.angles, pitch, yaw, rand()%360);
 			}
-			
+#ifdef GL_QUAKE
 			AnglesToAxis(ent.angles, ent.axis);
+#endif
 			V_AddEntity (&ent);
 
 			VectorMA (org, len, dist, org);
@@ -1621,7 +1627,9 @@ void CL_AddExplosions (void)
 		ent->oldframe = ex->baseframe + f;
 		ent->backlerp = 1.0f - cl.lerpfrac;
 
+#ifdef GL_QUAKE
 		AnglesToAxis(ent->angles, ent->axis);
+#endif
 		V_AddEntity (ent);
 	}
 }
@@ -1637,7 +1645,7 @@ void CL_AddLasers (void)
 	laser_t		*l;
 	int			i;
 
-	for (i=0, l=cl_lasers ; i< MAX_LASERS ; i++, l++)
+	for (i = 0, l = cl_lasers; i < MAX_LASERS; i++, l++)
 	{
 		if (l->endtime >= cl.time)
 			V_AddEntity (&l->ent);
@@ -1650,11 +1658,11 @@ void CL_ProcessSustain (void)
 	cl_sustain_t	*s;
 	int				i;
 
-	for (i=0, s=cl_sustains; i< MAX_SUSTAINS; i++, s++)
+	for (i = 0, s = cl_sustains; i < MAX_SUSTAINS; i++, s++)
 	{
 		if (s->id)
 		{
-			if ((s->endtime >= cl.time) && (cl.time >= s->nextthink))
+			if (s->endtime >= cl.time && cl.time >= s->nextthink)
 				s->think (s);
 			else if (s->endtime < cl.time)
 				s->id = 0;

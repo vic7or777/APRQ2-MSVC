@@ -183,15 +183,15 @@ static void SVC_Info (void)
 
 	version = atoi (Cmd_Argv(1));
 
-	if (version != PROTOCOL_VERSION)
+	if (version != PROTOCOL_VERSION_DEFAULT)
 		Com_sprintf (string, sizeof(string), "%s: wrong version\n", hostname->string, sizeof(string));
 	else
 	{
 		count = 0;
-		for (i=0 ; i<maxclients->integer ; i++)
+		for (i=0 ; i<maxclients->integer ; i++) {
 			if (svs.clients[i].state >= cs_connected)
 				count++;
-
+		}
 		Com_sprintf (string, sizeof(string), "%16s %8s %2i/%2i\n", hostname->string, sv.name, count, maxclients->integer);
 	}
 
@@ -281,7 +281,7 @@ static void SVC_DirectConnect (void)
 	Com_DPrintf ("SVC_DirectConnect ()\n");
 
 	version = atoi(Cmd_Argv(1));
-	if (version != PROTOCOL_VERSION)
+	if (version != PROTOCOL_VERSION_DEFAULT)
 	{
 		Netchan_OutOfBandPrint (NS_SERVER, &adr, "print\nServer is version %4.2f.\n", VERSION);
 		Com_DPrintf ("    rejected connect from version %i\n", version);
@@ -398,7 +398,7 @@ gotnewcl:
 	// send the connect packet to the client
 	Netchan_OutOfBandPrint (NS_SERVER, &adr, "client_connect");
 
-	Netchan_Setup (NS_SERVER, &newcl->netchan, &adr, PROTOCOL_VERSION, qport);
+	Netchan_Setup (NS_SERVER, &newcl->netchan, &adr, PROTOCOL_VERSION_DEFAULT, qport);
 
 	newcl->state = cs_connected;
 	
@@ -594,12 +594,29 @@ SV_ReadPackets
 */
 static void SV_ReadPackets (void)
 {
-	int			i;
+	int			i, ret;
 	client_t	*cl;
 	int			qport;
 
-	while (NET_GetPacket (NS_SERVER, &net_from, &net_message))
+	while ((ret = NET_GetPacket (NS_SERVER, &net_from, &net_message)) != 0)
 	{
+		if (ret == -1) {
+			// check for packets from connected clients
+			for (i=0, cl=svs.clients ; i<maxclients->integer ; i++,cl++)
+			{
+				if (cl->state == cs_free)
+					continue;
+				if (!NET_CompareBaseAdr (&net_from, &cl->netchan.remote_address))
+					continue;
+				SV_BroadcastPrintf( PRINT_HIGH, "%s was dropped, reason: connection reset by peer\n", cl->name );
+				if( cl->state != cs_spawned ) {
+					SV_ClientPrintf( cl, PRINT_HIGH, "You were dropped, reason: connection reset by peer\n" );
+				}
+				SV_DropClient( cl );
+				break;
+			}
+			continue;
+		}
 		// check for connectionless packet (0xffffffff) first
 		if (*(int *)net_message.data == -1)
 		{
@@ -957,7 +974,7 @@ void SV_Init (void)
 	Cvar_Get ("fraglimit", "0", CVAR_SERVERINFO);
 	Cvar_Get ("timelimit", "0", CVAR_SERVERINFO);
 	Cvar_Get ("cheats", "0", CVAR_SERVERINFO|CVAR_LATCH);
-	Cvar_Get ("protocol", va("%i", PROTOCOL_VERSION), CVAR_SERVERINFO|CVAR_NOSET);
+	Cvar_Get ("protocol", va("%i", PROTOCOL_VERSION_DEFAULT), CVAR_SERVERINFO|CVAR_NOSET);
 	maxclients = Cvar_Get ("maxclients", "1", CVAR_SERVERINFO | CVAR_LATCH);
 	hostname = Cvar_Get ("hostname", "noname", CVAR_SERVERINFO | CVAR_ARCHIVE);
 	timeout = Cvar_Get ("timeout", "125", 0);
@@ -1042,7 +1059,8 @@ void SV_Shutdown (char *finalmsg, qboolean reconnect)
 
 	// free current level
 	if (sv.demofile)
-		fclose (sv.demofile);
+		FS_FCloseFile(sv.demofile);
+
 	memset (&sv, 0, sizeof(sv));
 	Com_SetServerState (sv.state);
 

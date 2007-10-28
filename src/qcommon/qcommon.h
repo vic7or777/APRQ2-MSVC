@@ -23,17 +23,12 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "../game/q_shared.h"
 
 
-#define	VERSION		3.21
+#define APPLICATION "AprQ2"
+
+#define	VERSION		"1.21"
+
 
 #define	BASEDIRNAME	"baseq2"
-
-
-#ifndef APPLICATION
-# define APPLICATION "AprQ2"
-#endif
-
-#define APR_APPNAME "AprQ2"
-#define APR_VERSION "1.20"
 
 //============================================================================
 
@@ -69,9 +64,11 @@ void MSG_WriteCoord (sizebuf_t *sb, float f);
 void MSG_WritePos (sizebuf_t *sb, const vec3_t pos);
 void MSG_WriteAngle (sizebuf_t *sb, float f);
 void MSG_WriteAngle16 (sizebuf_t *sb, float f);
-void MSG_WriteDeltaUsercmd (sizebuf_t *sb, const struct usercmd_s *from, const struct usercmd_s *cmd);
+void MSG_WriteDeltaUsercmd (sizebuf_t *sb, const struct usercmd_s *from, const struct usercmd_s *cmd, int protocol);
 void MSG_WriteDeltaEntity (const struct entity_state_s *from, const struct entity_state_s *to, sizebuf_t *msg, qboolean force, qboolean newentity);
 void MSG_WriteDir (sizebuf_t *sb, const vec3_t vector);
+
+void MSG_WriteDeltaPlayerstate_Default (const player_state_t *from, const player_state_t *to, sizebuf_t *msg);
 
 
 void	MSG_BeginReading (sizebuf_t *sb);
@@ -94,11 +91,14 @@ void	MSG_ReadDir (sizebuf_t *sb, vec3_t vector);
 
 void	MSG_ReadData (sizebuf_t *sb, void *buffer, int size);
 
+void MSG_ParseDeltaEntity ( sizebuf_t *msg, const entity_state_t *from, entity_state_t *to, int number, int bits );
 
-#ifdef R1Q2_PROTOCOL
+void MSG_ParseDeltaPlayerstate_Default ( sizebuf_t *msg, const player_state_t *from, player_state_t *to, int flags );
+void MSG_ParseDeltaPlayerstate_Enhanced( sizebuf_t *msg, const player_state_t *from, player_state_t *to, int flags, int extraflags );
+
+
 int ZLibCompressChunk(byte *in, int len_in, byte *out, int len_out, int method, int wbits);
 int ZLibDecompress (byte *in, int inlen, byte /*@out@*/*out, int outlen, int wbits);
-#endif
 
 //============================================================================
 
@@ -137,12 +137,13 @@ PROTOCOL
 
 // protocol.h -- communications protocols
 
-#define	PROTOCOL_VERSION	34
+#define	PROTOCOL_VERSION_OLD		26
+#define	PROTOCOL_VERSION_DEFAULT	34
+#define PROTOCOL_VERSION_R1Q2		35
 
-#define	ORIGINAL_PROTOCOL_VERSION	34
-#define	ENHANCED_PROTOCOL_VERSION	35
-
-#define	CURRENT_ENHANCED_COMPATIBILITY_NUMBER	1903
+#define PROTOCOL_VERSION_R1Q2_MINIMUM	1902
+#define PROTOCOL_VERSION_R1Q2_UCMD		1904	// b7387
+#define PROTOCOL_VERSION_R1Q2_CURRENT	1904	// b7387
 
 //=========================================
 
@@ -158,6 +159,16 @@ PROTOCOL
 #define NET_NONE		0
 #define NET_CLIENT		1
 #define NET_SERVER		2
+
+
+#define SVCMD_BITS				5
+#define SVCMD_MASK				( ( 1 << SVCMD_BITS ) - 1 )
+
+#define	FRAMENUM_BITS			27
+#define FRAMENUM_MASK			( ( 1 << FRAMENUM_BITS ) - 1 )
+
+#define SURPRESSCOUNT_BITS		4
+#define SURPRESSCOUNT_MASK		( ( 1 << SURPRESSCOUNT_BITS ) - 1 )
 
 //==================
 // the svc_strings[] array in cl_parse.c should mirror this
@@ -196,8 +207,12 @@ enum svc_ops_e
 
 	// ********** r1q2 specific ***********
 	svc_zpacket,
-	svc_zdownload
+	svc_zdownload,
+	svc_playerupdate,
+	svc_setting,
 	// ********** end r1q2 specific *******
+
+	svc_max_enttypes
 };
 
 typedef enum {
@@ -214,8 +229,15 @@ typedef enum
 	CLSET_NOGUN,
 	CLSET_NOBLEND,
 	CLSET_RECORDING,
+	CLSET_PLAYERUPDATE_REQUESTS,
 	CLSET_MAX
 } clientsetting_t;
+
+typedef enum
+{
+	SVSET_PLAYERUPDATES,
+	SVSET_MAX
+} serversetting_t;
 
 //==============================================
 
@@ -252,15 +274,16 @@ enum clc_ops_e
 #define	PS_WEAPONINDEX		(1<<12)
 #define	PS_WEAPONFRAME		(1<<13)
 #define	PS_RDFLAGS			(1<<14)
-
 #define	PS_BBOX				(1<<15)
 
-//r1 extra hacky bits that are hijacked for more bandwidth goodness. 4 bits in surpresscount
-//and 3 in the server message byte (!!!!!!!!)
+#define PS_BITS				16
+#define PS_MASK				( ( 1 << PS_BITS ) - 1 )
+
+/* r1q2 protocol specific extra flags */
 #define	EPS_GUNOFFSET		(1<<0)
 #define	EPS_GUNANGLES		(1<<1)
-#define	EPS_PMOVE_VELOCITY2	(1<<2)
-#define	EPS_PMOVE_ORIGIN2	(1<<3)
+#define	EPS_VELOCITY2		(1<<2)
+#define	EPS_ORIGIN2			(1<<3)
 #define	EPS_VIEWANGLE2		(1<<4)
 #define	EPS_STATS			(1<<5)
 //==============================================
@@ -277,6 +300,20 @@ enum clc_ops_e
 #define	CM_BUTTONS	(1<<6)
 #define	CM_IMPULSE	(1<<7)
 
+ // r1q2 button byte hacks
+#define BUTTON_MASK (BUTTON_ATTACK|BUTTON_USE|BUTTON_ANY)
+#define BUTTON_FORWARD  4
+#define BUTTON_SIDE     8
+#define BUTTON_UP       16
+#define BUTTON_ANGLE1   32
+#define BUTTON_ANGLE2   64
+
+#define	BUTTON_UCMD_DBLFORWARD	4
+#define BUTTON_UCMD_DBLSIDE		8
+#define	BUTTON_UCMD_DBLUP		16
+#define BUTTON_UCMD_DBL_ANGLE1	32
+#define BUTTON_UCMD_DBL_ANGLE2	64
+
 //==============================================
 
 // a sound without an ent or pos will be a local only sound
@@ -286,8 +323,8 @@ enum clc_ops_e
 #define	SND_ENT			(1<<3)		// a short 0-2: channel, 3-12: entity
 #define	SND_OFFSET		(1<<4)		// a byte, msec offset from frame start
 
-#define DEFAULT_SOUND_PACKET_VOLUME	1.0
-#define DEFAULT_SOUND_PACKET_ATTENUATION 1.0
+#define DEFAULT_SOUND_PACKET_VOLUME	1.0f
+#define DEFAULT_SOUND_PACKET_ATTENUATION 1.0f
 
 //==============================================
 
@@ -394,7 +431,8 @@ then searches for a command or variable that matches the first token.
 
 */
 
-typedef void (*xcommand_t) (void);
+typedef void ( *xcommand_t ) ( void );
+typedef void ( *xmacro_t )( char *, int );
 
 void	Cmd_Init (void);
 
@@ -441,7 +479,8 @@ void Cmd_WriteAliases (FILE *f);
 
 char *Cmd_ArgsFrom (int arg);
 
-void Cmd_AddMacro( const char *name, void (*function)( char *, int ) );
+void Cmd_AddMacro( const char *name, xmacro_t function );
+xmacro_t Cmd_FindMacroFunction( const char *name );
 void Cmd_ExecTrigger( const char *string );
 
 /*
@@ -464,6 +503,25 @@ set r_draworder 0	as above, but creates the cvar if not present
 Cvars are restricted from having the same names as commands to keep this
 interface from being ambiguous.
 */
+
+#define CVAR_LATCHED	32	// save changes until restarting its subsystem
+#define CVAR_CHEAT		128	// will be reset to default unless cheats are enabled
+#define CVAR_USER_CREATED 256 // user own cvars created with set
+#define CVAR_ROM		512 //user cant change it even from command line
+
+#define CVAR_INFOMASK		(CVAR_USERINFO|CVAR_SERVERINFO)
+#define CVAR_EXTENDED_MASK	(~31)
+
+/* bits 12 - 14, enum */
+#define	CVAR_SYSTEM_GENERIC		0x00000000
+#define	CVAR_SYSTEM_GAME		0x00001000
+#define	CVAR_SYSTEM_VIDEO		0x00002000
+#define	CVAR_SYSTEM_SOUND		0x00003000
+#define	CVAR_SYSTEM_INPUT		0x00004000
+#define	CVAR_SYSTEM_NET			0x00005000
+#define	CVAR_SYSTEM_FILES		0x00006000
+#define CVAR_SYSTEM_RESERVED	0x00007000
+#define	CVAR_SYSTEM_MASK		0x00007000
 
 extern	cvar_t	*cvar_vars;
 
@@ -520,6 +578,8 @@ extern	qboolean	userinfo_modified;
 // this is set each time a CVAR_USERINFO variable is changed
 // so that the client knows to send it to the server
 
+void Cvar_Subsystem( int subsystem );
+
 /*
 ==============================================================
 
@@ -532,39 +592,40 @@ NET
 
 #define	PORT_ANY	-1
 
-#define	MAX_MSGLEN		1400		// max length of a message
+//#define	MAX_MSGLEN		1400		// max length of a message
+#define	MAX_MSGLEN		4096
 #define	PACKET_HEADER	10			// two ints and a short
-#define	MAX_USABLEMSG	MAX_MSGLEN - PACKET_HEADER
+#define	MAX_USABLEMSG	(MAX_MSGLEN - PACKET_HEADER)
 
 //typedef enum {NA_LOOPBACK, NA_BROADCAST, NA_IP, NA_IPX, NA_BROADCAST_IPX} netadrtype_t;
 typedef enum {NA_LOOPBACK, NA_BROADCAST, NA_IP} netadrtype_t;
 
-typedef enum {NS_CLIENT, NS_SERVER} netsrc_t;
+typedef enum {NS_CLIENT, NS_SERVER, NS_COUNT} netsrc_t;
 
-typedef struct
+typedef struct netadr_s
 {
 	netadrtype_t	type;
-
-	byte	ip[4];
-	//byte	ipx[10];
-
-	uint16	port;
+	byte			ip[4];
+	uint16			port;
 } netadr_t;
 
 void		NET_Init (void);
 void		NET_Shutdown (void);
 
-void		NET_Config (qboolean multiplayer);
+void		NET_Config (int flag);
 
-qboolean	NET_GetPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_message);
+int			NET_GetPacket (netsrc_t sock, netadr_t *net_from, sizebuf_t *net_message);
 int			NET_SendPacket (netsrc_t sock, int length, const void *data, const netadr_t *to);
 
 qboolean	NET_CompareAdr (const netadr_t *a, const netadr_t *b);
 qboolean	NET_CompareBaseAdr (const netadr_t *a, const netadr_t *b);
-qboolean	NET_IsLocalAddress (const netadr_t *adr);
+
 char		*NET_AdrToString (const netadr_t *a);
 qboolean	NET_StringToAdr (const char *s, netadr_t *a);
-void		NET_Sleep(int msec);
+void		NET_Sleep (int msec);
+
+qboolean	NET_IsLANAddress (const netadr_t *adr);
+#define		NET_IsLocalAddress( adr )	( (adr)->type == NA_LOOPBACK || ((adr)->ip[0] == 127 && (adr)->ip[1] == 0 && (adr)->ip[2] == 0 && (adr)->ip[3] == 1))
 
 //============================================================================
 
@@ -581,8 +642,8 @@ typedef struct
 
 	int			dropped;			// between last packet and previous
 
-	int			last_received;		// for timeouts
-	int			last_sent;			// for retransmits
+	unsigned int last_received;		// for timeouts
+	unsigned int last_sent;			// for retransmits
 
 	netadr_t	remote_address;
 	uint16		qport;				// qport value to write when transmitting
@@ -611,7 +672,7 @@ typedef struct
 extern	netadr_t	net_from;
 extern	sizebuf_t	net_message;
 extern	byte		net_message_buffer[MAX_MSGLEN];
-
+extern	cvar_t		*net_maxmsglen;
 
 void Netchan_Init (void);
 void Netchan_Setup (netsrc_t sock, netchan_t *chan, netadr_t *adr, int protocol, int qport);
@@ -679,8 +740,8 @@ qboolean	CM_AreasConnected (int area1, int area2);
 int			CM_WriteAreaBits (byte *buffer, int area);
 qboolean	CM_HeadnodeVisible (int headnode, const byte *visbits);
 
-void		CM_WritePortalState (FILE *f);
-void		CM_ReadPortalState (FILE *f);
+void		CM_WritePortalState (fileHandle_t f);
+void		CM_ReadPortalState (fileHandle_t f);
 
 /*
 ==============================================================
@@ -692,12 +753,13 @@ Common between server and client so prediction matches
 ==============================================================
 */
 
-extern float pm_airaccelerate;
-extern float	pm_multiplier;
-extern qboolean	pm_strafehack;
-extern qboolean	pm_enhanced;
+typedef struct {
+	qboolean	airaccelerate;
+	qboolean	strafeHack;
+	float		speedMultiplier;
+} pmoveParams_t;
 
-void Pmove (pmove_t *pmove);
+void Pmove ( pmove_t *pmove, pmoveParams_t *params );
 
 /*
 ==============================================================
@@ -706,32 +768,84 @@ FILESYSTEM
 
 ==============================================================
 */
+#define MAX_LISTED_FILES	4096
+
+/* bits 0 - 1, enum */
+#define		FS_MODE_APPEND			0x00000000
+#define		FS_MODE_READ			0x00000001
+#define		FS_MODE_WRITE			0x00000002
+#define		FS_MODE_RDWR			0x00000003
+#define		FS_MODE_MASK			0x00000003
+
+/* bits 0 - 1, enum */
+#define		FS_SEARCHDIRS_NO			0x00000000
+#define		FS_SEARCHDIRS_YES			0x00000001
+#define		FS_SEARCHDIRS_ONLY			0x00000002
+#define		FS_SEARCHDIRS_RESERVED		0x00000003
+#define		FS_SEARCHDIRS_MASK			0x00000003
+
+/* bit 2, enum */
+#define FS_FLUSH_NONE			0x00000000
+#define FS_FLUSH_SYNC			0x00000004
+#define	FS_FLUSH_MASK			0x00000004
+
+/* bits 3 - 4, enum */
+#define	FS_TYPE_ANY			0x00000000
+#define	FS_TYPE_REAL		0x00000008
+#define	FS_TYPE_PAK			0x00000010
+#define	FS_TYPE_RESERVED	0x00000018
+#define	FS_TYPE_MASK		0x00000018
+
+/* bits 5 - 6, enum */
+#define	FS_PATH_ANY			0x00000000
+#define	FS_PATH_INIT		0x00000020
+#define	FS_PATH_BASE		0x00000040
+#define	FS_PATH_GAME		0x00000060
+#define	FS_PATH_MASK		0x00000060
+
+/* bits 7 - 10, flag */
+#define	FS_SEARCH_BYFILTER		0x00000080
+#define	FS_SEARCH_SAVEPATH		0x00000100
+#define	FS_SEARCH_EXTRAINFO		0x00000200
+#define	FS_SEARCH_RESERVED		0x00000400
+
+/* bits 7 - 8, flag */
+#define	FS_FLAG_RAW				0x00000080
+#define	FS_FLAG_CACHE			0x00000100
 
 void	FS_InitFilesystem (void);
-void	FS_SetGamedir (const char *dir);
 char	*FS_Gamedir (void);
 char	*FS_NextPath (const char *prevpath);
 //void	FS_ExecAutoexec (void);
 void	FS_ExecConfig (const char *filename);
-void	FS_ReloadPAKs(void);
 qboolean FS_ExistsInGameDir (const char *filename);
 
-int		FS_FOpenFile (const char *filename, FILE **file);
-void	FS_FCloseFile (FILE *f);
+int		FS_FOpenFile (const char *filename, fileHandle_t *f, uint32 mode);
+void	FS_FCloseFile (fileHandle_t f);
 // note: this can't be called from another DLL, due to MS libc issues
 
+int		FS_LoadFileEx (const char *path, void **buffer, uint32 flags);
 int		FS_LoadFile (const char *path, void **buffer);
+void	FS_FreeFile (void *buffer);
 // a null buffer will just return the file length without loading
 // a -1 length is not present
 
-int		FS_Read (void *buffer, int len, FILE *f);
+int		FS_Read (void *buffer, int len, fileHandle_t hFile);
+int		FS_Write (const void *buffer, int len, fileHandle_t hFile);
 // properly handles partial reads
 
-void	FS_FreeFile (void *buffer);
+void	FS_FPrintf( fileHandle_t f, const char *format, ... );
 
-void	FS_CreatePath (char *path);
+qboolean FS_CopyFile (const char *src, const char *dst);
+qboolean FS_RemoveFile (const char *filename);
+qboolean FS_RenameFile (const char *src, const char *dst);
+
+void	FS_CreatePath ( const char *path );
 
 char **FS_ListFiles( const char *findname, int *numfiles, unsigned musthave, unsigned canthave );
+
+qboolean FS_NeedRestart ( void );
+void FS_Restart( void );
 
 /*
 ==============================================================
@@ -776,63 +890,59 @@ byte		COM_BlockSequenceCRCByte (byte *base, int length, int sequence);
 
 int SortStrcmp( const void *p1, const void *p2 );
 
-
+extern	cvar_t	nullCvar;
 extern	cvar_t	*developer;
 extern	cvar_t	*dedicated;
 extern	cvar_t	*host_speeds;
 
 // host_speeds times
-extern	int		time_before_game;
-extern	int		time_after_game;
-extern	int		time_before_ref;
-extern	int		time_after_ref;
+extern unsigned int time_before_game;
+extern unsigned int time_after_game;
+extern unsigned int time_before_ref;
+extern unsigned int time_after_ref;
 
-typedef struct tagmalloc_tag_s
+typedef enum memtag_e
 {
-	int16		value;
-	const char	*name;
-	unsigned int allocs;
-} tagmalloc_tag_t;
+	TAG_NOT_TAGGED,
+	TAG_STATIC,
+	TAG_TEMP,
+	TAG_CMD,
+	TAG_ALIAS,
+	TAG_TRIGGER,
+	TAG_MACRO,
+	TAG_CVAR,
+	TAG_FS_LOADFILE,
+	TAG_FS_LOADPAK,
+	TAG_FS_FILELIST,
+	TAG_FS_SEARCHPATH,
+	TAG_CLIENTS,
+	TAG_CL_ENTS,
 
-//r1: tagmalloc defines
-enum tagmalloc_tags_e
-{
-	TAGMALLOC_NOT_TAGGED,
-	TAGMALLOC_CMDBUFF,
-	TAGMALLOC_CMD,
-	TAGMALLOC_ALIAS,
-	TAGMALLOC_TRIGGER,
-	TAGMALLOC_MACRO,
-	TAGMALLOC_CVAR,
-	TAGMALLOC_FSLOADFILE,
-	TAGMALLOC_FSLOADPAK,
-	TAGMALLOC_FILELIST,
-	TAGMALLOC_SEARCHPATH,
-	TAGMALLOC_CLIENTS,
-	TAGMALLOC_CL_ENTS,
+	TAG_CL_KEYBIND,
+	TAG_CL_SFX,
+	TAG_CL_SOUNDCACHE,
+	TAG_CL_LOADPCX,
+	TAG_CL_CINEMA,
+	TAG_CL_LOC,
+	TAG_CL_IGNORE,
+	TAG_CL_DRAWSTRING,
+	TAG_CL_DOWNLOAD,
 
-	TAGMALLOC_CLIENT_KEYBIND,
-	TAGMALLOC_CLIENT_SFX,
-	TAGMALLOC_CLIENT_SOUNDCACHE,
-	TAGMALLOC_CLIENT_LOADPCX,
-	TAGMALLOC_CLIENT_CINEMA,
-	TAGMALLOC_CLIENT_LOC,
-	TAGMALLOC_CLIENT_IGNORE,
-	TAGMALLOC_CLIENT_DOWNLOAD,
-	TAGMALLOC_X86,
-	TAGMALLOC_CLIPBOARD,
+	TAG_X86,
+	TAG_CLIPBOARD,
+	TAG_MENU,
+	TAG_MP3LIST,
+	TAG_AVIEXPORT,
 
-	TAGMALLOC_MENU,
-	TAGMALLOC_MP3LIST,
-	TAGMALLOC_AVIEXPORT,
-	TAGMALLOC_RENDER_IMAGE,
-	TAGMALLOC_RENDER_IMGRESAMPLE,
-	TAGMALLOC_RENDER_SCRSHOT,
+	TAG_RENDER_MODEL,
+	TAG_RENDER_IMAGE,
+	TAG_RENDER_IMGRESAMPLE,
+	TAG_RENDER_SCRSHOT,
 
-	TAGMALLOC_DLL_GAME,
-	TAGMALLOC_DLL_LEVEL,
-	TAGMALLOC_MAX_TAGS
-};
+	TAG_DLL_GAME,
+	TAG_DLL_LEVEL,
+	TAG_MAX_TAGS
+} memtag_t;
 
 #ifndef NDEBUG
 void _Z_Free (void *ptr, const char *filename, int fileline);

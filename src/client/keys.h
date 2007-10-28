@@ -149,9 +149,6 @@ typedef struct {
 
 extern	qkey_t		keys[MAX_KEYS];
 
-//extern char		*keybindings[256];
-//extern	int		key_repeats[256];
-
 extern	int	anykeydown;
 
 void Key_Event (int key, qboolean down, unsigned time);
@@ -163,4 +160,5 @@ void Key_ClearStates (void);
 void Key_Message( int key );
 void Key_Console( int key );
 qboolean Key_IsDown( int key );
-
+qboolean Key_GetOverstrikeMode( void );
+void Key_SetOverstrikeMode( qboolean state );

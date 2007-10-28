@@ -179,7 +179,7 @@ static void SV_SpawnServer (char *server, char *spawnpoint, server_state_t serve
 
 	Com_DPrintf ("SpawnServer: %s\n",server);
 	if (sv.demofile)
-		fclose (sv.demofile);
+		FS_FCloseFile(sv.demofile);
 
 	svs.spawncount++;		// any partially connected client will be
 							// restarted
@@ -196,14 +196,16 @@ static void SV_SpawnServer (char *server, char *spawnpoint, server_state_t serve
 	strcpy(sv.configstrings[CS_NAME], server);
 	if (Cvar_VariableValue ("deathmatch"))
 	{
-		sprintf(sv.configstrings[CS_AIRACCEL], "%g", sv_airaccelerate->value);
-		pm_airaccelerate = sv_airaccelerate->value;
+		sprintf(sv.configstrings[CS_AIRACCEL], "%d", sv_airaccelerate->integer);
+		sv.pmp.airaccelerate = sv_airaccelerate->integer ? true : false;
 	}
 	else
 	{
 		strcpy(sv.configstrings[CS_AIRACCEL], "0");
-		pm_airaccelerate = 0;
+		sv.pmp.airaccelerate = false;
 	}
+	sv.pmp.strafeHack = false;
+	sv.pmp.speedMultiplier = 1;
 
 	SZ_Init (&sv.multicast, sv.multicast_buf, sizeof(sv.multicast_buf));
 
@@ -284,6 +286,8 @@ SV_InitGame
 A brand new game has been started
 ==============
 */
+void CL_LocalConnect( void );
+
 void SV_InitGame (void)
 {
 	int		i;
@@ -304,6 +308,8 @@ void SV_InitGame (void)
 
 	// get any latched variable changes (maxclients, etc)
 	Cvar_GetLatchedVars (CVAR_LATCH);
+
+	CL_LocalConnect();
 
 	svs.initialized = true;
 
@@ -348,15 +354,16 @@ void SV_InitGame (void)
 	}
 
 	svs.spawncount = rand();
-	svs.clients = Z_TagMalloc (sizeof(client_t)*maxclients->integer, TAGMALLOC_CLIENTS);
+	svs.clients = Z_TagMalloc (sizeof(client_t)*maxclients->integer, TAG_CLIENTS);
 	svs.num_client_entities = maxclients->integer*UPDATE_BACKUP*64;
-	svs.client_entities = Z_TagMalloc (sizeof(entity_state_t)*svs.num_client_entities, TAGMALLOC_CL_ENTS);
+	svs.client_entities = Z_TagMalloc (sizeof(entity_state_t)*svs.num_client_entities, TAG_CL_ENTS);
 
 	memset (svs.clients, 0, sizeof(client_t)*maxclients->integer);
 	memset (svs.client_entities, 0, sizeof(entity_state_t)*svs.num_client_entities);
 
 	// init network stuff
-	NET_Config ( (maxclients->integer > 1) );
+	if (maxclients->integer > 1)
+		NET_Config(NET_SERVER);
 
 	// heartbeats will always be sent to the id master
 	svs.last_heartbeat = -99999;		// send immediately

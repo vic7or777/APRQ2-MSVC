@@ -60,11 +60,12 @@ void SCR_FinishCinematic (void);
 //
 // cl_draw.c
 //
-void SCR_InitDraw( void );
-void SCR_Draw2D( void );
-void SCR_AddToChatHUD( const char *string, int color, qboolean mm2 );
-void SCR_ClearChatHUD_f( void );
-void SCR_AddLagometerOutPacketInfo( int size );
-void SCR_AddLagometerPacketInfo( void );
-void SCR_ClearLagometer( void );
+void	SCR_InitDraw( void );
+void	SCR_Draw2D( void );
+float	SCR_FadeAlpha( unsigned int startTime, unsigned int visTime, unsigned int fadeTime );
+void	SCR_AddToChatHUD( const char *string, int color, qboolean mm2 );
+void	SCR_ClearChatHUD_f( void );
+void	SCR_AddLagometerOutPacketInfo( int size );
+void	SCR_AddLagometerPacketInfo( void );
+void	SCR_ClearLagometer( void );
 

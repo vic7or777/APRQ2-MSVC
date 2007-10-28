@@ -271,6 +271,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 	.extern spr8entryvec_table
 #endif
 
+#ifndef MACOS_X
 	.extern C(snd_linear_count)
 	.extern C(snd_p)
 	.extern C(snd_out)
@@ -278,6 +279,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 	.extern C(vup)
 	.extern C(vpn)
 	.extern C(BOPS_Error)
+#endif
 
 //
 // !!! note that this file must match the corresponding C structures at all

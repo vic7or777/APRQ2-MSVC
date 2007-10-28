@@ -69,11 +69,11 @@ qboolean SNDDMA_Init(void)
 
 	if (!snddevice)
 	{
-		sndbits = Cvar_Get("sndbits", "16", CVAR_ARCHIVE|CVAR_LATCHSOUND);
-		sndspeed = Cvar_Get("sndspeed", "0", CVAR_ARCHIVE|CVAR_LATCHSOUND);
-		sndchannels = Cvar_Get("sndchannels", "2", CVAR_ARCHIVE|CVAR_LATCHSOUND);
-		sndalsa = Cvar_Get("sndalsa", "1", CVAR_ARCHIVE|CVAR_LATCHSOUND);
-		snddevice = Cvar_Get("snddevice", "/dev/dsp", CVAR_ARCHIVE|CVAR_LATCHSOUND);
+		sndbits = Cvar_Get("sndbits", "16", CVAR_ARCHIVE|CVAR_LATCHED);
+		sndspeed = Cvar_Get("sndspeed", "0", CVAR_ARCHIVE|CVAR_LATCHED);
+		sndchannels = Cvar_Get("sndchannels", "2", CVAR_ARCHIVE|CVAR_LATCHED);
+		sndalsa = Cvar_Get("sndalsa", "1", CVAR_ARCHIVE|CVAR_LATCHED);
+		snddevice = Cvar_Get("snddevice", "/dev/dsp", CVAR_ARCHIVE|CVAR_LATCHED);
 	}
 
 	if(sndalsa->integer)

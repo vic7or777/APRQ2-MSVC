@@ -30,10 +30,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 ** GLimp_SwitchFullscreen
 **
 */
-#define WIN32_LEAN_AND_MEAN
-#define VC_LEANMEAN
+
 #include <assert.h>
-#include <windows.h>
 #include "../ref_gl/gl_local.h"
 #include "glw_win.h"
 #include "winquake.h"
@@ -100,7 +98,7 @@ static void PrintWinError(const char *function, qboolean isFatal)
 static qboolean s_classRegistered = false;
 extern int		vid_scaled_width, vid_scaled_height;
 
-qboolean VID_CreateWindow( int width, int height, qboolean fullscreen )
+static qboolean VID_CreateWindow( int width, int height, qboolean fullscreen )
 {
 	RECT			r;
 	int				stylebits;
@@ -260,7 +258,7 @@ static qboolean GLimp_SetFSMode( int *width, int *height )
 		
 		Com_Printf ( "failed\n" );
 
-		switch (hr) {
+		switch ((int)hr) {
 		case DISP_CHANGE_BADFLAGS: //Shouldnt hapent
 			Com_Printf("An invalid set of flags was passed in.\n");
 			return false;

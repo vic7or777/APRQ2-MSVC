@@ -30,10 +30,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <time.h>
 #include <ctype.h>
 
-#define R1Q2_PROTOCOL
-#ifdef R1Q2_PROTOCOL
 # include <zlib.h>
-#endif
 
 //==============================================
 #ifdef _WIN32
@@ -84,7 +81,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #	define CPUSTRING	"AXP"
 # endif
 
+#ifdef NDEBUG
 #define ANTICHEAT
+#endif
 
 typedef __int32 int32;
 typedef __int16 int16;
@@ -145,7 +144,7 @@ typedef uint16_t uint16;
 #  define CPUSTRING	"Unknown"
 # endif
 
-#define ENDIAN_BIG
+/* #define ENDIAN_BIG */
 #ifndef C_ONLY
 # define C_ONLY
 #endif
@@ -238,7 +237,7 @@ typedef uint16_t uint16;
 
 #ifdef GL_QUAKE
 # define R_AppActivate GLimp_AppActivate
-# define R_EndFrame GLimp_EndFrame
+//# define R_EndFrame GLimp_EndFrame
 # ifdef _WIN32
 #  define AVI_EXPORT
 # endif
@@ -255,7 +254,8 @@ int Sys_GetAntiCheatAPI (void);
 
 typedef unsigned char 		byte;
 typedef enum {false, true}	qboolean;
-
+typedef int qhandle_t;
+typedef int fileHandle_t;
 
 #ifndef NULL
 #define NULL ((void *)0)
@@ -339,12 +339,6 @@ typedef	int	fixed16_t;
 
 typedef	vec_t	quat_t[4];
 
-#define ONEDIV64	0.015625f
-#define ONEDIV128	0.0078125f
-#define ONEDIV255	0.003921568627450980392156862745098f
-#define ONEDIV255_5	0.0039138943248532289628180039138943f
-#define ONEDIV256	0.00390625f
-
 #ifndef M_PI
 #define M_PI		3.14159265358979323846f	// matches value in gcc v2 math.h
 #endif
@@ -354,10 +348,15 @@ typedef	vec_t	quat_t[4];
 #endif
 
 #define	M_PI_DIV_2		1.57079632679489661923f
-#define M_PI_DIV_360	0.008726646259971647884611f
-
 #define M_PI_DIV_180	0.0174532925199432957692f
+#define M_PI_DIV_360	0.008726646259971647884611f
 #define M_180_DIV_PI	57.295779513082320876798f
+
+#define ONEDIV64	0.015625f
+#define ONEDIV128	0.0078125f
+#define ONEDIV255	0.003921568627450980392156862745098f
+#define ONEDIV255_5	0.0039138943248532289628180039138943f
+#define ONEDIV256	0.00390625f
 
 #define DEG2RAD( a ) (a * M_PI_DIV_180)
 #define RAD2DEG( a ) (a * M_180_DIV_PI)
@@ -397,10 +396,10 @@ extern long Q_ftol( float f );
 #define Q_ftol( f ) ( long ) (f)
 #endif
 
+#define PlaneDiff(point,plane) (((plane)->type < 3 ? (point)[(plane)->type] : DotProduct((point), (plane)->normal)) - (plane)->dist)
+
 #define DotProduct(x,y)			((x)[0]*(y)[0]+(x)[1]*(y)[1]+(x)[2]*(y)[2])
 #define CrossProduct(v1,v2,c)	((c)[0]=(v1)[1]*(v2)[2]-(v1)[2]*(v2)[1],(c)[1]=(v1)[2]*(v2)[0]-(v1)[0]*(v2)[2],(c)[2]=(v1)[0]*(v2)[1]-(v1)[1]*(v2)[0])
-
-#define PlaneDiff(point,plane) (((plane)->type < 3 ? (point)[(plane)->type] : DotProduct((point), (plane)->normal)) - (plane)->dist)
 
 #define VectorSubtract(a,b,c)   ((c)[0]=(a)[0]-(b)[0],(c)[1]=(a)[1]-(b)[1],(c)[2]=(a)[2]-(b)[2])
 #define VectorAdd(a,b,c)		((c)[0]=(a)[0]+(b)[0],(c)[1]=(a)[1]+(b)[1],(c)[2]=(a)[2]+(b)[2])
@@ -428,19 +427,30 @@ extern long Q_ftol( float f );
 #define Vector4Add(a,b,c)			((c)[0]=(((a[0])+(b[0]))),(c)[1]=(((a[1])+(b[1]))),(c)[2]=(((a[2])+(b[2]))),(c)[3]=(((a[3])+(b[3])))) 
 #define Vector4Avg(a,b,c)			((c)[0]=((a)[0]+(b)[0])*0.5f,(c)[1]=((a)[1]+(b)[1])*0.5f,(c)[2]=((a)[2]+(b)[2])*0.5f,(c)[3]=((a)[3]+(b)[3])*0.5f) 
 
-#define ClearBounds(mins,maxs)	((mins)[0]=(mins)[1]=(mins)[2]=99999,(maxs)[0]=(maxs)[1]=(maxs)[2]=-99999)
-
-void AddPointToBounds (const vec3_t v, vec3_t mins, vec3_t maxs);
 vec_t VectorNormalize (vec3_t v);		// returns vector length
 vec_t VectorNormalize2 (const vec3_t v, vec3_t out);
 
+#define ClearBounds(mins,maxs)	((mins)[0]=(mins)[1]=(mins)[2]=99999,(maxs)[0]=(maxs)[1]=(maxs)[2]=-99999)
+void AddPointToBounds (const vec3_t v, vec3_t mins, vec3_t maxs);
+float RadiusFromBounds (const vec3_t mins, const vec3_t maxs);
+
 void MakeNormalVectors (const vec3_t forward, vec3_t right, vec3_t up);
+void AngleVectors (const vec3_t angles, vec3_t forward, vec3_t right, vec3_t up);
+int BoxOnPlaneSide (const vec3_t emins, const vec3_t emaxs, const struct cplane_s *plane);
+#define anglemod(a) ((360.0f/65536) * ((int)((a)*(65536/360.0f)) & 65535))
+float LerpAngle (float a1, float a2, float frac);
+void VecToAngles (const vec3_t vec, vec3_t angles);
+void AnglesToAxis (const vec3_t angles, vec3_t axis[3]);
+#define AxisClear(a) ((a)[0][0]=(a)[1][1]=(a)[2][2]=1,(a)[0][1]=(a)[0][2]=(a)[1][0]=(a)[1][2]=(a)[2][0]=(a)[2][1]=0)
+#define AxisCopy(a, b) (VectorCopy(a[0],b[0]),VectorCopy(a[1],b[1]),VectorCopy(a[2],b[2]))
+
+float CalcFov (float fov_x, float width, float height);
 
 int Q_log2(int val);
 #define Q_rint(x)	((x) < 0 ? ((int)((x)-0.5f)) : ((int)((x)+0.5f)))
 
 #define NUMVERTEXNORMALS	162
-extern	const vec3_t	bytedirs[NUMVERTEXNORMALS];
+extern	const vec3_t bytedirs[NUMVERTEXNORMALS];
 int DirToByte (const vec3_t dir);
 void ByteToDir (int b, vec3_t dir);
 
@@ -448,11 +458,6 @@ void R_ConcatRotations (float in1[3][3], float in2[3][3], float out[3][3]);
 void R_ConcatTransforms (float in1[3][4], float in2[3][4], float out[3][4]);
 
 void Q_sincos( float angle, float *s, float *c );
-
-void AngleVectors (const vec3_t angles, vec3_t forward, vec3_t right, vec3_t up);
-int BoxOnPlaneSide (const vec3_t emins, const vec3_t emaxs, const struct cplane_s *plane);
-#define anglemod(a) ((360.0f/65536) * ((int)((a)*(65536/360.0f)) & 65535))
-float LerpAngle (float a1, float a2, float frac);
 
 #define BOX_ON_PLANE_SIDE(emins, emaxs, p)	\
 	(((p)->type < 3)?						\
@@ -476,10 +481,24 @@ void RotatePointAroundVector( vec3_t dst, const vec3_t dir, const vec3_t point, 
 
 
 //=============================================
+#define Q_isupper( c )	( (c) >= 'A' && (c) <= 'Z' )
+#define Q_islower( c )	( (c) >= 'a' && (c) <= 'z' )
+#define Q_isdigit( c )	( (c) >= '0' && (c) <= '9' )
+#define Q_isalpha( c )	( Q_isupper( c ) || Q_islower( c ) )
+#define Q_isalnum( c )	( Q_isalpha( c ) || Q_isdigit( c ) )
+
+int Q_tolower( int c );
+int Q_toupper( int c );
+
+char *Q_strlwr( char *s );
+char *Q_strupr( char *s );
+
+qboolean Q_IsNumeric (const char *s);
 
 void COM_FixPath (char *path);
 char *COM_SkipPath (const char *pathname);
 void COM_StripExtension (const char *in, char *out);
+char *COM_FileExtension (const char *in);
 void COM_FileBase (const char *in, char *out);
 void COM_FilePath (const char *in, char *out);
 void COM_DefaultExtension (char *path, size_t size, const char *extension);
@@ -507,17 +526,8 @@ char *Q_stristr(const char *str1, const char *str2);
 void Q_strncpyz( char *dest, const char *src, size_t size );
 void Q_strncatz( char *dest, const char *src, size_t size );
 void Com_sprintf (char *dest, size_t size, const char *fmt, ...);
-char *Q_strlwr( char *s );
-qboolean Q_IsNumeric (const char *s);
 
 void Com_PageInMemory (const byte *buffer, int size);
-
-#ifdef GL_QUAKE
-//#define AnglesToAxis(angles, axis) (AngleVectors(angles, axis[0], axis[1], axis[2]),VectorInverse(axis[1]))
-void AnglesToAxis (const vec3_t angles, vec3_t axis[3]);
-#else
-#define AnglesToAxis(angles, axis) 
-#endif
 
 //=============================================
 #if !defined(ENDIAN_LITTLE) && !defined(ENDIAN_BIG)
@@ -541,6 +551,10 @@ float FloatSwap (float f);
 # define BigFloat(l) FloatSwap(l)
 # define LittleFloat(l) (l)
 # define Swap_Init()
+ #define MakeLittleLong( b1, b2, b3, b4 ) \
+	( ( ( b4 ) << 24 ) + ( ( b3 ) << 16 ) + ( ( b2 ) << 8 ) + ( b1 ) )
+ #define MakeBigLong( b1, b2, b3, b4 ) \
+	( ( ( b1 ) << 24 ) + ( ( b2 ) << 16 ) + ( ( b3 ) << 8 ) + ( b4 ) )
 #elif defined ENDIAN_BIG
 // big endian
 # define BigShort(l) (l)
@@ -550,6 +564,10 @@ float FloatSwap (float f);
 # define BigFloat(l) (l)
 # define LittleFloat(l) FloatSwap(l)
 # define Swap_Init()
+ #define MakeLittleLong( b1, b2, b3, b4 ) \
+	( ( ( b1 ) << 24 ) + ( ( b2 ) << 16 ) + ( ( b3 ) << 8 ) + ( b4 ) )
+ #define MakeBigLong( b1, b2, b3, b4 ) \
+	( ( ( b4 ) << 24 ) + ( ( b3 ) << 16 ) + ( ( b2 ) << 8 ) + ( b1 ) )
 #else
 // figure it out at runtime
 extern int16 (*BigShort) (int16 l);
@@ -586,10 +604,12 @@ SYSTEM SPECIFIC
 ==============================================================
 */
 
-extern	int	curtime;		// time returned by last Sys_Milliseconds
+extern	unsigned int curtime;		// time returned by last Sys_Milliseconds
 
-int		Sys_Milliseconds (void);
-void	Sys_Mkdir (const char *path);
+unsigned int Sys_Milliseconds (void);
+void		Sys_Mkdir ( const char *path );
+qboolean	Sys_RemoveFile ( const char *path );
+qboolean	Sys_RenameFile ( const char *from, const char *to );
 
 // large block stack allocation routines
 void	*Hunk_Begin (int maxsize);
@@ -615,6 +635,7 @@ void	Sys_FindClose (void);
 // this is only here so the functions in q_shared.c and q_shwin.c can link
 void Sys_Error (const char *error, ...);
 void Com_Printf (const char *msg, ...);
+void Com_Error (int code, const char *fmt, ...);
 
 
 /*
@@ -634,11 +655,6 @@ CVARS (console variables)
 #define	CVAR_NOSET		8	// don't allow change from console at all,
 							// but can be set from the command line
 #define	CVAR_LATCH		16	// save changes until server restart
-#define CVAR_LATCHVIDEO	32	// save changes until video restart
-#define CVAR_LATCHSOUND 64	// save changes until sound restart
-#define CVAR_CHEAT		128	// will be reset to default unless cheats are enabled
-#define CVAR_USER_CREATED 256 // user own cvars created with set
-#define CVAR_ROM		512 //user cant change it even from command line
 
 // nothing outside the Cvar_*() functions should modify these fields!
 typedef struct cvar_s
@@ -1537,35 +1553,6 @@ typedef struct
 
 	int16		stats[MAX_STATS];		// fast status bar updates
 } player_state_t;
-
-typedef struct
-{
-	pmove_state_t	pmove;		// for prediction
-
-	// these fields do not need to be communicated bit-precise
-
-	vec3_t		viewangles;		// for fixed views
-	vec3_t		viewoffset;		// add to pmovestate->origin
-	vec3_t		kick_angles;	// add to view direction to get render angles
-								// set by weapon kicks, pain effects, etc
-
-	vec3_t		gunangles;
-	vec3_t		gunoffset;
-
-	int			gunindex;
-	int			gunframe;
-
-	float		blend[4];		// rgba full screen effect
-	
-	float		fov;			// horizontal field of view
-
-	int			rdflags;		// refdef flags
-
-	int16		stats[MAX_STATS];		// fast status bar updates
-
-	vec3_t		mins;
-	vec3_t		maxs;
-} player_state_new_t;
 
 #endif
 

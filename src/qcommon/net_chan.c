@@ -76,7 +76,8 @@ unacknowledged reliable
 
 cvar_t		*showpackets;
 cvar_t		*showdrop;
-cvar_t		*qport;
+cvar_t		*net_qport;
+cvar_t      *net_maxmsglen;
 
 netadr_t	net_from;
 sizebuf_t	net_message;
@@ -88,6 +89,15 @@ Netchan_Init
 
 ===============
 */
+static void OnChange_MaxMsgLen(cvar_t *self, const char *oldValue)
+{
+	if (self->integer < 0)
+		Cvar_Set(self->name, "0");
+	else if (self->integer > MAX_USABLEMSG)
+		Cvar_SetValue(self->name, MAX_USABLEMSG);
+}
+
+
 void Netchan_Init (void)
 {
 	int		port;
@@ -95,10 +105,12 @@ void Netchan_Init (void)
 	// pick a port value that should be nice and random
 	port = Sys_Milliseconds() & 0xffff;
 
-	showpackets = Cvar_Get ("showpackets", "0", 0);
-	showdrop = Cvar_Get ("showdrop", "0", 0);
-	qport = Cvar_Get ("qport", va("%i", port), CVAR_NOSET);
-
+	showpackets = Cvar_Get( "showpackets", "0", 0 );
+	showdrop = Cvar_Get( "showdrop", "0", 0 );
+	net_qport = Cvar_Get( "qport", va("%i", port), CVAR_NOSET );
+	net_maxmsglen = Cvar_Get( "net_maxmsglen", "1390", 0 );
+	net_maxmsglen->OnChange = OnChange_MaxMsgLen;
+	OnChange_MaxMsgLen(net_maxmsglen, net_maxmsglen->resetString);
 }
 
 /*
@@ -157,11 +169,9 @@ void Netchan_Setup (netsrc_t sock, netchan_t *chan, netadr_t *adr, int protocol,
 	chan->sock = sock;
 	chan->remote_address = *adr;
 
-#ifdef R1Q2_PROTOCOL
-	if (protocol == ENHANCED_PROTOCOL_VERSION)
+	if (protocol == PROTOCOL_VERSION_R1Q2)
 		SZ_Init (&chan->message, chan->message_buf, MAX_USABLEMSG);	//fragmentation allows this
 	else
-#endif
 		SZ_Init (&chan->message, chan->message_buf, 1390);			//traditional limit
 
 	chan->qport = qport;
@@ -244,11 +254,9 @@ int Netchan_Transmit (netchan_t *chan, int length, const byte *data)
 
 
 // write the packet header
-#ifdef R1Q2_PROTOCOL
-	if (chan->protocol == ENHANCED_PROTOCOL_VERSION)
+	if (chan->protocol == PROTOCOL_VERSION_R1Q2)
 		SZ_Init (&send, send_buf, sizeof(send_buf));
 	else
-#endif
 		SZ_Init (&send, send_buf, 1400);
 
 	w1 = ( chan->outgoing_sequence & ~(1<<31) ) | (send_reliable<<31);
@@ -263,14 +271,10 @@ int Netchan_Transmit (netchan_t *chan, int length, const byte *data)
 	// send the qport if we are a client
 	if (chan->sock == NS_CLIENT)
 	{
-#ifdef R1Q2_PROTOCOL
-		if (chan->protocol != ENHANCED_PROTOCOL_VERSION)
+		if (chan->protocol < PROTOCOL_VERSION_R1Q2)
 			MSG_WriteShort (&send, chan->qport);
 		else if (chan->qport)
 			MSG_WriteByte (&send, chan->qport);
-#else
-		MSG_WriteShort (&send, chan->qport);
-#endif
 	}
 
 // copy the reliable message to the packet first
@@ -341,15 +345,10 @@ qboolean Netchan_Process (netchan_t *chan, sizebuf_t *msg)
 	// read the qport if we are a server
 	if (chan->sock == NS_SERVER)
 	{
-#ifdef R1Q2_PROTOCOL
-		//suck up 2 bytes for original and old r1q2
-		if (chan->protocol != ENHANCED_PROTOCOL_VERSION || chan->qport > 0xFF)
+		if (chan->protocol < PROTOCOL_VERSION_R1Q2 || chan->qport > 0xFF)
 			MSG_ReadShort (msg);
 		else if (chan->qport)
 			MSG_ReadByte (msg);
-#else
-		MSG_ReadShort (msg);
-#endif
 	}
 
 	reliable_message = sequence >> 31;

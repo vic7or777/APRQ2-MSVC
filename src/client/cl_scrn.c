@@ -106,8 +106,8 @@ void CL_AddNetgraph (void)
 		SCR_DebugGraph (30, 0xdf);
 
 	// see what the latency was on this packet
-	in = cls.netchan.incoming_acknowledged & (CMD_BACKUP-1);
-	ping = cls.realtime - cl.cmd_time[in];
+	in = cls.netchan.incoming_acknowledged & CMD_MASK;
+	ping = cls.realtime - cl.history[in].realtime;
 	ping /= 30;
 	if (ping > 30)
 		ping = 30;
@@ -180,10 +180,7 @@ CENTER PRINTING
 */
 
 static char			scr_centerstring[1024];
-//static float		scr_centertime_start;	// for slow victory printing
-static int			scr_centertime_off;
-static int			scr_center_lines;
-static int			scr_erase_center;
+static unsigned int	scr_centertime_off, scr_centertime_start, scr_center_lines;
 
 /*
 ==============
@@ -195,39 +192,81 @@ for a few moments
 */
 void SCR_CenterPrint (const char *str)
 {
-	const char	*s;
-	char	line[64];
-	int		i, j, l;
+	char	line[1024], *s, *s2;
+	int		i, j, l, longestLine, maxChars;
 
-	Q_strncpyz (scr_centerstring, str, sizeof(scr_centerstring));
-	scr_centertime_off = (int)(cls.realtime + scr_centertime->value * 1000);
-	//scr_centertime_start = cl.time;
+	while (*str == '\n')
+		str++;
 
+	Q_strncpyz(line, str, sizeof(line));
+	s = line;
+	for (i = strlen(s) - 1; i > 0 && (s[i] == '\n' || s[i] == ' '); i--)
+		s[i] = 0;
+
+	if (!line[0])
+		return;
+
+	scr_centertime_start = cls.realtime;
+	scr_centertime_off = cls.realtime + (unsigned int)(scr_centertime->value * 1000);
+
+	if (!strcmp(scr_centerstring, line))
+		return;
+
+	strcpy(scr_centerstring, line);
+
+	s = scr_centerstring;
 	// count the number of lines for centering
+	longestLine = l = 0;
 	scr_center_lines = 1;
-	s = str;
-	while (*s)
+	do
 	{
-		if (*s == '\n' && s[1])
+		if (*s == '\n') {
 			scr_center_lines++;
+			if (l > longestLine)
+				longestLine = l;
+
+			l = 0;
+		} else {
+			l++;
+		}
 		s++;
-	}
+	} while (*s);
+	
+	if (l > longestLine)
+		longestLine = l;
+
+	maxChars = (viddef.width >> 3) - 2;
+	if (maxChars > longestLine)
+		maxChars = longestLine;
+
+	if (maxChars >= sizeof(line))
+		maxChars = sizeof(line) - 1;
+	else if (maxChars < 40)
+		maxChars = 40;
 
 	// echo it to the console
-	Com_Printf("\n\35\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\37\n\n");
+	s2 = line + sizeof(line) - 1;
+	*s2 = 0;
 
-	s = str;
+	for (i = maxChars - 2; i > 0; i--)
+		*--s2 = '\36';
+
+	Com_Printf("\n\35%s\37\n\n", s2);
+
+	s = scr_centerstring;
 	do	
 	{
-	// scan the width of the line
-		for (l=0 ; l<40 ; l++)
+		// scan the width of the line
+		for (l = 0; l < maxChars; l++) {
 			if (s[l] == '\n' || !s[l])
 				break;
-		for (i=0 ; i<(40-l)*0.5 ; i++)
+		}
+
+		j = (maxChars - l)/2;
+		for (i = 0; i < j; i++)
 			line[i] = ' ';
 
-		for (j=0 ; j<l ; j++)
-		{
+		for (j = 0; j < l; j++) {
 			line[i++] = s[j];
 		}
 
@@ -236,57 +275,67 @@ void SCR_CenterPrint (const char *str)
 
 		Com_Printf ("%s", line);
 
-		while (*s && *s != '\n')
-			s++;
-
+		s += l;
 		if (!*s)
 			break;
-		s++;		// skip the \n
+
+		if (l != maxChars)
+			s++;		// skip the \n
 	}
 	while (*s);
-	Com_Printf("\n\35\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\37\n\n");
-	Con_ClearNotify ();
+
+	s2 = line + sizeof(line) - 1;
+	*s2 = 0;
+
+	for (i = maxChars - 2; i > 0; i--)
+		*--s2 = '\36';
+
+	Com_Printf("\n\35%s\37\n\n", s2);
+	//Com_Printf("\n\35\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\36\37\n\n");
+	Con_ClearNotify();
 }
 
 
 static void SCR_DrawCenterString (void)
 {
-	char	*start;
-	int		l, j, x, y;
-	int		remaining = 9999;
+	char	*start, saved_byte;
+	int		l, x, y, maxChars;
+	float	alpha = 1.0f;
 
 // the finale prints the characters one at a time
-	scr_erase_center = 0;
 	start = scr_centerstring;
 
 	if (scr_center_lines <= 4)
-		y = viddef.height*0.35f;
+		y = (int)(viddef.height*0.35f);
 	else
 		y = 48;
 
+//	alpha = (scr_centertime_off - cls.realtime)*0.001f;
+	alpha = SCR_FadeAlpha(scr_centertime_start, scr_centertime_off - scr_centertime_start, 1000);
+	maxChars = (viddef.width >> 3) - 2;
+
 	do	
 	{
-	// scan the width of the line
-		for (l=0 ; l<40 ; l++)
+		// scan the width of the line
+		for (l = 0; l < maxChars; l++) {
 			if (start[l] == '\n' || !start[l])
 				break;
+		}
 		x = (viddef.width - l*8)*0.5f;
 		SCR_AddDirtyPoint (x, y);
-		for (j=0 ; j<l ; j++, x+=8)
-		{
-			Draw_Char (x, y, start[j], COLOR_WHITE, 1);
-			if (!remaining--)
-				return;
-		}
-		SCR_AddDirtyPoint (x, y+8);
-			
+
+		saved_byte = start[l];
+		start[l] = 0;
+		Draw_String(x, y, start, COLOR_WHITE, alpha, false);
+		start[l] = saved_byte;
+
 		y += 8;
+		SCR_AddDirtyPoint (x, y);
 
-		while (*start && *start != '\n')
-			start++;
-
+		start += l;
 		if (!*start)
 			break;
+
 		start++;		// skip the \n
 	}
 	while (*start);
@@ -294,10 +343,8 @@ static void SCR_DrawCenterString (void)
 
 void SCR_CheckDrawCenterString (void)
 {
-	if (scr_centertime_off <= cls.realtime)
-		return;
-
-	SCR_DrawCenterString ();
+	if (scr_centertime_off > cls.realtime)
+		SCR_DrawCenterString();
 }
 
 //=============================================================================
@@ -364,28 +411,28 @@ SCR_Sky_f
 Set a specific sky and rotation speed
 =================
 */
+char currentSky[64];
+
 static void SCR_Sky_f (void)
 {
-	float	rotate = 0;
+	float	rotate = 0.0f;
 	vec3_t	axis;
 
-	if (Cmd_Argc() < 2)
-	{
+	if (Cmd_Argc() < 2) {
 		Com_Printf ("Usage: sky <basename> <rotate> <axis x y z>\n");
+		Com_Printf ("Current: %s Map default: %s\n", currentSky, cl.configstrings[CS_SKY]);
 		return;
 	}
 	if (Cmd_Argc() > 2)
 		rotate = (float)atof(Cmd_Argv(2));
 
-	if (Cmd_Argc() == 6) {
-		axis[0] = (float)atof(Cmd_Argv(3));
-		axis[1] = (float)atof(Cmd_Argv(4));
-		axis[2] = (float)atof(Cmd_Argv(5));
-	}
+	if (Cmd_Argc() == 6)
+		VectorSet(axis, (float)atof(Cmd_Argv(3)), (float)atof(Cmd_Argv(4)), (float)atof(Cmd_Argv(5)));
 	else
 		VectorSet(axis, 0, 0, 1);
 
-	R_SetSky (Cmd_Argv(1), rotate, axis);
+	Q_strncpyz(currentSky, Cmd_Argv(1), sizeof(currentSky));
+	R_SetSky (currentSky, rotate, axis);
 }
 
 //============================================================================
@@ -606,7 +653,7 @@ void SCR_BeginLoadingPlaque (void)
 	else
 		scr_draw_loading = 1;
 	SCR_UpdateScreen ();
-	cls.disable_screen = Sys_Milliseconds ();
+	cls.disable_screen = Sys_Milliseconds();
 	cls.disable_servercount = cl.servercount;
 }
 
@@ -639,19 +686,18 @@ SCR_TimeRefresh_f
 void SCR_TimeRefresh_f (void)
 {
 	int		i;
-	int		start, stop;
+	unsigned int start, stop;
 	float	time;
 
 	if ( cls.state != ca_active )
 		return;
 
-	start = Sys_Milliseconds ();
+	start = Sys_Milliseconds();
 
 	if (Cmd_Argc() == 2)
 	{	// run without page flipping
 		R_BeginFrame( 0 );
-		for (i=0 ; i<128 ; i++)
-		{
+		for (i = 0; i < 128; i++) {
 			cl.refdef.viewangles[1] = i/128.0f*360.0f;
 			R_RenderFrame (&cl.refdef);
 		}
@@ -659,8 +705,7 @@ void SCR_TimeRefresh_f (void)
 	}
 	else
 	{
-		for (i=0 ; i<128 ; i++)
-		{
+		for (i = 0; i < 128; i++) {
 			cl.refdef.viewangles[1] = i/128.0f*360.0f;
 
 			R_BeginFrame( 0 );
@@ -669,7 +714,7 @@ void SCR_TimeRefresh_f (void)
 		}
 	}
 
-	stop = Sys_Milliseconds ();
+	stop = Sys_Milliseconds();
 	time = (stop-start)* 0.001f;
 	Com_Printf ("%f seconds (%f fps)\n", time, 128/time);
 }
@@ -892,6 +937,8 @@ void SCR_DrawField (int x, int y, int color, int width, int value)
 	if (width > 5)
 		width = 5;
 
+	color &= 1;
+
 	SCR_AddDirtyPoint (x, y);
 	SCR_AddDirtyPoint (x+width*CHAR_WIDTH+2, y+23);
 
@@ -1034,7 +1081,7 @@ void SCR_ExecuteLayoutString (char *s)
 				token = COM_Parse (&s);
 				value = atoi(token);
 
-				if (value >= MAX_CLIENTS || value < 0)
+				if ((unsigned)value >= MAX_CLIENTS)
 					Com_Error (ERR_DROP, "Bad client index %d in block 'client' whilst parsing layout string", value);
 
 				ci = &cl.clientinfo[value];
@@ -1075,7 +1122,7 @@ void SCR_ExecuteLayoutString (char *s)
 
 				value = atoi(token);
 				
-				if (value >= MAX_CLIENTS || value < 0)
+				if ((unsigned)value >= MAX_CLIENTS)
 					Com_Error (ERR_DROP, "Bad client index %d in block 'ctf' whilst parsing layout string", value);
 
 				ci = &cl.clientinfo[value];
@@ -1088,7 +1135,7 @@ void SCR_ExecuteLayoutString (char *s)
 				if (ping > 999)
 					ping = 999;
 
-				sprintf(block, "%3d %3d %-12.12s", score, ping, ci->name);
+				Com_sprintf(block, sizeof(block), "%3d %3d %-12.12s", score, ping, ci->name);
 
 				if (value == cl.playernum)
 					DrawAltString (x, y, block);
@@ -1133,12 +1180,12 @@ void SCR_ExecuteLayoutString (char *s)
 				token = COM_Parse (&s);
 				index = atoi(token);
 
-				if (index < 0 || index >= MAX_STATS)
+				if ((unsigned)index >= MAX_STATS)
 					Com_Error (ERR_DROP, "Bad stats index %d in block 'stat_string' whilst parsing layout string", index);
 
 				index = cl.frame.playerstate.stats[index];
 
-				if (index < 0 || index >= MAX_CONFIGSTRINGS)
+				if ((unsigned)index >= MAX_CONFIGSTRINGS)
 					Com_Error (ERR_DROP, "Bad stat_string index %d whilst parsing layout string", index);
 
 				DrawString (x, y, cl.configstrings[index]);
@@ -1154,12 +1201,12 @@ void SCR_ExecuteLayoutString (char *s)
 
 					index = atoi(token);
 
-					if (index < 0 || index >= MAX_STATS)
+					if ((unsigned)index >= MAX_STATS)
 						Com_Error (ERR_DROP, "Bad stats index %d in block 'pic' whilst parsing layout string", index);
 
 					value = cl.frame.playerstate.stats[index];
 
-					if (value >= MAX_IMAGES)
+					if ((unsigned)value >= MAX_IMAGES)
 						Com_Error (ERR_DROP, "Bad picture index %d in block 'pic' whilst parsing layout string", value);
 
 					if (cl.configstrings[CS_IMAGES+value][0])
@@ -1190,7 +1237,7 @@ void SCR_ExecuteLayoutString (char *s)
 
 				index = atoi(token);
 
-				if (index < 0 || index >= MAX_STATS)
+				if ((unsigned)index >= MAX_STATS)
 					Com_Error (ERR_DROP, "Bad stats index %d in block 'num' whilst parsing layout string", index);
 
 				value = cl.frame.playerstate.stats[index];
@@ -1204,7 +1251,7 @@ void SCR_ExecuteLayoutString (char *s)
 				token = COM_Parse (&s);
 				index = atoi(token);
 
-				if (index < 0 || index >= MAX_STATS)
+				if ((unsigned)index >= MAX_STATS)
 					Com_Error (ERR_DROP, "Bad stats index %d in block 'if' whilst parsing layout string", index);
 
 				value = cl.frame.playerstate.stats[index];
@@ -1423,7 +1470,7 @@ void SCR_UpdateScreen (void)
 		return;
 	}
 
-	if (!scr_initialized || !con.initialized)
+	if (!scr_initialized)
 		return;				// not initialized yet
 
 	if ( cl_stereo->value )

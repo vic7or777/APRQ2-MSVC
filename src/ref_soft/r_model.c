@@ -1133,7 +1133,6 @@ void R_BeginRegistration (const char *map)
 	// this guarantees that mod_known[0] is the world map
 	flushmap = Cvar_Get ("flushmap", "0", 0);
 	if (mod_known[0].name[0] && (strcmp(mod_known[0].name, fullname) || flushmap->integer)) {
-		Mod_RemoveHash(&mod_known[0]);
 		Mod_Free (&mod_known[0]);
 	}
 	r_worldmodel = R_RegisterModel (fullname);
@@ -1201,7 +1200,6 @@ void R_EndRegistration (void)
 			continue;
 		if (mod->registration_sequence != registration_sequence)
 		{	// don't need this model
-			Mod_RemoveHash(mod);
 			Mod_Free (mod);
 		}
 		else
@@ -1223,6 +1221,7 @@ Mod_Free
 */
 void Mod_Free (model_t *mod)
 {
+	Mod_RemoveHash(mod);
 	Hunk_Free (mod->extradata);
 	memset (mod, 0, sizeof(*mod));
 }

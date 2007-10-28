@@ -218,6 +218,9 @@ void *Sys_GetGameAPI (void *parms)
 	char	name[MAX_OSPATH];
 	char	*path;
 	char	*str_p;
+
+#ifndef MACOS_X
+
 #if defined __i386__
 	const char *gamename = "gamei386.so";
 #elif defined __alpha__
@@ -230,6 +233,18 @@ void *Sys_GetGameAPI (void *parms)
 	const char *gamename = "gamesparc.so";
 #else
 #error Unknown arch
+#endif
+
+#else /* MACOS_X */
+
+#if defined __i386__
+	const char *gamename = "gamei386.dylib";
+#elif defined __powerpc__
+	const char *gamename = "gameppc.dylib";
+#else
+#error Unknown arch (MACOSX)
+#endif
+
 #endif
 
 	setreuid(getuid(), getuid());
@@ -336,4 +351,5 @@ int main (int argc, char **argv)
 		oldtime = newtime;
     }
 }
+
 

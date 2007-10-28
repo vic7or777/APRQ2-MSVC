@@ -54,8 +54,9 @@ typedef struct
 	byte		multicast_buf[MAX_MSGLEN];
 
 	// demo server information
-	FILE		*demofile;
+	fileHandle_t demofile;
 	qboolean	timedemo;		// don't time sync
+	pmoveParams_t pmp;
 } server_t;
 
 #define EDICT_NUM(n) ((edict_t *)((byte *)ge->edicts + ge->edict_size*(n)))
@@ -150,7 +151,7 @@ typedef struct
 typedef struct
 {
 	qboolean	initialized;				// sv_init has completed
-	int			realtime;					// always increasing, no clamping, etc
+	unsigned int realtime;					// always increasing, no clamping, etc
 
 	char		mapcmd[MAX_TOKEN_CHARS];	// ie: *intro.cin+base 
 

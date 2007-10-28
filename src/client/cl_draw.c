@@ -28,7 +28,6 @@ void SCR_DrawNet( void );
 void SCR_CheckDrawCenterString( void );
 
 static cvar_t *scr_draw2d;
-static cvar_t *scr_draw2d;
 
 #define DSF_LEFT		1
 #define DSF_RIGHT		2
@@ -41,11 +40,33 @@ static cvar_t *scr_draw2d;
 #define DSF_SELECTED	256
 
 /*
+=================
+SCR_FadeAlpha
+=================
+*/
+float SCR_FadeAlpha( unsigned int startTime, unsigned int visTime, unsigned int fadeTime )
+{
+	int timeLeft;
+
+	timeLeft = visTime - ( cls.realtime - startTime );
+	if( timeLeft < 1 )
+		return 0.0f;
+
+	if( fadeTime > visTime )
+		fadeTime = visTime;
+
+	if( timeLeft < fadeTime )
+		return ( float )timeLeft / fadeTime;
+
+	return 1.0f;
+}
+
+/*
 ==============
 SCR_DrawString
 ==============
 */
-void SCR_DrawString( int x, int y, const char *string, int flags )
+void SCR_DrawString( int x, int y, const char *string, int flags, int color, float alpha )
 {
 	int len;
 
@@ -65,9 +86,9 @@ void SCR_DrawString( int x, int y, const char *string, int flags )
 		Draw_Fill( x - 1, y, (len << 3) + 2, 10, 16 );
 
 	if( flags & DSF_HIGHLIGHT )
-		DrawAltString( x, y, string );
+		Draw_String( x, y, string, color, alpha, true);
 	else
-		DrawString( x, y, string );
+		Draw_String( x, y, string, color, alpha, false);
 
 	if( flags & DSF_UNDERLINE )
 		Draw_Fill( x, y + 9, len << 3, 1, 0xDF );
@@ -110,6 +131,9 @@ typedef struct lagometer_s
 } lagometer_t;
 
 static cvar_t *scr_drawlagometer;
+static cvar_t *scr_drawlagometer_x;
+static cvar_t *scr_drawlagometer_y;
+//static cvar_t *scr_drawlagometer_alpha;
 
 static lagometer_t	scr_lagometer;
 
@@ -136,8 +160,8 @@ void SCR_AddLagometerPacketInfo( void )
 	if( cls.netchan.dropped ) {
 		ping = -1000;
 	} else {
-		i = cls.netchan.incoming_acknowledged & (CMD_BACKUP-1);
-		ping = cls.realtime - cl.cmd_time[i];
+		i = cls.netchan.incoming_acknowledged & CMD_MASK;
+		ping = cls.realtime - cl.history[i].realtime;
 		if( ping > 999 )
 			ping = 999;
 		if( cl.surpressCount )
@@ -185,8 +209,8 @@ static void SCR_DrawLagometer( void )
 	int color;
 	int startTime, endTime;
 
-	x = viddef.width - LAG_WIDTH - 1;
-	y = viddef.height - 96 - LAG_HEIGHT - 1;
+	x = (scr_drawlagometer_x->integer) ? scr_drawlagometer_x->integer : viddef.width - LAG_WIDTH - 1;
+	y = (scr_drawlagometer_y->integer) ? scr_drawlagometer_y->integer : viddef.height - 96 - LAG_HEIGHT - 1;
 
 	Draw_Fill( x, y, LAG_WIDTH, LAG_HEIGHT, 0x04 );
 
@@ -224,8 +248,6 @@ static void SCR_DrawLagometer( void )
 				v = LAG_HEIGHT;
 
 			Draw_Fill( x + LAG_WIDTH - i, y + LAG_HEIGHT - v, 1, v, color );
-		
-
 		}
 	}
 
@@ -239,7 +261,7 @@ static void SCR_DrawLagometer( void )
 
 	i = count ? ping / count : 0;
 	Com_sprintf( string, sizeof( string ), "%i", i );
-	SCR_DrawString( x + LAG_WIDTH/2, y + 22, string, DSF_CENTERX );
+	SCR_DrawString( x + LAG_WIDTH/2, y + 22, string, DSF_CENTERX, 7, 1.0f );
 
 
 //
@@ -265,7 +287,7 @@ static void SCR_DrawLagometer( void )
 		size *= 1000.0f / 1024.0f;
 	}
 	Com_sprintf( string, sizeof( string ), "%1.2f", size );
-	SCR_DrawString( x + LAG_WIDTH/2, y + 12, string, DSF_CENTERX );
+	SCR_DrawString( x + LAG_WIDTH/2, y + 12, string, DSF_CENTERX, 7, 1.0f );
 
 //
 // draw upload speed
@@ -287,7 +309,7 @@ static void SCR_DrawLagometer( void )
 		size *= 1000.0f / 1024.0f;
 	}
 	Com_sprintf( string, sizeof( string ), "%1.2f", size );
-	SCR_DrawString( x + LAG_WIDTH/2, y + 2, string, DSF_CENTERX );
+	SCR_DrawString( x + LAG_WIDTH/2, y + 2, string, DSF_CENTERX, 7, 1.0f );
 }
 
 /*
@@ -303,9 +325,9 @@ CHAT HUD
 #define CHAT_MASK			(MAX_CHAT_LINES-1)
 
 typedef struct chatMessage_s {
-	char	text[MAX_CHAT_LENGTH];
-	int		time;
-	int		color;
+	char	 text[MAX_CHAT_LENGTH];
+	unsigned int		time;
+	int		 color;
 } chatMessage_t;
 
 static chatMessage_t	chatMsgs[MAX_CHAT_LINES];
@@ -365,8 +387,9 @@ SCR_DrawChatHUD
 */
 static void SCR_DrawChatHUD( void )
 {
-    int i, y = viddef.height-22, x = 5;
-	float time = cl_chathudtime->value * 1000, alpha = 1;
+    int i, y = viddef.height-22, x = 5, j;
+	unsigned int time = cl_chathudtime->value * 1000;
+	float alpha = 1;
 	qboolean altColor;
 	chatMessage_t *msg;
 
@@ -378,7 +401,11 @@ static void SCR_DrawChatHUD( void )
 		y = cl_chathudy->integer;
 	}
 
-    for (i = chatMsgsNum-1; i >= 0 && i > chatMsgsNum-1 - cl_chathudlines->integer; i--)
+	j = chatMsgsNum-1 - cl_chathudlines->integer;
+	if (j < -1)
+		j = -1;
+
+    for (i = chatMsgsNum-1; i > j; i--)
 	{
 		msg = &chatMsgs[i & CHAT_MASK];
 		if( time ) {
@@ -387,7 +414,7 @@ static void SCR_DrawChatHUD( void )
 				msg->time = 0;
 				break;
 			}
-			alpha = (msg->time+time-cls.realtime) * (cl_chathudtime->value < 4 ? 0.001f : 0.0005f);
+			alpha = SCR_FadeAlpha( msg->time, time, 1000 );
 		}
 		y -= 8;
 		Draw_String(x, y, msg->text, msg->color, alpha, msg->color != 7 ? 0 : altColor);
@@ -447,7 +474,7 @@ SCR_DrawFPS
 */
 static void SCR_DrawFPS( void )
 {
-	static int prevTime = 0, index = 0;
+	static unsigned int prevTime = 0, index = 0;
 	static char fps[32];
 
 	index++;
@@ -537,10 +564,11 @@ cvar_t	*ch_health;
 cvar_t	*ch_x;
 cvar_t	*ch_y;
 
+/* fuck, this can call renderer before it have initialized gl functions
 static void OnChange_Crosshair(cvar_t *self, const char *oldValue)
 {
 	SCR_TouchPics ();
-}
+}*/
 
 /*
 =================
@@ -550,6 +578,11 @@ SCR_DrawCrosshair
 static void SCR_DrawCrosshair (void)
 {
 	float	alpha;
+
+	if( crosshair->modified ) {
+		crosshair->modified = false;
+		SCR_TouchPics();
+	}
 
 	if (!crosshair_pic[0])
 		return;
@@ -598,6 +631,179 @@ static void SCR_DrawCrosshair (void)
 }
 
 
+typedef struct drawobj_s
+{
+	struct drawobj_s *next;
+	int     x, y;
+	unsigned int startTime, visTime;
+	int     color;
+
+	cvar_t *cvar;
+	xmacro_t macro;
+} drawobj_t;
+
+static drawobj_t *scr_objects = NULL;
+
+// draw cl_fps -1 80
+static void SCR_Draw_f( void )
+{
+    int x, y, i;
+    char *s;
+    drawobj_t *entry;
+    xmacro_t macro;
+	cvar_t	*cvar;
+
+	i = Cmd_Argc();
+    if( i < 4 ) {
+		Com_Printf( "Usage: %s <name> <x> <y> [color [time]]\n", Cmd_Argv( 0 ) );
+        return;
+    }
+
+    s = Cmd_Argv( 1 );
+    x = atoi( Cmd_Argv( 2 ) );
+    y = atoi( Cmd_Argv( 3 ) );
+
+    macro = Cmd_FindMacroFunction( s );
+	if( macro ) {
+		cvar = NULL;
+	} else {
+		cvar = Cvar_Get( s, "", CVAR_USER_CREATED );
+	}
+
+	for(entry = scr_objects; entry; entry = entry->next ) {
+		if( entry->macro == macro && entry->cvar == cvar ) {
+			//Should we update this even when x or y is different?
+			if (entry->x == x && entry->y == y)
+				break;
+		}
+	}
+
+	if (!entry) {
+		entry = Z_TagMalloc( sizeof( *entry ), TAG_CL_DRAWSTRING );
+		entry->next = scr_objects;
+		scr_objects = entry;
+
+		entry->cvar = cvar;
+		entry->macro = macro;
+	}
+    entry->x = x;
+    entry->y = y;
+
+	entry->startTime = cls.realtime;
+	entry->visTime = 0;
+	if (i > 4) {
+		entry->color = atoi( Cmd_Argv( 4 ) ) & 7;
+		if (i > 5)
+			entry->visTime = (unsigned)atoi( Cmd_Argv( 5 ) ) * 1000;
+	} else {
+		entry->color = 7;
+	}
+}
+
+static void SCR_RemoveDraw(drawobj_t *removeMe)
+{
+	drawobj_t *entry, **back;
+
+	for(back = &scr_objects, entry = scr_objects; entry; back = &entry->next, entry = entry->next ) {
+		if( entry == removeMe ) {
+			*back = entry->next;
+			Z_Free(entry);
+			return;
+		}
+	}
+}
+
+static void SCR_UnDraw_f( void )
+{
+    char *s;
+    drawobj_t *entry, *next, **back;
+    xmacro_t macro;
+    cvar_t *cvar;
+	int		count = 0;
+
+    if( Cmd_Argc() != 2 ) {
+        Com_Printf( "Usage: %s <name>\n", Cmd_Argv( 0 ) );
+        return;
+    }
+
+    s = Cmd_Argv( 1 );
+    if( !strcmp( s, "all" ) ) {
+		for(entry = scr_objects; entry; entry = next) {
+			next = entry->next;
+			Z_Free(entry);
+			count++;
+		}
+		scr_objects = NULL;
+		Com_Printf("Removed all (%i) drawstrings.\n", count);
+		return;
+    }
+
+    cvar = NULL;
+	macro = Cmd_FindMacroFunction( s );
+    if( !macro ) {
+        cvar = Cvar_Get( s, "", CVAR_USER_CREATED );
+    }
+
+	back = &scr_objects;
+	for(;;)
+	{
+		entry = *back;
+		if(!entry) {
+			Com_Printf ("Drawstring '%s' not found.\n", s);
+			return;
+		}
+		if( entry->macro == macro && entry->cvar == cvar ) {
+			*back = entry->next;
+			Com_Printf ("Removed drawstring '%s'\n", s);
+			Z_Free(entry);
+			return;
+		}
+		back = &entry->next;
+	}
+}
+
+static void draw_objects( void )
+{
+    char buffer[MAX_QPATH];
+    int x, y, flags;
+    drawobj_t *entry, *temp;
+	float	alpha;
+
+	for (entry = scr_objects; entry;)
+	{
+		if ( entry->visTime ) {
+			if (entry->startTime + entry->visTime < cls.realtime ) {
+				temp = entry;
+				entry = entry->next;
+				SCR_RemoveDraw(temp);
+				continue;
+			}
+			alpha = SCR_FadeAlpha( entry->startTime, entry->visTime, 1000 );
+		} else {
+			alpha = 1.0f;
+		}
+
+        x = entry->x;
+        y = entry->y;
+        flags = 0;
+        if( x < 0 ) {
+            x += viddef.width;
+            flags |= DSF_RIGHT;
+        }
+        if( y < 0 ) {
+            y += viddef.height - 8;
+        }
+        if( entry->macro ) {
+			buffer[0] = 0;
+            entry->macro( buffer, sizeof( buffer ) );
+            SCR_DrawString( x, y, buffer, flags, entry->color, alpha );
+        } else if (entry->cvar) {
+            SCR_DrawString( x, y, entry->cvar->string, flags, entry->color, alpha );
+        }
+		entry = entry->next;
+    }
+}
+
 /*
 ================
 SCR_Draw2D
@@ -638,6 +844,9 @@ void SCR_Draw2D( void )
 
 	if(cl_clock->integer)
 		SCR_DrawClock ();
+
+	if (scr_objects)
+		draw_objects();
 }
 
 
@@ -651,7 +860,7 @@ void SCR_InitDraw( void )
 	scr_draw2d = Cvar_Get("scr_draw2d", "1", 0);
 
 	crosshair = Cvar_Get ("crosshair", "0", CVAR_ARCHIVE);
-	crosshair->OnChange = OnChange_Crosshair;
+	//crosshair->OnChange = OnChange_Crosshair;
 
 	ch_alpha  = Cvar_Get("ch_alpha", "1", CVAR_ARCHIVE);
 	ch_pulse  = Cvar_Get("ch_pulse", "0", CVAR_ARCHIVE);
@@ -680,11 +889,16 @@ void SCR_InitDraw( void )
 	cl_chathudx = Cvar_Get("cl_chathudx", "0", 0);
 	cl_chathudy = Cvar_Get("cl_chathudy", "0", 0);
 	cl_chathudlines = Cvar_Get("cl_chathudlines", "4", CVAR_ARCHIVE);
-	cl_chathudtime =  Cvar_Get("cl_chathudtime", "0", 0);
+	cl_chathudtime =  Cvar_Get("cl_chathudtime", "15", CVAR_ARCHIVE);
 	cl_chathudlines->OnChange = OnChange_Chathudlines;
 	OnChange_Chathudlines(cl_chathudlines, cl_chathudlines->resetString);
 
-	scr_drawlagometer = Cvar_Get("scr_drawlagometer", "0", 0);
+	scr_drawlagometer = Cvar_Get("scr_drawlagometer", "0", CVAR_ARCHIVE);
+	scr_drawlagometer_x = Cvar_Get("scr_drawlagometer_x", "0", 0);
+	scr_drawlagometer_y = Cvar_Get("scr_drawlagometer_y", "0", 0);
+	//scr_drawlagometer_alpha = Cvar_Get("scr_drawlagometer_alpha", "0", 0);
 
+	Cmd_AddCommand("draw", SCR_Draw_f);
+	Cmd_AddCommand("undraw", SCR_UnDraw_f);
 }
 

@@ -215,6 +215,19 @@ void MP3_Shuffle_f(void) {
 	XMMS_Set_ToggleFn("Shuffle", qxmms_remote_toggle_shuffle, qxmms_remote_is_shuffle);
 }
 
+void MP3_SetVolume_f (void) {
+	int vol;
+
+	if (!MP3_IsPlayerRunning()) {
+		Com_Printf("%s\n", mp3_notrunning_msg);	
+		return;
+	}
+
+	vol = atoi(Cmd_Argv(1));
+	vol = bound(0, vol, 100);
+	qxmms_remote_set_main_volume(XMMS_SESSION, vol);
+}
+
 void MP3_ToggleRepeat_f(void) {
 	if (!MP3_IsPlayerRunning()) {
 		Com_Printf("%s\n", mp3_notrunning_msg);	
@@ -451,8 +464,8 @@ int MP3_GetPlaylistSongs(mp3_tracks_t *songList, char *filter)
 	if(!songCount)
 		return 0;
 
-	songList->name = Z_TagMalloc (sizeof(char *) * songCount, TAGMALLOC_MP3LIST);
-	songList->num = Z_TagMalloc (sizeof(int) * songCount, TAGMALLOC_MP3LIST);
+	songList->name = Z_TagMalloc (sizeof(char *) * songCount, TAG_MP3LIST);
+	songList->num = Z_TagMalloc (sizeof(int) * songCount, TAG_MP3LIST);
 
 	for (i = 0 ; i < length; i ++) {
 		s = qxmms_remote_get_playlist_title(XMMS_SESSION, i);
@@ -470,7 +483,7 @@ int MP3_GetPlaylistSongs(mp3_tracks_t *songList, char *filter)
 
 		COM_MakePrintable(s);
 		songList->num[playlist_size] = tracknum;
-		songList->name[playlist_size++] = CopyString(va("%i. %s", tracknum, s), TAGMALLOC_MP3LIST);
+		songList->name[playlist_size++] = CopyString(va("%i. %s", tracknum, s), TAG_MP3LIST);
 		qg_free(s);
 
 		if(playlist_size >= songCount)
@@ -497,6 +510,7 @@ void MP3_Init(void)
 	Cmd_AddCommand("xmms_fadeout", MP3_FadeOut_f);
 	Cmd_AddCommand("xmms_shuffle", MP3_Shuffle_f);
 	Cmd_AddCommand("xmms_repeat", MP3_Repeat_f);
+	Cmd_AddCommand("xmms_volume", MP3_SetVolume_f );
 	Cmd_AddCommand("xmms_playlist", MP3_PrintPlaylist_f);
 	Cmd_AddCommand("xmms_songinfo", MP3_SongInfo_f);
 	Cmd_AddCommand("xmms_start", MP3_Execute_f);

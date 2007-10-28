@@ -54,10 +54,11 @@ static void R_RenderDlight (const dlight_t *light)
 	v[2] = light->origin[2] - viewAxis[0][2]*rad;
 
 	qglVertex3fv (v);
-	qglColor3fv(color_table[COLOR_BLACK]);
+	qglColor3fv(colorBlack);
 	for (i=16 ; i>=0 ; i--)
 	{
-		a = i*0.39269908169872415f;
+		//a = (float)i/16.0f * M_TWOPI;
+		a = (float)i*0.3926990816987241548f;
 		b = (float)cos(a) * rad;
 		a = (float)sin(a) * rad;
 		v[0] = light->origin[0] - viewAxis[1][0] * b + viewAxis[2][0] * a;
@@ -90,10 +91,10 @@ void R_RenderDlights (void)
 	qglBlendFunc (GL_ONE, GL_ONE);
 
 	l = r_newrefdef.dlights;
-	for (i=0 ; i<r_newrefdef.num_dlights ; i++, l++)
+	for (i = 0; i < r_newrefdef.num_dlights; i++, l++)
 		R_RenderDlight (l);
 
-	qglColor3fv(color_table[COLOR_WHITE]);
+	qglColor3fv(colorWhite);
 	qglDisable(GL_BLEND);
 	qglEnable (GL_TEXTURE_2D);
 	qglBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -195,17 +196,15 @@ static vec3_t	pointcolor;
 static cplane_t	*lightplane;		// used as shadow plane
 vec3_t			lightspot;
 
-int RecursiveLightPoint (const mnode_t *node, const vec3_t start, const vec3_t end)
+static int RecursiveLightPoint (const mnode_t *node, const vec3_t start, const vec3_t end)
 {
 	float		front, back, frac;
 	int			side;
 	cplane_t	*plane;
 	vec3_t		mid;
 	msurface_t	*surf;
-	int			ds, dt;
-	int			i;
+	int			ds, dt, i, r;
 	mtexinfo_t	*tex;
-	int			r;
 
 	if (node->contents != CONTENTS_NODE)
 		return -1;		// didn't hit anything
@@ -213,16 +212,14 @@ int RecursiveLightPoint (const mnode_t *node, const vec3_t start, const vec3_t e
 // calculate mid point
 
 	plane = node->plane;
-	if (plane->type < 3)
-	{
+	if (plane->type < 3) {
 		front = start[plane->type] - plane->dist;
 		back = end[plane->type] - plane->dist;
+	} else {
+		front = DotProduct(start, plane->normal) - plane->dist;
+		back = DotProduct(end, plane->normal) - plane->dist;
 	}
-	else
-	{
-		front = DotProduct (start, plane->normal) - plane->dist;
-		back = DotProduct (end, plane->normal) - plane->dist;
-	}
+
 	side = front < 0;
 	
 	if ( (back < 0) == side)
@@ -234,7 +231,7 @@ int RecursiveLightPoint (const mnode_t *node, const vec3_t start, const vec3_t e
 	mid[2] = start[2] + (end[2] - start[2])*frac;
 	
 // go down front side	
-	r = RecursiveLightPoint (node->children[side], start, mid);
+	r = RecursiveLightPoint(node->children[side], start, mid);
 	if (r >= 0)
 		return r;		// hit something
 		
@@ -242,7 +239,7 @@ int RecursiveLightPoint (const mnode_t *node, const vec3_t start, const vec3_t e
 		return -1;		// didn't hit anuthing
 		
 // check for impact on this node
-	VectorCopy (mid, lightspot);
+	VectorCopy(mid, lightspot);
 	lightplane = plane;
 
 	surf = r_worldmodel->surfaces + node->firstsurface;
@@ -253,38 +250,35 @@ int RecursiveLightPoint (const mnode_t *node, const vec3_t start, const vec3_t e
 
 		tex = surf->texinfo;
 		
-		ds = (int)DotProduct(mid, tex->vecs[0]) + tex->vecs[0][3] - surf->texturemins[0];
+		ds = (int)(DotProduct(mid, tex->vecs[0]) + tex->vecs[0][3]) - surf->texturemins[0];
 		if (ds < 0 || ds > surf->extents[0])
 			continue;
 
-		dt = (int)DotProduct(mid, tex->vecs[1]) + tex->vecs[1][3] - surf->texturemins[1];
+		dt = (int)(DotProduct(mid, tex->vecs[1]) + tex->vecs[1][3]) - surf->texturemins[1];
 		if (dt < 0 || dt > surf->extents[1])
 			continue;
 
 		if (surf->samples)
 		{
-			vec3_t	scale;
 			byte	*lightmap;
 			int		maps;
 
 			lightmap = surf->stain_samples + 3*((dt>>4) * ((surf->extents[0]>>4)+1) + (ds>>4));
-			VectorClear (pointcolor);
 
+			r = 3*((surf->extents[0]>>4)+1)*((surf->extents[1]>>4)+1);
+			VectorClear(pointcolor);
+
+			frac = gl_modulate->value * ONEDIV255;
 			for (maps = 0; maps < MAXLIGHTMAPS && surf->styles[maps] != 255; maps++)
 			{
-				scale[0] = gl_modulate->value*r_newrefdef.lightstyles[surf->styles[maps]].rgb[0];
-				scale[1] = gl_modulate->value*r_newrefdef.lightstyles[surf->styles[maps]].rgb[1];
-				scale[2] = gl_modulate->value*r_newrefdef.lightstyles[surf->styles[maps]].rgb[2];
-	
-				pointcolor[0] += lightmap[0] * scale[0] * ONEDIV255;
-				pointcolor[1] += lightmap[1] * scale[1] * ONEDIV255;
-				pointcolor[2] += lightmap[2] * scale[2] * ONEDIV255;
-				lightmap += 3*((surf->extents[0]>>4)+1)*((surf->extents[1]>>4)+1);
+				pointcolor[0] += lightmap[0] * frac*r_newrefdef.lightstyles[surf->styles[maps]].rgb[0];
+				pointcolor[1] += lightmap[1] * frac*r_newrefdef.lightstyles[surf->styles[maps]].rgb[1];
+				pointcolor[2] += lightmap[2] * frac*r_newrefdef.lightstyles[surf->styles[maps]].rgb[2];
+				lightmap += r;
 			}
 
 			return 1;
 		}
-		
 		return 0;
 	}
 
@@ -300,21 +294,18 @@ R_LightPoint
 void R_LightPoint (const vec3_t p, vec3_t color)
 {
 	vec3_t		end;
-	float		r;
+	float		r, add;
 	int			lnum;
 	dlight_t	*dl;
-	float		add;
 	
-	if (!r_worldmodel->lightdata)
-	{
+	if (!r_worldmodel->lightdata) {
 		color[0] = color[1] = color[2] = 1.0f;
 		return;
 	}
 	
 	VectorSet(end, p[0], p[1], p[2] - 2048);
 	
-	r = RecursiveLightPoint (r_worldmodel->nodes, p, end);
-	
+	r = RecursiveLightPoint(r_worldmodel->nodes, p, end);
 	if (r == -1)
 		VectorClear (color);
 	else
@@ -325,14 +316,13 @@ void R_LightPoint (const vec3_t p, vec3_t color)
 	for (lnum = 0; lnum < r_newrefdef.num_dlights; lnum++, dl++)
 	{
 		add = dl->intensity - (float)Distance(currententity->origin, dl->origin);
-		if (add > 0.0f)
-		{
+		if (add > 0.0f) {
 			add *= ONEDIV256;
 			VectorMA (color, add, dl->color, color);
 		}
 	}
 
-	VectorScale (color, gl_modulate->value, color);
+	VectorScale(color, gl_modulate->value, color);
 
 	if (usingmodifiedlightmaps)
 	{
@@ -443,8 +433,7 @@ static void R_StainNode (const stain_t *st, const mnode_t *node) {
 						test = pfBL[i] + (( frad - fdist ) * st->color[i]);
 						if(test < 255 && test > 0) {
 							col=pfBL[i]*st->color[i];
-							if (col > 255) col=255;
-							if (col < 0) col=0;
+							clamp(col, 0, 255);
 							pfBL[i] = (byte)col;
 						}
 					}
@@ -458,18 +447,32 @@ static void R_StainNode (const stain_t *st, const mnode_t *node) {
 }
 
 /*
-===============
-R_ApplyStains
-===============
-*/
-void R_ApplyStains (void)
-{
-	int i;
-	stain_t *st;
+=====================
+R_AddStain
 
-	for(i=0, st = r_newrefdef.newstains; i<r_newrefdef.num_newstains; i++, st++)
-		R_StainNode(st, r_worldmodel->nodes);
+=====================
+*/
+static const vec3_t stainColors[4] = {
+  {1.0f, 0.8f, 0.8f}, //Blood
+  {0.89f, 0.89f, 0.89f}, //Normal shot
+  {1.1f, 1.1f, 0.0f}, //Blaster
+  {0.8f, 0.8f, 0.8f} //Explosion
+};
+
+void R_AddStain (const vec3_t org, int color, float size)
+{
+	stain_t	s;
+
+	if (!gl_stainmaps->integer)
+		return;
+
+	VectorCopy (org, s.origin);
+	VectorCopy (stainColors[color], s.color);
+	s.size = size;
+
+	R_StainNode(&s, r_worldmodel->nodes);
 }
+
 /*
 ===============
 R_AddDynamicLights

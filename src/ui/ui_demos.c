@@ -116,12 +116,12 @@ static void Demos_Scan( void) {
 	if(!numTotal)
 		return;
 
-	m_demos.names = Z_TagMalloc ( sizeof(char *) * numTotal, TAGMALLOC_MENU );
-	m_demos.types = Z_TagMalloc ( sizeof(int) * numTotal, TAGMALLOC_MENU );
+	m_demos.names = Z_TagMalloc ( sizeof(char *) * numTotal, TAG_MENU );
+	m_demos.types = Z_TagMalloc ( sizeof(int) * numTotal, TAG_MENU );
 
 	if(demoFolder[0])
 	{
-		m_demos.names[demo_count] = CopyString("..", TAGMALLOC_MENU);
+		m_demos.names[demo_count] = CopyString("..", TAG_MENU);
 		m_demos.types[demo_count++] = FFILE_UP;
 		skip = 1;
 	}
@@ -131,9 +131,9 @@ static void Demos_Scan( void) {
 		for( i = 0; i < numDirs - 1; i++ )
 		{
 			if (strrchr( dirList[i], '/' ))
-				m_demos.names[demo_count] = CopyString( strrchr( dirList[i], '/' ) + 1, TAGMALLOC_MENU );
+				m_demos.names[demo_count] = CopyString( strrchr( dirList[i], '/' ) + 1, TAG_MENU );
 			else
-				m_demos.names[demo_count] = CopyString( dirList[i], TAGMALLOC_MENU );
+				m_demos.names[demo_count] = CopyString( dirList[i], TAG_MENU );
 
 			m_demos.types[demo_count++] = FFILE_FOLDER;
 			Z_Free( dirList[i] );
@@ -151,9 +151,9 @@ static void Demos_Scan( void) {
 		for( i = 0; i < numFiles - 1; i++ )
 		{
 			if (strrchr( fileList[i], '/' ))
-				m_demos.names[demo_count] = CopyString( strrchr( fileList[i], '/' ) + 1, TAGMALLOC_MENU);
+				m_demos.names[demo_count] = CopyString( strrchr( fileList[i], '/' ) + 1, TAG_MENU);
 			else
-				m_demos.names[demo_count] = CopyString( fileList[i], TAGMALLOC_MENU);
+				m_demos.names[demo_count] = CopyString( fileList[i], TAG_MENU);
 
 			m_demos.types[demo_count++] = FFILE_DEMO;
 			Z_Free( fileList[i] );

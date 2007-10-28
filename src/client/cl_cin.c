@@ -97,7 +97,7 @@ static void SCR_LoadPCX (const char *filename, byte **pic, byte **palette, int *
 		return;
 	}
 
-	out = Z_TagMalloc ( (pcx->ymax+1) * (pcx->xmax+1), TAGMALLOC_CLIENT_LOADPCX);
+	out = Z_TagMalloc ( (pcx->ymax+1) * (pcx->xmax+1), TAG_CL_LOADPCX);
 
 	*pic = out;
 
@@ -105,7 +105,7 @@ static void SCR_LoadPCX (const char *filename, byte **pic, byte **palette, int *
 
 	if (palette)
 	{
-		*palette = Z_TagMalloc(768, TAGMALLOC_CLIENT_LOADPCX);
+		*palette = Z_TagMalloc(768, TAG_CL_LOADPCX);
 		memcpy (*palette, (byte *)pcx + len - 768, 768);
 	}
 
@@ -171,8 +171,8 @@ void SCR_StopCinematic (void)
 	}
 	if (cl.cinematic_file)
 	{
-		fclose (cl.cinematic_file);
-		cl.cinematic_file = NULL;
+		FS_FCloseFile( cl.cinematic_file );
+		cl.cinematic_file = 0;
 	}
 	if (cin.hnodes1)
 	{
@@ -256,7 +256,7 @@ void Huff1TableInit (void)
 	byte	counts[256];
 	int		numhnodes;
 
-	cin.hnodes1 = Z_TagMalloc (256*256*2*4, TAGMALLOC_CLIENT_CINEMA);
+	cin.hnodes1 = Z_TagMalloc (256*256*2*4, TAG_CL_CINEMA);
 	memset (cin.hnodes1, 0, 256*256*2*4);
 
 	for (prev=0 ; prev<256 ; prev++)
@@ -313,7 +313,7 @@ cblock_t Huff1Decompress (cblock_t in)
 	// get decompressed count
 	count = in.data[0] + (in.data[1]<<8) + (in.data[2]<<16) + (in.data[3]<<24);
 	input = in.data + 4;
-	out_p = out.data = Z_TagMalloc (count, TAGMALLOC_CLIENT_CINEMA);
+	out_p = out.data = Z_TagMalloc (count, TAG_CL_CINEMA);
 	memset(out_p, 0, count);
 
 	// read bits
@@ -441,12 +441,13 @@ byte *SCR_ReadNextFrame (void)
 	int		start, end, count;
 
 	// read the next frame
-	r = fread (&command, 4, 1, cl.cinematic_file);
-	if (r == 0)		// we'll give it one more chance
-		r = fread (&command, 4, 1, cl.cinematic_file);
+	r = FS_Read(&command, 4, cl.cinematic_file);
+	if (r != 4)		// we'll give it one more chance
+		r = FS_Read(&command, 4, cl.cinematic_file);
 
-	if (r != 1)
+	if (r != 4)
 		return NULL;
+
 	command = LittleLong(command);
 	if (command == 2)
 		return NULL;	// last frame marker
@@ -614,9 +615,8 @@ void SCR_PlayCinematic (char *arg)
 	}
 
 	Com_sprintf (name, sizeof(name), "video/%s", arg);
-	FS_FOpenFile (name, &cl.cinematic_file);
-	if (!cl.cinematic_file)
-	{
+	FS_FOpenFile (name, &cl.cinematic_file, FS_MODE_READ);
+	if (!cl.cinematic_file) {
 //		Com_Error (ERR_DROP, "Cinematic %s not found.\n", name);
 		SCR_FinishCinematic ();
 		cl.cinematictime = 0;	// done

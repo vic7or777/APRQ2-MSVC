@@ -194,7 +194,7 @@ static size_t CL_HTTP_Recv (void *ptr, size_t size, size_t nmemb, void *stream)
 	if (!dl->fileSize)
 	{
 		dl->fileSize = bytes > 131072 ? bytes : 131072;
-		dl->tempBuffer = Z_TagMalloc ((int)dl->fileSize, TAGMALLOC_CLIENT_DOWNLOAD);
+		dl->tempBuffer = Z_TagMalloc ((int)dl->fileSize, TAG_CL_DOWNLOAD);
 	}
 	else if (dl->position + bytes >= dl->fileSize - 1)
 	{
@@ -202,7 +202,7 @@ static size_t CL_HTTP_Recv (void *ptr, size_t size, size_t nmemb, void *stream)
 
 		tmp = dl->tempBuffer;
 
-		dl->tempBuffer = Z_TagMalloc ((int)(dl->fileSize*2), TAGMALLOC_CLIENT_DOWNLOAD);
+		dl->tempBuffer = Z_TagMalloc ((int)(dl->fileSize*2), TAG_CL_DOWNLOAD);
 		memcpy (dl->tempBuffer, tmp, dl->fileSize);
 		Z_Free (tmp);
 		dl->fileSize *= 2;
@@ -447,7 +447,7 @@ qboolean CL_QueueHTTPDownload (const char *quakePath)
 			return true;
 	}
 
-	q->next = Z_TagMalloc (sizeof(*q), TAGMALLOC_CLIENT_DOWNLOAD);
+	q->next = Z_TagMalloc (sizeof(*q), TAG_CL_DOWNLOAD);
 	q = q->next;
 
 	q->next = NULL;
@@ -949,8 +949,7 @@ static void CL_FinishHTTPDownload (void)
 			i = strlen (tempName);
 			if (!strcmp (tempName + i - 4, ".pak"))
 			{
-				//FS_FlushCache ();
-				FS_ReloadPAKs ();
+				CL_RestartFilesystem(true);
 				CL_ReVerifyHTTPQueue ();
 				downloading_pak = false;
 			}

@@ -24,10 +24,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <float.h>
 
 #include "..\client\client.h"
-#ifndef CD_AUDIO
-# define WIN32_LEAN_AND_MEAN
+#ifdef CD_AUDIO
+#include <mmsystem.h>
 #endif
-#define VC_LEANMEAN
 #include "winquake.h"
 //#include "zmouse.h"
 
@@ -369,17 +368,18 @@ LONG WINAPI MainWndProc (
 		break;
 
 	case WM_SYSCOMMAND:
-		switch (wParam) { 
-		case SC_SCREENSAVE: 
-		case SC_MONITORPOWER: 
-			return 0; 
-		case SC_CLOSE: 
+		switch (wParam) {
+		case SC_SCREENSAVE:
+		case SC_MONITORPOWER:
+		case SC_KEYMENU:
+			return 0;
+		case SC_CLOSE:
 			Cbuf_AddText("quit\n");
 			return 0;
-		case SC_MAXIMIZE: 
-			Cvar_Set("vid_fullscreen", "1"); 
+		case SC_MAXIMIZE:
+			Cvar_Set("vid_fullscreen", "1");
 			return 0;
-		} 
+		}
 		break;
 
 	case WM_QUIT:
@@ -518,12 +518,14 @@ void VID_CheckChanges (void)
 
 		Com_Printf( "-------- [Loading Renderer] --------\n" );
 
-		vid_active = true; //Lets assume we get it active, otherwise
-							//if error occurs end of R_Init, it doesnt free the beging stuff
+		//Need to update lached cvar's
+		vid_displayfrequency = Cvar_Get ( "vid_displayfrequency", "0", CVAR_ARCHIVE|CVAR_LATCHED );
+
+		vid_active = true;
+
 		if ( R_Init( global_hInstance, MainWndProc ) == -1 )
 		{
 			R_Shutdown();
-			vid_active = false;
 			Com_Error (ERR_FATAL, "Couldn't initialize renderer!");
 		}
 
@@ -557,6 +559,7 @@ VID_Init
 */
 void VID_Init (void)
 {
+	Cvar_Subsystem( CVAR_SYSTEM_VIDEO );
 	/* Create the video variables so we know how to start the graphics drivers */
 	vid_xpos = Cvar_Get ("vid_xpos", "3", CVAR_ARCHIVE);
 	vid_ypos = Cvar_Get ("vid_ypos", "22", CVAR_ARCHIVE);
@@ -569,7 +572,7 @@ void VID_Init (void)
 	Cmd_AddCommand ("vid_front", VID_Front_f);
 	Cmd_AddCommand ("vid_minimize", VID_Minimize_f);
 
-	vid_displayfrequency = Cvar_Get ( "vid_displayfrequency", "0", CVAR_ARCHIVE|CVAR_LATCHVIDEO );
+	vid_displayfrequency = Cvar_Get ( "vid_displayfrequency", "0", CVAR_ARCHIVE|CVAR_LATCHED );
 	vid_restore_on_switch = Cvar_Get ("vid_flip_on_switch", "0", 0);
 
 	vid_xpos->OnChange = OnChange_VID_XY;
@@ -579,6 +582,8 @@ void VID_Init (void)
 	/*
 	** this is a gross hack but necessary to clamp the mode for 3Dfx
 	*/
+
+	Cvar_Subsystem( CVAR_SYSTEM_GENERIC );
 
 	/* Disable the 3Dfx splash screen */
 	putenv("FX_GLIDE_NO_SPLASH=0");

@@ -17,6 +17,10 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 */
+#ifndef _GNU_SOURCE
+ #define _GNU_SOURCE
+#endif
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <errno.h>
@@ -37,9 +41,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 //===============================================================================
 
-byte *membase;
-int maxhunksize;
-int curhunksize;
+static byte *membase;
+static size_t maxhunksize;
+static size_t curhunksize;
 
 #if defined(MACOS_X)
 void *Hunk_Begin (int maxsize)
@@ -49,7 +53,7 @@ void *Hunk_Begin (int maxsize)
 	curhunksize = 0;
 	membase = malloc(maxhunksize);
 	if (membase == NULL)
-		Sys_Error(ERR_FATAL, "unable to allocate %d bytes", maxsize);
+		Sys_Error("Hunk_Begin: unable to virtual allocate %d bytes", maxsize);
 
 	memset( membase, 0, maxhunksize );
 	return membase;
@@ -61,7 +65,7 @@ void *Hunk_Alloc (int size)
 
 	size = (size+31)&~31; 	// round to cacheline
 	if (curhunksize + size > maxhunksize)
-		Sys_Error(ERR_FATAL, "Hunk_Alloc overflow");
+		Sys_Error("Hunk_Alloc overflow");
 	buf = membase + curhunksize;
 	curhunksize += size;
 	return buf;
@@ -73,7 +77,7 @@ int Hunk_End (void)
 
 	n = realloc(membase, curhunksize);
 	if (n != membase)
-		Sys_Error(ERR_FATAL, "Hunk_End:  Could not remap virtual block (%d)", errno);
+		Sys_Error("Hunk_End:  Could not remap virtual block (%d)", errno);
 
 	return curhunksize;
 }
@@ -93,18 +97,19 @@ void Hunk_Free (void *base)
 void *Hunk_Begin (int maxsize)
 {
 	// reserve a huge chunk of memory, but don't commit any yet
-	maxhunksize = maxsize + sizeof(int);
+	maxhunksize = maxsize + sizeof(size_t);
 	curhunksize = 0;
 
 	membase = mmap(0, maxhunksize, PROT_READ|PROT_WRITE, 
 		MAP_PRIVATE|MMAP_ANON, -1, 0);
 
-	if (membase == NULL || membase == (byte *)-1)
-		Sys_Error("unable to virtual allocate %d bytes", maxsize);
+	if (membase == NULL || membase == (byte *)-1) {
+		Sys_Error("Hunk_Begin: unable to virtual allocate %d bytes", maxsize);
+	}
 
-	*((int *)membase) = curhunksize;
+	*((size_t *)membase) = curhunksize;
 
-	return membase + sizeof(int);
+	return membase + sizeof(size_t);
 }
 
 void *Hunk_Alloc (int size)
@@ -113,9 +118,10 @@ void *Hunk_Alloc (int size)
 
 	// round to cacheline
 	size = (size+31)&~31;
-	if (curhunksize + size > maxhunksize)
-		Sys_Error("Hunk_Alloc overflow");
-	buf = membase + sizeof(int) + curhunksize;
+	if (curhunksize + size > maxhunksize) {
+		Sys_Error("Hunk_Alloc: unable to allocate %d bytes out of %d", size, maxhunksize);
+	}
+	buf = membase + sizeof(size_t) + curhunksize;
 	curhunksize += size;
 	return buf;
 }
@@ -125,27 +131,31 @@ int Hunk_End (void)
 	byte *n;
 
 #if defined(__FreeBSD__)
-  size_t old_size = maxhunksize;
-  size_t new_size = curhunksize + sizeof(int);
-  void * unmap_base;
-  size_t unmap_len;
+	size_t old_size = maxhunksize;
+	size_t new_size = curhunksize + sizeof(int);
+	void * unmap_base;
+	size_t unmap_len;
 
-  new_size = round_page(new_size);
-  old_size = round_page(old_size);
-  if (new_size > old_size)
-  	n = 0; /* error */
-  else if (new_size < old_size)
-  {
-    unmap_base = (caddr_t)(membase + new_size);
-    unmap_len = old_size - new_size;
-    n = munmap(unmap_base, unmap_len) + membase;
-  }
+	new_size = round_page(new_size);
+	old_size = round_page(old_size);
+	if (new_size > old_size) {
+		Sys_Error("Hunk_End: new_size > old_size");
+		return;
+	}
+	else if (new_size < old_size)
+	{
+		unmap_base = (caddr_t)(membase + new_size);
+		unmap_len = old_size - new_size;
+		n = munmap(unmap_base, unmap_len) + membase;
+	}
 #else
-	n = mremap(membase, maxhunksize, curhunksize + sizeof(int), 0);
+	n = (byte *)mremap(membase, maxhunksize, curhunksize + sizeof(size_t), 0);
 #endif
-	if (n != membase)
-		Sys_Error("Hunk_End:  Could not remap virtual block (%d)", errno);
-	*((int *)membase) = curhunksize + sizeof(int);
+	if (n != membase) {
+		Sys_Error("Hunk_End: could not remap virtual block: %s", strerror(errno));
+	}
+
+	*((size_t *)membase) = curhunksize + sizeof(size_t);
 	
 	return curhunksize;
 }
@@ -155,9 +165,9 @@ void Hunk_Free (void *base)
 	byte *m;
 
 	if (base) {
-		m = ((byte *)base) - sizeof(int);
-		if (munmap(m, *((int *)m)))
-			Sys_Error("Hunk_Free: munmap failed (%d)", errno);
+		m = ((byte *)base) - sizeof(size_t);
+		if (munmap(m, *((size_t *)m)))
+			Sys_Error("Hunk_Free: munmap failed: %s", strerror(errno));
 	}
 }
 #endif
@@ -169,10 +179,10 @@ void Hunk_Free (void *base)
 Sys_Milliseconds
 ================
 */
-int curtime;
+unsigned int curtime;
 static unsigned long sys_timeBase = 0;
 
-int Sys_Milliseconds (void)
+unsigned int Sys_Milliseconds (void)
 {
 	struct timeval tp;
 	//struct timezone tzp;
@@ -214,9 +224,22 @@ int Sys_XTimeToSysTime (unsigned long xtime)
 }
 #endif
 
-void Sys_Mkdir (const char *path)
-{
+void Sys_Mkdir (const char *path) {
     mkdir (path, 0777);
+}
+
+qboolean Sys_RemoveFile( const char *path ) {
+	if( remove( path ) ) {
+		return false;
+	}
+	return true;
+}
+
+qboolean Sys_RenameFile( const char *from, const char *to ) {
+	if( rename( from, to ) ) {
+		return false;
+	}
+	return true;
 }
 
 //============================================
@@ -241,10 +264,11 @@ static qboolean CompareAttributes(const char *path, const char *name,
 	if (stat(fn, &st) == -1)
 		return false; // shouldn't happen
 
-	if ( ( canthave & SFF_SUBDIR ) &&  ( st.st_mode & S_IFDIR ) )
-		return false;
-
-	if ( ( musthave & SFF_SUBDIR ) && !( st.st_mode & S_IFDIR ) )
+	if (st.st_mode & S_IFDIR) {
+		if (canthave & SFF_SUBDIR)
+			return false;
+	}
+	else if (musthave & SFF_SUBDIR)
 		return false;
 
 	return true;

@@ -1,6 +1,38 @@
 :: AprQ2 changelog  ::
 
-1.20b
+1.21
+-Cl_async to toggle between asyncronous and syncronous renderer. When enable, use r_maxfps to change the renderer max fps.
+-New r1q2 protocol support.
+-Fixed protocol fallback on mismatch minor versions.
+-cvar net_maxmessagelen cvar to set maximum message size on R1Q2 servers. Default 1390 matches Q2 3.20 default. Set to 0 to use maximum available size.
+-cvars scr_drawlagometer_x and scr_drawlagometer_y to set the cordinations of lagometer.
+-cvar gl_decals_max to set maximum decals, this can use alot memory, so its limited between 256 - 4096.
+-cvar gl_stainmaps needs vid_restart, it uses alot memory, so dont need to allocate it when not used.
+-Doesnt load caustic, shell effect or decal images if those arent in use.
+-Alot stuff from q2pro.
+-*.pkz support.
+-Should use alot less memory.
+-Alot misc optimizations.
+-Error dumping from q2pro
+-New macro 'cl_ups' to show current velocity in units per second.
+-Removed char limits per line on centerprint.
+-Centerprint fading.
+-Updated libpng library to v1.2.20 on windows builds.
+-Command draw <name> <x> <y> [color [time]] to add drawing cvar/macro string to screen.
+-Command undraw <name> to remove the drawing cvar/macro.
+-Ignore wrong client_connect requests.
+-Cvar cl_chat_notify to disable notify on chat text.
+-Doesnt add aviexport info to notify.
+-Serverrequest list to only print stuff from servers where requested.
+-Check maps for bad lump offsets.
+-cvars cl_gun_x, cl_gun_y and cl_gun_z to adjust the gun place.
+-Lowers the gun depending how much fov is when drawing gun on fov over 90 (cl_gun 2).
+-Automaticly set correct fov for all widesreen modes, you can disable this with cl_wsfov 0.
+-New sound resample code from qfusion with stereo support. To use the original if sounds weird, set s_oldresample 1.
+-Check for malformed wav files.
+
+
+1.20
 -Checks for bad vid_displayfrequency/gl_bitdepth on mode change fail.
 -Checks that we actually got all addresses for used gl pointers from gl lib.
 -Old protocol < 34 demos works again.

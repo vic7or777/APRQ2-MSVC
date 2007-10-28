@@ -53,13 +53,6 @@ float   aliasoldworldtransform[3][4];
 static float	s_ziscale;
 static vec3_t	s_alias_forward, s_alias_right, s_alias_up;
 
-
-#define NUMVERTEXNORMALS	162
-
-const float	r_avertexnormals[NUMVERTEXNORMALS][3] = {
-#include "../client/anorms.h"
-};
-
 // precalculated dot products for quantized angles
 #define SHADEDOT_QUANT 16
 const float	r_avertexnormal_dots[SHADEDOT_QUANT][256] =
@@ -415,7 +408,7 @@ void R_AliasTransformFinalVerts( int numpoints, finalvert_t *fv, dtrivertx_t *ol
 		// PMM - added double damage shell
 		if ( currententity->flags & ( RF_SHELL_RED | RF_SHELL_GREEN | RF_SHELL_BLUE | RF_SHELL_DOUBLE | RF_SHELL_HALF_DAM) )
 		{
-			const float	*normal = r_avertexnormals[newv->lightnormalindex];
+			const float	*normal = bytedirs[newv->lightnormalindex];
 			lerped_vert[0] += normal[0] * POWERSUIT_SCALE;
 			lerped_vert[1] += normal[1] * POWERSUIT_SCALE;
 			lerped_vert[2] += normal[2] * POWERSUIT_SCALE;

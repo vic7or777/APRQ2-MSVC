@@ -29,6 +29,7 @@ int			anykeydown;
 
 qkey_t		keys[MAX_KEYS];
 
+static qboolean	key_overstrikeMode;
 
 typedef struct
 {
@@ -36,7 +37,7 @@ typedef struct
 	int		keynum;
 } keyname_t;
 
-keyname_t keynames[] =
+static keyname_t keynames[] =
 {
 	{"TAB", K_TAB},
 	{"ENTER", K_ENTER},
@@ -151,12 +152,30 @@ keyname_t keynames[] =
 
 /*
 ===================
+Key_GetOverstrikeMode
+===================
+*/
+qboolean Key_GetOverstrikeMode( void ) {
+	return key_overstrikeMode;
+}
+
+/*
+===================
+Key_SetOverstrikeMode
+===================
+*/
+void Key_SetOverstrikeMode( qboolean state ) {
+	key_overstrikeMode = state;
+}
+
+/*
+===================
 Key_IsDown
 ===================
 */
 qboolean Key_IsDown( int key )
 {
-	if( key < 0 || key >= MAX_KEYS )
+	if( (unsigned)key >= MAX_KEYS )
 		return false;
 
 	return keys[key].down;
@@ -234,7 +253,7 @@ const char *Key_KeynumToString (int keynum)
 	if (keynum == -1)
 		return "<KEY NOT FOUND>";
 	
-	if ( keynum < 0 || keynum >= MAX_KEYS )
+	if ( (unsigned)keynum >= MAX_KEYS )
 		return "<OUT OF RANGE>";
 
 	// check for printable ascii (don't use quote)
@@ -270,7 +289,7 @@ Key_SetBinding
 */
 void Key_SetBinding (int keynum, const char *binding)
 {
-	if (keynum == -1)
+	if( (unsigned)keynum >= MAX_KEYS )
 		return;
 
 	// free old bindings
@@ -278,7 +297,7 @@ void Key_SetBinding (int keynum, const char *binding)
 		Z_Free(keys[keynum].binding);
 	}
 	// allocate memory for new binding
-	keys[keynum].binding = CopyString(binding, TAGMALLOC_CLIENT_KEYBIND);
+	keys[keynum].binding = CopyString(binding, TAG_CL_KEYBIND);
 }
 
 /*
@@ -286,19 +305,17 @@ void Key_SetBinding (int keynum, const char *binding)
 Key_Unbind_f
 ===================
 */
-void Key_Unbind_f (void)
+static void Key_Unbind_f (void)
 {
 	int		b;
 
-	if (Cmd_Argc() != 2)
-	{
+	if (Cmd_Argc() != 2) {
 		Com_Printf ("unbind <key> : remove commands from a key\n");
 		return;
 	}
 
 	b = Key_StringToKeynum (Cmd_Argv(1));
-	if (b == -1)
-	{
+	if (b == -1) {
 		Com_Printf ("\"%s\" isn't a valid key\n", Cmd_Argv(1));
 		return;
 	}
@@ -306,7 +323,7 @@ void Key_Unbind_f (void)
 	Key_SetBinding (b, "");
 }
 
-void Key_Unbindall_f (void)
+static void Key_Unbindall_f (void)
 {
 	int	i;
 
@@ -322,26 +339,23 @@ void Key_Unbindall_f (void)
 Key_Bind_f
 ===================
 */
-void Key_Bind_f (void)
+static void Key_Bind_f (void)
 {
 	int			c, b;
 	
 	c = Cmd_Argc();
 
-	if (c < 2)
-	{
+	if (c < 2) {
 		Com_Printf ("bind <key> [command] : attach a command to a key\n");
 		return;
 	}
 	b = Key_StringToKeynum (Cmd_Argv(1));
-	if (b == -1)
-	{
+	if (b == -1) {
 		Com_Printf ("\"%s\" isn't a valid key\n", Cmd_Argv(1));
 		return;
 	}
 
-	if (c == 2)
-	{
+	if (c == 2) {
 		if (keys[b].binding)
 			Com_Printf ("\"%s\" = \"%s\"\n", Cmd_Argv(1), keys[b].binding );
 		else
@@ -376,7 +390,7 @@ Key_Bindlist_f
 
 ============
 */
-void Key_Bindlist_f (void)
+static void Key_Bindlist_f (void)
 {
 	int		i;
 

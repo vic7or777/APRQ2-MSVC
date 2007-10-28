@@ -33,12 +33,10 @@ typedef struct
 	int 		speed;			// not needed, because converted on load?
 	int 		width;
 	int 		channels;
-	byte		data[1];		// variable sized
-
 #ifdef USE_OPENAL
-	int					alFormat;
 	unsigned			alBufferNum;
 #endif
+	byte		data[1];		// variable sized
 } sfxcache_t;
 
 typedef struct sfx_s
@@ -122,17 +120,6 @@ typedef struct openal_channel_s
 } openal_channel_t;
 #endif
 
-typedef struct
-{
-	int			rate;
-	int			width;
-	int			channels;
-	int			loopstart;
-	int			samples;
-	int			dataofs;		// chunk starts this many bytes from file start
-} wavinfo_t;
-
-
 /*
 ====================================================================
 
@@ -188,8 +175,6 @@ extern cvar_t	*s_testsound;
 extern cvar_t	*s_primary;
 
 extern cvar_t	*s_swapstereo;
-
-wavinfo_t GetWavinfo (const char *name, byte *wav, int wavlength);
 
 void S_InitScaletable (void);
 

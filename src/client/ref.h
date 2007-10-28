@@ -131,9 +131,6 @@ typedef struct
 
 	int			num_particles;
 	particle_t	*particles;
-
-	int			num_newstains;		// Stainmaps
-	stain_t		*newstains;			// Stainmaps
 } refdef_t;
 
 
@@ -177,6 +174,10 @@ void	R_AppActivate( qboolean active );
 qboolean R_IsWideScreen(void);
 void R_AddDecal	(vec3_t origin, vec3_t dir, float red, float green, float blue, float alpha,
 				 float size, int type, int flags, float angle);
+
+void R_AddStain (const vec3_t org, int color, float size); //Stainmaps
+#else
+#define R_AddStain(a,b,c)
 #endif
 
 #endif // __REF_H

@@ -282,7 +282,7 @@ void R_Register (void)
 	vid_gamma->modified = true; // force us to rebuild the gamma table later
 
 //PGM
-	sw_lockpvs = Cvar_Get ("sw_lockpvs", "0", 0);
+	sw_lockpvs = Cvar_Get ("sw_lockpvs", "0", CVAR_CHEAT);
 //PGM
 }
 

@@ -99,17 +99,16 @@ void VID_CheckChanges (void)
 
 		Com_Printf( "--------- [Loading Renderer] ---------\n" );
 
+		vid_active = true;
 		if ( R_Init( 0, 0 ) == -1 )
 		{
 			R_Shutdown();
-			vid_active = false;
 			Com_Error (ERR_FATAL, "Couldn't initialize renderer!");
 		}
 
 		Com_Printf( "------------------------------------\n");
 
 		vid_restart = false;
-		vid_active = true;
 		cls.disable_screen = false;
 	}
 

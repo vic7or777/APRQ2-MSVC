@@ -197,7 +197,7 @@ static qboolean PlayerConfig_ScanDirectories( void )
 			continue;
 		}
 
-		skinnames = Z_TagMalloc( sizeof( char * ) * ( nskins + 1 ), TAGMALLOC_MENU );
+		skinnames = Z_TagMalloc( sizeof( char * ) * ( nskins + 1 ), TAG_MENU );
 		memset( skinnames, 0, sizeof( char * ) * ( nskins + 1 ) );
 
 		// copy the valid skins
@@ -220,7 +220,7 @@ static qboolean PlayerConfig_ScanDirectories( void )
 					if ( strrchr( scratch, '.' ) )
 						*strrchr( scratch, '.' ) = 0;
 
-					skinnames[s] = CopyString( scratch, TAGMALLOC_MENU );
+					skinnames[s] = CopyString( scratch, TAG_MENU );
 					s++;
 				}
 			}
@@ -273,8 +273,6 @@ static int pmicmpfnc( const void *_a, const void *_b )
 	return strcmp( a->directory, b->directory );
 }
 
-extern float CalcFov( float fov_x, float w, float h );
-
 void PlayerConfig_MenuDraw( menuframework_s *self )
 {
 	refdef_t refdef;
@@ -292,7 +290,7 @@ void PlayerConfig_MenuDraw( menuframework_s *self )
 
 	if ( s_pmi[s_player_model_box.curvalue].skindisplaynames )
 	{
-		static int yaw = 0;
+		static int yaw = 0, nextUpdate = 0;
 		//int maxframe = 29;
 		entity_t entity;
 
@@ -308,10 +306,18 @@ void PlayerConfig_MenuDraw( menuframework_s *self )
 		entity.frame = 0;
 		entity.oldframe = 0;
 		entity.backlerp = 0.0;
-		entity.angles[1] = yaw++;
-		if ( ++yaw > 360 )
-			yaw -= 360;
+		entity.angles[1] = yaw;
 
+		if (nextUpdate <= cls.realtime) {
+			nextUpdate = cls.realtime + 2;
+			yaw++;
+			if ( yaw > 360 )
+				yaw -= 360;
+		}
+
+#ifdef GL_QUAKE
+		AnglesToAxis(entity.angles, entity.axis);
+#endif
 		refdef.areabits = 0;
 		refdef.num_entities = 1;
 		refdef.entities = &entity;
@@ -371,17 +377,14 @@ const char *PlayerConfig_MenuKey (menuframework_s *self, int key)
 
 qboolean PlayerConfig_MenuInit( void )
 {
-	extern cvar_t *name;
-	extern cvar_t *skin;
+	extern cvar_t *info_name;
+	extern cvar_t *info_skin;
+	extern cvar_t *info_hand;
 	char currentdirectory[1024];
 	char currentskin[1024];
 	int i = 0;
-
 	int currentdirectoryindex = 0;
 	int currentskinindex = 0;
-
-	cvar_t *hand = Cvar_Get( "hand", "0", CVAR_USERINFO | CVAR_ARCHIVE );
-
 	static const char *handedness[] = { "right", "left", "center", 0 };
 
 	PlayerConfig_ScanDirectories();
@@ -389,10 +392,10 @@ qboolean PlayerConfig_MenuInit( void )
 	if (s_numplayermodels == 0)
 		return false;
 
-	if ( hand->integer < 0 || hand->integer > 2 )
+	if ( info_hand->integer < 0 || info_hand->integer > 2 )
 		Cvar_SetValue( "hand", 0 );
 
-	Q_strncpyz( currentdirectory, skin->string, sizeof(currentdirectory) );
+	Q_strncpyz( currentdirectory, info_skin->string, sizeof(currentdirectory) );
 
 	if ( strchr( currentdirectory, '/' ) )
 	{
@@ -445,8 +448,8 @@ qboolean PlayerConfig_MenuInit( void )
 	s_player_name_field.generic.y		= 0;
 	s_player_name_field.length	= 20;
 	s_player_name_field.visible_length = 20;
-	strcpy( s_player_name_field.buffer, name->string );
-	s_player_name_field.cursor = strlen( name->string );
+	Q_strncpyz( s_player_name_field.buffer, info_name->string, sizeof(s_player_name_field.buffer));
+	s_player_name_field.cursor = strlen( s_player_name_field.buffer );
 
 	s_player_model_title.generic.type = MTYPE_SEPARATOR;
 	s_player_model_title.generic.name = "model";

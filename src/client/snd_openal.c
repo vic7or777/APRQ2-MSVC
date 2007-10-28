@@ -171,15 +171,17 @@ ALSnd_CreateBuffer
 */
 void ALSnd_CreateBuffer (sfxcache_t *sc, int width, int channels, byte *data, int size, int frequency)
 {
+	int alFormat;
+
 	if (!sc)
 		return;
 
 	// Find the format
-	sc->alFormat = ALSnd_BufferFormat (width, channels);
+	alFormat = ALSnd_BufferFormat (width, channels);
 
 	// Upload
 	qalGenBuffers (1, &sc->alBufferNum);
-	qalBufferData (sc->alBufferNum, sc->alFormat, data, size, frequency);
+	qalBufferData (sc->alBufferNum, alFormat, data, size, frequency);
 
 	// Check
 	if (!qalIsBuffer (sc->alBufferNum))
@@ -617,7 +619,7 @@ static void ALSnd_AddLoopSounds (void)
 	// Add looping entity sounds
 	for (i=0 ; i<cl.frame.num_entities ; i++)
 	{
-		ent = &cl_parse_entities[(cl.frame.parse_entities+i) & (MAX_PARSE_ENTITIES-1)];
+		ent = &cl_parse_entities[(cl.frame.parse_entities + i) & PARSE_ENTITIES_MASK];
 		if (!ent->sound)
 			continue;
 

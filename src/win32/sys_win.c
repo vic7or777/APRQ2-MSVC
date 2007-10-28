@@ -18,7 +18,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 */
 // sys_win.h
-
+#define USE_DBGHELP
 #include "../qcommon/qcommon.h"
 #include "winquake.h"
 #include "resource.h"
@@ -29,7 +29,11 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <direct.h>
 #include <io.h>
 #include <conio.h>
+#include <mmsystem.h>
 #include "../win32/conproc.h"
+#ifdef USE_DBGHELP
+#include <dbghelp.h>
+#endif
 
 #define MINIMUM_WIN_MEMORY	0x0a00000
 #define MAXIMUM_WIN_MEMORY	0x1000000
@@ -289,22 +293,48 @@ char *Sys_GetClipboardData( void )
 	char *data = NULL;
 	char *cliptext;
 
-	if ( OpenClipboard( NULL ) != 0 )
+	if ( OpenClipboard( NULL ) != FALSE )
 	{
 		HANDLE hClipboardData;
 
-		if ( ( hClipboardData = GetClipboardData( CF_TEXT ) ) != 0 )
+		if ( ( hClipboardData = GetClipboardData( CF_TEXT ) ) != FALSE )
 		{
-			if ( ( cliptext = GlobalLock( hClipboardData ) ) != 0 ) 
-			{
-				data = Z_TagMalloc( GlobalSize( hClipboardData ) + 1, TAGMALLOC_CLIPBOARD );
-				Q_strncpyz( data, cliptext, GlobalSize( hClipboardData ) + 1 );
+			if ( ( cliptext = GlobalLock( hClipboardData ) ) != FALSE ) {
+				data = CopyString(cliptext, TAG_CLIPBOARD);
 				GlobalUnlock( hClipboardData );
 			}
 		}
 		CloseClipboard();
 	}
 	return data;
+}
+
+/*
+================
+Sys_SetClipboardData
+
+================
+*/
+void Sys_SetClipboardData( const char *data )
+{
+	char *cliptext;
+	int	length;
+
+	if( OpenClipboard( NULL ) != FALSE ) {
+		HANDLE hClipboardData;
+
+		length = strlen( data );
+		hClipboardData = GlobalAlloc( GMEM_MOVEABLE | GMEM_DDESHARE, length + 1 );
+
+		if( SetClipboardData( CF_TEXT, hClipboardData ) != NULL ) {
+			if( ( cliptext = GlobalLock( hClipboardData ) ) != NULL ) {
+				strcpy( cliptext, data );
+				cliptext[length] = 0;
+				GlobalUnlock( hClipboardData );
+			}
+		}
+		CloseClipboard();
+	}
 }
 
 /*
@@ -343,8 +373,12 @@ Sys_UnloadGame
 */
 void Sys_UnloadGame (void)
 {
-	if (!FreeLibrary (game_library))
-		Com_Error (ERR_FATAL, "FreeLibrary failed for game library");
+	if (!game_library)
+		return;
+
+	if (!FreeLibrary(game_library))
+		Com_Error (ERR_FATAL, "FreeLibrary failed for game library with error %lu", GetLastError());
+
 	game_library = NULL;
 }
 
@@ -393,28 +427,22 @@ void *Sys_GetGameAPI (void *parms)
 #error Don't know what kind of dynamic objects to use for this architecture.
 #endif
 
-	if (game_library)
+	if (game_library) {
+		Sys_UnloadGame();
 		Com_Error (ERR_FATAL, "Sys_GetGameAPI without Sys_UnloadingGame");
+	}
 
 	// check the current debug directory first for development purposes
 	_getcwd (cwd, sizeof(cwd));
 	Com_sprintf (name, sizeof(name), "%s/%s/%s", cwd, debugdir, gamename);
 	game_library = LoadLibrary ( name );
-	if (game_library)
-	{
-		Com_DPrintf ("LoadLibrary (%s)\n", name);
-	}
-	else
+	if (!game_library)
 	{
 #ifdef DEBUG
 		// check the current directory for other development purposes
 		Com_sprintf (name, sizeof(name), "%s/%s", cwd, gamename);
 		game_library = LoadLibrary ( name );
-		if (game_library)
-		{
-			Com_DPrintf ("LoadLibrary (%s)\n", name);
-		}
-		else
+		if (!game_library)
 #endif
 		{
 			// now run through the search paths
@@ -426,23 +454,27 @@ void *Sys_GetGameAPI (void *parms)
 					return NULL;		// couldn't find one anywhere
 				Com_sprintf (name, sizeof(name), "%s/%s", path, gamename);
 				game_library = LoadLibrary (name);
-				if (game_library)
-				{
-					Com_DPrintf ("LoadLibrary (%s)\n",name);
+				if (game_library) {
 					break;
 				}
 			}
 		}
 	}
 
+	if( !game_library ) {
+		return NULL;
+	}
+
+	Com_DPrintf ("LoadLibrary (%s)\n", name);
+
 	GetGameAPI = (void *)GetProcAddress (game_library, "GetGameAPI");
-	if (!GetGameAPI)
-	{
+	if (!GetGameAPI) {
+		Com_DPrintf("GetProcAddress from %s failed with error %lu\n", name, GetLastError());
 		Sys_UnloadGame ();		
 		return NULL;
 	}
 
-	return GetGameAPI (parms);
+	return GetGameAPI(parms);
 }
 
 //=======================================================================
@@ -488,6 +520,7 @@ void FixWorkingDirectory (void)
 	char *p, curDir[MAX_PATH];
 
 	GetModuleFileName (NULL, curDir, sizeof(curDir)-1);
+	curDir[sizeof(curDir)-1] = 0;
 
 	p = strrchr(curDir, '\\');
 	if(!p)
@@ -497,6 +530,264 @@ void FixWorkingDirectory (void)
 
 	SetCurrentDirectory(curDir);
 }
+void VID_Shutdown (void);
+#ifdef USE_DBGHELP
+
+typedef DWORD (WINAPI *SETSYMOPTIONS)( DWORD );
+typedef BOOL (WINAPI *SYMGETMODULEINFO)( HANDLE, DWORD, PIMAGEHLP_MODULE );
+typedef BOOL (WINAPI *SYMINITIALIZE)( HANDLE, PSTR, BOOL );
+typedef BOOL (WINAPI *SYMCLEANUP)( HANDLE );
+typedef BOOL (WINAPI *ENUMERATELOADEDMODULES)( HANDLE, PENUMLOADED_MODULES_CALLBACK, PVOID );
+typedef BOOL (WINAPI *STACKWALK)( DWORD, HANDLE, HANDLE, LPSTACKFRAME, PVOID,
+	PREAD_PROCESS_MEMORY_ROUTINE, PFUNCTION_TABLE_ACCESS_ROUTINE, PGET_MODULE_BASE_ROUTINE,
+	PTRANSLATE_ADDRESS_ROUTINE );
+typedef BOOL (WINAPI *SYMFROMADDR)( HANDLE, DWORD64, PDWORD64, PSYMBOL_INFO );
+typedef PVOID (WINAPI *SYMFUNCTIONTABLEACCESS)( HANDLE, DWORD );
+typedef DWORD (WINAPI *SYMGETMODULEBASE)( HANDLE, DWORD );
+
+typedef HINSTANCE (WINAPI *SHELLEXECUTE)( HWND, LPCSTR, LPCSTR, LPCSTR, LPCSTR, INT );
+
+static SETSYMOPTIONS pSymSetOptions;
+static SYMGETMODULEINFO pSymGetModuleInfo;
+static SYMINITIALIZE pSymInitialize;
+static SYMCLEANUP pSymCleanup;
+static ENUMERATELOADEDMODULES pEnumerateLoadedModules;
+static STACKWALK pStackWalk;
+static SYMFROMADDR pSymFromAddr;
+static SYMFUNCTIONTABLEACCESS pSymFunctionTableAccess;
+static SYMGETMODULEBASE pSymGetModuleBase;
+static SHELLEXECUTE pShellExecute;
+
+static HANDLE processHandle, threadHandle;
+
+static FILE *crashReport;
+
+static CHAR moduleName[MAX_PATH];
+
+static BOOL CALLBACK EnumModulesCallback(
+	PSTR  ModuleName,
+	ULONG ModuleBase,
+	ULONG ModuleSize,
+	PVOID UserContext )
+{
+	IMAGEHLP_MODULE moduleInfo;
+	DWORD pc = ( DWORD )UserContext;
+	BYTE buffer[4096];
+	PBYTE data;
+	UINT numBytes;
+	VS_FIXEDFILEINFO *info;
+	char version[64];
+	char *symbols;
+
+	strcpy( version, "unknown" );
+	if( GetFileVersionInfo( ModuleName, 0, sizeof( buffer ), buffer ) ) {
+		if( VerQueryValue( buffer, "\\", &data, &numBytes ) ) {
+			info = ( VS_FIXEDFILEINFO * )data;
+			Com_sprintf( version, sizeof( version ), "%u.%u.%u.%u",
+				HIWORD( info->dwFileVersionMS ),
+				LOWORD( info->dwFileVersionMS ),
+				HIWORD( info->dwFileVersionLS ),
+				LOWORD( info->dwFileVersionLS ) );
+		}
+	}
+	
+	symbols = "failed";
+	moduleInfo.SizeOfStruct = sizeof( moduleInfo );
+	if( pSymGetModuleInfo( processHandle, ModuleBase, &moduleInfo ) ) {
+		ModuleName = moduleInfo.ModuleName;
+		switch( moduleInfo.SymType ) {
+			case SymCoff: symbols = "COFF"; break;
+			case SymExport: symbols = "export"; break;
+			case SymNone: symbols = "none"; break;
+			case SymPdb: symbols = "PDB"; break;
+			default: symbols = "unknown"; break;
+		}
+	}
+	
+	fprintf( crashReport, "%08x %08x %s (version %s, symbols %s) ",
+		ModuleBase, ModuleBase + ModuleSize, ModuleName, version, symbols );
+	if( pc >= ModuleBase && pc < ModuleBase + ModuleSize ) {
+		Q_strncpyz( moduleName, ModuleName, sizeof( moduleName ) );
+		fprintf( crashReport, "*\n" );
+	} else {
+		fprintf( crashReport, "\n" );
+	}
+
+	return TRUE;
+}
+
+static DWORD Sys_ExceptionHandler( DWORD exceptionCode, LPEXCEPTION_POINTERS exceptionInfo ) {
+	STACKFRAME stackFrame;
+	PCONTEXT context;
+	SYMBOL_INFO *symbol;
+	int count, ret;
+	DWORD64 offset;
+	BYTE buffer[sizeof( SYMBOL_INFO ) + 256 - 1];
+	IMAGEHLP_MODULE moduleInfo;
+	char path[MAX_PATH];
+	char execdir[MAX_PATH];
+	char *p;
+	HMODULE helpModule, shellModule;
+	SYSTEMTIME systemTime;
+	static char *monthNames[12] = { "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+		"Jul", "Aug", "Sep", "Oct", "Nov", "Dec" };
+	OSVERSIONINFO	vinfo;
+
+#ifndef DEDICATED_ONLY
+	VID_Shutdown();
+#endif
+
+	ret = MessageBox( NULL, APPLICATION " has encountered an unhandled exception and needs to be terminated.\n"
+		"Would you like to generate a crash report?",
+		"Unhandled Exception",
+		MB_ICONERROR|MB_YESNO );
+	if( ret == IDNO ) {
+		return EXCEPTION_CONTINUE_SEARCH;
+	}
+
+	helpModule = LoadLibrary( "dbghelp.dll" );
+	if( !helpModule ) {
+		return EXCEPTION_CONTINUE_SEARCH;
+	}
+
+#define GPA( x, y )															\
+	do {																	\
+		p ## y = ( x )GetProcAddress( helpModule, #y );						\
+		if( !p ## y ) { \
+			FreeLibrary(helpModule); \
+			return EXCEPTION_CONTINUE_SEARCH;								\
+		}																	\
+	} while( 0 )
+
+	GPA( SETSYMOPTIONS, SymSetOptions );
+	GPA( SYMGETMODULEINFO, SymGetModuleInfo );
+	GPA( SYMCLEANUP, SymCleanup );
+	GPA( SYMINITIALIZE, SymInitialize );
+	GPA( ENUMERATELOADEDMODULES, EnumerateLoadedModules );
+	GPA( STACKWALK, StackWalk );
+	GPA( SYMFROMADDR, SymFromAddr );
+	GPA( SYMFUNCTIONTABLEACCESS, SymFunctionTableAccess );
+	GPA( SYMGETMODULEBASE, SymGetModuleBase );
+
+	pSymSetOptions( SYMOPT_LOAD_ANYTHING|SYMOPT_DEBUG|SYMOPT_FAIL_CRITICAL_ERRORS );
+	processHandle = GetCurrentProcess();
+	threadHandle = GetCurrentThread();
+
+	GetModuleFileName( NULL, execdir, sizeof( execdir ) - 1 );
+	execdir[sizeof( execdir ) - 1] = 0;
+	p = strrchr( execdir, '\\' );
+	if( p ) {
+		*p = 0;
+	}
+	
+	GetSystemTime( &systemTime );
+
+	Com_sprintf( path, sizeof( path ), "%s\\" APPLICATION "_CrashReport.txt", execdir );
+	crashReport = fopen( path, "a" );
+	if( !crashReport ) {
+		return EXCEPTION_CONTINUE_SEARCH;
+	}
+
+	pSymInitialize( processHandle, execdir, TRUE );
+
+	fprintf( crashReport, "Crash report generated %s %u %u, %02u:%02u:%02u UTC\n",
+		monthNames[systemTime.wMonth % 12], systemTime.wDay, systemTime.wYear,
+		systemTime.wHour, systemTime.wMinute, systemTime.wSecond );
+	fprintf( crashReport, "by " APPLICATION " v" VERSION ", built " __DATE__", " __TIME__ "\n" );
+
+	vinfo.dwOSVersionInfoSize = sizeof( vinfo );
+	if( GetVersionEx( &vinfo ) ) {
+		fprintf( crashReport, "\nWindows version: %u.%u (build %u) %s\n",
+			vinfo.dwMajorVersion, vinfo.dwMinorVersion, vinfo.dwBuildNumber, vinfo.szCSDVersion );
+	}
+
+	strcpy( moduleName, "unknown" );
+
+	context = exceptionInfo->ContextRecord;
+
+	fprintf( crashReport, "\nLoaded modules:\n" );
+	pEnumerateLoadedModules( processHandle, EnumModulesCallback, ( PVOID )context->Eip );
+
+	fprintf( crashReport, "\nException information:\n" );
+	fprintf( crashReport, "Code: %08x\n", exceptionCode );
+	fprintf( crashReport, "Address: %08x (%s)\n",
+		context->Eip, moduleName );
+
+	fprintf( crashReport, "\nThread context:\n" );
+	fprintf( crashReport, "EIP: %08x EBP: %08x ESP: %08x\n",
+		context->Eip, context->Ebp, context->Esp );
+	fprintf( crashReport, "EAX: %08x EBX: %08x ECX: %08x\n",
+		context->Eax, context->Ebx, context->Ecx );
+	fprintf( crashReport, "EDX: %08x ESI: %08x EDI: %08x\n",
+		context->Edx, context->Esi, context->Edi );
+
+	memset( &stackFrame, 0, sizeof( stackFrame ) );
+	stackFrame.AddrPC.Offset = context->Eip;
+	stackFrame.AddrPC.Mode = AddrModeFlat;
+	stackFrame.AddrFrame.Offset = context->Ebp;
+	stackFrame.AddrFrame.Mode = AddrModeFlat;
+	stackFrame.AddrStack.Offset = context->Esp;
+	stackFrame.AddrStack.Mode = AddrModeFlat;	
+
+	fprintf( crashReport, "\nStack trace:\n" );
+	count = 0;
+	symbol = ( SYMBOL_INFO * )buffer;
+	symbol->SizeOfStruct = sizeof( *symbol );
+	symbol->MaxNameLen = 256;
+	while( pStackWalk( IMAGE_FILE_MACHINE_I386,
+		processHandle,
+		threadHandle,
+		&stackFrame,
+		context,
+		NULL,
+		pSymFunctionTableAccess,
+		pSymGetModuleBase,
+		NULL ) )
+	{
+		fprintf( crashReport, "%d: %08x %08x %08x %08x ",
+			count,
+			stackFrame.Params[0],
+			stackFrame.Params[1],
+			stackFrame.Params[2],
+			stackFrame.Params[3] );
+
+		moduleInfo.SizeOfStruct = sizeof( moduleInfo );
+		if( pSymGetModuleInfo( processHandle, stackFrame.AddrPC.Offset, &moduleInfo ) ) {
+			if( moduleInfo.SymType != SymNone && moduleInfo.SymType != SymExport &&
+				pSymFromAddr( processHandle, stackFrame.AddrPC.Offset, &offset, symbol ) )
+			{
+				fprintf( crashReport, "%s!%s+%#x\n", 
+					moduleInfo.ModuleName,
+					symbol->Name, offset );
+			} else {
+				fprintf( crashReport, "%s!%#x\n",
+					moduleInfo.ModuleName,
+					stackFrame.AddrPC.Offset );
+			}
+		} else {
+			fprintf( crashReport, "%#x\n",
+				stackFrame.AddrPC.Offset );
+		}
+		count++;
+	}
+
+	fclose( crashReport );
+
+	shellModule = LoadLibrary( "shell32.dll" );
+	if( shellModule ) {
+		pShellExecute = ( SHELLEXECUTE )GetProcAddress( shellModule, "ShellExecuteA" );
+		if( pShellExecute ) {
+			pShellExecute( NULL, "open", path, NULL, execdir, SW_SHOW );
+		}
+	}
+
+	pSymCleanup( processHandle );
+
+	ExitProcess( 1 );
+	return EXCEPTION_CONTINUE_SEARCH;
+}
+
+#endif /* USE_DBGHELP */
 
 /*
 ==================
@@ -509,7 +800,7 @@ HINSTANCE	global_hInstance;
 int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow)
 {
     MSG				msg;
-	int				time, oldtime, newtime;
+	unsigned int	time, oldtime, newtime;
 //	char			*cddir;
 
     /* previous instances do not exist in Win32 */
@@ -547,6 +838,13 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 		}
 	}
 #endif
+	#ifdef USE_DBGHELP
+#ifdef _MSC_VER
+	__try {
+#else
+	__try1( Sys_ExceptionHandler );
+#endif
+#endif /* USE_DBGHELP */
 	Qcommon_Init (argc, argv);
 	oldtime = Sys_Milliseconds ();
 
@@ -561,6 +859,8 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 	}
 
 
+	//_controlfp( _PC_24, _MCW_PC );
+
     /* main window message loop */
 	while (1)
 	{
@@ -568,13 +868,10 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 		if (!ActiveApp || dedicated->integer)
 			Sleep (3);
 
-		while (PeekMessage (&msg, NULL, 0, 0, PM_REMOVE))
-		{
-			//if (!GetMessage (&msg, NULL, 0, 0))
-			//	Com_Quit ();
+		while (PeekMessage (&msg, NULL, 0, 0, PM_REMOVE)) {
 			sys_msg_time = msg.time;
-			TranslateMessage (&msg);
-   			DispatchMessage (&msg);
+			TranslateMessage(&msg);
+   			DispatchMessage(&msg);
 		}
 
 		do
@@ -582,20 +879,28 @@ int WINAPI WinMain (HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLin
 			newtime = Sys_Milliseconds ();
 			time = newtime - oldtime;
 		} while (time < 1);
-//			Con_Printf ("time:%5.2f - %5.2f = %5.2f\n", newtime, oldtime, time);
 
-		//	_controlfp( ~( _EM_ZERODIVIDE /*| _EM_INVALID*/ ), _MCW_EM );
 		_controlfp( _PC_24, _MCW_PC );
-
-		Qcommon_Frame (time);
+		Qcommon_Frame( time );
 
 		oldtime = newtime;
 	}
-
+#ifdef USE_DBGHELP
+#ifdef _MSC_VER
+	} __except( Sys_ExceptionHandler( GetExceptionCode(), GetExceptionInformation() ) ) {
+		return 1;
+	}
+#else
+	__except1;
+#endif
+#endif /* USE_DBGHELP */
 	// never gets here
-    return 1;
+    return 0;
 }
 
+
+
+////ANTICHEAT
 
 #ifdef ANTICHEAT
 #ifndef DEDICATED_ONLY
@@ -616,12 +921,9 @@ int Sys_GetAntiCheatAPI (void)
 	static FNINIT	init;
 
 	//already loaded, just reinit
-	if (anticheat)
-	{
+	if (anticheat) {
 		anticheat = (anticheat_export_t *)init ();
-		if (!anticheat)
-			return 0;
-		return 1;
+		return (anticheat) ? 1 : 0;
 	}
 
 reInit:
@@ -631,19 +933,20 @@ reInit:
 		return 0;
 
 	init = (FNINIT)GetProcAddress (hAC, "Initialize");
+	if (!init)
+		Sys_Error("Couldn't GetProcAddress Initialize on anticheat.dll!\r\n\r\nPlease check you are using a valid anticheat.dll from http://antiche.at/");
+
 	anticheat = (anticheat_export_t *)init ();
 
-	if (!updated && !anticheat)
-	{
+	if (!updated && !anticheat) {
 		updated = true;
 		FreeLibrary (hAC);
 		hAC = NULL;
+		init = NULL;
 		goto reInit;
 	}
 
-	if (!anticheat)
-		return 0;
-	return 1;
+	return (anticheat) ? 1 : 0;
 }
 #endif
 #endif

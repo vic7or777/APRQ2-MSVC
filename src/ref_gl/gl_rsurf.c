@@ -180,7 +180,7 @@ This routine takes all the given light mapped surfaces in the world and
 blends them into the framebuffer.
 ================================
 */
-static void R_BlendLightmaps (void)
+static void R_BlendLightmaps (qboolean isWorldModel)
 {
 	int			i;
 	msurface_t	*surf, *newdrawsurf = 0;
@@ -205,7 +205,7 @@ static void R_BlendLightmaps (void)
 			qglBlendFunc (GL_ZERO, GL_SRC_COLOR );
 	}
 
-	if ( currentmodel == r_worldmodel )
+	if (isWorldModel)
 		c_visible_lightmaps = 0;
 
 	// render static lightmaps first
@@ -213,7 +213,7 @@ static void R_BlendLightmaps (void)
 	{
 		if ( gl_lms.lightmap_surfaces[i] )
 		{
-			if (currentmodel == r_worldmodel)
+			if (isWorldModel)
 				c_visible_lightmaps++;
 			GL_Bind( gl_state.lightmap_textures + i);
 
@@ -232,7 +232,7 @@ static void R_BlendLightmaps (void)
 
 		GL_Bind( gl_state.lightmap_textures+0 );
 
-		if (currentmodel == r_worldmodel)
+		if (isWorldModel)
 			c_visible_lightmaps++;
 
 		newdrawsurf = gl_lms.lightmap_surfaces[0];
@@ -419,33 +419,37 @@ of alpha_surfaces will draw back to front, giving proper ordering.
 void R_DrawAlphaSurfaces (void)
 {
 	const msurface_t	*s;
-	float		intens, scroll;
+	float		scroll;
+	vec4_t		intens;
 
 	// go back to the world matrix
-    qglLoadMatrixf (r_WorldViewMatrix);
+    //qglLoadMatrixf (r_WorldViewMatrix);
 
 	qglEnable(GL_BLEND);
 	GL_TexEnv( GL_MODULATE );
 
 	// the textures are prescaled up for a better lighting range,
 	// so scale it back down
-	intens = gl_state.inverse_intensity;
+	intens[0] = intens[1] = intens[2] = gl_state.inverse_intensity;
+	intens[3] = 1.0f;
 
 	scroll = -64 * ( (r_newrefdef.time / 40.0) - (int)(r_newrefdef.time / 40.0) );
 	if (scroll == 0)
 		scroll = -64;
 
-	for (s=r_alpha_surfaces ; s ; s=s->texturechain)
+	for (s = r_alpha_surfaces; s; s = s->texturechain)
 	{
 		GL_Bind(s->texinfo->image->texnum);
 		c_brush_polys++;
 
 		if (s->texinfo->flags & SURF_TRANS33)
-			qglColor4f (intens,intens,intens,0.33f);
+			intens[3] = 0.33f;
 		else if (s->texinfo->flags & SURF_TRANS66)
-			qglColor4f (intens,intens,intens,0.66f);
+			intens[3] = 0.66f;
 		else
-			qglColor4f (intens,intens,intens,1);
+			intens[3] = 1.0f;
+
+		qglColor4fv(intens);
 
 		if (s->flags & SURF_DRAWTURB)
 			EmitWaterPolys (s);
@@ -473,7 +477,7 @@ static void DrawTextureChains (void)
 
 	c_visible_textures = 0;
 
-	if ( !qglActiveTextureARB && !qglSelectTextureSGIS )
+	if ( !gl_state.multiTexture )
 	{
 		for ( i = 0, image=gltextures ; i<numgltextures ; i++,image++)
 		{
@@ -482,9 +486,9 @@ static void DrawTextureChains (void)
 			s = image->texturechain;
 			if (!s)
 				continue;
-			c_visible_textures++;
 
-			for ( ; s ; s=s->texturechain)
+			c_visible_textures++;
+			for (; s; s = s->texturechain)
 				R_RenderBrushPoly (s);
 
 			image->texturechain = NULL;
@@ -496,12 +500,12 @@ static void DrawTextureChains (void)
 		{
 			if (!image->registration_sequence)
 				continue;
-			if (!image->texturechain)
+			s = image->texturechain;
+			if (!s)
 				continue;
-			c_visible_textures++;
 
-			for ( s = image->texturechain; s ; s=s->texturechain)
-			{
+			c_visible_textures++;
+			for (; s; s = s->texturechain) {
 				if ( !( s->flags & SURF_DRAWTURB ) )
 					R_RenderBrushPoly (s);
 			}
@@ -516,8 +520,7 @@ static void DrawTextureChains (void)
 			if (!s)
 				continue;
 
-			for ( ; s ; s=s->texturechain)
-			{
+			for (; s; s = s->texturechain) {
 				if ( s->flags & SURF_DRAWTURB )
 					R_RenderBrushPoly (s);
 			}
@@ -531,13 +534,12 @@ static void DrawTextureChains (void)
 
 void GL_DrawPoly(int nv, msurface_t *surf)
 {
-	float	*v;
-	float	r,g,b;
+	float	*v, r, g, b;
 	int i;
 
-	GL_SelectTexture(QGL_TEXTURE1);
+	GL_SelectTexture(1);
 	qglDisable(GL_TEXTURE_2D);
-	GL_SelectTexture(QGL_TEXTURE0);
+	GL_SelectTexture(0);
 	qglDisable(GL_TEXTURE_2D);
 
 	if (gl_eff_world_bg_type->integer)
@@ -612,10 +614,10 @@ void GL_DrawPoly(int nv, msurface_t *surf)
 		qglPolygonMode( GL_FRONT_AND_BACK, GL_FILL );
 	}
 
-	qglColor3fv(color_table[COLOR_WHITE]);
-	GL_SelectTexture(QGL_TEXTURE1);
+	qglColor3fv(colorWhite);
+	GL_SelectTexture(1);
 	qglEnable(GL_TEXTURE_2D);
-	GL_SelectTexture(QGL_TEXTURE0);
+	GL_SelectTexture(0);
 	qglEnable(GL_TEXTURE_2D);
 
 }
@@ -670,7 +672,7 @@ dynamic:
 			lmtex = 0;
 		}
 
-		GL_MBind(QGL_TEXTURE1, gl_state.lightmap_textures + lmtex);
+		GL_MBind(1, gl_state.lightmap_textures + lmtex);
 
 		qglTexSubImage2D( GL_TEXTURE_2D, 0,
 						  surf->light_s, surf->light_t, 
@@ -682,8 +684,8 @@ dynamic:
 
 	c_brush_polys++;
 
-	GL_MBind(QGL_TEXTURE0, image->texnum);
-	GL_MBind(QGL_TEXTURE1, gl_state.lightmap_textures + lmtex);
+	GL_MBind(0, image->texnum);
+	GL_MBind(1, gl_state.lightmap_textures + lmtex);
 
 	if (surf->texinfo->flags & SURF_FLOWING)
 	{
@@ -692,9 +694,9 @@ dynamic:
 			scroll = -64.0f;
 	}
 
-	if(gl_eff_world_bg_type->integer)
+	if(gl_eff_world_bg_type->integer) {
 		GL_DrawPoly(nv,surf);
-	else {
+	} else {
 		v = surf->polys->verts[0];
 
 		qglBegin (GL_POLYGON);
@@ -706,7 +708,7 @@ dynamic:
 		}
 		qglEnd ();
 
-		if (gl_watercaustics->integer && (surf->flags & SURF_UNDERWATER) && !image->has_alpha)
+		if (gl_watercaustics->integer && (surf->flags & SURF_UNDERWATER) && !(image->flags & IT_TRANS))
 			EmitCausticPolys(surf);
 
 		if(gl_eff_world_wireframe->integer)
@@ -720,7 +722,7 @@ dynamic:
 R_DrawInlineBModel
 =================
 */
-static void R_DrawInlineBModel (void)
+static void R_DrawInlineBModel (bspSubmodel_t *subModel)
 {
 	int			i, k;
 	cplane_t	*pplane;
@@ -728,8 +730,11 @@ static void R_DrawInlineBModel (void)
 	msurface_t	*psurf;
 	dlight_t	*lt;
 
+	if(!subModel)
+		Com_Error(ERR_FATAL, "subModel == NULL");
+
 	// calculate dynamic lighting for bmodel
-	if ( !gl_flashblend->integer )
+	if (!gl_flashblend->integer && subModel->headnode)
 	{
 		lt = r_newrefdef.dlights;
 		if (currententity->angles[0] || currententity->angles[1] || currententity->angles[2])
@@ -742,7 +747,7 @@ static void R_DrawInlineBModel (void)
 				lt->origin[0] = DotProduct (temp, currententity->axis[0]);
 				lt->origin[1] = DotProduct (temp, currententity->axis[1]);
 				lt->origin[2] = DotProduct (temp, currententity->axis[2]);
-				R_MarkLights (lt, 1<<k, currentmodel->nodes + currentmodel->firstnode);
+				R_MarkLights( lt, 1<<k, subModel->headnode );
 				VectorAdd (temp, currententity->origin, lt->origin);
 			}
 		}
@@ -751,13 +756,13 @@ static void R_DrawInlineBModel (void)
 			for (k=0 ; k<r_newrefdef.num_dlights ; k++, lt++)
 			{
 				VectorSubtract (lt->origin, currententity->origin, lt->origin);
-				R_MarkLights (lt, 1<<k, currentmodel->nodes + currentmodel->firstnode);
+				R_MarkLights( lt, 1<<k, subModel->headnode );
 				VectorAdd (lt->origin, currententity->origin, lt->origin);
 			}
 		}
 	}
 
-	psurf = &currentmodel->surfaces[currentmodel->firstmodelsurface];
+	psurf = subModel->firstFace;
 
 	if ( currententity->flags & RF_TRANSLUCENT )
 	{
@@ -767,7 +772,7 @@ static void R_DrawInlineBModel (void)
 	}
 
 	// draw texture
-	for (i=0 ; i<currentmodel->nummodelsurfaces ; i++, psurf++)
+	for (i = 0; i < subModel->numFaces; i++, psurf++)
 	{
 	// find which side of the node we are on
 		pplane = psurf->plane;
@@ -803,7 +808,7 @@ static void R_DrawInlineBModel (void)
 	if ( !(currententity->flags & RF_TRANSLUCENT) )
 	{
 		if ( !qglMTexCoord2fSGIS )
-			R_BlendLightmaps ();
+			R_BlendLightmaps(false);
 	}
 	else
 	{
@@ -818,31 +823,31 @@ static void R_DrawInlineBModel (void)
 R_DrawBrushModel
 =================
 */
-void R_DrawBrushModel (void)
+void R_DrawBrushModel (bspSubmodel_t *subModel)
 {
 	vec3_t		mins, maxs;
 	qboolean	rotated;
 
-	if (currentmodel->nummodelsurfaces == 0)
+	if (subModel->numFaces == 0)
 		return;
 
-	gl_state.currenttextures[0] = gl_state.currenttextures[1] = -1;
+	gl_state.currentTextures[0] = gl_state.currentTextures[1] = -1;
 
 	if (currententity->angles[0] || currententity->angles[1] || currententity->angles[2])
 	{
 		rotated = true;
-		mins[0] = currententity->origin[0] - currentmodel->radius;
-		mins[1] = currententity->origin[1] - currentmodel->radius;
-		mins[2] = currententity->origin[2] - currentmodel->radius;
-		maxs[0] = currententity->origin[0] + currentmodel->radius;
-		maxs[1] = currententity->origin[1] + currentmodel->radius;
-		maxs[2] = currententity->origin[2] + currentmodel->radius;
+		mins[0] = currententity->origin[0] - subModel->radius;
+		mins[1] = currententity->origin[1] - subModel->radius;
+		mins[2] = currententity->origin[2] - subModel->radius;
+		maxs[0] = currententity->origin[0] + subModel->radius;
+		maxs[1] = currententity->origin[1] + subModel->radius;
+		maxs[2] = currententity->origin[2] + subModel->radius;
 	}
 	else
 	{
 		rotated = false;
-		VectorAdd (currententity->origin, currentmodel->mins, mins);
-		VectorAdd (currententity->origin, currentmodel->maxs, maxs);
+		VectorAdd (currententity->origin, subModel->mins, mins);
+		VectorAdd (currententity->origin, subModel->maxs, maxs);
 	}
 
 	if (R_CullBox (mins, maxs))
@@ -855,34 +860,28 @@ void R_DrawBrushModel (void)
 	{
 		vec3_t	temp;
 
-		VectorCopy (modelorg, temp);
-		modelorg[0] = DotProduct (temp, currententity->axis[0]);
-		modelorg[1] = DotProduct (temp, currententity->axis[1]);
-		modelorg[2] = DotProduct (temp, currententity->axis[2]);
+		VectorCopy(modelorg, temp);
+		modelorg[0] = DotProduct(temp, currententity->axis[0]);
+		modelorg[1] = DotProduct(temp, currententity->axis[1]);
+		modelorg[2] = DotProduct(temp, currententity->axis[2]);
+
+		R_RotateForEntity(currententity->origin, currententity->axis);
+	}
+	else {
+		R_TranslateForEntity(currententity->origin);
 	}
 
-    qglPushMatrix ();
-
-	currententity->angles[0] = -currententity->angles[0];	// stupid quake bug
-	currententity->angles[2] = -currententity->angles[2];	// stupid quake bug
-	
-	R_RotateForEntity (currententity);
-
-	currententity->angles[0] = -currententity->angles[0];	// stupid quake bug
-	currententity->angles[2] = -currententity->angles[2];	// stupid quake bug
-
 	GL_EnableMultitexture( true );
-	GL_SelectTexture(QGL_TEXTURE1);
+	GL_SelectTexture(1);
 
 	if ( gl_lightmap->integer )
 		GL_TexEnv( GL_REPLACE );
 	else
 		GL_TexEnv( GL_MODULATE );
 
-	R_DrawInlineBModel ();
-	GL_EnableMultitexture( false );
+	R_DrawInlineBModel(subModel);
 
-	qglPopMatrix ();
+	GL_EnableMultitexture( false );
 }
 
 /*
@@ -1032,7 +1031,6 @@ void R_DrawWorld (void)
 	if ( r_newrefdef.rdflags & RDF_NOWORLDMODEL )
 		return;
 
-	currentmodel = r_worldmodel;
 
 	VectorCopy (r_newrefdef.vieworg, modelorg);
 
@@ -1041,7 +1039,7 @@ void R_DrawWorld (void)
 	ent.frame = (int)(r_newrefdef.time*2);
 	currententity = &ent;
 
-	gl_state.currenttextures[0] = gl_state.currenttextures[1] = -1;
+	gl_state.currentTextures[0] = gl_state.currentTextures[1] = -1;
 
 	memset (gl_lms.lightmap_surfaces, 0, sizeof(gl_lms.lightmap_surfaces));
 
@@ -1051,7 +1049,7 @@ void R_DrawWorld (void)
 	{
 		GL_EnableMultitexture( true );
 
-		GL_SelectTexture(QGL_TEXTURE1);
+		GL_SelectTexture(1);
 
 		if ( gl_lightmap->integer )
 			GL_TexEnv( GL_REPLACE );
@@ -1069,43 +1067,43 @@ void R_DrawWorld (void)
 
 	// theoretically nothing should happen in the next two functions if multitexture is enabled
 	DrawTextureChains ();
-	R_BlendLightmaps ();
+	R_BlendLightmaps(true);
 
 	if(gl_eff_world_bg_type->integer && qglMTexCoord2fSGIS)
 	{
-		float	r,g,b;
+		vec3_t	color;
 
 		GL_EnableMultitexture( true );
-		GL_SelectTexture(QGL_TEXTURE1);
+		GL_SelectTexture(1);
 		qglDisable(GL_TEXTURE_2D);
-		GL_SelectTexture(QGL_TEXTURE0);
+		GL_SelectTexture(0);
 		qglDisable(GL_TEXTURE_2D);
 		if (gl_eff_world_bg_color_r->value < 256)
-			r = gl_eff_world_bg_color_r->value/255;
+			color[0] = gl_eff_world_bg_color_r->value/255;
 		else
-			r = (float)random()*255/255;
+			color[0] = (float)random()*255/255;
 
 		if (gl_eff_world_bg_color_g->value < 256)
-			g = gl_eff_world_bg_color_g->value/255;
+			color[1] = gl_eff_world_bg_color_g->value/255;
 		else
-			g = (float)random()*255/255;
+			color[1] = (float)random()*255/255;
 
 		if (gl_eff_world_bg_color_b->value < 256)
-			b = gl_eff_world_bg_color_b->value/255;
+			color[2] = gl_eff_world_bg_color_b->value/255;
 		else
-			b = (float)random()*255/255;
+			color[2] = (float)random()*255/255;
 
-		qglColor3f (r, g, b);
+		qglColor3fv(color);
 		R_DrawSkyBox ();
-		qglColor3fv(color_table[COLOR_WHITE]);
-		GL_SelectTexture(QGL_TEXTURE1);
+		qglColor3fv(colorWhite);
+		GL_SelectTexture(1);
 		qglEnable(GL_TEXTURE_2D);
-		GL_SelectTexture(QGL_TEXTURE0);
+		GL_SelectTexture(0);
 		qglEnable(GL_TEXTURE_2D);
 		GL_EnableMultitexture( false );
-	}
-	else
+	} else {
 		R_DrawSkyBox ();
+	}
 
 	R_DrawTriangleOutlines ();
 }
@@ -1121,12 +1119,10 @@ cluster
 */
 void R_MarkLeaves (void)
 {
-	byte	*vis;
-	byte	fatvis[MAX_MAP_LEAFS/8];
+	byte	*vis, fatvis[MAX_MAP_LEAFS/8];
 	mnode_t	*node;
-	int		i, c;
 	mleaf_t	*leaf;
-	int		cluster;
+	int		i, c, cluster;
 
 	if (r_oldviewcluster == r_viewcluster && r_oldviewcluster2 == r_viewcluster2 && !r_novis->integer && r_viewcluster != -1)
 		return;
@@ -1281,17 +1277,16 @@ static qboolean LM_AllocBlock (int w, int h, int *x, int *y)
 GL_BuildPolygonFromSurface
 ================
 */
-void GL_BuildPolygonFromSurface(msurface_t *fa)
+void GL_BuildPolygonFromSurface(msurface_t *fa, bspModel_t *bspModel)
 {
 	int			i, lindex, lnumverts;
 	medge_t		*pedges, *r_pedge;
 	float		*vec;
 	float		s, t;
 	glpoly_t	*poly;
-	vec3_t		total = {0,0,0};
 
 	// reconstruct the polygon
-	pedges = currentmodel->edges;
+	pedges = bspModel->edges;
 	lnumverts = fa->numedges;
 
 	// draw texture
@@ -1302,17 +1297,17 @@ void GL_BuildPolygonFromSurface(msurface_t *fa)
 
 	for (i=0 ; i<lnumverts ; i++)
 	{
-		lindex = currentmodel->surfedges[fa->firstedge + i];
+		lindex = bspModel->surfedges[fa->firstedge + i];
 
 		if (lindex > 0)
 		{
 			r_pedge = &pedges[lindex];
-			vec = currentmodel->vertexes[r_pedge->v[0]].position;
+			vec = bspModel->vertexes[r_pedge->v[0]].position;
 		}
 		else
 		{
 			r_pedge = &pedges[-lindex];
-			vec = currentmodel->vertexes[r_pedge->v[1]].position;
+			vec = bspModel->vertexes[r_pedge->v[1]].position;
 		}
 		
 		if (!(fa->flags & SURF_DRAWTURB))
@@ -1328,7 +1323,6 @@ void GL_BuildPolygonFromSurface(msurface_t *fa)
 			t = DotProduct (vec, fa->texinfo->vecs[1]);
 		}
 
-		VectorAdd (total, vec, total);
 		VectorCopy (vec, poly->verts[i]);
 		poly->verts[i][3] = s;
 		poly->verts[i][4] = t;
@@ -1398,7 +1392,7 @@ void GL_BeginBuildingLightmaps (void) //(model_t *m)
 
 	GL_EnableMultitexture( true );
 
-	GL_SelectTexture(QGL_TEXTURE1);
+	GL_SelectTexture(1);
 
 	/*
 	** setup the base lightstyles so the lightmaps won't have to be regenerated

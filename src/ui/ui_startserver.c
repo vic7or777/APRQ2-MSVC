@@ -68,7 +68,7 @@ static void Maps_Scan( void)
 
 	Maps_Free();
 
-	sprintf(findname, "%s/maps/*.bsp", FS_Gamedir());
+	Com_sprintf(findname, sizeof(findname), "%s/maps/*.bsp", FS_Gamedir());
 	list = FS_ListFiles( findname, &numFiles, 0, SFF_SUBDIR | SFF_HIDDEN | SFF_SYSTEM );
 	if( !list ) {
 		return;
@@ -78,9 +78,9 @@ static void Maps_Scan( void)
 		if( map_count < MAX_MENU_MAPS ) {
 			list[i][strlen(list[i]) - 4] = 0;
 			if (strrchr( list[i], '/' ))
-				mapnames[map_count] = CopyString( strrchr( list[i], '/' ) + 1, TAGMALLOC_MENU);
+				mapnames[map_count] = CopyString( strrchr( list[i], '/' ) + 1, TAG_MENU);
 			else
-				mapnames[map_count] = CopyString( list[i], TAGMALLOC_MENU);
+				mapnames[map_count] = CopyString( list[i], TAG_MENU);
 
 			map_count++;
 		}

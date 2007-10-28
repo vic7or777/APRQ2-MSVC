@@ -40,12 +40,11 @@ void CL_WriteDemoMessageFull( sizebuf_t *msg )
 
 	if(swlen > 0) // skip bad packets
 	{
-		fwrite( &swlen, 4, 1, cls.demofile);
-		fwrite( msg->data + 8, len, 1, cls.demofile);
+		FS_Write( &swlen, 4, cls.demofile);
+		FS_Write( msg->data + 8, len, cls.demofile);
 	}
 }
 
-#ifdef R1Q2_PROTOCOL
 void CL_WriteDemoMessage (byte *buff, int len, qboolean forceFlush)
 {
 	if (forceFlush)
@@ -64,8 +63,8 @@ void CL_WriteDemoMessage (byte *buff, int len, qboolean forceFlush)
 			}
 
 			swlen = LittleLong(cl.demoBuff.cursize);
-			fwrite (&swlen, 4, 1, cls.demofile);
-			fwrite (cl.demoFrame, cl.demoBuff.cursize, 1, cls.demofile);
+			FS_Write (&swlen, 4, cls.demofile);
+			FS_Write (cl.demoFrame, cl.demoBuff.cursize, cls.demofile);
 		}
 		SZ_Clear (&cl.demoBuff);
 	}
@@ -73,7 +72,6 @@ void CL_WriteDemoMessage (byte *buff, int len, qboolean forceFlush)
 	if (len)
 		SZ_Write (&cl.demoBuff, buff, len);
 }
-#endif
 
 /*
 ====================
@@ -89,21 +87,19 @@ void CL_CloseDemoFile( void )
 
 	// finish up
 	len = -1;
-	fwrite (&len, 4, 1, cls.demofile);
+	FS_Write(&len, 4, cls.demofile);
 
-	fclose( cls.demofile );
+	FS_FCloseFile( cls.demofile );
 	 
-	cls.demofile = NULL;
+	cls.demofile = 0;
 
-#ifdef R1Q2_PROTOCOL
 	// inform server we are done with extra data
-	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
+	if (cls.serverProtocol == PROTOCOL_VERSION_R1Q2)
 	{
 		MSG_WriteByte  (&cls.netchan.message, clc_setting);
 		MSG_WriteShort (&cls.netchan.message, CLSET_RECORDING);
 		MSG_WriteShort (&cls.netchan.message, 0);
 	}
-#endif
 }
 
 
@@ -135,17 +131,15 @@ void CL_StopAutoRecord (void)
 
 void CL_StartRecording(char *name)
 {
-	byte	buf_data[MAX_MSGLEN];
+	byte	buf_data[1390];
 	sizebuf_t	buf;
 	int		i, len;
 	entity_state_t	*ent;
-	entity_state_t	nullstate;
 	char *string;
 
 	FS_CreatePath( name );
-	cls.demofile = fopen (name, "wb");
-	if( !cls.demofile )
-	{
+	FS_FOpenFile( name, &cls.demofile, FS_MODE_WRITE );
+	if( !cls.demofile ) {
 		Com_Printf( "ERROR: Couldn't open demo file %s.\n", name );
 		return;
 	}
@@ -157,15 +151,13 @@ void CL_StartRecording(char *name)
 	// don't start saving messages until a non-delta compressed message is received
 	cls.demowaiting = true;
 
-#ifdef R1Q2_PROTOCOL
 	// inform server we need to receive more data
-	if (cls.serverProtocol == ENHANCED_PROTOCOL_VERSION)
+	if (cls.serverProtocol == PROTOCOL_VERSION_R1Q2)
 	{
 		MSG_WriteByte  (&cls.netchan.message, clc_setting);
 		MSG_WriteShort (&cls.netchan.message, CLSET_RECORDING);
 		MSG_WriteShort (&cls.netchan.message, 1);
 	}
-#endif
 
 	//
 	// write out messages to hold the startup information
@@ -174,7 +166,7 @@ void CL_StartRecording(char *name)
 
 	// send the serverdata
 	MSG_WriteByte( &buf, svc_serverdata );
-	MSG_WriteLong( &buf, ORIGINAL_PROTOCOL_VERSION );
+	MSG_WriteLong( &buf, PROTOCOL_VERSION_DEFAULT );
 	MSG_WriteLong( &buf, 0x10000 + cl.servercount );
 	MSG_WriteByte( &buf, 1 );	// demos are always attract loops
 	MSG_WriteString( &buf, cl.gamedir );
@@ -191,19 +183,17 @@ void CL_StartRecording(char *name)
 		if( buf.cursize + strlen( string ) + 32 > buf.maxsize )
 		{	// write it out
 			len = LittleLong (buf.cursize);
-			fwrite (&len, 4, 1, cls.demofile);
-			fwrite (buf.data, buf.cursize, 1, cls.demofile);
+			FS_Write(&len, 4, cls.demofile);
+			FS_Write(buf.data, buf.cursize, cls.demofile);
 			buf.cursize = 0;
 		}
 
 		MSG_WriteByte( &buf, svc_configstring );
 		MSG_WriteShort( &buf, i );
 		MSG_WriteString( &buf, string );
-
 	}
 
 	// baselines
-	memset (&nullstate, 0, sizeof(nullstate));
 	for( i=1; i<MAX_EDICTS ; i++ )
 	{
 		ent = &cl_entities[i].baseline;
@@ -213,13 +203,13 @@ void CL_StartRecording(char *name)
 		if( buf.cursize + 64 > buf.maxsize )
 		{	// write it out
 			len = LittleLong (buf.cursize);
-			fwrite (&len, 4, 1, cls.demofile);
-			fwrite (buf.data, buf.cursize, 1, cls.demofile);
+			FS_Write(&len, 4, cls.demofile);
+			FS_Write(buf.data, buf.cursize, cls.demofile);
 			buf.cursize = 0;
 		}
 
 		MSG_WriteByte( &buf, svc_spawnbaseline );
-		MSG_WriteDeltaEntity(&nullstate, ent, &buf, true, false);
+		MSG_WriteDeltaEntity(NULL, ent, &buf, true, false);
 	}
 
 	MSG_WriteByte( &buf, svc_stufftext );
@@ -227,8 +217,8 @@ void CL_StartRecording(char *name)
 
 	// write it to the demo file
 	len = LittleLong (buf.cursize);
-	fwrite (&len, 4, 1, cls.demofile);
-	fwrite (buf.data, buf.cursize, 1, cls.demofile);
+	FS_Write(&len, 4, cls.demofile);
+	FS_Write(buf.data, buf.cursize, cls.demofile);
 
 	// the rest of the demo file will be individual frames
 }
@@ -245,7 +235,7 @@ Begins recording a demo from the current position
 void CL_Record_f( void )
 {
 	int		i, c;
-    char 	name[MAX_OSPATH], timebuf[32];
+    char 	name[MAX_OSPATH], timebuf[32], *ext;
     time_t	clock;
 
 	c = Cmd_Argc();
@@ -254,24 +244,22 @@ void CL_Record_f( void )
 		return;
 	}
 
-	if( cls.demorecording )
-	{
+	if( cls.demorecording ) {
 		Com_Printf( "Already recording.\n" );
 		return;
 	}
 
-	if( cls.state != ca_active )
-	{
+	if( cls.state != ca_active ) {
 		Com_Printf( "You must be in a level to record.\n" );
 		return;
 	}
 
-	if (cl.attractloop)
-	{
+	if (cl.attractloop) {
 		Com_Printf ("Unable to record from a demo stream due to insufficient deltas.\n");
 		return;
 	}
 
+	ext = "dm2";
 	//
 	// open the demo file
 	//
@@ -280,14 +268,13 @@ void CL_Record_f( void )
 		time( &clock );
         strftime(timebuf, sizeof(timebuf), "%Y-%m-%d", localtime(&clock));
 
-        Com_sprintf (name, sizeof(name), "%s/demos/%s_%s_%s.dm2", FS_Gamedir(), timebuf, cl_clan->string, cls.mapname);
+        Com_sprintf (name, sizeof(name), "demos/%s_%s_%s.%s", timebuf, cl_clan->string, cls.mapname, ext);
         for (i=2; i<100; i++)
         {
-			cls.demofile = fopen (name, "rb");
-			if (!cls.demofile)
+			if (FS_LoadFileEx( name, NULL, FS_TYPE_REAL|FS_PATH_GAME) == -1)
 				break;
-			fclose (cls.demofile);
-			Com_sprintf (name, sizeof(name), "%s/demos/%s_%s_%s_%i%i.dm2", FS_Gamedir(), timebuf, cl_clan->string, cls.mapname, (int)(i/10)%10, i%10);
+
+			Com_sprintf (name, sizeof(name), "demos/%s_%s_%s_%i%i.%s", timebuf, cl_clan->string, cls.mapname, (int)(i/10)%10, i%10, ext);
 		}
 		if (i == 100)
 		{
@@ -297,7 +284,7 @@ void CL_Record_f( void )
     }
 	else
 	{
-		Com_sprintf( name, sizeof( name ), "%s/demos/%s.dm2", FS_Gamedir(), Cmd_Argv( 1 ) );
+		Com_sprintf( name, sizeof( name ), "demos/%s.%s", Cmd_Argv( 1 ), ext);
 	}
 
 	CL_StartRecording(name);
@@ -321,9 +308,9 @@ void CL_StartAutoRecord(void)
 	strftime( timebuf, sizeof(timebuf), "%Y-%m-%d_%H-%M-%S", localtime(&clock));
 
 	if(strlen(cl_clan->string) > 2)
-		Com_sprintf(name, sizeof(name), "%s/demos/%s_%s_%s.dm2", FS_Gamedir(), timebuf, cl_clan->string, cls.mapname);
+		Com_sprintf(name, sizeof(name), "demos/%s_%s_%s.dm2", timebuf, cl_clan->string, cls.mapname);
 	else
-		Com_sprintf(name, sizeof(name), "%s/demos/%s_%s.dm2", FS_Gamedir(), timebuf, cls.mapname);	
+		Com_sprintf(name, sizeof(name), "demos/%s_%s.dm2", timebuf, cls.mapname);	
 
 	CL_StartRecording(name);
 }
@@ -436,21 +423,20 @@ CL_DemoCompleted
 */
 void CL_StopDemoFile( void ) {
 	if( cls.demofile ) {
-		fclose( cls.demofile );
-		
-		cls.demofile = NULL;
+		FS_FCloseFile( cls.demofile );
+		cls.demofile = 0;
 	}
 	cls.demoplaying = false;
 }
 
 void CL_DemoCompleted( void ) {
 	if (cl_timedemo && cl_timedemo->integer) {
-		int	time;
+		unsigned int time;
 		
 		time = Sys_Milliseconds() - cls.timeDemoStart;
 		if ( time > 0 ) {
 			Com_Printf ("%i frames, %3.1f seconds: %3.1f fps\n", cls.timeDemoFrames,
-			time/1000.0, cls.timeDemoFrames*1000.0 / time);
+			time/1000.0f, cls.timeDemoFrames*1000.0f / time);
 		}
 	}
 	CL_Disconnect();
@@ -461,12 +447,10 @@ void CL_DemoCompleted( void ) {
 CL_ReadDemoMessage
 =================
 */
-#define MAX_MVD_MSGLEN	0x4000
-
 void CL_ReadDemoMessage( void ) {
 	int			r;
 	sizebuf_t	buf;
-	byte		bufData[ MAX_MVD_MSGLEN ];
+	byte		bufData[MAX_MSGLEN];
 
 	if ( !cls.demofile ) {
 		CL_DemoCompleted ();
@@ -515,7 +499,7 @@ void CL_PlayDemo_f( void ) {
 	char		name[MAX_OSPATH];
 	char		*arg;
 	int			len;
-	FILE		*demofile;
+	fileHandle_t demofile;
 
 	if (Cmd_Argc() != 2) {
 		Com_Printf("Usage: %s <name>\n", Cmd_Argv(0));
@@ -528,7 +512,7 @@ void CL_PlayDemo_f( void ) {
 	Com_sprintf( name, sizeof( name ), "demos/%s", arg);
 	COM_DefaultExtension(name, sizeof(name), ".dm2");
 
-	len = FS_FOpenFile (name, &demofile);
+	len = FS_FOpenFile (name, &demofile, FS_MODE_READ);
 	if (!demofile) {
 		Com_Printf( "couldn't open %s\n", name);
 		return;

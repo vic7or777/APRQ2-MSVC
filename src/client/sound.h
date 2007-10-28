@@ -30,6 +30,7 @@ void S_StartLocalSound (const char *s);
 void S_RawSamples (int samples, int rate, int width, int channels, byte *data);
 
 void S_StopAllSounds(void);
+void S_FreeAllSounds(void);
 void S_Update (const vec3_t origin, const vec3_t v_forward, const vec3_t v_right, const vec3_t v_up);
 
 void S_Activate (qboolean active);

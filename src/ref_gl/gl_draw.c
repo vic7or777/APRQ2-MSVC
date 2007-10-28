@@ -59,6 +59,8 @@ const vec3_t color_table[8] = {
 
 const vec4_t colorWhite	= { 1, 1, 1, 1 };
 
+vec4_t colorBlack = { 0, 0, 0, 1 };
+
 /*
 ================
 Draw_Char
@@ -92,9 +94,6 @@ void Draw_Char (int x, int y, int num, int color, float alpha)
 	if (y <= -8)
 		return;			// totally off screen
 
-	VectorCopy(color_table[color&7], fcolor);
-	fcolor[3] = alpha;
-
 	frow = (num>>4)*0.0625f;
 	fcol = (num&15)*0.0625f;
 
@@ -106,11 +105,15 @@ void Draw_Char (int x, int y, int num, int color, float alpha)
 
 	qglBegin (GL_QUADS);
 	
-	if(gl_fontshadow->integer)
-	{
-		qglColor4f (0, 0, 0, alpha);
+	if(gl_fontshadow->integer) {
+		colorBlack[3] = alpha;
+		qglColor4fv(colorBlack);
 		DRAW_CHAR(x+1, y+1, frow, fcol);
 	}
+
+	VectorCopy(color_table[color&7], fcolor);
+	fcolor[3] = alpha;
+
 	qglColor4fv (fcolor);
 
 	DRAW_CHAR(x, y, frow, fcol);
@@ -127,7 +130,7 @@ void Draw_String (int x, int y, const char *s, int color, float alpha, qboolean 
 {
 	vec4_t	fcolor;
 	float	frow, fcol;
-	int		num;
+	byte	num;
 
 	if (y <= -8)
 		return;	// totally off screen
@@ -139,29 +142,38 @@ void Draw_String (int x, int y, const char *s, int color, float alpha, qboolean 
 	GL_Bind (draw_chars->texnum);
 	qglBegin (GL_QUADS);
 
+	if(gl_fontshadow->integer) {
+		const char *string = s;
+		int	tempX = x;
+		
+		colorBlack[3] = alpha;
+		qglColor4fv(colorBlack);
+
+		while (*s) {
+			num = (alt) ? (*s ^ 0x80) : *s;
+			if ((num&127) != 32) // not a space
+			{
+				frow = (num>>4)*0.0625f;
+				fcol = (num&15)*0.0625f;
+				DRAW_CHAR(x+1, y+1, frow, fcol);
+			}
+			x += 8;
+			s++;
+		}
+		s = string;
+		x = tempX;
+	}
+
 	VectorCopy( color_table[color&7], fcolor );
 	fcolor[3] = alpha;
 
 	qglColor4fv (fcolor);
-	while (*s)
-	{
-		if(alt)
-			num = (*s ^ 0x80) & 0xff;
-		else
-			num = *s & 0xff;
-	
+	while (*s) {
+		num = (alt) ? (*s ^ 0x80) : *s;
 		if ((num&127) != 32) // not a space
 		{
 			frow = (num>>4)*0.0625f;
 			fcol = (num&15)*0.0625f;
-
-			if(gl_fontshadow->integer)
-			{
-				qglColor4f (0, 0, 0, alpha);
-				DRAW_CHAR(x+1, y+1, frow, fcol);
-				qglColor4fv (fcolor);
-			}
-
 			DRAW_CHAR(x, y, frow, fcol);
 		}
 		x += 8;
@@ -180,8 +192,8 @@ void Draw_String (int x, int y, const char *s, int color, float alpha, qboolean 
 void DrawCString (int x, int y, const short *s, float alpha, int enable)
 {
 	float		frow, fcol;
-	int			num;
-	vec4_t		fcolor = {1, 1, 1, 1};
+	byte		num;
+	vec4_t		fcolor;
 	int			currentColor = COLOR_WHITE;
 
 	if (y <= -8)
@@ -194,17 +206,37 @@ void DrawCString (int x, int y, const short *s, float alpha, int enable)
 	GL_Bind (draw_chars->texnum);
 	qglBegin (GL_QUADS);
 
-	fcolor[3] = alpha;
+	if(gl_fontshadow->integer) {
+		const short *string = s;
+		int	tempX = x;
+		
+		colorBlack[3] = alpha;
+		qglColor4fv(colorBlack);
+		while (*s) {
+			num = *s & 0xff;
+			if ((num&127) != 32) // not a space
+			{
+				frow = (num>>4)*0.0625f;
+				fcol = (num&15)*0.0625f;
+				DRAW_CHAR(x+1, y+1, frow, fcol);
+			}
+			x += 8;
+			s++;
+		}
+		s = string;
+		x = tempX;
+	}
 
-	qglColor4fv (fcolor);
+	VectorCopy( color_table[currentColor], fcolor );
+	fcolor[3] = alpha;
+	qglColor4fv(fcolor);
+
 	while (*s)
 	{
 		num = *s & 0xff;
-
 		if ((num&127) != 32) // not a space
 		{
-			if ( enable && ( (*s>>8)&7 ) != currentColor)
-			{
+			if ( enable && ( (*s>>8)&7 ) != currentColor) {
 				currentColor = (*s>>8)&7;
 				VectorCopy( color_table[currentColor], fcolor );
 				qglColor4fv (fcolor);
@@ -212,14 +244,6 @@ void DrawCString (int x, int y, const short *s, float alpha, int enable)
 
 			frow = (num>>4)*0.0625f;
 			fcol = (num&15)*0.0625f;
-
-			if(gl_fontshadow->integer)
-			{
-				qglColor4f (0, 0, 0, alpha);
-				DRAW_CHAR(x+1, y+1, frow, fcol);
-				qglColor4fv (fcolor);
-			}
-
 			DRAW_CHAR(x, y, frow, fcol);
 		}
 		x += 8;
@@ -269,11 +293,11 @@ void Draw_GetPicSize (int *w, int *h, const char *pic)
 	image_t *gl;
 
 	gl = Draw_FindPic (pic);
-	if (!gl)
-	{
+	if (!gl) {
 		*w = *h = -1;
 		return;
 	}
+
 	*w = gl->width;
 	*h = gl->height;
 }
@@ -289,20 +313,19 @@ void Draw_ScaledPic (int x, int y, float scale, const char *pic, float red, floa
 	int yoff = 0, xoff = 0;
 	int enabled = 0;
 
-	gl = Draw_FindPic (pic);
-	if (!gl)
-	{
+	gl = Draw_FindPic(pic);
+	if (!gl) {
 		Com_DPrintf ( "Can't find pic: %s\n", pic);
 		return;
 	}
 
-	if (alpha < 1 || (gl->bits == 32 && gl->has_alpha))
+	if (alpha < 1 || (gl->flags & (IT_TRANS|IT_PALETTED)) == IT_TRANS)
 	{
 		enabled = 1;
 		qglEnable(GL_BLEND);
 		qglDisable(GL_ALPHA_TEST);
 	}
-	else if ( ( ( gl_config.renderer == GL_RENDERER_MCD ) || ( gl_config.renderer & GL_RENDERER_RENDITION ) ) && !gl->has_alpha)
+	else if ( ((gl_config.renderer == GL_RENDERER_MCD) || (gl_config.renderer & GL_RENDERER_RENDITION)) && !(gl->flags & IT_TRANS))
 	{
 		enabled = 2;
 		qglDisable(GL_ALPHA_TEST);
@@ -353,14 +376,13 @@ void Draw_StretchPic (int x, int y, int w, int h, const char *pic, float alpha)
 	image_t *gl;
 	int enabled = 0;
 
-	gl = Draw_FindPic (pic);
-	if (!gl)
-	{
+	gl = Draw_FindPic(pic);
+	if (!gl) {
 		Com_DPrintf ( "Can't find pic: %s\n", pic);
 		return;
 	}
 
-	if (alpha < 1 || (gl->bits == 32 && gl->has_alpha))
+	if (alpha < 1 || (gl->flags & (IT_TRANS|IT_PALETTED)) == IT_TRANS)
 	{
 		enabled = 1;
 		qglDisable(GL_ALPHA_TEST);
@@ -368,7 +390,7 @@ void Draw_StretchPic (int x, int y, int w, int h, const char *pic, float alpha)
 		GL_TexEnv(GL_MODULATE);
 		qglColor4f(1,1,1,alpha);
 	}
-	else if ( ( ( gl_config.renderer == GL_RENDERER_MCD ) || ( gl_config.renderer & GL_RENDERER_RENDITION ) ) && !gl->has_alpha)
+	else if ((gl_config.renderer == GL_RENDERER_MCD || gl_config.renderer & GL_RENDERER_RENDITION) && !(gl->flags & IT_TRANS))
 	{
 		enabled = 2;
 		qglDisable(GL_ALPHA_TEST);
@@ -411,13 +433,12 @@ void Draw_Pic (int x, int y, const char *pic, float alpha)
 
 
 	gl = Draw_FindPic (pic);
-	if (!gl)
-	{
+	if (!gl) {
 		Com_DPrintf ( "Can't find pic: %s\n", pic);
 		return;
 	}
 
-	if (alpha < 1 || (gl->bits == 32 && gl->has_alpha))
+	if (alpha < 1 || (gl->flags & (IT_TRANS|IT_PALETTED)) == IT_TRANS)
 	{
 		enabled = 1;
 		qglDisable(GL_ALPHA_TEST);
@@ -425,7 +446,7 @@ void Draw_Pic (int x, int y, const char *pic, float alpha)
 		GL_TexEnv(GL_MODULATE);
 		qglColor4f(1,1,1,alpha);
 	}
-	else if ( ( ( gl_config.renderer == GL_RENDERER_MCD ) || ( gl_config.renderer & GL_RENDERER_RENDITION ) ) && !gl->has_alpha)
+	else if ((gl_config.renderer == GL_RENDERER_MCD || gl_config.renderer & GL_RENDERER_RENDITION) && !(gl->flags & IT_TRANS))
 	{
 		enabled = 2;
 		qglDisable(GL_ALPHA_TEST);
@@ -469,13 +490,12 @@ void Draw_TileClear (int x, int y, int w, int h, const char *pic)
 	image_t	*image;
 
 	image = Draw_FindPic (pic);
-	if (!image)
-	{
+	if (!image) {
 		Com_DPrintf ( "Can't find pic: %s\n", pic);
 		return;
 	}
 
-	if ( ( ( gl_config.renderer == GL_RENDERER_MCD ) || ( gl_config.renderer & GL_RENDERER_RENDITION ) )  && !image->has_alpha)
+	if ((gl_config.renderer == GL_RENDERER_MCD || gl_config.renderer & GL_RENDERER_RENDITION) && !(image->flags & IT_TRANS))
 		qglDisable(GL_ALPHA_TEST);
 
 	GL_Bind (image->texnum);
@@ -490,7 +510,7 @@ void Draw_TileClear (int x, int y, int w, int h, const char *pic)
 	qglVertex2i (x, y+h);
 	qglEnd ();
 
-	if ( ( ( gl_config.renderer == GL_RENDERER_MCD ) || ( gl_config.renderer & GL_RENDERER_RENDITION ) )  && !image->has_alpha)
+	if ((gl_config.renderer == GL_RENDERER_MCD || gl_config.renderer & GL_RENDERER_RENDITION) && !(image->flags & IT_TRANS))
 		qglEnable(GL_ALPHA_TEST);
 }
 
@@ -504,19 +524,9 @@ Fills a box of pixels with a single color
 */
 void Draw_Fill (int x, int y, int w, int h, int c)
 {
-	union
-	{
-		unsigned int col;
-		byte		v[4];
-	} color;
-
-	if ( (unsigned)c > 255)
-		Com_Error (ERR_FATAL, "Draw_Fill: bad color");
-
 	qglDisable (GL_TEXTURE_2D);
 
-	color.col = d_8to24table[c];
-	qglColor3f (color.v[0]*ONEDIV255, color.v[1]*ONEDIV255, color.v[2]*ONEDIV255);
+	qglColor3ubv(( byte * )&d_8to24table[c & 255]);
 
 	qglBegin (GL_QUADS);
 
@@ -526,7 +536,7 @@ void Draw_Fill (int x, int y, int w, int h, int c)
 	qglVertex2i (x, y+h);
 
 	qglEnd ();
-	qglColor3fv(color_table[COLOR_WHITE]);
+	qglColor3fv(colorWhite);
 	qglEnable (GL_TEXTURE_2D);
 }
 
@@ -565,7 +575,7 @@ void Draw_FadeScreen (void)
 Draw_StretchRaw
 =============
 */
-extern unsigned	r_rawpalette[256];
+extern uint32	r_rawpalette[256];
 
 void Draw_StretchRaw (int x, int y, int w, int h, int cols, int rows, byte *data)
 {
@@ -575,22 +585,18 @@ void Draw_StretchRaw (int x, int y, int w, int h, int cols, int rows, byte *data
 	float		hscale;
 	int			row;
 	float		t;
-	unsigned image32[256*256] = { 0 };
-	unsigned *dest = image32;
+	uint32		image32[256*256] = { 0 };
+	uint32		*dest = image32;
 
-
-	GL_Bind (0);
-
-	if (rows<=256)
-	{
+	if (rows <= 256) {
 		hscale = 1;
 		trows = rows;
 	}
-	else
-	{
+	else {
 		hscale = rows * ONEDIV256;
 		trows = 256;
 	}
+
 	t = rows*hscale * ONEDIV256;
 	fracstep = cols*0x10000/256;
 
@@ -615,6 +621,7 @@ void Draw_StretchRaw (int x, int y, int w, int h, int cols, int rows, byte *data
 		}
 	}
 
+	qglBindTexture( GL_TEXTURE_2D, 0 );
 	qglTexImage2D (GL_TEXTURE_2D, 0, gl_tex_solid_format, 256, 256, 0, GL_RGBA, GL_UNSIGNED_BYTE, image32);
 	
 	qglTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);

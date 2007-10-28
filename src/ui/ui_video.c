@@ -40,7 +40,6 @@ extern cvar_t *scr_viewsize;
 extern cvar_t *gl_mode;
 extern cvar_t *gl_driver;
 extern cvar_t *gl_picmip;
-extern cvar_t *gl_ext_palettedtexture;
 extern cvar_t *gl_finish;
 #else
 extern cvar_t *sw_mode;
@@ -66,7 +65,6 @@ static menuslider_s		s_screensize_slider;
 static menuslider_s		s_brightness_slider;
 static menulist_s  		s_fs_box;
 static menulist_s  		s_stipple_box;
-static menulist_s  		s_paletted_texture_box;
 static menulist_s  		s_finish_box;
 static menuaction_s		s_defaults_action;
 static menuaction_s		s_apply_action;
@@ -112,7 +110,6 @@ static void ApplyChanges( void *unused )
 	Cvar_SetValue( "sw_stipplealpha", s_stipple_box.curvalue );
 	Cvar_SetValue( "gl_picmip", 3 - s_tq_slider.curvalue );
 	Cvar_SetValue( "vid_fullscreen", s_fs_box.curvalue );
-	Cvar_SetValue( "gl_ext_palettedtexture", s_paletted_texture_box.curvalue );
 	Cvar_SetValue( "gl_finish", s_finish_box.curvalue );
 
 #ifndef GL_QUAKE
@@ -151,29 +148,7 @@ static void ApplyChanges( void *unused )
 	if ( gl_driver->modified )
 		VID_Restart_f ();
 #endif
-	/*
-	** update appropriate stuff if we're running OpenGL and gamma
-	** has been modified
-	*/
-#if defined(GL_QUAKE) && defined(_WIN32)
-		if ( vid_gamma->modified )
-		{
-			if ( Q_stricmp( gl_driver->string, "3dfxgl" ) == 0 )
-			{
-				char envbuffer[32];
-				float g;
 
-				g = 2.00f * ( 0.8f - ( vid_gamma->value - 0.5f ) ) + 1.0F;
-				Com_sprintf( envbuffer, sizeof(envbuffer), "SSTV2_GAMMA=%g", g );
-				putenv( envbuffer );
-				Com_sprintf( envbuffer, sizeof(envbuffer), "SST_GAMMA=%g", g );
-				putenv( envbuffer );
-
-				vid_gamma->modified = false;
-			}
-			VID_Restart_f ();
-		}
-#endif
 
 	M_ForceMenuOff();
 }
@@ -297,8 +272,8 @@ void VID_MenuInit( void )
 	s_screensize_slider.generic.x		= 0;
 	s_screensize_slider.generic.y		= 20;
 	s_screensize_slider.generic.name	= "screen size";
-	s_screensize_slider.minvalue = 3;
-	s_screensize_slider.maxvalue = 12;
+	s_screensize_slider.minvalue = 4;
+	s_screensize_slider.maxvalue = 10;
 	s_screensize_slider.generic.callback = ScreenSizeCallback;
 
 	s_brightness_slider.generic.type	= MTYPE_SLIDER;
@@ -345,13 +320,6 @@ void VID_MenuInit( void )
 	s_tq_slider.maxvalue = 3;
 	s_tq_slider.curvalue = 3-gl_picmip->integer;
 
-	s_paletted_texture_box.generic.type = MTYPE_SPINCONTROL;
-	s_paletted_texture_box.generic.x	= 0;
-	s_paletted_texture_box.generic.y	= 70;
-	s_paletted_texture_box.generic.name	= "8-bit textures";
-	s_paletted_texture_box.itemnames = yesno_names;
-	s_paletted_texture_box.curvalue = gl_ext_palettedtexture->integer;
-
 	s_finish_box.generic.type = MTYPE_SPINCONTROL;
 	s_finish_box.generic.x	= 0;
 	s_finish_box.generic.y	= 80;
@@ -375,7 +343,6 @@ void VID_MenuInit( void )
 	Menu_AddItem( &s_video_menu, ( void * ) &s_brightness_slider );
 	Menu_AddItem( &s_video_menu, ( void * ) &s_fs_box );
 	Menu_AddItem( &s_video_menu, ( void * ) &s_tq_slider );
-	Menu_AddItem( &s_video_menu, ( void * ) &s_paletted_texture_box );
 	Menu_AddItem( &s_video_menu, ( void * ) &s_finish_box );
 #endif
 

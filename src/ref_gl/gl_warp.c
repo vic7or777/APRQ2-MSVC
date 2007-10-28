@@ -300,7 +300,7 @@ void R_AddSkySurface (const msurface_t *fa)
 	const glpoly_t	*p;
 
 	// calculate vertex values for sky box
-	for (i=0, p=fa->polys; i<p->numverts ; i++)
+	for (i = 0, p = fa->polys; i < p->numverts; i++)
 		VectorSubtract (p->verts[i], r_origin, verts[i]);
 
 	ClipSkyPolygon (p->numverts, verts[0], 0);
@@ -316,8 +316,7 @@ void R_ClearSkyBox (void)
 {
 	int		i;
 
-	for (i=0 ; i<6 ; i++)
-	{
+	for (i = 0; i < 6; i++) {
 		skymins[0][i] = skymins[1][i] = 9999;
 		skymaxs[0][i] = skymaxs[1][i] = -9999;
 	}
@@ -335,7 +334,7 @@ static void MakeSkyVec (float s, float t, int axis)
 	b[1] = t * b[2];
 
 
-	for (j=0 ; j<3 ; j++)
+	for (j = 0; j < 3; j++)
 	{
 		k = st_to_vec[axis][j];
 		if (k < 0)
@@ -366,27 +365,76 @@ static void MakeSkyVec (float s, float t, int axis)
 R_DrawSkyBox
 ==============
 */
+static void R_RotateForSky (float skyM[16], vec_t angle, vec_t x, vec_t y, vec_t z )
+{
+	float	*wM = r_WorldViewMatrix;
+	vec_t	c, s, mc, t1, t2, t3, t4, t5;
+
+	Q_sincos(DEG2RAD(angle), &s, &c);
+	mc = 1 - c;
+
+	t1 = y * x * mc;
+	t2 = z * s;
+	t3 = t1 + t2;
+	t4 = t1 - t2;
+	
+	t1 = x * z * mc;
+	t2 = y * s;
+	t5 = t1 + t2;
+	t2 = t1 - t2;
+	t1 = (x * x * mc) + c;
+	skyM[0]  = wM[0] * t1 + wM[4] * t3 + wM[8 ] * t2;
+	skyM[1]  = wM[1] * t1 + wM[5] * t3 + wM[9 ] * t2;
+	skyM[2]  = wM[2] * t1 + wM[6] * t3 + wM[10] * t2;
+
+	t1 = y * z * mc;
+	t2 = x * s;
+	t3 = t1 + t2;
+	t2 = t1 - t2;
+	t1 = (y * y * mc) + c;
+	skyM[4]  = wM[0] * t4 + wM[4] * t1 + wM[8 ] * t3;
+	skyM[5]  = wM[1] * t4 + wM[5] * t1 + wM[9 ] * t3;
+	skyM[6]  = wM[2] * t4 + wM[6] * t1 + wM[10] * t3;
+
+	t1 = (z * z * mc) + c;
+	skyM[8]  = wM[0] * t5 + wM[4] * t2 + wM[8 ] * t1;
+	skyM[9]  = wM[1] * t5 + wM[5] * t2 + wM[9 ] * t1;
+	skyM[10] = wM[2] * t5 + wM[6] * t2 + wM[10] * t1;
+}
+
 static const int	skytexorder[6] = {0,2,1,3,4,5};
 void R_DrawSkyBox (void)
 {
 	int		i;
+	float skyM[16];
 
 	if (skyrotate)
 	{	// check for no sky at all
-		for (i=0 ; i<6 ; i++)
+		for (i = 0; i < 6; i++) {
 			if (skymins[0][i] < skymaxs[0][i] && skymins[1][i] < skymaxs[1][i])
 				break;
+		}
 		if (i == 6)
 			return;		// nothing visible
+
+		R_RotateForSky(skyM, r_newrefdef.time * skyrotate, skyaxis[0], skyaxis[1], skyaxis[2]);
+	} else {
+		skyM[0]  = r_WorldViewMatrix[0];
+		skyM[1]  = r_WorldViewMatrix[1];
+		skyM[2]  = r_WorldViewMatrix[2];
+		skyM[4]  = r_WorldViewMatrix[4];
+		skyM[5]  = r_WorldViewMatrix[5];
+		skyM[6]  = r_WorldViewMatrix[6];
+		skyM[8]  = r_WorldViewMatrix[8];
+		skyM[9]  = r_WorldViewMatrix[9];
+		skyM[10] = r_WorldViewMatrix[10];
 	}
 
-	qglPushMatrix ();
+	skyM[3] = skyM[7] = skyM[11] = skyM[12] = skyM[13] = skyM[14] = 0.0f;
+	skyM[15] = 1.0f;
+	qglLoadMatrixf( skyM );
 
-	qglTranslatef (r_origin[0], r_origin[1], r_origin[2]);
-	if(skyrotate)
-		qglRotatef (r_newrefdef.time * skyrotate, skyaxis[0], skyaxis[1], skyaxis[2]);
-
-	for (i=0 ; i<6 ; i++)
+	for (i = 0; i < 6; i++)
 	{
 		if (skyrotate)
 		{	// hack, forces full sky to draw when rotating
@@ -406,9 +454,8 @@ void R_DrawSkyBox (void)
 		qglEnd ();
 	}
 
-	qglPopMatrix ();
+	qglLoadMatrixf(r_WorldViewMatrix);
 }
-
 
 /*
 ============
@@ -417,6 +464,7 @@ R_SetSky
 */
 // 3dstudio environment map names
 static const char	*suf[6] = {"rt", "bk", "lf", "ft", "up", "dn"};
+
 void R_SetSky (const char *name, float rotate, vec3_t axis)
 {
 	int		i;
@@ -462,9 +510,9 @@ void EmitCausticPolys (const msurface_t *fa)
 	txm = (float)cos(r_newrefdef.time*0.3f) * 0.3f;
 	tym = (float)sin(r_newrefdef.time*-0.3f) * 0.6f;
 
-	GL_SelectTexture(QGL_TEXTURE1);
+	GL_SelectTexture(1);
 	qglDisable(GL_TEXTURE_2D);
-	GL_SelectTexture(QGL_TEXTURE0);
+	GL_SelectTexture(0);
 	qglEnable(GL_BLEND);
 
     qglBlendFunc(GL_ZERO, GL_SRC_COLOR);
@@ -488,7 +536,7 @@ void EmitCausticPolys (const msurface_t *fa)
 
 	qglColor4fv(colorWhite);
 	qglDisable(GL_BLEND);
-	GL_SelectTexture(QGL_TEXTURE1);
+	GL_SelectTexture(1);
 	qglEnable(GL_TEXTURE_2D);
-	GL_SelectTexture(QGL_TEXTURE0);
+	GL_SelectTexture(0);
 }

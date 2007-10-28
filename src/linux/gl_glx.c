@@ -39,7 +39,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include <unistd.h>
 #include <signal.h>
 #include <dlfcn.h>
+#ifndef MACOS_X
 #include <execinfo.h>
+#endif
 
 #include "../ref_gl/gl_local.h"
 #include "../client/keys.h"
@@ -481,7 +483,7 @@ char *Sys_GetClipboardData(void)
 				0, bytes_left, True, AnyPropertyType, &type, &format, &len, &tmp, &data);
 
 			if (result == Success) {
-				ret = CopyString(data, TAGMALLOC_CLIPBOARD);
+				ret = CopyString(data, TAG_CLIPBOARD);
 			}
 			XFree(data);
 		}
@@ -501,6 +503,7 @@ static void signal_handler2(int sig)
 
 	printf("Received signal %d, exiting...\n", sig);
 
+	#ifndef MACOS_X
 	size = backtrace (array, sizeof(array)/sizeof(void*));
 	
 	strings = backtrace_symbols (array, size);
@@ -511,6 +514,9 @@ static void signal_handler2(int sig)
 		printf("%.2zd: %s\n", i, strings[i]);
 
 	free (strings);
+	#else
+	printf("Note: Backtrace is disabled on OSX, no backtrace available\n");
+	#endif
 
 	GLimp_Shutdown();
 	_exit(0);

@@ -37,13 +37,18 @@ ARCH:=$(shell uname -m | sed -e s/i.86/i386/ -e s/sun4u/sparc/ -e s/sparc64/spar
 #COMPILATION TOOLS
 CC=gcc
 
-SHLIBEXT=so
-GAME_NAME=game$(ARCH).$(SHLIBEXT)
-
 #BASE CFLAGS
 BASE_CFLAGS= -funsigned-char -pipe
 ifneq ($(ARCH),i386)
  BASE_CFLAGS+=-DC_ONLY
+endif
+
+ifeq ($(PLATFORM),darwin)
+ BASE_CFLAGS += -DMACOS_X -I/Developer/SDKs/MacOSX10.4u.sdk/usr/X11R6/include -I../jpeg -I/Library/Frameworks/SDL.framework/Headers
+ # more sane defaults for OSX
+ BUILD_SDLSOUND=YES
+ BUILD_OPENAL=NO
+ BUILD_XMMS=NO
 endif
 
 ifeq ($(strip $(BUILD_XMMS)),YES)
@@ -68,10 +73,6 @@ endif
 
 ifeq ($(strip $(BUILD_OPENAL)),YES)
  BASE_CFLAGS += -DUSE_OPENAL
-endif
-
-ifeq ($(PLATFORM),darwin)
- BASE_CFLAGS += -DMACOS_X -I/Developer/SDKs/MacOSX10.4u.sdk/usr/X11R6/include -I../jpeg -I/Library/Frameworks/SDL.framework/Headers
 endif
 
 DEBUG_CFLAGS=$(BASE_CFLAGS) -g -Wall -Wimplicit
@@ -121,8 +122,18 @@ else
  endif
 endif
 
+# game dll
+SHLIBEXT=so
+GAME_NAME=game$(ARCH).$(SHLIBEXT)
+
+SHLIBCFLAGS=-fPIC
+SHLIBLDFLAGS=-shared
+
 ifeq ($(PLATFORM),darwin)
  LDFLAGS += -L../jpeg -framework SDL
+ SHLIBCFLAGS+=-fno-common
+ SHLIBLDFLAGS=-dynamiclib
+ GAME_NAME=game$(ARCH).dylib
 endif
 
 LIBDIR=lib
@@ -138,9 +149,6 @@ ifeq ($(ARCH),s390x)
 endif
 endif
 endif
-
-SHLIBCFLAGS=-fPIC
-SHLIBLDFLAGS=-shared
 
 DO_SHLIB_CC=$(CC) $(CFLAGS) $(SHLIBCFLAGS) -o $@ -c $<
 
@@ -246,9 +254,11 @@ QUAKE2GLX_OBJS = \
 	$(BUILDDIR)/q2glx/cvar.o \
 	$(BUILDDIR)/q2glx/files.o \
 	$(BUILDDIR)/q2glx/md4.o \
+	$(BUILDDIR)/q2glx/net.o \
 	$(BUILDDIR)/q2glx/net_chan.o \
 	$(BUILDDIR)/q2glx/pmove.o \
 	$(BUILDDIR)/q2glx/q_shared.o \
+	$(BUILDDIR)/q2glx/q_msg.o \
 	\
 	$(BUILDDIR)/q2glx/sv_ccmds.o \
 	$(BUILDDIR)/q2glx/sv_ents.o \
@@ -263,7 +273,6 @@ QUAKE2GLX_OBJS = \
 	$(BUILDDIR)/q2glx/vid_so.o \
 	$(BUILDDIR)/q2glx/sys_linux.o \
 	$(BUILDDIR)/q2glx/glob.o \
-	$(BUILDDIR)/q2glx/net_udp.o \
 	$(BUILDDIR)/q2glx/cd_linux.o \
 	\
 	$(BUILDDIR)/q2glx/qmenu.o \
@@ -303,7 +312,10 @@ QUAKE2GLX_OBJS = \
 	$(BUILDDIR)/q2glx/xmms.o \
 	$(BUILDDIR)/q2glx/mpd.o \
 	$(BUILDDIR)/q2glx/libmpdclient.o \
-	$(BUILDDIR)/q2glx/snd_openal.o
+	$(BUILDDIR)/q2glx/snd_openal.o \
+	\
+	$(BUILDDIR)/q2glx/ioapi.o \
+	$(BUILDDIR)/q2glx/unzip.o
 	
 ifeq ($(strip $(BUILD_SDL)),YES)
 QUAKE2GLX_OBJS += \
@@ -402,6 +414,12 @@ $(BUILDDIR)/q2glx/mpd.o :		 $(LINUX_DIR)/mpd.c
 
 $(BUILDDIR)/q2glx/libmpdclient.o : $(LINUX_DIR)/libmpdclient.c
 	$(DO_GL_CC)
+
+$(BUILDDIR)/q2glx/ioapi.o : include/minizip/ioapi.c
+	$(DO_GL_CC)
+
+$(BUILDDIR)/q2glx/unzip.o : include/minizip/unzip.c
+	$(DO_GL_CC)
 	
 #############################################################################
 # X11 CLIENT
@@ -438,9 +456,11 @@ QUAKE2SWX_OBJS = \
 	$(BUILDDIR)/q2swx/cvar.o \
 	$(BUILDDIR)/q2swx/files.o \
 	$(BUILDDIR)/q2swx/md4.o \
+	$(BUILDDIR)/q2swx/net.o \
 	$(BUILDDIR)/q2swx/net_chan.o \
 	$(BUILDDIR)/q2swx/pmove.o \
 	$(BUILDDIR)/q2swx/q_shared.o \
+	$(BUILDDIR)/q2swx/q_msg.o \
 	\
 	$(BUILDDIR)/q2swx/sv_ccmds.o \
 	$(BUILDDIR)/q2swx/sv_ents.o \
@@ -455,7 +475,6 @@ QUAKE2SWX_OBJS = \
 	$(BUILDDIR)/q2swx/vid_so.o \
 	$(BUILDDIR)/q2swx/sys_linux.o \
 	$(BUILDDIR)/q2swx/glob.o \
-	$(BUILDDIR)/q2swx/net_udp.o \
 	$(BUILDDIR)/q2swx/cd_linux.o \
 	\
 	$(BUILDDIR)/q2swx/qmenu.o \
@@ -501,7 +520,10 @@ QUAKE2SWX_OBJS = \
 	$(BUILDDIR)/q2swx/xmms.o \
 	$(BUILDDIR)/q2swx/mpd.o \
 	$(BUILDDIR)/q2swx/libmpdclient.o \
-	$(BUILDDIR)/q2swx/snd_openal.o
+	$(BUILDDIR)/q2swx/snd_openal.o \
+	\
+	$(BUILDDIR)/q2swx/ioapi.o \
+	$(BUILDDIR)/q2swx/unzip.o
 	
 ifeq ($(strip $(BUILD_SDL)),YES)
 QUAKE2SWX_OBJS += \
@@ -611,7 +633,12 @@ $(BUILDDIR)/q2swx/libmpdclient.o : $(LINUX_DIR)/libmpdclient.c
 $(BUILDDIR)/q2swx/%.o :          $(LINUX_DIR)/%.s
 	$(DO_AS)
 
+$(BUILDDIR)/q2swx/ioapi.o : include/minizip/ioapi.c
+	$(DO_CC)
 
+$(BUILDDIR)/q2swx/unzip.o : include/minizip/unzip.c
+	$(DO_CC)
+	
 #############################################################################
 # GAME
 #############################################################################

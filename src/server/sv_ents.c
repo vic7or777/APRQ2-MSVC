@@ -41,8 +41,6 @@ void SV_EmitPacketEntities (client_frame_t *from, client_frame_t *to, sizebuf_t 
 	int		oldindex, newindex;
 	int		oldnum, newnum;
 	int		from_num_entities;
-	int		bits;
-
 
 	MSG_WriteByte (msg, svc_packetentities);
 
@@ -51,8 +49,7 @@ void SV_EmitPacketEntities (client_frame_t *from, client_frame_t *to, sizebuf_t 
 	else
 		from_num_entities = from->num_entities;
 
-	newindex = 0;
-	oldindex = 0;
+	newindex = oldindex = 0;
 	newent = NULL;
 	oldent = NULL;
 	while (newindex < to->num_entities || oldindex < from_num_entities)
@@ -79,7 +76,7 @@ void SV_EmitPacketEntities (client_frame_t *from, client_frame_t *to, sizebuf_t 
 			// in any bytes being emited if the entity has not changed at all
 			// note that players are always 'newentities', this updates their oldorigin always
 			// and prevents warping
-			MSG_WriteDeltaEntity (oldent, newent, msg, false, newent->number <= maxclients->integer);
+			MSG_WriteDeltaEntity(oldent, newent, msg, false, newent->number <= maxclients->integer);
 			oldindex++;
 			newindex++;
 			continue;
@@ -87,26 +84,14 @@ void SV_EmitPacketEntities (client_frame_t *from, client_frame_t *to, sizebuf_t 
 
 		if (newnum < oldnum)
 		{	// this is a new entity, send it from the baseline
-			MSG_WriteDeltaEntity (&sv.baselines[newnum], newent, msg, true, true);
+			MSG_WriteDeltaEntity(&sv.baselines[newnum], newent, msg, true, true);
 			newindex++;
 			continue;
 		}
 
 		if (newnum > oldnum)
 		{	// the old entity isn't present in the new message
-			bits = U_REMOVE;
-			if (oldnum >= 256)
-				bits |= U_NUMBER16 | U_MOREBITS1;
-
-			MSG_WriteByte (msg,	bits&255 );
-			if (bits & 0x0000ff00)
-				MSG_WriteByte (msg,	(bits>>8)&255 );
-
-			if (bits & U_NUMBER16)
-				MSG_WriteShort (msg, oldnum);
-			else
-				MSG_WriteByte (msg, oldnum);
-
+			MSG_WriteDeltaEntity(oldent, NULL, msg, true, false);
 			oldindex++;
 			continue;
 		}
@@ -116,202 +101,6 @@ void SV_EmitPacketEntities (client_frame_t *from, client_frame_t *to, sizebuf_t 
 
 }
 
-
-
-/*
-=============
-SV_WritePlayerstateToClient
-
-=============
-*/
-void SV_WritePlayerstateToClient (client_frame_t *from, client_frame_t *to, sizebuf_t *msg)
-{
-	int				i;
-	int				pflags;
-	player_state_t	*ps, *ops;
-	player_state_t	dummy;
-	int				statbits;
-
-	ps = &to->ps;
-	if (!from)
-	{
-		memset (&dummy, 0, sizeof(dummy));
-		ops = &dummy;
-	}
-	else
-		ops = &from->ps;
-
-	//
-	// determine what needs to be sent
-	//
-	pflags = 0;
-
-	if (ps->pmove.pm_type != ops->pmove.pm_type)
-		pflags |= PS_M_TYPE;
-
-	if (ps->pmove.origin[0] != ops->pmove.origin[0]
-		|| ps->pmove.origin[1] != ops->pmove.origin[1]
-		|| ps->pmove.origin[2] != ops->pmove.origin[2] )
-		pflags |= PS_M_ORIGIN;
-
-	if (ps->pmove.velocity[0] != ops->pmove.velocity[0]
-		|| ps->pmove.velocity[1] != ops->pmove.velocity[1]
-		|| ps->pmove.velocity[2] != ops->pmove.velocity[2] )
-		pflags |= PS_M_VELOCITY;
-
-	if (ps->pmove.pm_time != ops->pmove.pm_time)
-		pflags |= PS_M_TIME;
-
-	if (ps->pmove.pm_flags != ops->pmove.pm_flags)
-		pflags |= PS_M_FLAGS;
-
-	if (ps->pmove.gravity != ops->pmove.gravity)
-		pflags |= PS_M_GRAVITY;
-
-	if (ps->pmove.delta_angles[0] != ops->pmove.delta_angles[0]
-		|| ps->pmove.delta_angles[1] != ops->pmove.delta_angles[1]
-		|| ps->pmove.delta_angles[2] != ops->pmove.delta_angles[2] )
-		pflags |= PS_M_DELTA_ANGLES;
-
-
-	if (ps->viewoffset[0] != ops->viewoffset[0]
-		|| ps->viewoffset[1] != ops->viewoffset[1]
-		|| ps->viewoffset[2] != ops->viewoffset[2] )
-		pflags |= PS_VIEWOFFSET;
-
-	if (ps->viewangles[0] != ops->viewangles[0]
-		|| ps->viewangles[1] != ops->viewangles[1]
-		|| ps->viewangles[2] != ops->viewangles[2] )
-		pflags |= PS_VIEWANGLES;
-
-	if (ps->kick_angles[0] != ops->kick_angles[0]
-		|| ps->kick_angles[1] != ops->kick_angles[1]
-		|| ps->kick_angles[2] != ops->kick_angles[2] )
-		pflags |= PS_KICKANGLES;
-
-	if (ps->blend[0] != ops->blend[0]
-		|| ps->blend[1] != ops->blend[1]
-		|| ps->blend[2] != ops->blend[2]
-		|| ps->blend[3] != ops->blend[3] )
-		pflags |= PS_BLEND;
-
-	if (ps->fov != ops->fov)
-		pflags |= PS_FOV;
-
-	if (ps->rdflags != ops->rdflags)
-		pflags |= PS_RDFLAGS;
-
-	if (ps->gunframe != ops->gunframe)
-		pflags |= PS_WEAPONFRAME;
-
-	pflags |= PS_WEAPONINDEX;
-
-	//
-	// write it
-	//
-	MSG_WriteByte (msg, svc_playerinfo);
-	MSG_WriteShort (msg, pflags);
-
-	//
-	// write the pmove_state_t
-	//
-	if (pflags & PS_M_TYPE)
-		MSG_WriteByte (msg, ps->pmove.pm_type);
-
-	if (pflags & PS_M_ORIGIN)
-	{
-		MSG_WriteShort (msg, ps->pmove.origin[0]);
-		MSG_WriteShort (msg, ps->pmove.origin[1]);
-		MSG_WriteShort (msg, ps->pmove.origin[2]);
-	}
-
-	if (pflags & PS_M_VELOCITY)
-	{
-		MSG_WriteShort (msg, ps->pmove.velocity[0]);
-		MSG_WriteShort (msg, ps->pmove.velocity[1]);
-		MSG_WriteShort (msg, ps->pmove.velocity[2]);
-	}
-
-	if (pflags & PS_M_TIME)
-		MSG_WriteByte (msg, ps->pmove.pm_time);
-
-	if (pflags & PS_M_FLAGS)
-		MSG_WriteByte (msg, ps->pmove.pm_flags);
-
-	if (pflags & PS_M_GRAVITY)
-		MSG_WriteShort (msg, ps->pmove.gravity);
-
-	if (pflags & PS_M_DELTA_ANGLES)
-	{
-		MSG_WriteShort (msg, ps->pmove.delta_angles[0]);
-		MSG_WriteShort (msg, ps->pmove.delta_angles[1]);
-		MSG_WriteShort (msg, ps->pmove.delta_angles[2]);
-	}
-
-	//
-	// write the rest of the player_state_t
-	//
-	if (pflags & PS_VIEWOFFSET)
-	{
-		MSG_WriteChar (msg, (int)(ps->viewoffset[0]*4));
-		MSG_WriteChar (msg, (int)(ps->viewoffset[1]*4));
-		MSG_WriteChar (msg, (int)(ps->viewoffset[2]*4));
-	}
-
-	if (pflags & PS_VIEWANGLES)
-	{
-		MSG_WriteAngle16 (msg, ps->viewangles[0]);
-		MSG_WriteAngle16 (msg, ps->viewangles[1]);
-		MSG_WriteAngle16 (msg, ps->viewangles[2]);
-	}
-
-	if (pflags & PS_KICKANGLES)
-	{
-		MSG_WriteChar (msg, (int)(ps->kick_angles[0]*4));
-		MSG_WriteChar (msg, (int)(ps->kick_angles[1]*4));
-		MSG_WriteChar (msg, (int)(ps->kick_angles[2]*4));
-	}
-
-	if (pflags & PS_WEAPONINDEX)
-	{
-		MSG_WriteByte (msg, ps->gunindex);
-	}
-
-	if (pflags & PS_WEAPONFRAME)
-	{
-		MSG_WriteByte (msg, ps->gunframe);
-		MSG_WriteChar (msg, (int)(ps->gunoffset[0]*4));
-		MSG_WriteChar (msg, (int)(ps->gunoffset[1]*4));
-		MSG_WriteChar (msg, (int)(ps->gunoffset[2]*4));
-		MSG_WriteChar (msg, (int)(ps->gunangles[0]*4));
-		MSG_WriteChar (msg, (int)(ps->gunangles[1]*4));
-		MSG_WriteChar (msg, (int)(ps->gunangles[2]*4));
-	}
-
-	if (pflags & PS_BLEND)
-	{
-		MSG_WriteByte (msg, (int)(ps->blend[0]*255));
-		MSG_WriteByte (msg, (int)(ps->blend[1]*255));
-		MSG_WriteByte (msg, (int)(ps->blend[2]*255));
-		MSG_WriteByte (msg, (int)(ps->blend[3]*255));
-	}
-	if (pflags & PS_FOV)
-		MSG_WriteByte (msg, (int)(ps->fov));
-	if (pflags & PS_RDFLAGS)
-		MSG_WriteByte (msg, ps->rdflags);
-
-	// send stats
-	statbits = 0;
-	for (i=0 ; i<MAX_STATS ; i++)
-		if (ps->stats[i] != ops->stats[i])
-			statbits |= 1<<i;
-	MSG_WriteLong (msg, statbits);
-	for (i=0 ; i<MAX_STATS ; i++)
-		if (statbits & (1<<i) )
-			MSG_WriteShort (msg, ps->stats[i]);
-}
-
-
 /*
 ==================
 SV_WriteFrameToClient
@@ -320,6 +109,7 @@ SV_WriteFrameToClient
 void SV_WriteFrameToClient (client_t *client, sizebuf_t *msg)
 {
 	client_frame_t		*frame, *oldframe;
+	player_state_t		*oldstate;
 	int					lastframe;
 
 //Com_Printf ("%i -> %i\n", client->lastframe, sv.framenum);
@@ -354,7 +144,13 @@ void SV_WriteFrameToClient (client_t *client, sizebuf_t *msg)
 	SZ_Write (msg, frame->areabits, frame->areabytes);
 
 	// delta encode the playerstate
-	SV_WritePlayerstateToClient (oldframe, frame, msg);
+	MSG_WriteByte(msg, svc_playerinfo);
+	if( oldframe ) {
+		oldstate = &oldframe->ps;
+	} else {
+		oldstate = NULL;
+	}
+	MSG_WriteDeltaPlayerstate_Default( oldstate, &frame->ps, msg );
 
 	// delta encode the entities
 	SV_EmitPacketEntities (oldframe, frame, msg);
@@ -541,12 +337,7 @@ void SV_BuildClientFrame (client_t *client)
 
 				if (!ent->s.modelindex)
 				{	// don't send sounds if they will be attenuated away
-					vec3_t	delta;
-					float	len;
-
-					VectorSubtract (org, ent->s.origin, delta);
-					len = (float)VectorLength (delta);
-					if (len > 400)
+					if (Distance(org, ent->s.origin) > 400)
 						continue;
 				}
 			}
@@ -588,7 +379,6 @@ void SV_RecordDemoMessage (void)
 {
 	int			e;
 	edict_t		*ent;
-	entity_state_t	nostate;
 	sizebuf_t	buf;
 	byte		buf_data[32768];
 	int			len;
@@ -596,7 +386,6 @@ void SV_RecordDemoMessage (void)
 	if (!svs.demofile)
 		return;
 
-	memset (&nostate, 0, sizeof(nostate));
 	SZ_Init (&buf, buf_data, sizeof(buf_data));
 
 	// write a frame message that doesn't contain a player_state_t
@@ -614,7 +403,7 @@ void SV_RecordDemoMessage (void)
 			ent->s.number && 
 			(ent->s.modelindex || ent->s.effects || ent->s.sound || ent->s.event) && 
 			!(ent->svflags & SVF_NOCLIENT))
-			MSG_WriteDeltaEntity (&nostate, &ent->s, &buf, false, true);
+			MSG_WriteDeltaEntity (NULL, &ent->s, &buf, false, true);
 
 		e++;
 		ent = EDICT_NUM(e);

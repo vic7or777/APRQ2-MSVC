@@ -154,7 +154,7 @@ __declspec( naked ) void S_WriteSwappedLinearBlastStereo16 (void)
 }
 #endif
 
-static void S_TransferStereo16 (unsigned long *pbuf, int endtime)
+static void S_TransferStereo16 (unsigned int *pbuf, int endtime)
 {
 	int		lpos, lpaintedtime;
 	
@@ -197,18 +197,13 @@ S_TransferPaintBuffer
 */
 void S_TransferPaintBuffer(int endtime)
 {
-	int 	out_idx;
-	int 	i, count;
-	int 	out_mask;
-	int 	*p;
-	int 	step;
-	int		val;
-	unsigned long *pbuf;
+	int 	i, count, out_idx, out_mask;
+	int 	*p, step, val;
+	unsigned int *pbuf;
 
-	pbuf = (unsigned long *)dma.buffer;
+	pbuf = (unsigned int *)dma.buffer;
 
-	if (s_testsound->integer)
-	{
+	if (s_testsound->integer) {
 		// write a fixed sine wave
 		count = (endtime - paintedtime);
 		for (i=0 ; i<count ; i++)
@@ -261,8 +256,8 @@ CHANNEL MIXING
 ===============================================================================
 */
 
-void S_PaintChannelFrom8 (channel_t *ch, sfxcache_t *sc, int endtime, int offset);
-void S_PaintChannelFrom16 (channel_t *ch, sfxcache_t *sc, int endtime, int offset);
+static void S_PaintChannelFrom8 (channel_t *ch, sfxcache_t *sc, int endtime, int offset);
+static void S_PaintChannelFrom16 (channel_t *ch, sfxcache_t *sc, int endtime, int offset);
 
 void S_PaintChannels(int endtime)
 {
@@ -386,8 +381,7 @@ void S_PaintChannels(int endtime)
 
 void S_InitScaletable (void)
 {
-	int		i, j;
-	int		scale;
+	int		i, j, scale;
 
 	if (s_volume->value > 2.0f)
 		Cvar_Set ("s_volume", "2");
@@ -395,19 +389,18 @@ void S_InitScaletable (void)
 		Cvar_Set  ("s_volume", "0");
 
 	s_volume->modified = false;
-	for (i=0 ; i<32 ; i++)
+	for (i = 0; i < 32; i++)
 	{
 		scale = i * 8 * 256 * s_volume->value;
-		for (j=0 ; j<256 ; j++)
-			snd_scaletable[i][j] = ((signed char)j) * scale;
+		for (j = 0; j < 256; j++)
+			snd_scaletable[i][j] = ((signed char)(j - 128)) * scale;
 	}
 }
 
-void S_PaintChannelFrom8 (channel_t *ch, sfxcache_t *sc, int count, int offset)
+static void S_PaintChannelFrom8 (channel_t *ch, sfxcache_t *sc, int count, int offset)
 {
-	int		i, j;
-	int		*lscale, *rscale;
-	unsigned char *sfx;
+	int		i, j, *lscale, *rscale;
+	byte *sfx;
 	portable_samplepair_t	*samp;
 
 	if (ch->leftvol > 255)
@@ -415,31 +408,36 @@ void S_PaintChannelFrom8 (channel_t *ch, sfxcache_t *sc, int count, int offset)
 	if (ch->rightvol > 255)
 		ch->rightvol = 255;
 		
-	if ( !s_volume->value ) {
+	if ( !snd_vol ) {
 		ch->pos += count;
 		return;
 	}
 
 	lscale = snd_scaletable[ch->leftvol >> 3];
 	rscale = snd_scaletable[ch->rightvol >> 3];
-
 	samp = &paintbuffer[offset];
 
-	sfx = (unsigned char *)sc->data + ch->pos;
-	for (i=0 ; i<count ; i++, samp++)
-	{
-		j = *sfx++;
-		samp->left += lscale[j];
-		samp->right += rscale[j];
+	if (sc->channels == 2) {
+		sfx = sc->data + ch->pos * 2;
+		for (i = 0; i < count; i++, samp++) {
+			samp->left += lscale[*sfx++];
+			samp->right += rscale[*sfx++];
+		}
+	} else {
+		sfx = sc->data + ch->pos;
+		for (i = 0; i < count; i++, samp++) {
+			j = *sfx++;
+			samp->left += lscale[j];
+			samp->right += rscale[j];
+		}
 	}
 	
 	ch->pos += count;
 }
 
-void S_PaintChannelFrom16 (channel_t *ch, sfxcache_t *sc, int count, int offset)
+static void S_PaintChannelFrom16 (channel_t *ch, sfxcache_t *sc, int count, int offset)
 {
-	int	i, j;
-	int leftvol, rightvol;
+	int	i, j, leftvol, rightvol;
 	int16 *sfx;
 	portable_samplepair_t	*samp;
 
@@ -452,12 +450,19 @@ void S_PaintChannelFrom16 (channel_t *ch, sfxcache_t *sc, int count, int offset)
 	rightvol = ch->rightvol*snd_vol;
 	samp = &paintbuffer[offset];
 
-	sfx = (int16 *)sc->data + ch->pos;
-	for (i=0 ; i<count ; i++, samp++)
-	{
-		j = *sfx++;
-		samp->left += (j * leftvol) >> 8;
-		samp->right += (j * rightvol) >> 8;
+	if (sc->channels == 2) {
+		sfx = (int16 *)sc->data + ch->pos * 2;
+		for (i = 0; i < count; i++, samp++) {
+			samp->left += (*sfx++ * leftvol) >> 8;
+			samp->right += (*sfx++ * rightvol) >> 8;
+		}
+	} else {
+		sfx = (int16 *)sc->data + ch->pos;
+		for (i = 0; i < count; i++, samp++) {
+			j = *sfx++;
+			samp->left += (j * leftvol) >> 8;
+			samp->right += (j * rightvol) >> 8;
+		}
 	}
 
 	ch->pos += count;

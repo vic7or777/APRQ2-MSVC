@@ -124,25 +124,22 @@ static void M_LoadServersFromFile(void)
 	FS_FreeFile( buffer );
 }
 
+void CL_SendUIStatusRequests( netadr_t *adr );
+
 static void M_PingServers (void)
 {
 	int			i;
-	netadr_t	adr;
+	netadr_t	adr = {0};
 	char		*adrstring;
-	cvar_t		*noudp;
 
 	if(!m_num_addresses)
 		return;
 
-	NET_Config (true);		// allow remote
+	NET_Config (NET_CLIENT);		// allow remote
 
-	noudp = Cvar_Get ("noudp", "0", CVAR_NOSET);
-	if (!noudp->integer)
-	{
-		adr.type = NA_BROADCAST;
-		adr.port = BigShort(PORT_SERVER);
-		Netchan_OutOfBandPrint (NS_CLIENT, &adr, "status");
-	}
+	adr.type = NA_BROADCAST;
+	adr.port = BigShort(PORT_SERVER);
+	CL_SendUIStatusRequests(&adr);
 
 	// send a packet to each address book entry
 	for (i=0; i<m_num_addresses; i++)
@@ -156,7 +153,8 @@ static void M_PingServers (void)
 		}
 		if (!adr.port)
 			adr.port = BigShort(PORT_SERVER);
-		Netchan_OutOfBandPrint (NS_CLIENT, &adr, "status");
+
+		CL_SendUIStatusRequests(&adr);
 	}
 }
 

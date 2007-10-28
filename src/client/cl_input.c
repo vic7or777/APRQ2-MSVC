@@ -21,13 +21,35 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "client.h"
 
-cvar_t	*cl_nodelta;
+static cvar_t *cl_nodelta;
 static cvar_t *cl_maxpackets;
 extern cvar_t *cl_maxfps;
 
+
+cvar_t	*cl_upspeed;
+cvar_t	*cl_forwardspeed;
+cvar_t	*cl_sidespeed;
+
+cvar_t	*cl_yawspeed;
+cvar_t	*cl_pitchspeed;
+
+cvar_t	*cl_run;
+
+cvar_t	*cl_anglespeedkey;
+
+extern cvar_t	*cl_instantpacket;
+
+#ifdef MOUSE_TEST
+cvar_t	*m_filter;
+cvar_t	*m_autosens;
+cvar_t	*m_accel;
+
+static qboolean	mlooking;
+#endif
+
 extern	unsigned	sys_frame_time;
-unsigned	frame_msec;
-unsigned	old_sys_frame_time;
+static unsigned	frame_msec;
+static unsigned	old_sys_frame_time;
 
 /*
 ===============================================================================
@@ -56,16 +78,16 @@ Key_Event (int key, qboolean down, unsigned time);
 */
 
 
-kbutton_t	in_klook;
-kbutton_t	in_left, in_right, in_forward, in_back;
-kbutton_t	in_lookup, in_lookdown, in_moveleft, in_moveright;
+static kbutton_t	in_klook;
+static kbutton_t	in_left, in_right, in_forward, in_back;
+static kbutton_t	in_lookup, in_lookdown, in_moveleft, in_moveright;
 kbutton_t	in_strafe, in_speed, in_use, in_attack;
-kbutton_t	in_up, in_down;
+static kbutton_t	in_up, in_down;
 
-int			in_impulse;
+static int			in_impulse;
 
 
-void KeyDown (kbutton_t *b)
+static void KeyDown (kbutton_t *b)
 {
 	int		k;
 	char	*c;
@@ -101,7 +123,7 @@ void KeyDown (kbutton_t *b)
 	b->state |= 1 + 2;	// down + impulse down
 }
 
-void KeyUp (kbutton_t *b)
+static void KeyUp (kbutton_t *b)
 {
 	int		k;
 	char	*c;
@@ -141,41 +163,65 @@ void KeyUp (kbutton_t *b)
 	b->state |= 4; 		// impulse up
 }
 
-void IN_KLookDown (void) {KeyDown(&in_klook);}
-void IN_KLookUp (void) {KeyUp(&in_klook);}
-void IN_UpDown(void) {KeyDown(&in_up);}
-void IN_UpUp(void) {KeyUp(&in_up);}
-void IN_DownDown(void) {KeyDown(&in_down);}
-void IN_DownUp(void) {KeyUp(&in_down);}
-void IN_LeftDown(void) {KeyDown(&in_left);}
-void IN_LeftUp(void) {KeyUp(&in_left);}
-void IN_RightDown(void) {KeyDown(&in_right);}
-void IN_RightUp(void) {KeyUp(&in_right);}
-void IN_ForwardDown(void) {KeyDown(&in_forward);}
-void IN_ForwardUp(void) {KeyUp(&in_forward);}
-void IN_BackDown(void) {KeyDown(&in_back);}
-void IN_BackUp(void) {KeyUp(&in_back);}
-void IN_LookupDown(void) {KeyDown(&in_lookup);}
-void IN_LookupUp(void) {KeyUp(&in_lookup);}
-void IN_LookdownDown(void) {KeyDown(&in_lookdown);}
-void IN_LookdownUp(void) {KeyUp(&in_lookdown);}
-void IN_MoveleftDown(void) {KeyDown(&in_moveleft);}
-void IN_MoveleftUp(void) {KeyUp(&in_moveleft);}
-void IN_MoverightDown(void) {KeyDown(&in_moveright);}
-void IN_MoverightUp(void) {KeyUp(&in_moveright);}
+static void IN_KLookDown (void) {KeyDown(&in_klook);}
+static void IN_KLookUp (void) {KeyUp(&in_klook);}
+static void IN_UpDown(void) {KeyDown(&in_up);}
+static void IN_UpUp(void) {KeyUp(&in_up);}
+static void IN_DownDown(void) {KeyDown(&in_down);}
+static void IN_DownUp(void) {KeyUp(&in_down);}
+static void IN_LeftDown(void) {KeyDown(&in_left);}
+static void IN_LeftUp(void) {KeyUp(&in_left);}
+static void IN_RightDown(void) {KeyDown(&in_right);}
+static void IN_RightUp(void) {KeyUp(&in_right);}
+static void IN_ForwardDown(void) {KeyDown(&in_forward);}
+static void IN_ForwardUp(void) {KeyUp(&in_forward);}
+static void IN_BackDown(void) {KeyDown(&in_back);}
+static void IN_BackUp(void) {KeyUp(&in_back);}
+static void IN_LookupDown(void) {KeyDown(&in_lookup);}
+static void IN_LookupUp(void) {KeyUp(&in_lookup);}
+static void IN_LookdownDown(void) {KeyDown(&in_lookdown);}
+static void IN_LookdownUp(void) {KeyUp(&in_lookdown);}
+static void IN_MoveleftDown(void) {KeyDown(&in_moveleft);}
+static void IN_MoveleftUp(void) {KeyUp(&in_moveleft);}
+static void IN_MoverightDown(void) {KeyDown(&in_moveright);}
+static void IN_MoverightUp(void) {KeyUp(&in_moveright);}
 
-void IN_SpeedDown(void) {KeyDown(&in_speed);}
-void IN_SpeedUp(void) {KeyUp(&in_speed);}
-void IN_StrafeDown(void) {KeyDown(&in_strafe);}
-void IN_StrafeUp(void) {KeyUp(&in_strafe);}
+static void IN_SpeedDown(void) {KeyDown(&in_speed);}
+static void IN_SpeedUp(void) {KeyUp(&in_speed);}
+static void IN_StrafeDown(void) {KeyDown(&in_strafe);}
+static void IN_StrafeUp(void) {KeyUp(&in_strafe);}
 
-void IN_AttackDown(void) {KeyDown(&in_attack);}
-void IN_AttackUp(void) {KeyUp(&in_attack);}
+static void IN_AttackDown(void) {
+	KeyDown(&in_attack);
+    if( cl_instantpacket->integer ) {
+        cl.sendPacketNow = true;
+    }
+}
+static void IN_AttackUp(void) {KeyUp(&in_attack);}
 
-void IN_UseDown (void) {KeyDown(&in_use);}
-void IN_UseUp (void) {KeyUp(&in_use);}
+static void IN_UseDown (void) {
+	KeyDown(&in_use);
+    if( cl_instantpacket->integer ) {
+        cl.sendPacketNow = true;
+    }
+}
+static void IN_UseUp (void) {KeyUp(&in_use);}
 
-void IN_Impulse (void) {in_impulse=atoi(Cmd_Argv(1));}
+static void IN_Impulse (void) {
+	in_impulse = atoi(Cmd_Argv(1));
+}
+
+#ifdef MOUSE_TEST
+static void IN_MLookDown (void) {
+	mlooking = true;
+}
+
+static void IN_MLookUp (void) {
+	mlooking = false;
+	if (!freelook->integer && lookspring->integer)
+		IN_CenterView ();
+}
+#endif
 
 /*
 ===============
@@ -184,7 +230,7 @@ CL_KeyState
 Returns the fraction of the frame that the key was down
 ===============
 */
-float CL_KeyState (kbutton_t *key)
+static float CL_KeyState (kbutton_t *key)
 {
 	float		val;
 	int			msec;
@@ -200,32 +246,95 @@ float CL_KeyState (kbutton_t *key)
 		key->downtime = sys_frame_time;
 	}
 
+	if (!frame_msec)
+		return 0;
+
 	val = (float)msec / frame_msec;
-	if (val < 0)
-		val = 0;
-	if (val > 1)
-		val = 1;
+	clamp(val, 0, 1);
 
 	return val;
 }
 
+// FIXME: always discrete?
+static float CL_ImmKeyState( kbutton_t *key ) {
+	if( key->state & 1 ) {
+		return 1;
+	}
 
+	return 0;
+}
 
 
 //==========================================================================
+#ifdef MOUSE_TEST
+static int mouse_x, mouse_y;
+static int old_mouse_x, old_mouse_y;
 
-cvar_t	*cl_upspeed;
-cvar_t	*cl_forwardspeed;
-cvar_t	*cl_sidespeed;
+/*
+================
+CL_MouseEvent
+================
+*/
+void CL_MouseEvent( int dx, int dy ) {
+	if( cls.key_dest == key_menu ) {
+		M_MouseMove( mx, my );
+		return;
+	}
 
-cvar_t	*cl_yawspeed;
-cvar_t	*cl_pitchspeed;
+	mouse_x += dx;
+	mouse_y += dy;
+}
 
-cvar_t	*cl_run;
+/*
+================
+CL_MouseMove
+================
+*/
+static void CL_MouseMove( usercmd_t *cmd ) {
+	float	mx, my;
 
-cvar_t	*cl_anglespeedkey;
+	if (m_filter->integer) {
+		mx = ( mouse_x + old_mouse_x ) * 0.5f;
+		my = ( mouse_y + old_mouse_y ) * 0.5f;
+	} else {
+		mx = mouse_x;
+		my = mouse_y;
+	}
 
+	old_mouse_x = mouse_x;
+	old_mouse_y = mouse_y;
+	mouse_x = mouse_y = 0;
 
+	if (!mx && !my)
+		return;
+
+	if (m_accel->value) {
+		float speed = (float)sqrt(mx * mx + my * my);
+		speed = sensitivity->value + speed * m_accel->value;
+		mx *= speed;
+		my *= speed;
+	} else {
+		mx *= sensitivity->value;
+		my *= sensitivity->value;
+	}
+
+	if (m_autosens->integer) {
+		mx *= cl.refdef.fov_x/90.0f;
+		my *= cl.refdef.fov_y/90.0f;
+	}
+
+// add mouse X/Y movement to cmd
+	if( ( in_strafe.state & 1 ) || ( lookstrafe->value && mlooking ) )
+		cmd->sidemove += (int16)(m_side->value * mx);
+	else
+		cl.viewangles[YAW] -= m_yaw->value * mx;
+
+	if( ( mlooking || freelook->integer ) && !( in_strafe.state & 1 ) )
+		cl.viewangles[PITCH] += m_pitch->value * my;
+	else
+		cmd->sidemove -= (int16)(m_forward->value * my);
+}
+#endif
 /*
 ================
 CL_AdjustAngles
@@ -233,10 +342,10 @@ CL_AdjustAngles
 Moves the local angle positions
 ================
 */
-void CL_AdjustAngles (void)
+/*
+static void CL_AdjustAngles (void)
 {
-	float	speed;
-	float	up, down;
+	float	speed, tspeed;
 	
 	if (in_speed.state & 1)
 		speed = cls.frametime * cl_anglespeedkey->value;
@@ -245,21 +354,20 @@ void CL_AdjustAngles (void)
 
 	if (!(in_strafe.state & 1))
 	{
-		cl.viewangles[YAW] -= speed*cl_yawspeed->value*CL_KeyState (&in_right);
-		cl.viewangles[YAW] += speed*cl_yawspeed->value*CL_KeyState (&in_left);
+		tspeed = speed*cl_yawspeed->value;
+		cl.viewangles[YAW] -= tspeed * CL_KeyState(&in_right);
+		cl.viewangles[YAW] += tspeed * CL_KeyState(&in_left);
 	}
+	tspeed = speed*cl_pitchspeed->value;
 	if (in_klook.state & 1)
 	{
-		cl.viewangles[PITCH] -= speed*cl_pitchspeed->value * CL_KeyState (&in_forward);
-		cl.viewangles[PITCH] += speed*cl_pitchspeed->value * CL_KeyState (&in_back);
+		cl.viewangles[PITCH] -= tspeed * CL_KeyState(&in_forward);
+		cl.viewangles[PITCH] += tspeed * CL_KeyState(&in_back);
 	}
 	
-	up = CL_KeyState (&in_lookup);
-	down = CL_KeyState(&in_lookdown);
-	
-	cl.viewangles[PITCH] -= speed*cl_pitchspeed->value * up;
-	cl.viewangles[PITCH] += speed*cl_pitchspeed->value * down;
-}
+	cl.viewangles[PITCH] -= tspeed * CL_KeyState(&in_lookup);
+	cl.viewangles[PITCH] += tspeed * CL_KeyState(&in_lookdown);
+}*/
 
 /*
 ================
@@ -268,46 +376,90 @@ CL_BaseMove
 Send the intended movement message to the server
 ================
 */
-void CL_BaseMove (usercmd_t *cmd)
-{	
-	CL_AdjustAngles ();
-	
-	memset (cmd, 0, sizeof(*cmd));
-	
-	cmd->angles[0] = (int16)cl.viewangles[0];
-	cmd->angles[1] = (int16)cl.viewangles[1];
-	cmd->angles[2] = (int16)cl.viewangles[2];
+static void CL_BaseMove (usercmd_t *cmd)
+{
+	vec3_t	move = {0,0,0};
 
-	if (in_strafe.state & 1)
-	{
-		cmd->sidemove += (int16)(cl_sidespeed->value * CL_KeyState (&in_right));
-		cmd->sidemove -= (int16)(cl_sidespeed->value * CL_KeyState (&in_left));
+	if (in_strafe.state & 1) {
+		move[1] += cl_sidespeed->value * CL_KeyState(&in_right);
+		move[1] -= cl_sidespeed->value * CL_KeyState(&in_left);
 	}
 
-	cmd->sidemove += (int16)(cl_sidespeed->value * CL_KeyState (&in_moveright));
-	cmd->sidemove -= (int16)(cl_sidespeed->value * CL_KeyState (&in_moveleft));
+	move[1] += cl_sidespeed->value * CL_KeyState(&in_moveright);
+	move[1] -= cl_sidespeed->value * CL_KeyState(&in_moveleft);
 
-	cmd->upmove += (int16)(cl_upspeed->value * CL_KeyState (&in_up));
-	cmd->upmove -= (int16)(cl_upspeed->value * CL_KeyState (&in_down));
+	move[2] += cl_upspeed->value * CL_KeyState(&in_up);
+	move[2] -= cl_upspeed->value * CL_KeyState(&in_down);
 
-	if (! (in_klook.state & 1) )
-	{	
-		cmd->forwardmove += (int16)(cl_forwardspeed->value * CL_KeyState (&in_forward));
-		cmd->forwardmove -= (int16)(cl_forwardspeed->value * CL_KeyState (&in_back));
-	}	
+	if ( !(in_klook.state & 1) ) {
+		move[0] += cl_forwardspeed->value * CL_KeyState(&in_forward);
+		move[0] -= cl_forwardspeed->value * CL_KeyState(&in_back);
+	}
+
+	// adjust for speed key / running
+	if( ( in_speed.state & 1 ) ^ cl_run->integer ) {
+		VectorScale( move, 2, move );
+	}
+
+	cmd->forwardmove += (int16)move[0];
+	cmd->sidemove += (int16)move[1];
+	cmd->upmove += (int16)move[2];
+}
+
+/*
+================
+CL_ImmBaseMove
+
+Builds intended movement message for
+local pmove sampling
+================
+*/
+static void CL_ImmBaseMove( void )
+{
+	float	speed, tspeed;
+
+	if (in_speed.state & 1)
+		speed = cls.frametime * cl_anglespeedkey->value;
+	else
+		speed = cls.frametime;
+
+	VectorClear( cl.move );
+	if( in_strafe.state & 1 ) {
+		cl.move[1] += cl_sidespeed->value * CL_ImmKeyState( &in_right );
+		cl.move[1] -= cl_sidespeed->value * CL_ImmKeyState( &in_left );
+	} else {
+		tspeed = speed*cl_yawspeed->value;
+		cl.viewangles[YAW] -= tspeed * CL_KeyState(&in_right);
+		cl.viewangles[YAW] += tspeed * CL_KeyState(&in_left);
+	}
+
+	tspeed = speed*cl_pitchspeed->value;
+	if (in_klook.state & 1) {
+		cl.viewangles[PITCH] -= tspeed * CL_KeyState(&in_forward);
+		cl.viewangles[PITCH] += tspeed * CL_KeyState(&in_back);
+	} else {	
+		cl.move[0] += cl_forwardspeed->value * CL_ImmKeyState(&in_forward);
+		cl.move[0] -= cl_forwardspeed->value * CL_ImmKeyState(&in_back);
+	}
+
+	cl.viewangles[PITCH] -= tspeed * CL_KeyState(&in_lookup);
+	cl.viewangles[PITCH] += tspeed * CL_KeyState(&in_lookdown);
+
+	cl.move[1] += cl_sidespeed->value * CL_ImmKeyState( &in_moveright );
+	cl.move[1] -= cl_sidespeed->value * CL_ImmKeyState( &in_moveleft );
+
+	cl.move[2] += cl_upspeed->value * CL_ImmKeyState( &in_up );
+	cl.move[2] -= cl_upspeed->value * CL_ImmKeyState( &in_down );
 
 //
 // adjust for speed key / running
 //
-	if ( (in_speed.state & 1) ^ cl_run->integer )
-	{
-		cmd->forwardmove *= 2;
-		cmd->sidemove *= 2;
-		cmd->upmove *= 2;
-	}	
+	if( ( in_speed.state & 1 ) ^ cl_run->integer ) {
+		VectorScale( cl.move, 2, cl.move );
+	}
 }
 
-void CL_ClampPitch (void)
+static void CL_ClampPitch (void)
 {
 	float	pitch;
 
@@ -326,76 +478,65 @@ void CL_ClampPitch (void)
 		cl.viewangles[PITCH] = -89 - pitch;
 }
 
-/*
-==============
-CL_FinishMove
-==============
-*/
-void CL_FinishMove (usercmd_t *cmd)
+
+// CL_UpdateCmd
+void CL_UpdateCmd( int msec )
 {
-	int		ms;
-//
-// figure button bits
-//	
+	CL_ImmBaseMove();
+
+	// allow mice or other external controllers to add to the move
+	IN_Move(&cl.cmd);
+
+	// update cmd viewangles for CL_PredictMove
+	CL_ClampPitch ();
+
+	cl.cmd.angles[0] = ANGLE2SHORT(cl.viewangles[0]);
+	cl.cmd.angles[1] = ANGLE2SHORT(cl.viewangles[1]);
+	cl.cmd.angles[2] = ANGLE2SHORT(cl.viewangles[2]);
+
+	// update cmd->msec for CL_PredictMove
+	cl.cmd.msec += msec;
+}
+
+// CL_FinalizeCmd
+void CL_FinalizeCmd (void)
+{
+	frame_msec = sys_frame_time - old_sys_frame_time;
+	clamp( frame_msec, 1, 200 );
+
+	//set any button hits that occured since last frame
 	if ( in_attack.state & 3 )
-		cmd->buttons |= BUTTON_ATTACK;
+		cl.cmd.buttons |= BUTTON_ATTACK;
 	in_attack.state &= ~2;
-	
+
 	if (in_use.state & 3)
-		cmd->buttons |= BUTTON_USE;
+		cl.cmd.buttons |= BUTTON_USE;
 	in_use.state &= ~2;
 
 	if (anykeydown && cls.key_dest == key_game)
-		cmd->buttons |= BUTTON_ANY;
+		cl.cmd.buttons |= BUTTON_ANY;
 
-	// send milliseconds of time to apply the move
-	ms = (int)(cls.frametime * 1000);
-	if (ms > 250)
-		ms = 100;		// time was unreasonable
-	cmd->msec = ms;
+	if (cl.cmd.msec > 250)
+		cl.cmd.msec = 100;
 
-	CL_ClampPitch ();
-	cmd->angles[0] = ANGLE2SHORT(cl.viewangles[0]);
-	cmd->angles[1] = ANGLE2SHORT(cl.viewangles[1]);
-	cmd->angles[2] = ANGLE2SHORT(cl.viewangles[2]);
+	CL_BaseMove(&cl.cmd);
 
-	cmd->impulse = in_impulse;
+	cl.cmd.impulse = in_impulse;
 	in_impulse = 0;
 
-// send the ambient light level at the player's current position
-	cmd->lightlevel = (byte)cl_lightlevel->value;
-}
+	// set the ambient light level at the player's current position
+	cl.cmd.lightlevel = (byte)cl_lightlevel->value;
 
-/*
-=================
-CL_CreateCmd
-=================
-*/
-usercmd_t CL_CreateCmd (void)
-{
-	usercmd_t	cmd;
+	clamp(cl.cmd.forwardmove, -300, 300);
+	clamp(cl.cmd.sidemove, -300, 300);
+	clamp(cl.cmd.upmove, -300, 300);
 
-	frame_msec = sys_frame_time - old_sys_frame_time;
-	if (frame_msec < 1)
-		frame_msec = 1;
-	else if (frame_msec > 200)
-		frame_msec = 200;
-	
-	// get basic movement from keyboard
-	CL_BaseMove (&cmd);
+	cl.cmds[cls.netchan.outgoing_sequence & CMD_MASK] = cl.cmd;
+	memset( &cl.cmd, 0, sizeof( cl.cmd ) );
 
-	// allow mice or other external controllers to add to the move
-	IN_Move (&cmd);
-
-	CL_FinishMove (&cmd);
-
+	//update counter
 	old_sys_frame_time = sys_frame_time;
-
-//cmd.impulse = cls.framecount;
-
-	return cmd;
 }
-
 
 void IN_CenterView (void)
 {
@@ -447,48 +588,42 @@ void CL_InitInput (void)
 	cl_maxpackets = Cvar_Get( "cl_maxpackets", "0", 0 );
 }
 
-
-
 /*
 =================
 CL_SendCmd
 =================
 */
+extern cvar_t *cl_async;
+
 void CL_SendCmd (void)
 {
 	sizebuf_t	buf;
 	byte		data[128];
 	int			i;
 	usercmd_t	*cmd, *oldcmd;
-	usercmd_t	nullcmd;
 	int			checksumIndex = 0;
-	static int	prevTime;
-	int			time;
+	static unsigned int	prevTime;
+	unsigned int			time;
 
-	// build a command even if not connected
-
-	// save this command off for prediction
-	i = cls.netchan.outgoing_sequence & (CMD_BACKUP-1);
-	cmd = &cl.cmds[i];
-	cl.cmd_time[i] = cls.realtime;	// for netgraph ping calculation
-
-	*cmd = CL_CreateCmd ();
-
-	//cl.cmd = *cmd;
-
-	if (cls.state <= ca_connecting || cls.demoplaying)
+	if (cls.state < ca_connected || cls.demoplaying)
 		return;
 
 	if ( cls.state == ca_connected)
 	{
-		if (cls.netchan.got_reliable || cls.netchan.message.cursize	|| curtime - cls.netchan.last_sent > 100 )
+		if (cls.netchan.got_reliable || cls.netchan.message.cursize	|| curtime - cls.netchan.last_sent > 100)
 			Netchan_Transmit (&cls.netchan, 0, NULL);	
 		return;
 	}
 
+	// save this command off for prediction
+	i = cls.netchan.outgoing_sequence & CMD_MASK;
+	cmd = &cl.cmds[i];
+	cl.history[i].realtime = cls.realtime;	// for netgraph ping calculation
+
+	CL_FinalizeCmd();
+
 	// send a userinfo update if needed
-	if (userinfo_modified)
-	{
+	if (userinfo_modified) {
 		CL_FixUpGender();
 		userinfo_modified = false;
 		MSG_WriteByte (&cls.netchan.message, clc_userinfo);
@@ -507,15 +642,10 @@ void CL_SendCmd (void)
 	MSG_WriteByte (&buf, clc_move);
 
 	// save the position for a checksum byte
-#ifdef R1Q2_PROTOCOL
-	if (cls.serverProtocol != ENHANCED_PROTOCOL_VERSION)
-	{
-#endif
+	if (cls.serverProtocol < PROTOCOL_VERSION_R1Q2) {
 		checksumIndex = buf.cursize;
 		MSG_WriteByte (&buf, 0);
-#ifdef R1Q2_PROTOCOL
 	}
-#endif
 
 	// let the server know what the last frame we
 	// got was, so the next message can be delta compressed
@@ -526,47 +656,31 @@ void CL_SendCmd (void)
 
 	// send this and the previous cmds in the message, so
 	// if the last packet was dropped, it can be recovered
-	i = (cls.netchan.outgoing_sequence-2) & (CMD_BACKUP-1);
-	cmd = &cl.cmds[i];
-	memset (&nullcmd, 0, sizeof(nullcmd));
-	MSG_WriteDeltaUsercmd (&buf, &nullcmd, cmd);
+	cmd = &cl.cmds[(cls.netchan.outgoing_sequence-2) & CMD_MASK];
+	MSG_WriteDeltaUsercmd(&buf, NULL, cmd, cls.protocolVersion);
 	oldcmd = cmd;
 
-	i = (cls.netchan.outgoing_sequence-1) & (CMD_BACKUP-1);
-	cmd = &cl.cmds[i];
-	MSG_WriteDeltaUsercmd (&buf, oldcmd, cmd);
+	cmd = &cl.cmds[(cls.netchan.outgoing_sequence-1) & CMD_MASK];
+	MSG_WriteDeltaUsercmd(&buf, oldcmd, cmd, cls.protocolVersion);
 	oldcmd = cmd;
 
-	i = (cls.netchan.outgoing_sequence) & (CMD_BACKUP-1);
-	cmd = &cl.cmds[i];
-	MSG_WriteDeltaUsercmd (&buf, oldcmd, cmd);
+	cmd = &cl.cmds[cls.netchan.outgoing_sequence & CMD_MASK];
+	MSG_WriteDeltaUsercmd(&buf, oldcmd, cmd, cls.protocolVersion);
 
 	// calculate a checksum over the move commands
-#ifdef R1Q2_PROTOCOL
-	if (cls.serverProtocol != ENHANCED_PROTOCOL_VERSION)
-	{
-#endif
-	buf.data[checksumIndex] = COM_BlockSequenceCRCByte(
-		buf.data + checksumIndex + 1, buf.cursize - checksumIndex - 1,
-		cls.netchan.outgoing_sequence);
-#ifdef R1Q2_PROTOCOL
+	if (cls.serverProtocol < PROTOCOL_VERSION_R1Q2) {
+		buf.data[checksumIndex] = COM_BlockSequenceCRCByte(
+			buf.data + checksumIndex + 1, buf.cursize - checksumIndex - 1,
+			cls.netchan.outgoing_sequence);
 	}
-#endif
 
-	//cl_maxpackets code from q2pro
-	// Hack from fuzzquake2 - we simply drop outgoing packets
-	//
-	// Dropping two packets seems to be completely safe (see the code above)
-	//
-	// If we drop more, server will reuse our last command multiple times,
-	// and this will probably result in prediction error (see sv_user.c)
-	//
-	if(cl_maxpackets->integer) {
+	cl.sendPacketNow = false;
+
+	if(cl_maxpackets->integer && !cl_async->integer) {
 		if( cl_maxpackets->integer < cl_maxfps->integer/3 )
 			Cvar_SetValue( "cl_maxpackets", cl_maxfps->integer/3 );
 		else if( cl_maxpackets->value > cl_maxfps->integer )
 			Cvar_SetValue( "cl_maxpackets", cl_maxfps->integer );
-
 
 		time = cls.realtime;
 		if( prevTime > time )
@@ -575,10 +689,8 @@ void CL_SendCmd (void)
 		if( !cls.netchan.message.cursize && time - prevTime < 1000 / cl_maxpackets->integer ) {
 			// drop the packet, saving reliable contents
 			cls.netchan.outgoing_sequence++;
-
 			return;
 		}
-
 		prevTime = time;
 	}
 
@@ -587,5 +699,7 @@ void CL_SendCmd (void)
 	//
 	// deliver the message
 	//
-	Netchan_Transmit (&cls.netchan, buf.cursize, buf.data);	
+	Netchan_Transmit (&cls.netchan, buf.cursize, buf.data);
+
 }
+

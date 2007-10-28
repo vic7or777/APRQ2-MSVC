@@ -502,7 +502,7 @@ static void AVI_WriteAudio (int samples, byte *sample_buffer)
 			Com_Printf ("ERROR: mp3bufsize is zero\n");
 			return;
 		}
-		mp3_buffer = Z_TagMalloc(mp3_bufsize, TAGMALLOC_AVIEXPORT);
+		mp3_buffer = Z_TagMalloc(mp3_bufsize, TAG_AVIEXPORT);
 
 		memset (&strhdr, 0, sizeof(strhdr));
 		strhdr.cbStruct = sizeof(strhdr);
@@ -556,7 +556,9 @@ static void AVI_StartExporting(const char *name, float fps)
 		return;
 	}
 
-	aviFrameBuf = Z_TagMalloc(avi.m_video_frame_size, TAGMALLOC_AVIEXPORT);
+	aviFrameBuf = Z_TagMalloc(avi.m_video_frame_size, TAG_AVIEXPORT);
+
+	Con_SkipNotify(true);
 
 	if(avi.m_codec_fourcc)
 		Com_Printf("Exporting %s using %s codec ", aviName, FourccToString(avi.m_codec_fourcc));
@@ -576,13 +578,14 @@ static void AVI_StartExporting(const char *name, float fps)
     if (Cvar_VariableValue("cl_maxfps") < avi.m_fps)
         Com_Printf("Warning: you may need to increase cl_maxfps!\n");
 
+	Con_SkipNotify(false);
+
 	Cvar_Set("cl_avidemo", "0");
 }
 
 void AVI_Export_f (void)
 {
 	char		demoName[MAX_QPATH];
-	FILE		*f;
 
 	AVI_InitModules();
 	if(!handle_avi)	{
@@ -604,16 +607,12 @@ void AVI_Export_f (void)
 	Q_strncpyz(demoName, Cmd_Argv(2), sizeof(demoName));
 	COM_DefaultExtension(demoName, sizeof(demoName), ".dm2");
 	// Check to see if the demo actually exists
-	FS_FOpenFile (va("demos/%s", demoName), &f);
-	if (!f)
-	{
+	if (FS_LoadFile(va("demos/%s", demoName), NULL) < 1) {
 		Com_Printf("Aviexport: Couldnt find demo 'demos/%s'\n", demoName);
 		return;
 	}
-	FS_FCloseFile(f);
 
 	AVI_StartExporting( Cmd_Argv(3), (float)atof(Cmd_Argv(1)) );
-	
 	if(!avi_recording)
 		return;
 
@@ -690,9 +689,9 @@ void CL_InitAVIExport( void )
 
 void CL_ShutdownAVIExport( void )
 {
-	Cmd_RemoveCommand("aviexport");
+/*	Cmd_RemoveCommand("aviexport");
 	Cmd_RemoveCommand("avirecord");
-	Cmd_RemoveCommand("avistop");
+	Cmd_RemoveCommand("avistop");*/
 	AVI_StopExport();
 	AVI_ShutdownModules();
 }

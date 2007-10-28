@@ -394,17 +394,25 @@ void M_Init (void)
 #endif
 }
 
-void M_MouseMove( int mx, int my ) {
-	m_mouseold[0] = m_mouse[0];
-	m_mouseold[1] = m_mouse[1];
+void List_MoveB ( menulist_s *l, int moy, int my);
+
+void M_MouseMove( int mx, int my )
+{
+	menucommon_s *item = NULL;
+
 	m_mouse[0] += mx;
 	m_mouse[1] += my;
 
 	clamp( m_mouse[0], 0, viddef.width - 8 );
 	clamp( m_mouse[1], 0, viddef.height - 8 );
 
+	if(bselected) {
+		if (my) {
+			if((item = Menu_ItemAtCursor( m_active ) ) != 0)
+				List_MoveB( (menulist_s * ) item, m_mouse[1], my);
+		}
+	}
 }
-void List_MoveB ( menulist_s *l, int moy, int my);
 
 /*
 =================
@@ -415,7 +423,6 @@ void M_Draw (void)
 {
 	int index;
 	static int prev;
-	menucommon_s *item = NULL;
 
 	if (cls.key_dest != key_menu)
 		return;
@@ -432,11 +439,7 @@ void M_Draw (void)
 	else
 		Draw_FadeScreen ();
 
-	if(bselected) {
-		if((item = Menu_ItemAtCursor( m_active ) ) != 0)
-			List_MoveB( (menulist_s * ) item, m_mouse[1], m_mouse[1] - m_mouseold[1]);
-	}
-	else {
+	if(!bselected) {
 		index = Menu_HitTest( m_active, m_mouse[0], m_mouse[1] );
 		if( prev != index ) {
 			if( index != -1 ) {

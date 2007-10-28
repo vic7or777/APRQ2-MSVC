@@ -18,7 +18,6 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 "Nullsoft", "Winamp", and "Winamp3" are trademarks of Nullsoft, Inc.
 */
-#include <float.h>
 
 #include "../client/client.h"
 #include "winquake.h"
@@ -107,7 +106,7 @@ void MP3_SetVolume_f (void)
 
 	percent = atoi(Cmd_Args());
 
-	vol = (percent / 100) * 255;
+	vol = (percent * 0.01f) * 255;
 	clamp(vol, 0, 255);
 
 	SendMessage(mywinamp.hWnd, WM_USER, vol, 122);
@@ -419,7 +418,10 @@ static void MP3_SongTitle_m ( char *buffer, int bufferSize )
 	char *songtitle;
 	int	 total;
 
-	if (!MP3_Status())
+	//if (!MP3_Status())
+	//	return;
+
+	if (!mywinamp.isOK)
 		return;
 
 	if(!MP3_GetTrackTime(NULL, &total))
@@ -463,7 +465,19 @@ void MP3_SongInfo_f (void)
 				elapsed / 60, elapsed % 60, remaining / 60, remaining % 60, bitrate, samplerate);
 }
 
-extern int FS_filelength (FILE *f);
+static int FS_filelength (FILE *f)
+{
+	int		pos;
+	int		end;
+
+	pos = ftell (f);
+	fseek (f, 0, SEEK_END);
+	end = ftell (f);
+	fseek (f, pos, SEEK_SET);
+
+	return end;
+}
+
 /*
 ===================
 MP3_GetPlaylist
@@ -487,7 +501,7 @@ int MP3_GetPlaylist (char **buf)
 	if (pathlength && (path[pathlength - 1] == '\\' || path[pathlength - 1] == '/'))
 		path[pathlength - 1] = 0;
 
-	strcat(path, "/winamp.m3u");
+	Q_strncatz(path, "/winamp.m3u", sizeof(path));
 	file = fopen (path, "rb");
 	if (!file) {
 		Com_Printf("Cant find winamp in \"%s\", use cl_winamp_dir to change dir\n", path);
@@ -495,7 +509,7 @@ int MP3_GetPlaylist (char **buf)
 	}
 	filelength = FS_filelength (file);
 
-	*buf = Z_TagMalloc (filelength, TAGMALLOC_MP3LIST);
+	*buf = Z_TagMalloc (filelength, TAG_MP3LIST);
 	if (filelength != fread (*buf, 1,  filelength, file))
 	{
 		Z_Free (*buf);
@@ -567,7 +581,7 @@ int MP3_ParsePlaylist_EXTM3U(char *playlist_buf, unsigned int length, mp3_tracks
 
 			COM_MakePrintable(s);
 			songList->num[playlist_size] = trackNum;
-			songList->name[playlist_size++] = CopyString(va("%*i. %s", trackNumLen, trackNum, s), TAGMALLOC_MP3LIST);
+			songList->name[playlist_size++] = CopyString(va("%*i. %s", trackNumLen, trackNum, s), TAG_MP3LIST);
 
 			if(playlist_size >= songCount)
 				break;
@@ -585,8 +599,8 @@ int MP3_ParsePlaylist_EXTM3U(char *playlist_buf, unsigned int length, mp3_tracks
 					break;
 				}
 			}
-			songList->name = Z_TagMalloc (sizeof(char *) * songCount, TAGMALLOC_MP3LIST);
-			songList->num = Z_TagMalloc (sizeof(int) * songCount, TAGMALLOC_MP3LIST);
+			songList->name = Z_TagMalloc (sizeof(char *) * songCount, TAG_MP3LIST);
+			songList->num = Z_TagMalloc (sizeof(int) * songCount, TAG_MP3LIST);
 			counted = true;
 		}
 	}

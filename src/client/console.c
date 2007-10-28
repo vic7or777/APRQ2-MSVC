@@ -23,18 +23,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #define		MAX_FIELD_TEXT	256
 #define		HISTORY_LINES	32
-#define		HISTORY_MASK	(HISTORY_LINES-1)
-
-console_t	con;
-
-cvar_t		*con_notifytime;
-
-cvar_t		*con_notifylines;	//Notifylines
-cvar_t		*con_notifyfade;	//Notifyfade
-cvar_t		*con_alpha;			//transparent console
-cvar_t		*con_scrlines;
-cvar_t		*con_mwheel;		//disable mwheel scrolling
-cvar_t		*con_cmdcomplete;
+#define		HISTORY_MASK	(HISTORY_LINES - 1)
 
 typedef struct
 {
@@ -44,11 +33,47 @@ typedef struct
 	int		historyLine;
 } inputField_t;
 
+#define	CON_TIMES		8
+#define CON_TIMES_MASK	(CON_TIMES - 1)
+#define	CON_TEXTSIZE	65536
+
+typedef struct console_s
+{
+	qboolean	initialized;
+
+	short 	text[CON_TEXTSIZE];
+	int		current;		// line where next message will be printed
+	int		x;				// offset in current line for next print
+	int		display;		// bottom of console displays this line
+
+	//int		ormask;			// high bit mask for colored characters
+
+	int 	linewidth;		// characters across screen
+	int		totallines;		// total lines in console scrollback
+
+	float	cursorspeed;
+
+	int		vislines;
+
+	unsigned int		times[CON_TIMES];	// cls.realtime time the line was generated
+								// for transparent notify lines
+	qboolean	skipNotify;
+} console_t;
+
+static console_t	con;
+
+static cvar_t		*con_notifytime;
+cvar_t		*con_notifylines;	//Notifylines
+cvar_t		*con_notifyfade;	//Notifyfade
+cvar_t		*con_alpha;			//transparent console
+cvar_t		*con_scrlines;
+static cvar_t		*con_mwheel;		//disable mwheel scrolling
+static cvar_t		*con_cmdcomplete;
+
 static inputField_t con_inputLines;
 static inputField_t chat_inputLines;
 
-qboolean	key_insert	= true;
-qboolean	chat_team = false;
+static qboolean	chat_team = false;
 
 #ifndef GL_QUAKE
 void DrawString (int x, int y, const char *s)
@@ -191,28 +216,30 @@ Con_Dump_f
 Save the console contents out to a file
 ================
 */
-void Con_Dump_f (void)
+static void Con_Dump_f (void)
 {
 	int		l, x, i;
 	short	*line;
 	FILE	*f;
-	char	buffer[1024];
-	char	name[MAX_OSPATH];
+	char	buffer[1024], name[MAX_OSPATH], *s;
 
-	if (Cmd_Argc() != 2)
-	{
-		Com_Printf ("usage: condump <filename>\n");
+	if (Cmd_Argc() != 2) {
+		Com_Printf ("usage: %s <filename>\n", Cmd_Argv(0));
 		return;
 	}
 
-	Com_sprintf (name, sizeof(name), "%s/%s.txt", FS_Gamedir(), Cmd_Argv(1));
+	s = Cmd_Argv(1);
+	if (strstr(s, "..") || strchr(s, '/') || strchr(s, '\\') ) {
+		Com_Printf ("Con_Dump_f: Illegal filename.\n");
+		return;
+	}
 
-	Com_Printf ("Dumped console text to %s.\n", name);
+	Com_sprintf (name, sizeof(name), "%s/%s.txt", FS_Gamedir(), s);
+
 	FS_CreatePath (name);
 	f = fopen (name, "w");
-	if (!f)
-	{
-		Com_Printf ("ERROR: couldn't open.\n");
+	if (!f) {
+		Com_Printf ("Con_Dump_f: Couldn't open %s for writing.\n", name );
 		return;
 	}
 
@@ -241,13 +268,15 @@ void Con_Dump_f (void)
 			else
 				break;
 		}
-		for (x=0; buffer[x]; x++)
+		for (x = 0; buffer[x]; x++)
 			buffer[x] &= 0x7f;
 
 		fprintf (f, "%s\n", buffer);
 	}
 
 	fclose (f);
+
+	Com_Printf ("Dumped console text to %s.\n", name);
 }
 
 						
@@ -260,7 +289,7 @@ void Con_ClearNotify (void)
 {
 	int		i;
 	
-	for ( i = 0 ; i < MAX_CON_TIMES ; i++ ) {
+	for ( i = 0 ; i < CON_TIMES ; i++ ) {
 		con.times[i] = 0;
 	}
 }
@@ -363,6 +392,14 @@ static void OnChange_scrlines (cvar_t *self, const char *oldValue)
 		Cvar_Set(self->name, "1");
 }
 
+static void OnChange_notifyLines (cvar_t *self, const char *oldValue)
+{
+	if(self->integer < 0)
+		Cvar_Set(self->name, "0");
+	else if (self->integer > CON_TIMES)
+		Cvar_SetValue(self->name, CON_TIMES);
+}
+
 /*
 ================
 Con_Init
@@ -371,7 +408,7 @@ Con_Init
 void Con_Init (void)
 {
 	con.linewidth = -1;
-	con.ormask = 0;
+//	con.ormask = 0;
 
 	Con_CheckResize ();
 	
@@ -387,9 +424,13 @@ void Con_Init (void)
 	con_scrlines = Cvar_Get("con_scrlines", "2", CVAR_ARCHIVE);
 	con_mwheel = Cvar_Get("con_mwheel", "1", 0);
 	con_cmdcomplete = Cvar_Get("con_cmdcomplete", "2", 0);
+	con_alpha = Cvar_Get ("con_alpha", "0.6", CVAR_ARCHIVE);
+
+	con_notifylines->OnChange = OnChange_notifyLines;
+	OnChange_notifyLines(con_notifylines, con_notifylines->resetString);
+
 	con_scrlines->OnChange = OnChange_scrlines;
 	OnChange_scrlines(con_scrlines, con_scrlines->resetString);
-	con_alpha = Cvar_Get ("con_alpha", "0.6", CVAR_ARCHIVE);
 
 	Cmd_AddCommand ("toggleconsole", Con_ToggleConsole_f);
 	Cmd_AddCommand ("togglechat", Con_ToggleChat_f);
@@ -400,13 +441,21 @@ void Con_Init (void)
 	con.initialized = true;
 }
 
+/*
+================
+Con_SkipNotify
+================
+*/
+void Con_SkipNotify( qboolean skip ) {
+	con.skipNotify = skip;
+}
 
 /*
 ===============
 Con_Linefeed
 ===============
 */
-void Con_Linefeed (void)
+static void Con_Linefeed (void)
 {
 	int i;
 
@@ -416,6 +465,10 @@ void Con_Linefeed (void)
 	con.current++;
 	for(i=0; i<con.linewidth; i++)
 		con.text[(con.current%con.totallines)*con.linewidth+i] = (COLOR_WHITE<<8) | ' ';
+
+	// mark time for transparent overlay
+	if (con.current >= 0)
+		con.times[con.current & CON_TIMES_MASK] = (con.skipNotify) ? 0 : cls.realtime;
 }
 
 /*
@@ -429,9 +482,8 @@ If no console is visible, the text will appear at the top of the game window
 */
 void Con_Print (const char *txt)
 {
-	int		y;
-	int		c, l;
-	static int	cr;
+	int		y, c, l;
+	static qboolean	cr = false;
 	int		mask, color;
 	qboolean colors = false;
 
@@ -439,28 +491,25 @@ void Con_Print (const char *txt)
 		return;
 
 	color = COLOR_WHITE;
+	mask = 0;
 
-	if (txt[0] == 1 || txt[0] == 2)
-	{
-		mask = 128;		// go to colored text
+	switch (*txt) {
+	case 1:
+	case 2:
+		mask = 128; // go to colored text
 		txt++;
-	}
-	else
-		mask = 0;
-
-
-	if(Q_IsOneColorString(txt))
-	{
+		break;
+	case COLOR_ONE:
 		txt++;
 		if(Q_IsColorString( txt )) {
 			color = ColorIndex(*(txt+1));
 			txt+=2;
 		}
-	}
-	else if(Q_IsColorEnabled(txt))
-	{
+		break;
+	case COLOR_ENABLE:
 		txt++;
 		colors = true;
+		break;
 	}
 
 	while ( (c = *txt) != 0 )
@@ -470,55 +519,44 @@ void Con_Print (const char *txt)
 			txt += 2;
 			continue;
 		}
-	// count word length
-		for (l=0 ; l< con.linewidth ; l++) {
-			if ( txt[l] <= ' ')
-				break;
+
+		if (con.x) {
+			// count word length
+			for (l=0 ; l< con.linewidth ; l++) {
+				if ( txt[l] <= ' ')
+					break;
+			}
+
+			// word wrap
+			if (l != con.linewidth && (con.x + l > con.linewidth) )
+				Con_Linefeed();
 		}
-
-	// word wrap
-		if (l != con.linewidth && (con.x + l > con.linewidth) )
-			con.x = 0;
-
-		if (cr)
-		{
-			con.current--;
-			cr = false;
+		else {
+			if (cr) {
+				con.current--;
+				cr = false;
+			}
+			Con_Linefeed();
 		}
-	
-		if (!con.x)
-		{
-			Con_Linefeed ();
-		// mark time for transparent overlay
-			if (con.current >= 0)
-				con.times[con.current % MAX_CON_TIMES] = cls.realtime;
-
-		}
-
-		txt++;
 
 		switch (c)
 		{
+		case '\r':
+			cr = true;
 		case '\n':
 			color = COLOR_WHITE;
 			con.x = 0;
 			break;
-
-		case '\r':
-			color = COLOR_WHITE;
-			con.x = 0;
-			cr = 1;
-			break;
-
 		default:	// display character and advance
 			y = con.current % con.totallines;
-			con.text[y*con.linewidth+con.x] = c | mask | con.ormask | (color << 8);
+			con.text[y*con.linewidth+con.x] = c | mask | (color << 8);
 			con.x++;
 			if (con.x >= con.linewidth)
 				con.x = 0;
 
 			break;
 		}
+		txt++;
 	}
 }
 
@@ -568,10 +606,10 @@ void Draw_Input( const char *text, int x, int y, int curPos )
 	// add the cursor frame
 	if ((int)(cls.realtime>>8)&1)
 	{
-		if (curPos == len)
+		if (curPos == len || Key_GetOverstrikeMode())
 			Draw_Char ( x+cursorPos*8, y, 11, COLOR_WHITE, 1);
 		else
-			Draw_Char ( x+cursorPos*8, y+4, key_insert ? '_' : 11, COLOR_WHITE, 1);
+			Draw_Char ( x+cursorPos*8, y+4, '_', COLOR_WHITE, 1);
 	}
 }
 /*
@@ -607,60 +645,53 @@ Draws the last few lines of output transparently over the game top
 */
 void Con_DrawNotify (void)
 {
-	int		v = 0;
+	int		i, v = 0, skip;
+	unsigned int time;
 	short	*text;
-	int		i;
-	int		time;
-	int		skip;
-	float	alpha = 1;
-	int		lines = 0;
+	float	alpha = 1.0f;
 
-	lines = con_notifylines->integer;
-	clamp(lines, 0, MAX_CON_TIMES);
 
-	if (lines)
+	i = con.current - con_notifylines->integer + 1;
+	if(i < 0)
+		i = 0;
+	for (; i <= con.current ; i++)
 	{
-		for (i= con.current - lines + 1 ; i<=con.current ; i++)
-		{
-			if (i < 0)
-				continue;
-			time = con.times[i % MAX_CON_TIMES];
-			if (time == 0)
-				continue;
+		time = con.times[i & CON_TIMES_MASK];
+		if (time == 0)
+			continue;
 
-			if (cls.realtime - time > con_notifytime->value*1000)
+		if (cls.realtime - time > con_notifytime->value*1000)
+			continue;
+		text = con.text + (i % con.totallines)*con.linewidth;
+		
+		if (con_notifyfade->value) {
+			alpha = SCR_FadeAlpha( time, con_notifytime->value * 1000, con_notifyfade->value * 1000 );
+			if( !alpha )
 				continue;
-			text = con.text + (i % con.totallines)*con.linewidth;
-			
-			if (con_notifyfade->value)
-				alpha = 0.1f + (time + con_notifytime->value*1000 - cls.realtime)*0.001f;
-
-			Draw_StringLen (8, v, text, con.linewidth, alpha);
-
-			v += 8;
+			//alpha = (time + con_notifytime->value*1000 - cls.realtime)*0.001f;
 		}
+
+		Draw_StringLen (8, v, text, con.linewidth, alpha);
+
+		v += 8;
 	}
 
 
 	if (cls.key_dest == key_message)
 	{
-		if (chat_team)
-		{
+		if (chat_team) {
 			DrawString (8, v, "say_team:");
 			skip = 11;
 		}
-		else
-		{
+		else {
 			DrawString (8, v, "say:");
 			skip = 6;
 		}
-
 		Draw_Input(chat_inputLines.text[chat_inputLines.editLine], skip*8, v, chat_inputLines.cursorPos);
 		v += 8;
 	}
 	
-	if (v)
-	{
+	if (v) {
 		SCR_AddDirtyPoint (0,0);
 		SCR_AddDirtyPoint (viddef.width-1, v);
 	}
@@ -676,12 +707,9 @@ Draws the console with the solid background
 void Con_DrawConsole (float frac, qboolean ingame)
 {
 	int				i, j, x, y, n;
-	int				rows;
+	int				rows, row, lines;
 	short			*text;
-	int				row;
-	int				lines;
-	char			version[32], *text2;
-	char			dlbar[1024];
+	char			*text2, dlbar[1024];
 
 	lines = viddef.height * frac;
 	if (lines <= 0)
@@ -695,8 +723,8 @@ void Con_DrawConsole (float frac, qboolean ingame)
 	SCR_AddDirtyPoint (0,0);
 	SCR_AddDirtyPoint (viddef.width-1,lines-1);
 
-	Com_sprintf (version, sizeof(version), "%s v%s", APR_APPNAME, APR_VERSION);
-	DrawAltString(viddef.width-4-(strlen(version)*8), lines-12, version);
+	text2 = APPLICATION " v" VERSION;
+	DrawAltString(viddef.width-4-(strlen(text2)<<3), lines-12, text2);
 
 
 // draw the text
@@ -710,7 +738,7 @@ void Con_DrawConsole (float frac, qboolean ingame)
 	if (con.display != con.current)
 	{
 	// draw arrows to show the buffer is backscrolled
-		for (x=0 ; x<con.linewidth ; x+=4)
+		for (x = 0; x < con.linewidth; x += 4)
 			Draw_Char ( (x+1)<<3, y, '^', COLOR_WHITE, 1);
 	
 		y -= 8;
@@ -718,7 +746,7 @@ void Con_DrawConsole (float frac, qboolean ingame)
 	}
 	
 	row = con.display;
-	for (i=0 ; i<rows ; i++, y-=8, row--)
+	for (i = 0; i < rows; i++, y -= 8, row--)
 	{
 		if (row < 0)
 			break;
@@ -973,11 +1001,10 @@ void CompleteCommand (void)
 	//Print partial matches
 	Com_Printf("]%s\n", con_inputLines.text[con_inputLines.editLine]);
 
-	qsort(&compMatches, matchCount, sizeof(compMatches[0]), (int (*)(const void *, const void *))MatchShort);
+	qsort(compMatches, matchCount, sizeof(compMatches[0]), (int (*)(const void *, const void *))MatchShort);
 
-	for(i=0; i<matchCount; i++)
+	for(i = 0, match = compMatches; i < matchCount; i++, match++)
 	{
-		match = &compMatches[i];
 		if(con_cmdcomplete->integer == 3 && match->value)
 			Com_Printf("   %s = %s\n", match->name, match->value);
 		else
@@ -1000,7 +1027,7 @@ void IF_CharEvent( inputField_t *field, int key )
 		return;
 
 	len = strlen(field->text[field->editLine]);
-	if (key_insert) {
+	if (!Key_GetOverstrikeMode()) {
 		if(len >= MAX_FIELD_TEXT-1)
 			return;
 		memmove( field->text[field->editLine] + field->cursorPos + 1, field->text[field->editLine] + field->cursorPos, len - field->cursorPos + 1 );
@@ -1129,7 +1156,7 @@ void IF_KeyEvent( inputField_t *field, int key )
 
 	if ( key == K_INS )
 	{ // toggle insert mode
-		key_insert = !key_insert;
+		Key_SetOverstrikeMode( Key_GetOverstrikeMode() ^ 1 );
 		return;
 	}
 
@@ -1208,8 +1235,11 @@ void Key_Console (int key)
 
 		Com_Printf ("]%s\n", con_inputLines.text[con_inputLines.editLine]);
 
-		con_inputLines.editLine = (con_inputLines.editLine + 1) & HISTORY_MASK;
+		if(strcmp(con_inputLines.text[con_inputLines.editLine], con_inputLines.text[(con_inputLines.editLine - 1) & HISTORY_MASK])) {
+			con_inputLines.editLine = (con_inputLines.editLine + 1) & HISTORY_MASK;
+		}
 		con_inputLines.historyLine = con_inputLines.editLine;
+
 		IF_Init(&con_inputLines);
 
 		if (cls.state == ca_disconnected)
@@ -1410,8 +1440,11 @@ void Key_Message (int key)
 		Cbuf_AddText(chat_inputLines.text[chat_inputLines.editLine]);
 		Cbuf_AddText("\"\n");
 
-		chat_inputLines.editLine = (chat_inputLines.editLine + 1) & HISTORY_MASK;
+		if(strcmp(chat_inputLines.text[chat_inputLines.editLine], chat_inputLines.text[(chat_inputLines.editLine - 1) & HISTORY_MASK])) {
+			chat_inputLines.editLine = (chat_inputLines.editLine + 1) & HISTORY_MASK;
+		}
 		chat_inputLines.historyLine = chat_inputLines.editLine;
+
 		IF_Init(&chat_inputLines);
 		cls.key_dest = key_game;
 		return;

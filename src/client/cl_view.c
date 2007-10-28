@@ -27,7 +27,7 @@ static cvar_t		*cl_testlights;
 static cvar_t		*cl_testblend;
 
 static cvar_t		*cl_stats;
-
+static cvar_t		*cl_wsfov;
 
 static int			r_numdlights;
 static dlight_t	r_dlights[MAX_DLIGHTS];
@@ -37,11 +37,6 @@ static entity_t	r_entities[MAX_ENTITIES];
 
 static int			r_numparticles;
 static particle_t	r_particles[MAX_PARTICLES];
-
-// Stainmaps: Begin // -Maniac
-static int			r_numstains;
-static stain_t		r_stains[MAX_STAINS];
-// Stainmaps: End
 
 static lightstyle_t	r_lightstyles[MAX_LIGHTSTYLES];
 
@@ -69,11 +64,9 @@ V_AddEntity
 */
 void V_AddEntity (const entity_t *ent)
 {
-	if (r_numentities >= MAX_ENTITIES)
-		return;
-	r_entities[r_numentities++] = *ent;
+	if (r_numentities < MAX_ENTITIES)
+		r_entities[r_numentities++] = *ent;
 }
-
 
 /*
 =====================
@@ -83,42 +76,9 @@ V_AddParticle
 */
 void V_AddParticle (const particle_t *p)
 {
-	if (r_numparticles >= MAX_PARTICLES)
-		return;
-
-	r_particles[r_numparticles++] = *p;
+	if (r_numparticles < MAX_PARTICLES)
+		r_particles[r_numparticles++] = *p;
 }
-
-/*
-=====================
-V_AddStain
-
-=====================
-*/
-#ifdef GL_QUAKE
-static const vec3_t stainColors[4] = {
-  {1.0f, 0.8f, 0.8f}, //Blood
-  {0.89f, 0.89f, 0.89f}, //Normal shot
-  {1.1f, 1.1f, 0.0f}, //Blaster
-  {0.8f, 0.8f, 0.8f} //Explosion
-};
-extern cvar_t *gl_stainmaps; //should only used in renderer
-#endif
-
-void V_AddStain (const vec3_t org, int color, float size)
-{
-#ifdef GL_QUAKE
-	stain_t	*s;
-
-	if (!gl_stainmaps->integer || r_numstains >= MAX_STAINS)
-		return;
-	s = &r_stains[r_numstains++];
-	VectorCopy (org, s->origin);
-	VectorCopy (stainColors[color], s->color);
-	s->size = size;
-#endif
-}
-
 
 /*
 =====================
@@ -145,16 +105,16 @@ V_AddLightStyle
 
 =====================
 */
-void V_AddLightStyle (int style, float r, float g, float b)
+void V_AddLightStyle (int style, const vec3_t value)
 {
 	lightstyle_t	*ls;
 
-	if (style < 0 || style > MAX_LIGHTSTYLES)
+	if ((unsigned)style >= MAX_LIGHTSTYLES)
 		Com_Error (ERR_DROP, "Bad light style %i", style);
-	ls = &r_lightstyles[style];
 
-	ls->white = r+g+b;
-	VectorSet(ls->rgb, r, g, b);
+	ls = &r_lightstyles[style];
+	ls->white = value[0]+value[1]+value[2];
+	VectorCopy(value, ls->rgb);
 }
 
 /*
@@ -216,6 +176,9 @@ static void V_TestEntities (void)
 
 		ent->model = cl.baseclientinfo.model;
 		ent->skin = cl.baseclientinfo.skin;
+#ifdef GL_QUAKE
+		AxisClear(ent->axis);
+#endif
 	}
 }
 
@@ -253,7 +216,7 @@ static void V_TestLights (void)
 }
 
 //===================================================================
-
+extern char currentSky[64];
 /*
 =================
 CL_PrepRefresh
@@ -351,6 +314,7 @@ void CL_PrepRefresh (void)
 	rotate = (float)atof(cl.configstrings[CS_SKYROTATE]);
 	sscanf (cl.configstrings[CS_SKYAXIS], "%f %f %f", &axis[0], &axis[1], &axis[2]);
 	R_SetSky (cl.configstrings[CS_SKY], rotate, axis);
+	Q_strncpyz(currentSky, cl.configstrings[CS_SKY], sizeof(currentSky));
 	Com_Printf ("                                     \r");
 
 	// the renderer can now free unneeded stuff
@@ -372,23 +336,6 @@ void CL_PrepRefresh (void)
 	cls.roundtime = 0;
 }
 
-/*
-====================
-CalcFov
-====================
-*/
-float CalcFov (float fov_x, float width, float height)
-{
-	float	x;
-
-	if (fov_x < 1 || fov_x > 179)
-		Com_Error (ERR_DROP, "Bad fov: %f", fov_x);
-
-	x = width/(float)tan(fov_x/360*M_PI);
-
-	return (float)atan2(height, x)*360/M_PI;
-}
-
 //============================================================================
 
 static int entitycmpfnc( const entity_t *a, const entity_t *b )
@@ -406,8 +353,11 @@ V_RenderView
 
 ==================
 */
+static const float standardRatio = 4.0f/3.0f;
+
 void V_RenderView( float stereo_separation )
 {
+	float currentRatio;
 
 	if (!cl.refresh_prepped)
 		return;			// still loading
@@ -461,12 +411,17 @@ void V_RenderView( float stereo_separation )
 		cl.refdef.y = scr_vrect.y;
 		cl.refdef.width = scr_vrect.width;
 		cl.refdef.height = scr_vrect.height;
-#ifdef GL_QUAKE
-		if(R_IsWideScreen())
-			cl.refdef.fov_y = CalcFov (cl.refdef.fov_x, cl.refdef.width*0.75f, cl.refdef.height);
-		else
-#endif
-			cl.refdef.fov_y = CalcFov (cl.refdef.fov_x, cl.refdef.width, cl.refdef.height);
+
+		// adjust fov for wide aspect ratio
+		currentRatio = (float)cl.refdef.width/(float)cl.refdef.height;
+		if (cl_wsfov->integer && currentRatio > standardRatio) {
+			cl.refdef.fov_y = CalcFov(cl.refdef.fov_x, cl.refdef.width * (standardRatio / currentRatio), cl.refdef.height);
+			cl.refdef.fov_x = CalcFov(cl.refdef.fov_y, cl.refdef.height, cl.refdef.width);
+			//cl.refdef.fov_x *= (currentRatio / standardRatio);
+		} else {
+			cl.refdef.fov_y = CalcFov(cl.refdef.fov_x, cl.refdef.width, cl.refdef.height);
+		}
+
 		cl.refdef.time = cl.time*0.001f;
 
 		cl.refdef.areabits = cl.frame.areabits;
@@ -479,10 +434,6 @@ void V_RenderView( float stereo_separation )
 			r_numdlights = 0;
 		if (!cl_add_blend->integer)
 			VectorClear (cl.refdef.blend);
-
-		cl.refdef.num_newstains = r_numstains;
-		cl.refdef.newstains = r_stains;
-		r_numstains = 0;
 
 		cl.refdef.num_entities = r_numentities;
 		cl.refdef.entities = r_entities;
@@ -534,5 +485,6 @@ void V_Init (void)
 	cl_testentities = Cvar_Get ("cl_testentities", "0", 0);
 	cl_testlights = Cvar_Get ("cl_testlights", "0", CVAR_CHEAT);
 
+	cl_wsfov = Cvar_Get("cl_wsfov", "1", 0);
 	cl_stats = Cvar_Get ("cl_stats", "0", 0);
 }

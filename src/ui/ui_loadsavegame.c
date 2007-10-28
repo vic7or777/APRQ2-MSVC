@@ -55,7 +55,7 @@ void Create_Savestrings (void)
 		}
 		else
 		{
-			FS_Read (m_savestrings[i], sizeof(m_savestrings[i]), f);
+			fwrite(m_savestrings[i], 1, sizeof(m_savestrings[i]), f);
 			fclose (f);
 			m_savevalid[i] = true;
 		}
