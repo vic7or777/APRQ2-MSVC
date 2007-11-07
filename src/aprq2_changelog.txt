@@ -1,4 +1,9 @@
 :: AprQ2 changelog  ::
+1.211
+-Fixed models with 0 skins would crash the game.
+-Fixed gl_decals would cause a crash.
+-Fixed beam bug.
+-Fixed rotating sky with axis.
 
 1.21
 -Cl_async to toggle between asyncronous and syncronous renderer. When enable, use r_maxfps to change the renderer max fps.

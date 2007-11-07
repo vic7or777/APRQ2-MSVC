@@ -331,7 +331,7 @@ qboolean R_CullBox (const vec3_t mins, const vec3_t maxs);
 void R_MarkLeaves (void);
 
 glpoly_t *WaterWarpPolyVerts (glpoly_t *p);
-void EmitWaterPolys (const msurface_t *fa);
+void EmitWaterPolys (const glpoly_t *p, qboolean flowing);
 void R_AddSkySurface (const msurface_t *fa);
 void R_ClearSkyBox (void);
 void R_DrawSkyBox (void);

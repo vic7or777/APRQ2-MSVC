@@ -599,11 +599,9 @@ void R_BuildLightMap (const msurface_t *surf, byte *dest, int stride)
 {
 	int			smax, tmax;
 	int			r, g, b, a, max;
-	int			i, j, size;
+	int			i, j, size, nummaps;
 	byte		*lightmap;
-	float		scale[4];
-	int			nummaps;
-	float		*bl;
+	float		scale[4], *bl;
 
 	if ( surf->texinfo->flags & (SURF_SKY|SURF_TRANS33|SURF_TRANS66|SURF_WARP) )
 		Com_Error (ERR_DROP, "R_BuildLightMap called for non-lit surface");
@@ -617,7 +615,7 @@ void R_BuildLightMap (const msurface_t *surf, byte *dest, int stride)
 	// set to full bright if no light data
 	if (!surf->samples)
 	{
-		for (i=0; i<size*3; i++)
+		for (i = 0; i < size*3; i++)
 			s_blocklights[i] = 255;
 
 		goto store;
@@ -640,23 +638,20 @@ void R_BuildLightMap (const msurface_t *surf, byte *dest, int stride)
 
 		if ( scale[0] != 1.0F || scale[1] != 1.0F || scale[2] != 1.0F )
 		{
-			for (i=0 ; i<size ; i++, bl+=3)
-			{
-				bl[0] = lightmap[i*3+0] * scale[0];
-				bl[1] = lightmap[i*3+1] * scale[1];
-				bl[2] = lightmap[i*3+2] * scale[2];
+			for (i = 0; i < size; i++, bl += 3, lightmap += 3 ) {
+				bl[0] = lightmap[0] * scale[0];
+				bl[1] = lightmap[1] * scale[1];
+				bl[2] = lightmap[2] * scale[2];
 			}
 		}
 		else
 		{
-			for (i=0 ; i<size ; i++, bl+=3 )
-			{
-				bl[0] = lightmap[i*3+0];
-				bl[1] = lightmap[i*3+1];
-				bl[2] = lightmap[i*3+2];
+			for (i = 0; i < size; i++, bl += 3, lightmap += 3 ) {
+				bl[0] = lightmap[0];
+				bl[1] = lightmap[1];
+				bl[2] = lightmap[2];
 			}
 		}
-		lightmap += size*3;		// skip to next lightmap
 	}
 	else
 	{
@@ -674,23 +669,20 @@ void R_BuildLightMap (const msurface_t *surf, byte *dest, int stride)
 
 			if ( scale[0] != 1.0F || scale[1] != 1.0F || scale[2] != 1.0F )
 			{
-				for (i=0 ; i<size ; i++, bl+=3)
-				{
-					bl[0] += lightmap[i*3+0] * scale[0];
-					bl[1] += lightmap[i*3+1] * scale[1];
-					bl[2] += lightmap[i*3+2] * scale[2];
+				for (i = 0; i < size; i++, bl += 3, lightmap += 3 ) {
+					bl[0] += lightmap[0] * scale[0];
+					bl[1] += lightmap[1] * scale[1];
+					bl[2] += lightmap[2] * scale[2];
 				}
 			}
 			else
 			{
-				for (i=0 ; i<size ; i++, bl+=3 )
-				{
-					bl[0] += lightmap[i*3+0];
-					bl[1] += lightmap[i*3+1];
-					bl[2] += lightmap[i*3+2];
+				for (i = 0; i < size; i++, bl += 3, lightmap += 3 ) {
+					bl[0] += lightmap[0];
+					bl[1] += lightmap[1];
+					bl[2] += lightmap[2];
 				}
 			}
-			lightmap += size*3;		// skip to next lightmap
 		}
 	}
 

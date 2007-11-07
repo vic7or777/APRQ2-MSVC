@@ -43,38 +43,37 @@ EmitWaterPolys
 Does a water warp
 =============
 */
-void EmitWaterPolys (const msurface_t *fa)
+void EmitWaterPolys (const glpoly_t *p, qboolean flowing)
 {
+	const float	*v;
+	vec_t		st[2], scroll;
 	int			i, nv;
-	float		*v, st[2], scroll;
 
-	if (fa->texinfo->flags & SURF_FLOWING)
+	if (flowing)
 		scroll = -64 * ( (r_newrefdef.time*0.5f) - (int)(r_newrefdef.time*0.5f) );
 	else
 		scroll = 0;
 
-	v = fa->polys->verts[0];
-	nv = fa->polys->numverts;
+	v = p->verts[0];
+	nv = p->numverts;
 
 	qglBegin (GL_TRIANGLE_FAN);
-	if (!(fa->texinfo->flags & SURF_FLOWING) && gl_waterwaves->value) {
+	if (!flowing && gl_waterwaves->value) {
 		vec3_t		wv;   // Water waves
-		for (i=0 ; i<nv ; i++, v+=VERTEXSIZE)
-		{
+
+		for (i = 0; i < nv; i++, v += VERTEXSIZE) {
 			st[0] = (v[3] + TURBSIN(v[4], 0.125f) + scroll) * ONEDIV64;
 			st[1] = (v[4] + TURBSIN(v[3], 0.125f)) * ONEDIV64;
-			qglTexCoord2fv (st);
+			qglTexCoord2fv(st);
 
 			wv[0] = v[0];
 			wv[1] = v[1];
 			wv[2] = v[2] + gl_waterwaves->value *(float)sin(v[0]*0.025f+r_newrefdef.time)*(float)sin(v[2]*0.05f+r_newrefdef.time)
 					+ gl_waterwaves->value *(float)sin(v[1]*0.025f+r_newrefdef.time*2)*(float)sin(v[2]*0.05f+r_newrefdef.time);
-
-			qglVertex3fv (wv);
+			qglVertex3fv(wv);
 		}
 	} else {
-		for (i=0 ; i<nv ; i++, v+=VERTEXSIZE)
-		{
+		for (i = 0; i < nv; i++, v += VERTEXSIZE) {
 			st[0] = (v[3] + TURBSIN(v[4], 0.125f) + scroll) * ONEDIV64;
 			st[1] = (v[4] + TURBSIN(v[3], 0.125f)) * ONEDIV64;
 			qglTexCoord2fv (st);
@@ -324,15 +323,14 @@ void R_ClearSkyBox (void)
 
 extern float skybox_farz;
 
-static void MakeSkyVec (float s, float t, int axis)
+static void MakeSkyVec (float s, float t, int axis, vec_t *v, vec_t *st)
 {
-	vec3_t		v, b;
+	vec3_t		b;
 	int			j, k;
 
 	b[2] = (skybox_farz / 2);
 	b[0] = s * b[2];
 	b[1] = t * b[2];
-
 
 	for (j = 0; j < 3; j++)
 	{
@@ -348,16 +346,18 @@ static void MakeSkyVec (float s, float t, int axis)
 	t = (t+1.0f)*0.5f;
 
 	if (s < sky_min)
-		s = sky_min;
+		st[0] = sky_min;
 	else if (s > sky_max)
-		s = sky_max;
-	if (t < sky_min)
-		t = sky_min;
-	else if (t > sky_max)
-		t = sky_max;
+		st[0] = sky_max;
+	else
+		st[0] = s;
 
-	qglTexCoord2f (s, 1.0f - t);
-	qglVertex3fv (v);
+	if (t < sky_min)
+		st[1] = 1.0f - sky_min;
+	else if (t > sky_max)
+		st[1] = 1.0f - sky_max;
+	else
+		st[1] = 1.0f - t;
 }
 
 /*
@@ -365,13 +365,28 @@ static void MakeSkyVec (float s, float t, int axis)
 R_DrawSkyBox
 ==============
 */
-static void R_RotateForSky (float skyM[16], vec_t angle, vec_t x, vec_t y, vec_t z )
+static void R_RotateMatrix (float dstM[16], const float srcM[16], vec_t angle, vec_t x, vec_t y, vec_t z )
 {
-	float	*wM = r_WorldViewMatrix;
 	vec_t	c, s, mc, t1, t2, t3, t4, t5;
 
+	dstM[3] = dstM[7] = dstM[11] = dstM[12] = dstM[13] = dstM[14] = 0.0f;
+	dstM[15] = 1.0f;
+
+	t1 = (float)sqrt(x*x + y*y + z*z);
+	if (t1 == 0.0f) {
+		dstM[0] = srcM[0], dstM[1] = srcM[1], dstM[2]  = srcM[2];
+		dstM[4] = srcM[4], dstM[5] = srcM[5], dstM[6]  = srcM[6];
+		dstM[8] = srcM[8], dstM[9] = srcM[9], dstM[10] = srcM[10];
+		return;
+	}
+
+	t1 = 1.0f / t1;
+	x *= t1;
+	y *= t1;
+	z *= t1;
+
 	Q_sincos(DEG2RAD(angle), &s, &c);
-	mc = 1 - c;
+	mc = 1.0f - c;
 
 	t1 = y * x * mc;
 	t2 = z * s;
@@ -383,23 +398,23 @@ static void R_RotateForSky (float skyM[16], vec_t angle, vec_t x, vec_t y, vec_t
 	t5 = t1 + t2;
 	t2 = t1 - t2;
 	t1 = (x * x * mc) + c;
-	skyM[0]  = wM[0] * t1 + wM[4] * t3 + wM[8 ] * t2;
-	skyM[1]  = wM[1] * t1 + wM[5] * t3 + wM[9 ] * t2;
-	skyM[2]  = wM[2] * t1 + wM[6] * t3 + wM[10] * t2;
+	dstM[0]  = srcM[0] * t1 + srcM[4] * t3 + srcM[8 ] * t2;
+	dstM[1]  = srcM[1] * t1 + srcM[5] * t3 + srcM[9 ] * t2;
+	dstM[2]  = srcM[2] * t1 + srcM[6] * t3 + srcM[10] * t2;
 
 	t1 = y * z * mc;
 	t2 = x * s;
 	t3 = t1 + t2;
 	t2 = t1 - t2;
 	t1 = (y * y * mc) + c;
-	skyM[4]  = wM[0] * t4 + wM[4] * t1 + wM[8 ] * t3;
-	skyM[5]  = wM[1] * t4 + wM[5] * t1 + wM[9 ] * t3;
-	skyM[6]  = wM[2] * t4 + wM[6] * t1 + wM[10] * t3;
+	dstM[4]  = srcM[0] * t4 + srcM[4] * t1 + srcM[8 ] * t3;
+	dstM[5]  = srcM[1] * t4 + srcM[5] * t1 + srcM[9 ] * t3;
+	dstM[6]  = srcM[2] * t4 + srcM[6] * t1 + srcM[10] * t3;
 
 	t1 = (z * z * mc) + c;
-	skyM[8]  = wM[0] * t5 + wM[4] * t2 + wM[8 ] * t1;
-	skyM[9]  = wM[1] * t5 + wM[5] * t2 + wM[9 ] * t1;
-	skyM[10] = wM[2] * t5 + wM[6] * t2 + wM[10] * t1;
+	dstM[8]  = srcM[0] * t5 + srcM[4] * t2 + srcM[8 ] * t1;
+	dstM[9]  = srcM[1] * t5 + srcM[5] * t2 + srcM[9 ] * t1;
+	dstM[10] = srcM[2] * t5 + srcM[6] * t2 + srcM[10] * t1;
 }
 
 static const int	skytexorder[6] = {0,2,1,3,4,5};
@@ -407,6 +422,7 @@ void R_DrawSkyBox (void)
 {
 	int		i;
 	float skyM[16];
+	vec_t	*v, *st;
 
 	if (skyrotate)
 	{	// check for no sky at all
@@ -417,7 +433,7 @@ void R_DrawSkyBox (void)
 		if (i == 6)
 			return;		// nothing visible
 
-		R_RotateForSky(skyM, r_newrefdef.time * skyrotate, skyaxis[0], skyaxis[1], skyaxis[2]);
+		R_RotateMatrix(skyM, r_WorldViewMatrix, r_newrefdef.time * skyrotate, skyaxis[0], skyaxis[1], skyaxis[2]);
 	} else {
 		skyM[0]  = r_WorldViewMatrix[0];
 		skyM[1]  = r_WorldViewMatrix[1];
@@ -428,12 +444,13 @@ void R_DrawSkyBox (void)
 		skyM[8]  = r_WorldViewMatrix[8];
 		skyM[9]  = r_WorldViewMatrix[9];
 		skyM[10] = r_WorldViewMatrix[10];
+		skyM[3] = skyM[7] = skyM[11] = skyM[12] = skyM[13] = skyM[14] = 0.0f;
+		skyM[15] = 1.0f;
 	}
 
-	skyM[3] = skyM[7] = skyM[11] = skyM[12] = skyM[13] = skyM[14] = 0.0f;
-	skyM[15] = 1.0f;
 	qglLoadMatrixf( skyM );
 
+	qglTexCoordPointer( 2, GL_FLOAT, 0, r_arrays.tcoords );
 	for (i = 0; i < 6; i++)
 	{
 		if (skyrotate)
@@ -446,12 +463,19 @@ void R_DrawSkyBox (void)
 
 		GL_Bind (sky_images[skytexorder[i]]->texnum);
 
-		qglBegin (GL_QUADS);
-		MakeSkyVec (skymins[0][i], skymins[1][i], i);
-		MakeSkyVec (skymins[0][i], skymaxs[1][i], i);
-		MakeSkyVec (skymaxs[0][i], skymaxs[1][i], i);
-		MakeSkyVec (skymaxs[0][i], skymins[1][i], i);
-		qglEnd ();
+		st = r_arrays.tcoords[0];
+		v = r_arrays.vertices;
+		MakeSkyVec (skymins[0][i], skymins[1][i], i, v, st);
+		MakeSkyVec (skymins[0][i], skymaxs[1][i], i, v+=3, st+=2);
+		MakeSkyVec (skymaxs[0][i], skymaxs[1][i], i, v+=3, st+=2);
+		MakeSkyVec (skymaxs[0][i], skymins[1][i], i, v+=3, st+=2);
+		if(gl_state.compiledVertexArray) {
+			qglLockArraysEXT( 0, 4 );
+			qglDrawElements( GL_TRIANGLES, 6, GL_UNSIGNED_INT, r_arrays.indices );
+			qglUnlockArraysEXT ();
+		} else {
+			qglDrawElements( GL_TRIANGLES, 6, GL_UNSIGNED_INT, r_arrays.indices );
+		}
 	}
 
 	qglLoadMatrixf(r_WorldViewMatrix);
@@ -500,12 +524,11 @@ void R_SetSky (const char *name, float rotate, vec3_t axis)
 }
 
 //Water caustics
-void EmitCausticPolys (const msurface_t *fa)
+void EmitCausticPolys (const glpoly_t *p)
 {
-	float		*v;
-	int			i;
+	int			i, nv;
 	float		txm, tym;
-
+	const float	*v;
 
 	txm = (float)cos(r_newrefdef.time*0.3f) * 0.3f;
 	tym = (float)sin(r_newrefdef.time*-0.3f) * 0.6f;
@@ -521,16 +544,17 @@ void EmitCausticPolys (const msurface_t *fa)
 
 	GL_Bind(r_caustictexture->texnum);
 	
+	v = p->verts[0];
+	nv = p->numverts;
+
 	qglBegin (GL_POLYGON);
 
-	v = fa->polys->verts[0];
-	for (i=0 ; i<fa->polys->numverts; i++, v+= VERTEXSIZE)
-	{
+	for (i = 0; i < nv; i++, v += VERTEXSIZE) {
 		qglTexCoord2f (v[3]+txm, v[4]+tym);
 		qglVertex3fv (v);
 	}
-	qglEnd ();
 
+	qglEnd();
 
 	qglBlendFunc (GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 

@@ -25,7 +25,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #define APPLICATION "AprQ2"
 
-#define	VERSION		"1.21"
+#define	VERSION		"1.211"
 
 
 #define	BASEDIRNAME	"baseq2"
@@ -91,7 +91,7 @@ void	MSG_ReadDir (sizebuf_t *sb, vec3_t vector);
 
 void	MSG_ReadData (sizebuf_t *sb, void *buffer, int size);
 
-void MSG_ParseDeltaEntity ( sizebuf_t *msg, const entity_state_t *from, entity_state_t *to, int number, int bits );
+void MSG_ParseDeltaEntity ( sizebuf_t *msg, const entity_state_t *from, entity_state_t *to, int number, int bits, int protocol );
 
 void MSG_ParseDeltaPlayerstate_Default ( sizebuf_t *msg, const player_state_t *from, player_state_t *to, int flags );
 void MSG_ParseDeltaPlayerstate_Enhanced( sizebuf_t *msg, const player_state_t *from, player_state_t *to, int flags, int extraflags );

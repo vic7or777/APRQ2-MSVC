@@ -178,7 +178,6 @@ cvar_t	*gl_depthbits;
 cvar_t	*gl_stencilbits;*/
 
 static void R_ModeList_f( void );
-static qboolean isWideScreen = false;
 
 // vertex arrays
 vArrays_t r_arrays;
@@ -1566,24 +1565,6 @@ static void R_ModeList_f( void )
 	}
 }
 
-qboolean R_IsWideScreen(void)
-{
-	return isWideScreen;
-}
-
-static void R_CheckWideScreen(void)
-{
-	float aspect, aspect2;
-
-	aspect = (float)vid.width/(float)vid.height;
-	aspect2 = 16.0f/9.0f;
-
-	if(aspect == aspect2) {
-		Com_Printf("WideScreen Mode\n");
-		isWideScreen = true;
-	}
-}
-
 /*
 ==================
 R_SetMode
@@ -1605,7 +1586,6 @@ qboolean R_SetMode (void)
 	fullscreen = vid_fullscreen->integer;
 	vid_fullscreen->modified = false;
 	gl_mode->modified = false;
-	isWideScreen = false;
 
 	if ( ( err = GLimp_SetMode( &vid.width, &vid.height, gl_mode->integer, fullscreen ) ) == rserr_ok )
 	{
@@ -1620,7 +1600,6 @@ qboolean R_SetMode (void)
 			Com_Printf ( "R_SetMode: fullscreen unavailable in this mode (%i).\n", gl_mode->integer );
 			//This isnt nesecery, GLimp_SetMode go windowed mode automaticly on fs fail
 			//if ( ( err = GLimp_SetMode( &vid.width, &vid.height, gl_mode->integer, false ) ) == rserr_ok ) {
-				R_CheckWideScreen();
 				return true;
 			//}
 		}
@@ -1641,7 +1620,6 @@ qboolean R_SetMode (void)
 			return false;
 		}
 	}
-	R_CheckWideScreen();
 
 	return true;
 }

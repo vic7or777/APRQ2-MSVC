@@ -103,10 +103,9 @@ static void DrawGLPoly (const glpoly_t *p, float scroll)
 	int		i;
 	const float	*v;
 
-	qglBegin (GL_POLYGON);
 	v = p->verts[0];
-	for (i=0 ; i<p->numverts ; i++, v+= VERTEXSIZE)
-	{
+	qglBegin (GL_POLYGON);
+	for (i = 0; i < p->numverts; i++, v+= VERTEXSIZE) {
 		qglTexCoord2f (v[3] + scroll, v[4]);
 		qglVertex3fv (v);
 	}
@@ -160,12 +159,11 @@ DrawGLPolyChain
 static void DrawGLPolyChain( const glpoly_t *p, float soffset, float toffset )
 {
 	const float *v;
-	int j;
+	int i;
 
-	qglBegin (GL_POLYGON);
 	v = p->verts[0];
-	for (j=0 ; j<p->numverts ; j++, v+= VERTEXSIZE)
-	{
+	qglBegin (GL_POLYGON);
+	for (i = 0; i < p->numverts; i++, v+= VERTEXSIZE) {
 		qglTexCoord2f (v[5] - soffset, v[6] - toffset );
 		qglVertex3fv (v);
 	}
@@ -329,7 +327,7 @@ static void R_RenderBrushPoly (msurface_t *fa)
 			        gl_state.inverse_intensity,
 					gl_state.inverse_intensity,
 					1.0F );
-		EmitWaterPolys (fa);
+		EmitWaterPolys( fa->polys, (fa->texinfo->flags & SURF_FLOWING) );
 		qglColor4fv(colorWhite);
 		GL_TexEnv( GL_REPLACE );
 
@@ -452,9 +450,9 @@ void R_DrawAlphaSurfaces (void)
 		qglColor4fv(intens);
 
 		if (s->flags & SURF_DRAWTURB)
-			EmitWaterPolys (s);
+			EmitWaterPolys( s->polys, (s->texinfo->flags & SURF_FLOWING) );
 		else
-			DrawGLPoly (s->polys, (s->texinfo->flags & SURF_FLOWING) ? scroll : 0);
+			DrawGLPoly( s->polys, (s->texinfo->flags & SURF_FLOWING) ? scroll : 0 );
 	}
 
 	GL_TexEnv( GL_REPLACE );
@@ -622,7 +620,7 @@ void GL_DrawPoly(int nv, msurface_t *surf)
 
 }
 
-extern void EmitCausticPolys (const msurface_t *s);
+extern void EmitCausticPolys (const glpoly_t *p);
 
 static void GL_RenderLightmappedPoly( msurface_t *surf )
 {
@@ -709,7 +707,7 @@ dynamic:
 		qglEnd ();
 
 		if (gl_watercaustics->integer && (surf->flags & SURF_UNDERWATER) && !(image->flags & IT_TRANS))
-			EmitCausticPolys(surf);
+			EmitCausticPolys(surf->polys);
 
 		if(gl_eff_world_wireframe->integer)
 			GL_DrawPoly(nv,surf);
@@ -1210,9 +1208,10 @@ static void LM_UploadBlock( qboolean dynamic )
 	{
 		int i;
 
-		for ( i = 0; i < BLOCK_WIDTH; i++ )
+		for ( i = 0; i < BLOCK_WIDTH; i++ ) {
 			if ( gl_lms.allocated[i] > height )
 				height = gl_lms.allocated[i];
+		}
 
 		qglTexSubImage2D( GL_TEXTURE_2D, 
 						  0,

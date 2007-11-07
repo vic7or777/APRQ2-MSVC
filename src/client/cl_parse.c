@@ -514,7 +514,7 @@ void CL_ParseBaseline (sizebuf_t *msg)
 	newnum = CL_ParseEntityBits(msg, &bits);
 
 	es = &cl_entities[newnum].baseline;
-	MSG_ParseDeltaEntity(msg, NULL, es, newnum, bits);
+	MSG_ParseDeltaEntity(msg, NULL, es, newnum, bits, cls.serverProtocol);
 }
 
 void CL_ParseZPacket (sizebuf_t *msg)

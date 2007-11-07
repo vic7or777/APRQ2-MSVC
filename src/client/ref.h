@@ -171,7 +171,6 @@ void	R_EndFrame( void );
 void	R_AppActivate( qboolean active );
 
 #ifdef GL_QUAKE
-qboolean R_IsWideScreen(void);
 void R_AddDecal	(vec3_t origin, vec3_t dir, float red, float green, float blue, float alpha,
 				 float size, int type, int flags, float angle);
 

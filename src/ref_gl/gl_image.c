@@ -355,7 +355,7 @@ static void LoadPCX (const char *filename, byte **pic, byte **palette, int *widt
 	byte	*pix, *out, *raw, *end;
 	pcx_t	*pcx;
 	int		x, y, w, h, len;
-	int		dataByte, runLength;
+	int		dataByte, runLength, exeedCount = 0, exeedBytes = 0;
 
 	// load the file
 	len = FS_LoadFile (filename, (void **)&raw);
@@ -403,22 +403,29 @@ static void LoadPCX (const char *filename, byte **pic, byte **palette, int *widt
 	pix = out = Z_TagMalloc( w * h, TAG_RENDER_IMAGE );
 
 	raw = &pcx->data;
-	end = ( byte * )pcx + len;
+	end = ( byte * )pcx + len; //- 768;
 
 	for ( y = 0; y < h; y++, pix += w )
 	{
 		for ( x = 0; x < w; )
 		{
+			if (raw == end) {
+				Com_Printf ( "LoadPCX: %s is malformed\n", filename);
+				Z_Free(out);
+				FS_FreeFile ((void *)pcx);
+				return;
+			}
 			dataByte = *raw++;
 
 			if((dataByte & 0xC0) == 0xC0) {
 				runLength = dataByte & 0x3F;
 				if( x + runLength > w ) {
-					Com_Printf ( "LoadPCX: file %s is malformed, runLength exceeds with %i\n", filename, x + runLength - w);
+					exeedCount++;
+					exeedBytes += x + runLength - w;
 					runLength = w - x;
 				}
 				if (raw == end) {
-					Com_Printf ( "LoadPCX: file %s is malformed", filename);
+					Com_Printf ( "LoadPCX: %s is malformed\n", filename);
 					Z_Free(out);
 					FS_FreeFile ((void *)pcx);
 					return;
@@ -431,6 +438,10 @@ static void LoadPCX (const char *filename, byte **pic, byte **palette, int *widt
 				pix[x++] = dataByte;
 			}
 		}
+	}
+
+	if (exeedCount) {
+		Com_DPrintf ( "LoadPCX: %s: runLength exceeds %d times with total %d bytes\n", exeedCount, exeedBytes);
 	}
 
 	*width = w;
@@ -558,13 +569,7 @@ static void LoadTGA( const char *filename, byte **pic, int *width, int *height, 
 		}
 
 		bytesPerPixel = 1;
-		if (imageType == TGA_Map) {
-			if (pdata + ((tgaHeader->colorMapSize + 1) >> 3) * colorMapLenght + bytesPerPixel * w * h > endData) {
-				Com_Printf("LoadTGA: %s: malformed targa image\n", filename );
-				FS_FreeFile((void *)data);
-				return;
-			}
-		} else if (pdata + ((tgaHeader->colorMapSize + 1) >> 3) * colorMapLenght + 1 > endData) {
+		if (pdata + ((tgaHeader->colorMapSize + 1) >> 3) * colorMapLenght + 1 > endData) {
 			Com_Printf("LoadTGA: %s: malformed targa image\n", filename );
 			FS_FreeFile((void *)data);
 			return;
@@ -630,11 +635,6 @@ static void LoadTGA( const char *filename, byte **pic, int *width, int *height, 
 			FS_FreeFile((void *)data);
 			return;
 		}
-		if(imageType == TGA_RGB && pdata + bytesPerPixel * w * h > endData) {
-			Com_Printf("LoadTGA: %s: malformed targa image\n", filename );
-			FS_FreeFile((void *)data);
-			return;
-		}
 		break;
 	case TGA_RLEMono:
 		rlencoded = true;
@@ -646,14 +646,15 @@ static void LoadTGA( const char *filename, byte **pic, int *width, int *height, 
 			return;
 		}
 		bytesPerPixel = 1;
-		if(imageType == TGA_Mono && pdata + bytesPerPixel * w * h > endData) {
-			Com_Printf("LoadTGA: %s: malformed targa image\n", filename );
-			FS_FreeFile((void *)data);
-			return;
-		}
 		break;
 	default:
 		Com_Printf ("LoadTGA: %s: Only type 1, 2, 3, 9, 10 and 11 Targas supported. This one is %i.\n", filename, imageType );
+		FS_FreeFile((void *)data);
+		return;
+	}
+
+	if (!rlencoded && pdata + bytesPerPixel * w * h > endData) {
+		Com_Printf("LoadTGA: %s: malformed targa image\n", filename );
 		FS_FreeFile((void *)data);
 		return;
 	}
@@ -2033,7 +2034,7 @@ void R_InitBuildInTextures (void)
 	r_particletexture = GL_LoadPic ("***particle***", data, 16, 16, it_sprite, 0, 4);
 
 	// White texture
-	memset( data, 255, 16 * 16 * 4 );
+	memset( data, 255, sizeof(data));
 	r_whitetexture = GL_LoadPic ("***r_whitetexture***", data, 8, 8, it_pic, 0, 3);
 
 	// Other

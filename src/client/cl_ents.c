@@ -100,7 +100,7 @@ static void CL_DeltaEntity (sizebuf_t *msg, frame_t *frame, int newnum, const en
 	cl.parse_entities++;
 	frame->num_entities++;
 
-	MSG_ParseDeltaEntity(msg, old, state, newnum, bits);
+	MSG_ParseDeltaEntity(msg, old, state, newnum, bits, cls.serverProtocol);
 
 	// some data changes will force no lerping
 	if (state->modelindex != ent->current.modelindex
@@ -664,13 +664,13 @@ void CL_AddPacketEntities (const frame_t *frame)
 		ent.oldframe = cent->prev.frame;
 		ent.backlerp = 1.0f - cl.lerpfrac;
 
-		if (renderfx & RF_FRAMELERP)
+		if (renderfx & (RF_FRAMELERP|RF_BEAM))
 		{	// step origin discretely, because the frames
 			// do the animation properly
 			VectorCopy (cent->current.origin, ent.origin);
 			VectorCopy (cent->current.old_origin, ent.oldorigin);
 		}
-		else if (renderfx & RF_BEAM)
+/*		else if (renderfx & RF_BEAM)
 		{	// interpolate start and end points for beams
 			ent.oldorigin[0] = cent->prev.old_origin[0] + cl.lerpfrac * (cent->current.old_origin[0] - cent->prev.old_origin[0]);
 			ent.oldorigin[1] = cent->prev.old_origin[1] + cl.lerpfrac * (cent->current.old_origin[1] - cent->prev.old_origin[1]);
@@ -679,7 +679,7 @@ void CL_AddPacketEntities (const frame_t *frame)
 			ent.origin[0] = cent->prev.origin[0] + cl.lerpfrac * (cent->current.origin[0] - cent->prev.origin[0]);
 			ent.origin[1] = cent->prev.origin[1] + cl.lerpfrac * (cent->current.origin[1] - cent->prev.origin[1]);
 			ent.origin[2] = cent->prev.origin[2] + cl.lerpfrac * (cent->current.origin[2] - cent->prev.origin[2]);
-		}
+		}*/
 		else
 		{	// interpolate origin
 			ent.origin[0] = ent.oldorigin[0] = cent->prev.origin[0] + cl.lerpfrac * (cent->current.origin[0] - cent->prev.origin[0]);
@@ -909,7 +909,8 @@ void CL_AddPacketEntities (const frame_t *frame)
 		}
 
 		ent.skin = NULL;		// never use a custom skin on others
-		ent.skinnum = ent.flags = ent.alpha = 0;
+		ent.skinnum = ent.flags = 0;
+		ent.alpha = 0;
 
 		// duplicate for linked models
 		if (s1->modelindex2)
@@ -942,7 +943,8 @@ void CL_AddPacketEntities (const frame_t *frame)
 			V_AddEntity (&ent);
 
 			//PGM - make sure these get reset.
-			ent.flags = ent.alpha = 0;
+			ent.flags = 0;
+			ent.alpha = 0;
 			//PGM
 		}
 		if (s1->modelindex3)

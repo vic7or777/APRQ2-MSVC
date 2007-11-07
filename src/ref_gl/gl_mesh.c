@@ -173,19 +173,19 @@ static void GL_DrawAliasShellFrameLerp (const aliasMesh_t *mesh, int oldFrame, i
 	aliasVertex_t	*ov, *v;
 	int				i;
 	const vec_t		*normal;
-	vec_t			*vertexArray;
+	vec_t			*vertexArray, *texCoordArray;
 	float			scale;
-	vec2_t			*texCoordArray;
 
 	vertexArray = r_arrays.vertices;
 
 	if(gl_shelleffect->integer)
 	{
 		float time = (float)sin(r_newrefdef.time*0.3f);
-		texCoordArray = r_arrays.tcoords;
+		texCoordArray = r_arrays.tcoords[0];
 		for(i = 0; i < mesh->numVerts; i++) {
-			texCoordArray[i][0] = mesh->stcoords[i][0] - time;
-			texCoordArray[i][1] = mesh->stcoords[i][1] - time;
+			texCoordArray[0] = mesh->stcoords[i][0] - time;
+			texCoordArray[1] = mesh->stcoords[i][1] - time;
+			texCoordArray += 2;
 		}
 		scale = (currententity->flags & RF_WEAPONMODEL) ?  0.5f : POWERSUIT_SCALE;
 	}

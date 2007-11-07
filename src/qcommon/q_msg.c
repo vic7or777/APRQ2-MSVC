@@ -901,7 +901,7 @@ MSG_ParseDeltaEntity
 Can go from either a baseline or a previous packet_entity
 ==================
 */
-void MSG_ParseDeltaEntity ( sizebuf_t *msg, const entity_state_t *from, entity_state_t *to, int number, int bits )
+void MSG_ParseDeltaEntity ( sizebuf_t *msg, const entity_state_t *from, entity_state_t *to, int number, int bits, int protocol )
 {
 	if( !to ) {
 		Com_Error( ERR_DROP, "MSG_ParseDeltaEntity: NULL" );
@@ -910,7 +910,10 @@ void MSG_ParseDeltaEntity ( sizebuf_t *msg, const entity_state_t *from, entity_s
 	// set everything to the state we are delta'ing from
 	if( from ) {
 		memcpy( to, from, sizeof( *to ) );
-		VectorCopy( from->origin, to->old_origin );
+		if (protocol < PROTOCOL_VERSION_R1Q2)
+			VectorCopy (from->origin, to->old_origin);
+		else if (!(bits & U_OLDORIGIN) && !(from->renderfx & RF_BEAM))
+			VectorCopy (from->origin, to->old_origin);
 	} else {
 		memset( to, 0, sizeof( *to ) );
 		from = &nullEntityState;

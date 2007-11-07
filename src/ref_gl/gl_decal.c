@@ -97,6 +97,15 @@ void GL_FreeUnusedDecalImages(void)
 	r_bholetexture->registration_sequence = registration_sequence;
 }
 
+static void GL_FreeDecals(void)
+{
+	if (decals)
+		Z_Free(decals);
+
+	maxDecals = 0;
+	decals = NULL;
+}
+
 static void GL_AllocDecals(void)
 {
 	maxDecals = gl_decals_max->integer;
@@ -127,7 +136,7 @@ static void OnChange_DecalsMax(cvar_t *self, const char *oldValue)
 	if (maxDecals == self->integer)
 		return;
 
-	GL_ShutDownDecals();
+	GL_FreeDecals();
 	OnChange_Decals(gl_decals, gl_decals->resetString);
 }
 
@@ -147,11 +156,7 @@ void GL_InitDecals (void)
 
 void GL_ShutDownDecals (void)
 {
-	if (decals)
-		Z_Free(decals);
-
-	maxDecals = 0;
-	decals = NULL;
+	GL_FreeDecals();
 
 	gl_decals->OnChange = NULL;
 	gl_decals_max->OnChange = NULL;
@@ -240,8 +245,6 @@ void R_AddDecal	(vec3_t origin, vec3_t dir, float red, float green, float blue, 
 	vec3_t		verts[MAX_DECAL_VERTS], shade;
 	fragment_t	*fr, fragments[MAX_DECAL_FRAGMENTS];
 	mat3_t		axis;
-
-
 	cdecal_t	*d;
 
 	if (!gl_decals->integer)
@@ -272,9 +275,8 @@ void R_AddDecal	(vec3_t origin, vec3_t dir, float red, float green, float blue, 
 	{
 		if (fr->numverts > MAX_DECAL_VERTS)
 			fr->numverts = MAX_DECAL_VERTS;
-		else if (fr->numverts <= 0)
+		else if (fr->numverts < 1)
 			continue;
-
 
 		d = GL_AllocDecal ();
 
@@ -291,8 +293,7 @@ void R_AddDecal	(vec3_t origin, vec3_t dir, float red, float green, float blue, 
 		Vector4Set(d->color, red, green, blue, alpha);
 		VectorCopy (origin, d->org);
 
-		if (flags&DF_SHADE)
-		{
+		if (flags&DF_SHADE) {
 			R_LightPoint (origin, shade);
 
 			for (j=0 ; j<3 ; j++)
@@ -302,8 +303,7 @@ void R_AddDecal	(vec3_t origin, vec3_t dir, float red, float green, float blue, 
 		d->type = type;
 		d->flags = flags;
 
-		for (j=0 ; j<fr->numverts ; j++)
-		{
+		for (j = 0; j < fr->numverts; j++) {
 			vec3_t v;
 
 			VectorCopy (verts[fr->firstvert+j], d->verts[j]);
@@ -326,7 +326,6 @@ void R_AddDecals (void)
 {
 	cdecal_t	*dl, *next,	*active;
 	float		mindist, time;
-	int			i;
 	vec3_t		v;
 	vec4_t		color;
 
@@ -334,6 +333,8 @@ void R_AddDecals (void)
 		return;
 
 	active = &active_decals;
+	if (active->next == active)
+		return;
 
 	mindist = DotProduct(r_origin, viewAxis[0]) + 4.0f; 
 
@@ -343,6 +344,7 @@ void R_AddDecals (void)
 	qglDepthMask(GL_FALSE);
 	qglEnable(GL_BLEND);
 	GL_TexEnv(GL_MODULATE);
+
 	GL_Bind(r_bholetexture->texnum);
 
 	for (dl = active->next; dl != active; dl = next)
@@ -376,13 +378,9 @@ void R_AddDecals (void)
 		//Draw it
 		qglColor4fv (color);
 
-		qglBegin (GL_TRIANGLE_FAN);
-		for (i = 0; i < dl->numverts; i++)
-		{
-			qglTexCoord2fv (dl->stcoords[i]);
-			qglVertex3fv (dl->verts[i]);
-		}
-		qglEnd ();
+		qglTexCoordPointer( 2, GL_FLOAT, 0, dl->stcoords);
+		qglVertexPointer( 3, GL_FLOAT, 0, dl->verts );
+		qglDrawArrays( GL_TRIANGLE_FAN, 0, dl->numverts );
 	}
 
 	GL_TexEnv(GL_REPLACE);
@@ -390,6 +388,7 @@ void R_AddDecals (void)
 	qglColor4fv(colorWhite);
 	qglDepthMask(GL_TRUE);
 	qglDisable(GL_POLYGON_OFFSET_FILL);
+	qglVertexPointer( 3, GL_FLOAT, 0, r_arrays.vertices );
 }
 
 

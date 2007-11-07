@@ -842,8 +842,7 @@ static void Mod_LoadSurfedges (const lump_t *l)
 	}
 	count = l->filelen / sizeof(*in);
 	if (count < 1 || count >= MAX_MAP_SURFEDGES)
-		Com_Error (ERR_DROP, "Mod_LoadSurfedges: bad surfedges count in %s: %i",
-		loadmodel->name, count);
+		Com_Error (ERR_DROP, "Mod_LoadSurfedges: bad surfedges count in %s: %i", loadmodel->name, count);
 
 	out = Hunk_Alloc ( count*sizeof(*out));	
 
@@ -1004,7 +1003,7 @@ static void Mod_LoadAliasMD2Model (model_t *mod, byte *rawdata, int length)
 	aliasFrame_t		*poutframe;
 	aliasVertex_t		*poutvertex;
 	aliasSkin_t			*poutskin;
-	int					numVerts, numIndexes, bufsize;
+	int					numVerts, numIndexes, numSkins, bufsize;
 	uint16				indremap[MD2_MAX_TRIANGLES*3];
 	uint16				vertIndices[MD2_MAX_TRIANGLES*3];
 	uint16				tcIndices[MD2_MAX_TRIANGLES*3];
@@ -1016,7 +1015,7 @@ static void Mod_LoadAliasMD2Model (model_t *mod, byte *rawdata, int length)
 
 
 	if( length < sizeof( dmdl_t ) ) {
-		Com_Error( ERR_DROP, "%s has length < header length\n", mod->name );
+		Com_Error( ERR_DROP, "Mod_LoadAliasMD2Model: %s has length < header length\n", mod->name );
 	}
 
 	/* byte swap the header */
@@ -1026,41 +1025,41 @@ static void Mod_LoadAliasMD2Model (model_t *mod, byte *rawdata, int length)
 	}
 
 	if( header.version != ALIAS_VERSION )
-		Com_Error( ERR_DROP, "%s has wrong version number (%i should be %i)\n",
+		Com_Error( ERR_DROP, "Mod_LoadAliasMD2Model: %s has wrong version number (%d should be %d)\n",
 				 mod->name, header.version, ALIAS_VERSION );
 
 	if (header.skinwidth <= 0 || header.skinheight <= 0)
-		Com_Error( ERR_DROP, "model %s has bad skin dimensions: %d x %d\n", mod->name, header.skinwidth, header.skinheight);
+		Com_Error( ERR_DROP, "Mod_LoadAliasMD2Model: %s has bad skin dimensions: %d x %d\n", mod->name, header.skinwidth, header.skinheight);
 
 	if( header.num_frames < 1 )
-		Com_Error( ERR_DROP, "model %s bad number of frames: %d\n", mod->name, header.num_frames );
+		Com_Error( ERR_DROP, "Mod_LoadAliasMD2Model: %s bad number of frames: %d\n", mod->name, header.num_frames );
 	else if( header.num_frames > MD2_MAX_FRAMES )
-		Com_Error( ERR_DROP, "model %s has too many frames: %d > %d\n", mod->name, MD2_MAX_FRAMES, header.num_frames );
+		Com_Error( ERR_DROP, "Mod_LoadAliasMD2Model: %s has too many frames: %d > %d\n", mod->name, MD2_MAX_FRAMES, header.num_frames );
 
 	if( header.num_tris < 1 )
-		Com_Error( ERR_DROP, "model %s bad number of triangles: %d\n", mod->name, header.num_tris );
+		Com_Error( ERR_DROP, "Mod_LoadAliasMD2Model: %s bad number of triangles: %d\n", mod->name, header.num_tris );
 	else if( header.num_tris > MD2_MAX_TRIANGLES )
-		Com_Error( ERR_DROP, "model %s has too many triangles: %d > %d\n", mod->name , header.num_tris, MD2_MAX_TRIANGLES);
+		Com_Error( ERR_DROP, "Mod_LoadAliasMD2Model: %s has too many triangles: %d > %d\n", mod->name , header.num_tris, MD2_MAX_TRIANGLES);
 
 	if( header.num_xyz < 1 )
-		Com_Error( ERR_DROP, "model %s has bad number of vertices: %d\n", mod->name, header.num_xyz);
+		Com_Error( ERR_DROP, "Mod_LoadAliasMD2Model: %s has bad number of vertices: %d\n", mod->name, header.num_xyz);
 	else if( header.num_xyz > MD2_MAX_VERTS )
-		Com_Error( ERR_DROP, "model %s has too many vertices: %d > %d\n", mod->name, header.num_xyz, MD2_MAX_VERTS );
+		Com_Error( ERR_DROP, "Mod_LoadAliasMD2Model: %s has too many vertices: %d > %d\n", mod->name, header.num_xyz, MD2_MAX_VERTS );
 
 	if((unsigned)header.num_skins > MD2_MAX_SKINS )
-		Com_Error( ERR_DROP, "model %s has too many skins: %d > %d\n", mod->name, header.num_skins, MD2_MAX_SKINS );
+		Com_Error( ERR_DROP, "Mod_LoadAliasMD2Model: %s has too many skins: %d > %d\n", mod->name, header.num_skins, MD2_MAX_SKINS );
 
 	rawend = rawdata + length;
-	if(rawdata + header.ofs_tris + sizeof(dtriangle_t) * header.num_tris > rawend ) {
-		Com_Error( ERR_DROP, "%s has bad skins offset\n", mod->name );
+	if (header.ofs_tris < 1 || rawdata + header.ofs_tris + sizeof(dtriangle_t) * header.num_tris > rawend ) {
+		Com_Error( ERR_DROP, "Mod_LoadAliasMD2Model: %s has bad triangles offset\n", mod->name );
 	}
 
-	if(rawdata + header.ofs_skins + MAX_SKINNAME * header.num_skins > rawend) {
-		Com_Error( ERR_DROP, "%s has bad skins offset\n", mod->name );
+	if ((header.ofs_skins < 1 && header.ofs_skins != -1) || rawdata + header.ofs_skins + MAX_SKINNAME * header.num_skins > rawend) {
+		Com_Error( ERR_DROP, "Mod_LoadAliasMD2Model: %s has bad skins offset\n", mod->name );
 	}
 
-	if(rawdata + header.ofs_frames + header.num_frames * header.framesize > rawend) {
-		Com_Error( ERR_DROP, "%s has bad frame offset\n", mod->name );
+	if (header.ofs_frames < 1 || rawdata + header.ofs_frames + header.num_frames * header.framesize > rawend) {
+		Com_Error( ERR_DROP, "Mod_LoadAliasMD2Model: %s has bad frame offset\n", mod->name );
 	}
 
 //
@@ -1081,13 +1080,11 @@ static void Mod_LoadAliasMD2Model (model_t *mod, byte *rawdata, int length)
 // build list of unique vertexes
 //
 	numIndexes = header.num_tris * 3;
-
 	for( i = 0; i < numIndexes; i++ ) {
 		indremap[i] = 0xFFFF;
 	}
 
 	numVerts = 0;
-
 	pinst = ( dstvert_t * )( rawdata + header.ofs_st );
 	for( i = 0; i < numIndexes; i++ ) {
 		if( indremap[i] != 0xFFFF )
@@ -1102,7 +1099,6 @@ static void Mod_LoadAliasMD2Model (model_t *mod, byte *rawdata, int length)
 				finalIndices[j] = numVerts;
 			}
 		}
-
 		// add unique vertex
 		indremap[i] = i;
 		finalIndices[i] = numVerts++;
@@ -1110,36 +1106,34 @@ static void Mod_LoadAliasMD2Model (model_t *mod, byte *rawdata, int length)
 
 	Com_DPrintf( "%s: remapped %i verts to %i (%i tris)\n", mod->name, header.num_xyz, numVerts, header.num_tris );
 
+	numSkins = header.num_skins;
+	if (numSkins < 1) { //Some models dont have skins and uses the null skin
+		numSkins = 1;
+	}
+
 	bufsize = ( sizeof(aliasModel_t) + sizeof(aliasMesh_t) +
 		numIndexes * sizeof(index_t) + //indexes
 		numVerts * sizeof(vec2_t) + //stcoords
 		header.num_frames * (sizeof(aliasFrame_t) + numVerts * sizeof(aliasVertex_t)) + //frames
-		header.num_skins * sizeof(aliasSkin_t)); //skins
+		numSkins * sizeof(aliasSkin_t)); //skins
 
 	mod->type = mod_alias;
-//	mod->radius = 0;
-//	ClearBounds( mod->mins, mod->maxs );
 
-	//bufsize = (bufsize+31)&~31;
 	buf = mod->extradata = Mod_Malloc(bufsize);
 	mod->extradatasize = bufsize;
 
 	poutmodel = mod->aliasModel = (aliasModel_t *)buf; buf += sizeof(aliasModel_t);
-	//poutmodel->numtags = 0;
-	//poutmodel->tags = NULL;
 	poutmodel->numMeshes = 1;
 	poutmodel->numFrames = header.num_frames;
 
 	poutmesh = poutmodel->meshes = (aliasMesh_t *)buf; buf += sizeof(aliasMesh_t);
-
-	//Q_strncpyz( poutmesh->name, "default", MD2_MAX_SKINNAME );
 	poutmesh->numSkins = header.num_skins;
 	poutmesh->numVerts = numVerts;
 	poutmesh->numTris = header.num_tris;
 
 	poutindex = poutmesh->indices = (index_t *)buf; buf += numIndexes * sizeof(index_t);
 
-	for(i=0; i<numIndexes; i++)
+	for ( i = 0; i < numIndexes; i++)
 		poutindex[i] = finalIndices[i];
 //
 // load base s and t vertices
@@ -1177,12 +1171,9 @@ static void Mod_LoadAliasMD2Model (model_t *mod, byte *rawdata, int length)
 				poutvertex[poutindex[j]].point[0] = (short)pinframe->verts[vertIndices[j]].v[0];
 				poutvertex[poutindex[j]].point[1] = (short)pinframe->verts[vertIndices[j]].v[1];
 				poutvertex[poutindex[j]].point[2] = (short)pinframe->verts[vertIndices[j]].v[2];
-				//ByteToDir(pinframe->verts[vertIndices[j]].lightnormalindex, poutvertex[vertIndices[j]].normal);
 				poutvertex[poutindex[j]].normalIndex = pinframe->verts[vertIndices[j]].lightnormalindex;
 			}
 		}
-
-		//Mod_AliasCalculateVertexNormals( numIndexes, poutindex, numverts, poutvertex );
 
 		VectorCopy( poutframe->translate, poutframe->mins );
 		VectorMA( poutframe->translate, 255, poutframe->scale, poutframe->maxs );
@@ -1190,10 +1181,11 @@ static void Mod_LoadAliasMD2Model (model_t *mod, byte *rawdata, int length)
 	}
 
 	// register all skins
-	if (header.ofs_skins != -1) {
+	poutskin = poutmesh->skins = (aliasSkin_t *)buf;
+	memset(poutskin, 0, numSkins * sizeof(aliasSkin_t));
+	if (header.ofs_skins != -1 && header.num_skins) {
 		pinskin = ( char * )rawdata + header.ofs_skins;
-		poutskin = poutmesh->skins = (aliasSkin_t *)buf;
-		for( i = 0; i < poutmesh->numSkins; i++, poutskin++, pinskin += MD2_MAX_SKINNAME) {
+		for( i = 0; i < header.num_skins; i++, poutskin++, pinskin += MD2_MAX_SKINNAME) {
 			poutskin->image = GL_FindImage(pinskin, it_skin );
 		}
 	}
@@ -1278,7 +1270,7 @@ static void Mod_LoadAliasMD3Model ( model_t *mod, byte *rawdata, int length )
 {
 	int					version, i, j, l;
 	int					bufsize;
-	dmd3header_t		*pinmodel;
+	dmd3header_t		*header;
 	dmd3frame_t			*pinframe;
 //	dmd3tag_t			*pintag;
 	dmd3mesh_t			*pinmesh;
@@ -1293,68 +1285,78 @@ static void Mod_LoadAliasMD3Model ( model_t *mod, byte *rawdata, int length )
 //	aliasTag_t			*pouttag;
 	aliasFrame_t		*poutframe;
 	aliasModel_t		*poutmodel;
-	byte				*buf;
-	int					numFrames, numTags, numMeshes, totalVerts;
+	byte				*buf, *rawend;
+	int					numFrames, numTags, numMeshes;
 	int					numTris[MD3_MAX_MESHES], numSkins[MD3_MAX_MESHES], numVerts[MD3_MAX_MESHES];
 	float				s[2], c[2];
 	vec3_t				normal;
 
 	if( length < sizeof( dmd3header_t ) ) {
-		Com_Error( ERR_DROP, "%s has length < header length\n", mod->name );
+		Com_Error( ERR_DROP, "Mod_LoadAliasMD3Model: %s has length < header length\n", mod->name );
 	}
 
-	pinmodel = ( dmd3header_t * )rawdata;
-	version = LittleLong( pinmodel->version );
+	header = ( dmd3header_t * )rawdata;
+	version = LittleLong( header->version );
 
 	if ( version != MD3_ALIAS_VERSION ) {
-		Com_Error (ERR_DROP, "Mod_LoadAliasMD3Model: %s has wrong version number (%i should be %i)\n",
+		Com_Error (ERR_DROP, "Mod_LoadAliasMD3Model: %s has wrong version number (%d should be %d)\n",
 				 mod->name, version, MD3_ALIAS_VERSION);
 	}
 
 	// byte swap the header fields and sanity check
-	numFrames = LittleLong ( pinmodel->num_frames );
+	numFrames = LittleLong ( header->num_frames );
 	if ( numFrames < 1 )
-		Com_Error (ERR_DROP, "Mod_LoadAliasMD3Model: model %s has no frames\n", mod->name );
+		Com_Error (ERR_DROP, "Mod_LoadAliasMD3Model: %s has bad number of frames: %d\n", mod->name, numFrames );
 	else if ( numFrames > MD3_MAX_FRAMES )
-		Com_Error (ERR_DROP, "Mod_LoadAliasMD3Model: model %s has too many frames\n", mod->name );
+		Com_Error (ERR_DROP, "Mod_LoadAliasMD3Model: %s has too many frames: %d > %d\n", mod->name, numFrames, MD3_MAX_FRAMES );
 
-	numTags = LittleLong ( pinmodel->num_tags );
-	if ( numTags < 0 ) 
-		Com_Error (ERR_DROP, "Mod_LoadAliasMD3Model: model %s has invalid number of tags\n", mod->name );
+	numTags = LittleLong ( header->num_tags );
+	/*if ( numTags < 0 ) 
+		Com_Error (ERR_DROP, "Mod_LoadAliasMD3Model: %s has bad number of tags: %d\n", mod->name, numTags );
 	else if ( numTags > MD3_MAX_TAGS )
-		Com_Error (ERR_DROP, "Mod_LoadAliasMD3Model: model %s has too many tags\n", mod->name );
+		Com_Error (ERR_DROP, "Mod_LoadAliasMD3Model: %s has too many tags: %d > %d\n", mod->name, numTags, MD3_MAX_TAGS );*/
 
-	numMeshes = LittleLong ( pinmodel->num_meshes );
+	numMeshes = LittleLong ( header->num_meshes );
 	if ( numMeshes < 1 )
-		Com_Error (ERR_DROP, "Mod_LoadAliasMD3Model: model %s has no meshes\n", mod->name );
+		Com_Error (ERR_DROP, "Mod_LoadAliasMD3Model: %s has bad number of meshes: %d\n", mod->name, numMeshes );
 	else if ( numMeshes > MD3_MAX_MESHES )
-		Com_Error (ERR_DROP, "Mod_LoadAliasMD3Model: model %s has too many meshes\n", mod->name );
+		Com_Error (ERR_DROP, "Mod_LoadAliasMD3Model: %s has too many meshes: %d > %d\n", mod->name, numMeshes, MD3_MAX_MESHES );
+
+	rawend = rawdata + length;
+	if (header->ofs_frames < 1 || rawdata + header->ofs_frames + header->num_frames * sizeof(dmd3frame_t) > rawend) {
+		Com_Error( ERR_DROP, "Mod_LoadAliasMD3Model: %s has bad frame offset\n", mod->name );
+	}
 
 	bufsize = sizeof(aliasModel_t) + numFrames * (sizeof( aliasFrame_t ) /*+ sizeof( aliasTag_t ) * numTags*/) + 
 		numMeshes * sizeof( aliasMesh_t );
 
-	pinmesh = ( dmd3mesh_t * )( ( byte * )pinmodel + LittleLong( pinmodel->ofs_meshes ) );
+	pinmesh = ( dmd3mesh_t * )( rawdata + LittleLong( header->ofs_meshes ) );
 	for( i = 0; i < numMeshes; i++ ) {
+		if( ( byte * )( pinmesh + 1 ) > rawend ) {
+			Com_Error( ERR_DROP, "Mod_LoadAliasMD3Model: %s has bad offset for mesh %d\n", mod->name, i );
+		}
+
 		if( strncmp( (const char *)pinmesh->id, "IDP3", 4) )
-			Com_Error( ERR_DROP, "mesh %s in model %s has wrong id (%s should be %s)\n",
-					 pinmesh->name, mod->name, LittleLong( pinmesh->id ), IDMD3HEADER );
+			Com_Error( ERR_DROP, "Mod_LoadAliasMD3Model: %s has wrong id for mesh %s (%s should be %s)\n",
+					 mod->name, pinmesh->name, LittleLong( pinmesh->id ), IDMD3HEADER );
+
+		numSkins[i] = LittleLong( pinmesh->num_skins );
+		if( numSkins[i] < 1 )
+			Com_Error( ERR_DROP, "Mod_LoadAliasMD3Model: %s has no skins for mesh %d\n", mod->name, i );
+		else if( numSkins[i] > MD3_MAX_SHADERS )
+			Com_Error( ERR_DROP, "Mod_LoadAliasMD3Model: %s has too many skins (%d > %d) for mesh %d\n", i, mod->name, numSkins[i], MD3_MAX_SHADERS, i);
 
 		numTris[i] = LittleLong( pinmesh->num_tris );
-		numSkins[i] = LittleLong( pinmesh->num_skins );
-		numVerts[i] = LittleLong( pinmesh->num_verts );
-
-		if( numSkins[i] < 1 )
-			Com_Error( ERR_DROP, "mesh %i in model %s has no skins\n", i, mod->name );
-		else if( numSkins[i] > MD3_MAX_SHADERS )
-			Com_Error( ERR_DROP, "mesh %i in model %s has too many skins (%i > %i)\n", i, mod->name, numSkins[i], MD3_MAX_SHADERS);
 		if( numTris[i] < 1 )
-			Com_Error( ERR_DROP, "mesh %i in model %s has no elements\n", i, mod->name );
+			Com_Error( ERR_DROP, "Mod_LoadAliasMD3Model: %s has no elements for mesh %d\n", mod->name, i );
 		else if( numTris[i] > MD3_MAX_TRIANGLES )
-			Com_Error( ERR_DROP, "mesh %i in model %s has too many triangles (%i > %i)\n", i, mod->name, numTris[i], MD3_MAX_TRIANGLES);
+			Com_Error( ERR_DROP, "Mod_LoadAliasMD3Model: %s has too many triangles (%d > %d) for mesh %d\n", mod->name, numTris[i], MD3_MAX_TRIANGLES, i);
+		
+		numVerts[i] = LittleLong( pinmesh->num_verts );
 		if( numVerts[i] < 1 )
-			Com_Error( ERR_DROP, "mesh %i in model %s has no vertices\n", i, mod->name );
+			Com_Error( ERR_DROP, "Mod_LoadAliasMD3Model: %s has no vertices for mesh %d\n", mod->name, i );
 		else if( numVerts[i] > MD3_MAX_VERTS )
-			Com_Error( ERR_DROP, "mesh %i in model %s has too many vertices (%i > %i)\n", i, mod->name, numVerts[i], MD3_MAX_VERTS);
+			Com_Error( ERR_DROP, "Mod_LoadAliasMD3Model: %s has too many vertices (%d > %d) for mesh %d\n", mod->name, numVerts[i], MD3_MAX_VERTS, i);
 
 		bufsize += sizeof(aliasSkin_t *) * numSkins[i] + numTris[i] * sizeof(index_t) * 3 +
 			numVerts[i] * (sizeof(vec2_t) + sizeof(aliasVertex_t) * numFrames);
@@ -1377,7 +1379,7 @@ static void Mod_LoadAliasMD3Model ( model_t *mod, byte *rawdata, int length )
 //
 // load the frames
 //
-	pinframe = ( dmd3frame_t * )( ( byte * )pinmodel + LittleLong( pinmodel->ofs_frames ) );
+	pinframe = ( dmd3frame_t * )( rawdata + LittleLong( header->ofs_frames ) );
 	poutframe = poutmodel->frames = ( aliasFrame_t * )buf; buf += sizeof( aliasFrame_t ) * poutmodel->numFrames;
 	for( i = 0; i < poutmodel->numFrames; i++, pinframe++, poutframe++ ) {
 		poutframe->scale[0] = poutframe->scale[1] = poutframe->scale[2] = MD3_XYZ_SCALE;
@@ -1391,7 +1393,7 @@ static void Mod_LoadAliasMD3Model ( model_t *mod, byte *rawdata, int length )
 //
 // load the tags
 //
-/*	pintag = ( dmd3tag_t * )( ( byte * )pinmodel + LittleLong( pinmodel->ofs_tags ) );
+/*	pintag = ( dmd3tag_t * )( ( byte * )header + LittleLong( header->ofs_tags ) );
 	pouttag = poutmodel->tags = ( aliasTag_t * )buf; buf += sizeof( aliasTag_t ) * poutmodel->numFrames * poutmodel->numTags;
 	for( i = 0; i < poutmodel->numFrames; i++ ) {
 		for( l = 0; l < poutmodel->numTags; l++, pintag++, pouttag++ ) {
@@ -1413,22 +1415,23 @@ static void Mod_LoadAliasMD3Model ( model_t *mod, byte *rawdata, int length )
 //
 // load the meshes
 //
-	pinmesh = ( dmd3mesh_t * )( ( byte * )pinmodel + LittleLong( pinmodel->ofs_meshes ) );
+	pinmesh = ( dmd3mesh_t * )( rawdata + LittleLong( header->ofs_meshes ) );
 	poutmesh = poutmodel->meshes = ( aliasMesh_t * )buf; buf += poutmodel->numMeshes * sizeof( aliasMesh_t );
 	for( i = 0; i < poutmodel->numMeshes; i++, poutmesh++ )
 	{
 		//Q_strncpyz( poutmesh->name, pinmesh->name, MD3_MAX_PATH );
-
 		//Mod_StripLODSuffix( poutmesh->name );
 
 		poutmesh->numTris = numTris[i];
 		poutmesh->numSkins = numSkins[i];
 		poutmesh->numVerts = numVerts[i];
-
 	//
 	// load the skins
 	//
 		pinskin = ( dmd3skin_t * )( ( byte * )pinmesh + LittleLong( pinmesh->ofs_skins ) );
+		if( ( byte * )( pinskin + poutmesh->numSkins ) > rawend ) {
+			Com_Error( ERR_DROP, "Mod_LoadAliasMD3Model: %s has bad skin offset for mesh %d\n", mod->name, i );
+		}
 		poutskin = poutmesh->skins = ( aliasSkin_t * )buf; buf += sizeof(aliasSkin_t *) * poutmesh->numSkins;
 		for( j = 0; j < poutmesh->numSkins; j++, pinskin++, poutskin++ )
 			poutskin->image = GL_FindImage(pinskin->name, it_skin );
@@ -1437,6 +1440,9 @@ static void Mod_LoadAliasMD3Model ( model_t *mod, byte *rawdata, int length )
 	// load the indexes
 	//
 		pinindex = ( index_t * )( ( byte * )pinmesh + LittleLong( pinmesh->ofs_indexes ) );
+		if( ( byte * )( pinindex + poutmesh->numTris * 3 ) > rawend ) {
+			Com_Error( ERR_DROP, "Mod_LoadAliasMD3Model: %s has bad indices offset for mesh %d\n", mod->name, i );
+		}
 		poutindex = poutmesh->indices = ( index_t * )buf; buf += poutmesh->numTris * sizeof(index_t) * 3;
 		for( j = 0; j < poutmesh->numTris; j++, pinindex += 3, poutindex += 3 ) {
 			poutindex[0] = (index_t)LittleLong( pinindex[0] );
@@ -1448,6 +1454,9 @@ static void Mod_LoadAliasMD3Model ( model_t *mod, byte *rawdata, int length )
 	// load the texture coordinates
 	//
 		pincoord = ( dmd3coord_t * )( ( byte * )pinmesh + LittleLong( pinmesh->ofs_tcs ) );
+		if( ( byte * )( pincoord + poutmesh->numVerts ) > rawend ) {
+			Com_Error( ERR_DROP, "Mod_LoadAliasMD3Model: %s has bad tcoords offset for mesh %d\n", mod->name, i );
+		}
 		poutcoord = poutmesh->stcoords = ( vec2_t * )buf; buf += poutmesh->numVerts * sizeof(vec2_t);
 		for( j = 0; j < poutmesh->numVerts; j++, pincoord++ ) {
 			poutcoord[j][0] = LittleFloat( pincoord->st[0] );
@@ -1457,8 +1466,10 @@ static void Mod_LoadAliasMD3Model ( model_t *mod, byte *rawdata, int length )
 	//
 	// load the vertexes and normals
 	//
-		totalVerts = poutmesh->numVerts * poutmodel->numFrames;
 		pinvert = ( dmd3vertex_t * )( ( byte * )pinmesh + LittleLong( pinmesh->ofs_verts ) );
+		if( ( byte * )( pinvert + poutmesh->numVerts * poutmodel->numFrames ) > rawend ) {
+			Com_Error( ERR_DROP, "Mod_LoadAliasMD3Model: %s has bad vertices offset for mesh %d\n", mod->name, i );
+		}
 		poutvert = poutmesh->vertexes = ( aliasVertex_t * )buf; buf += poutmesh->numVerts * sizeof(aliasVertex_t) * poutmodel->numFrames;
 		for( l = 0, poutframe = poutmodel->frames; l < poutmodel->numFrames; l++, poutframe++ ) {
 
@@ -1468,11 +1479,14 @@ static void Mod_LoadAliasMD3Model ( model_t *mod, byte *rawdata, int length )
 				poutvert->point[2] = LittleShort( pinvert->point[2] );
 
 				Q_sincos((float)pinvert->norm[0] / 255.0f, &s[0], &c[0]);	
-				Q_sincos((float)pinvert->norm[0] / 255.0f, &s[1], &c[1]);
+				Q_sincos((float)pinvert->norm[1] / 255.0f, &s[1], &c[1]);
 				VectorSet( normal, s[0] * c[1], s[0] * s[1], c[0] );
 				poutvert->normalIndex = DirToByte( normal );
 
-				AddPointToBounds( (float *)poutvert->point, poutframe->mins, poutframe->maxs );
+				normal[0] = (float)pinvert->point[0];
+				normal[1] = (float)pinvert->point[1];
+				normal[2] = (float)pinvert->point[2];
+				AddPointToBounds( normal, poutframe->mins, poutframe->maxs );
 			}
 		}
 
@@ -1523,35 +1537,39 @@ static void Mod_LoadSpriteModel (model_t *mod, byte *rawdata, int length)
 	sprin = (dsprite_t *)rawdata;
 
 	if (LittleLong(sprin->version) != SPRITE_VERSION)
-		Com_Error (ERR_DROP, "Mod_LoadSpriteModel: %s has wrong version number (%i should be %i)",
+		Com_Error (ERR_DROP, "Mod_LoadSpriteModel: %s has wrong version number (%d should be %d)\n",
 				 mod->name, LittleLong(sprin->version), SPRITE_VERSION);
 
 	numFrames = LittleLong (sprin->numframes);
 	if (numFrames < 1)
-		Com_Error (ERR_DROP, "Mod_LoadSpriteModel: %s has bad number of frames: %d", mod->name, numFrames);
+		Com_Error (ERR_DROP, "Mod_LoadSpriteModel: %s has bad number of frames: %d\n", mod->name, numFrames);
 	else if (numFrames > SPRITE_MAX_FRAMES)
-		Com_Error (ERR_DROP, "Mod_LoadSpriteModel: %s has too many frames: %i > %i", mod->name, numFrames, SPRITE_MAX_FRAMES);
+		Com_Error (ERR_DROP, "Mod_LoadSpriteModel: %s has too many frames: %d > %d\n", mod->name, numFrames, SPRITE_MAX_FRAMES);
+
+	sprinframe = sprin->frames;
+	if ( ( byte * )(sprinframe + numFrames) > rawdata + length) {
+		Com_Printf("Mod_LoadSpriteModel: WARNING: %s frames exeeds the filelenght with %d\n", mod->name, (int)(( byte * )(sprinframe + numFrames) - (rawdata + length)));
+		numFrames = (length - sizeof( dsprite_t )) / sizeof( dsprframe_t );
+		numFrames += 1; // dsprite_t got 1 frame
+	}
 
 	bufsize = sizeof(spriteModel_t) + sizeof(spriteFrame_t) * numFrames;
 
 	mod->type = mod_sprite;
-
-	//bufsize = (bufsize+31)&~31;
 	mod->extradata = Mod_Malloc(bufsize);
 	mod->extradatasize = bufsize;
 
 	sprout = mod->sModel = (spriteModel_t *)mod->extradata;
 	sprout->numFrames = numFrames;
 
-	sprinframe = sprin->frames;
 	sprout->frames = sproutframe = (spriteFrame_t *)((byte *)sprout + sizeof(spriteModel_t));
 
 	// byte swap everything
-	for (i = 0; i < sprout->numFrames; i++, sprinframe++, sproutframe++)
+	for (i = 0; i < numFrames; i++, sprinframe++, sproutframe++)
 	{
 		sproutframe->width = LittleLong( sprinframe->width );
 		sproutframe->height = LittleLong( sprinframe->height );
-		if( sproutframe->width <= 0 || sproutframe->height <= 0 ) {
+		if( sproutframe->width < 1 || sproutframe->height < 1 ) {
 			Com_DPrintf( "Mod_LoadSpriteModel: %s has bad image dimensions for frame #%d: %d x %d\n",
 				mod->name, sproutframe->width, sproutframe->height, i );
 			sproutframe->width = 1;
@@ -1564,7 +1582,7 @@ static void Mod_LoadSpriteModel (model_t *mod, byte *rawdata, int length)
 		Q_strncpyz(skinName, sprinframe->name, sizeof(skinName));
 		sproutframe->image = GL_FindImage(skinName, it_sprite);
 		if (!sproutframe->image) {
-			Com_DPrintf( "Mod_LoadSpriteModel: Couldn't find image '%s' for frame #%d for sprite '%s'\n", skinName, i, mod->name );
+			Com_DPrintf( "Mod_LoadSpriteModel: %s: Couldn't find image '%s' for frame #%d\n", mod->name, skinName, i );
 			sproutframe->image = r_notexture;
 		}
 	}
