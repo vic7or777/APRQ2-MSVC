@@ -4,6 +4,7 @@
 	Version="9,00"
 	Name="Q2 SW"
 	ProjectGUID="{C8962C1F-320E-43AC-B023-DC8A08C51EED}"
+	RootNamespace="Q2 SW"
 	TargetFrameworkVersion="131072"
 	>
 	<Platforms>
@@ -62,7 +63,7 @@
 				BrowseInformationFile=".\debug/"
 				WarningLevel="3"
 				SuppressStartupBanner="true"
-				DebugInformationFormat="4"
+				DebugInformationFormat="3"
 				CompileAs="1"
 			/>
 			<Tool
@@ -78,6 +79,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
+				AdditionalOptions="/PDBALTPATH:%_PDB%"
 				AdditionalDependencies="winmm.lib wsock32.lib zlib.lib curllib.lib version.lib"
 				OutputFile="d:\games\quake2\aq2swde.exe"
 				LinkIncremental="2"
@@ -87,7 +89,7 @@
 				IgnoreDefaultLibraryNames=""
 				ModuleDefinitionFile=""
 				GenerateDebugInformation="true"
-				ProgramDatabaseFile=".\debug/aq2sw.pdb"
+				ProgramDatabaseFile="d:\games\quake2\aq2swde.pdb"
 				GenerateMapFile="true"
 				MapFileName=".\debug/aq2sw.map"
 				SubSystem="2"
@@ -170,6 +172,7 @@
 				ProgramDataBaseFileName=".\release/"
 				WarningLevel="3"
 				SuppressStartupBanner="true"
+				DebugInformationFormat="0"
 				CompileAs="1"
 			/>
 			<Tool
@@ -185,6 +188,7 @@
 			/>
 			<Tool
 				Name="VCLinkerTool"
+				AdditionalOptions="/PDBALTPATH:%_PDB%"
 				AdditionalDependencies="winmm.lib wsock32.lib zlib.lib curllib.lib version.lib"
 				OutputFile="d:\games\quake2\aq2sw.exe"
 				LinkIncremental="1"
@@ -192,8 +196,8 @@
 				AdditionalLibraryDirectories="../win32/lib"
 				GenerateManifest="false"
 				ModuleDefinitionFile=""
-				GenerateDebugInformation="true"
-				ProgramDatabaseFile=".\release/aq2sw.pdb"
+				GenerateDebugInformation="false"
+				ProgramDatabaseFile="d:\games\quake2\aq2sw.pdb"
 				GenerateMapFile="true"
 				MapFileName=".\release/aq2sw.map"
 				SubSystem="2"
