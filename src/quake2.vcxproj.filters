@@ -1,0 +1,489 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup>
+    <Filter Include="client">
+      <UniqueIdentifier>{9ee19800-292e-4720-a301-25a922a556bd}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="game">
+      <UniqueIdentifier>{823bf92c-098f-4de4-a946-1fea0c986db3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="common">
+      <UniqueIdentifier>{13f04fd0-34e5-48ad-b638-145952982130}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="server">
+      <UniqueIdentifier>{aad9d69c-5d87-4a38-bad9-80f526c1803d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="sound">
+      <UniqueIdentifier>{bbb08834-c1fa-4492-85c4-449b9571bfb2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="ui">
+      <UniqueIdentifier>{cbea17fa-a144-4545-bcbd-18ce734f4a28}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="win32">
+      <UniqueIdentifier>{5c346a90-0e88-4485-9b95-5ced72989ff1}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="linux">
+      <UniqueIdentifier>{c9dd9c06-2585-41a7-862f-35b992d17ae3}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="render">
+      <UniqueIdentifier>{2137f84f-48ef-46af-ab32-7433762f91b2}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="include">
+      <UniqueIdentifier>{6cd5d53c-d353-43c0-8370-05fd5da77c17}</UniqueIdentifier>
+    </Filter>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="client\anorms.h">
+      <Filter>client</Filter>
+    </ClInclude>
+    <ClInclude Include="client\client.h">
+      <Filter>client</Filter>
+    </ClInclude>
+    <ClInclude Include="client\console.h">
+      <Filter>client</Filter>
+    </ClInclude>
+    <ClInclude Include="client\input.h">
+      <Filter>client</Filter>
+    </ClInclude>
+    <ClInclude Include="client\keys.h">
+      <Filter>client</Filter>
+    </ClInclude>
+    <ClInclude Include="client\mp3.h">
+      <Filter>client</Filter>
+    </ClInclude>
+    <ClInclude Include="client\ref.h">
+      <Filter>client</Filter>
+    </ClInclude>
+    <ClInclude Include="client\screen.h">
+      <Filter>client</Filter>
+    </ClInclude>
+    <ClInclude Include="client\vid.h">
+      <Filter>client</Filter>
+    </ClInclude>
+    <ClInclude Include="game\game.h">
+      <Filter>game</Filter>
+    </ClInclude>
+    <ClInclude Include="game\q_shared.h">
+      <Filter>game</Filter>
+    </ClInclude>
+    <ClInclude Include="qcommon\crc.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="qcommon\qcommon.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="qcommon\qfiles.h">
+      <Filter>common</Filter>
+    </ClInclude>
+    <ClInclude Include="server\server.h">
+      <Filter>server</Filter>
+    </ClInclude>
+    <ClInclude Include="client\cdaudio.h">
+      <Filter>sound</Filter>
+    </ClInclude>
+    <ClInclude Include="client\openal_funcs.h">
+      <Filter>sound</Filter>
+    </ClInclude>
+    <ClInclude Include="client\snd_loc.h">
+      <Filter>sound</Filter>
+    </ClInclude>
+    <ClInclude Include="client\sound.h">
+      <Filter>sound</Filter>
+    </ClInclude>
+    <ClInclude Include="ui\ui_local.h">
+      <Filter>ui</Filter>
+    </ClInclude>
+    <ClInclude Include="win32\conproc.h">
+      <Filter>win32</Filter>
+    </ClInclude>
+    <ClInclude Include="win32\resource.h">
+      <Filter>win32</Filter>
+    </ClInclude>
+    <ClInclude Include="win32\winquake.h">
+      <Filter>win32</Filter>
+    </ClInclude>
+    <ClInclude Include="ref_gl\anormtab.h">
+      <Filter>render</Filter>
+    </ClInclude>
+    <ClInclude Include="ref_gl\gl_decal.h">
+      <Filter>render</Filter>
+    </ClInclude>
+    <ClInclude Include="ref_gl\gl_local.h">
+      <Filter>render</Filter>
+    </ClInclude>
+    <ClInclude Include="ref_gl\gl_model.h">
+      <Filter>render</Filter>
+    </ClInclude>
+    <ClInclude Include="win32\glw_win.h">
+      <Filter>render</Filter>
+    </ClInclude>
+    <ClInclude Include="ref_gl\qgl.h">
+      <Filter>render</Filter>
+    </ClInclude>
+    <ClInclude Include="ref_gl\warpsin.h">
+      <Filter>render</Filter>
+    </ClInclude>
+    <ClInclude Include="include\minizip\ioapi.h">
+      <Filter>include</Filter>
+    </ClInclude>
+    <ClInclude Include="include\minizip\unzip.h">
+      <Filter>include</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <ClCompile Include="client\avi_export.c">
+      <Filter>client</Filter>
+    </ClCompile>
+    <ClCompile Include="client\cl_cin.c">
+      <Filter>client</Filter>
+    </ClCompile>
+    <ClCompile Include="client\cl_demo.c">
+      <Filter>client</Filter>
+    </ClCompile>
+    <ClCompile Include="client\cl_draw.c">
+      <Filter>client</Filter>
+    </ClCompile>
+    <ClCompile Include="client\cl_ents.c">
+      <Filter>client</Filter>
+    </ClCompile>
+    <ClCompile Include="client\cl_fx.c">
+      <Filter>client</Filter>
+    </ClCompile>
+    <ClCompile Include="client\cl_http.c">
+      <Filter>client</Filter>
+    </ClCompile>
+    <ClCompile Include="client\cl_input.c">
+      <Filter>client</Filter>
+    </ClCompile>
+    <ClCompile Include="client\cl_inv.c">
+      <Filter>client</Filter>
+    </ClCompile>
+    <ClCompile Include="client\cl_loc.c">
+      <Filter>client</Filter>
+    </ClCompile>
+    <ClCompile Include="client\cl_main.c">
+      <Filter>client</Filter>
+    </ClCompile>
+    <ClCompile Include="client\cl_newfx.c">
+      <Filter>client</Filter>
+    </ClCompile>
+    <ClCompile Include="client\cl_parse.c">
+      <Filter>client</Filter>
+    </ClCompile>
+    <ClCompile Include="client\cl_pred.c">
+      <Filter>client</Filter>
+    </ClCompile>
+    <ClCompile Include="client\cl_scrn.c">
+      <Filter>client</Filter>
+    </ClCompile>
+    <ClCompile Include="client\cl_tent.c">
+      <Filter>client</Filter>
+    </ClCompile>
+    <ClCompile Include="client\cl_view.c">
+      <Filter>client</Filter>
+    </ClCompile>
+    <ClCompile Include="client\console.c">
+      <Filter>client</Filter>
+    </ClCompile>
+    <ClCompile Include="client\keys.c">
+      <Filter>client</Filter>
+    </ClCompile>
+    <ClCompile Include="client\x86.c">
+      <Filter>client</Filter>
+    </ClCompile>
+    <ClCompile Include="game\m_flash.c">
+      <Filter>game</Filter>
+    </ClCompile>
+    <ClCompile Include="game\q_shared.c">
+      <Filter>game</Filter>
+    </ClCompile>
+    <ClCompile Include="qcommon\cmd.c">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="qcommon\cmodel.c">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="qcommon\common.c">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="qcommon\crc.c">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="qcommon\cvar.c">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="qcommon\files.c">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="qcommon\md4.c">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="qcommon\net.c">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="qcommon\net_chan.c">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="qcommon\pmove.c">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="qcommon\q_msg.c">
+      <Filter>common</Filter>
+    </ClCompile>
+    <ClCompile Include="server\sv_ccmds.c">
+      <Filter>server</Filter>
+    </ClCompile>
+    <ClCompile Include="server\sv_ents.c">
+      <Filter>server</Filter>
+    </ClCompile>
+    <ClCompile Include="server\sv_game.c">
+      <Filter>server</Filter>
+    </ClCompile>
+    <ClCompile Include="server\sv_init.c">
+      <Filter>server</Filter>
+    </ClCompile>
+    <ClCompile Include="server\sv_main.c">
+      <Filter>server</Filter>
+    </ClCompile>
+    <ClCompile Include="server\sv_send.c">
+      <Filter>server</Filter>
+    </ClCompile>
+    <ClCompile Include="server\sv_user.c">
+      <Filter>server</Filter>
+    </ClCompile>
+    <ClCompile Include="server\sv_world.c">
+      <Filter>server</Filter>
+    </ClCompile>
+    <ClCompile Include="client\snd_dma.c">
+      <Filter>sound</Filter>
+    </ClCompile>
+    <ClCompile Include="client\snd_mem.c">
+      <Filter>sound</Filter>
+    </ClCompile>
+    <ClCompile Include="client\snd_mix.c">
+      <Filter>sound</Filter>
+    </ClCompile>
+    <ClCompile Include="client\snd_openal.c">
+      <Filter>sound</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\qmenu.c">
+      <Filter>ui</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\ui_addressbook.c">
+      <Filter>ui</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\ui_atoms.c">
+      <Filter>ui</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\ui_controls.c">
+      <Filter>ui</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\ui_credits.c">
+      <Filter>ui</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\ui_demos.c">
+      <Filter>ui</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\ui_dmoptions.c">
+      <Filter>ui</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\ui_download.c">
+      <Filter>ui</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\ui_game.c">
+      <Filter>ui</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\ui_joinserver.c">
+      <Filter>ui</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\ui_keys.c">
+      <Filter>ui</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\ui_loadsavegame.c">
+      <Filter>ui</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\ui_main.c">
+      <Filter>ui</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\ui_mp3.c">
+      <Filter>ui</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\ui_multiplayer.c">
+      <Filter>ui</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\ui_newoptions.c">
+      <Filter>ui</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\ui_playerconfig.c">
+      <Filter>ui</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\ui_quit.c">
+      <Filter>ui</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\ui_startserver.c">
+      <Filter>ui</Filter>
+    </ClCompile>
+    <ClCompile Include="ui\ui_video.c">
+      <Filter>ui</Filter>
+    </ClCompile>
+    <ClCompile Include="win32\cd_win.c">
+      <Filter>win32</Filter>
+    </ClCompile>
+    <ClCompile Include="win32\conproc.c">
+      <Filter>win32</Filter>
+    </ClCompile>
+    <ClCompile Include="win32\in_win.c">
+      <Filter>win32</Filter>
+    </ClCompile>
+    <ClCompile Include="win32\q_shwin.c">
+      <Filter>win32</Filter>
+    </ClCompile>
+    <ClCompile Include="win32\snd_win.c">
+      <Filter>win32</Filter>
+    </ClCompile>
+    <ClCompile Include="win32\sys_win.c">
+      <Filter>win32</Filter>
+    </ClCompile>
+    <ClCompile Include="win32\vid_dll.c">
+      <Filter>win32</Filter>
+    </ClCompile>
+    <ClCompile Include="win32\winamp.c">
+      <Filter>win32</Filter>
+    </ClCompile>
+    <ClCompile Include="linux\cd_linux.c">
+      <Filter>linux</Filter>
+    </ClCompile>
+    <ClCompile Include="linux\gl_glx.c">
+      <Filter>linux</Filter>
+    </ClCompile>
+    <ClCompile Include="linux\glob.c">
+      <Filter>linux</Filter>
+    </ClCompile>
+    <ClCompile Include="linux\mpd.c">
+      <Filter>linux</Filter>
+    </ClCompile>
+    <ClCompile Include="linux\net_udp.c">
+      <Filter>linux</Filter>
+    </ClCompile>
+    <ClCompile Include="linux\q_shlinux.c">
+      <Filter>linux</Filter>
+    </ClCompile>
+    <ClCompile Include="linux\qgl_linux.c">
+      <Filter>linux</Filter>
+    </ClCompile>
+    <ClCompile Include="linux\rw_linux.c">
+      <Filter>linux</Filter>
+    </ClCompile>
+    <ClCompile Include="linux\rw_sdl.c">
+      <Filter>linux</Filter>
+    </ClCompile>
+    <ClCompile Include="linux\rw_x11.c">
+      <Filter>linux</Filter>
+    </ClCompile>
+    <ClCompile Include="linux\snd_alsa.c">
+      <Filter>linux</Filter>
+    </ClCompile>
+    <ClCompile Include="linux\snd_linux.c">
+      <Filter>linux</Filter>
+    </ClCompile>
+    <ClCompile Include="linux\snd_oss.c">
+      <Filter>linux</Filter>
+    </ClCompile>
+    <ClCompile Include="linux\snd_sdl.c">
+      <Filter>linux</Filter>
+    </ClCompile>
+    <ClCompile Include="linux\sys_linux.c">
+      <Filter>linux</Filter>
+    </ClCompile>
+    <ClCompile Include="linux\vid_so.c">
+      <Filter>linux</Filter>
+    </ClCompile>
+    <ClCompile Include="linux\xmms.c">
+      <Filter>linux</Filter>
+    </ClCompile>
+    <ClCompile Include="ref_gl\gl_decal.c">
+      <Filter>render</Filter>
+    </ClCompile>
+    <ClCompile Include="ref_gl\gl_draw.c">
+      <Filter>render</Filter>
+    </ClCompile>
+    <ClCompile Include="ref_gl\gl_image.c">
+      <Filter>render</Filter>
+    </ClCompile>
+    <ClCompile Include="ref_gl\gl_light.c">
+      <Filter>render</Filter>
+    </ClCompile>
+    <ClCompile Include="ref_gl\gl_mesh.c">
+      <Filter>render</Filter>
+    </ClCompile>
+    <ClCompile Include="ref_gl\gl_model.c">
+      <Filter>render</Filter>
+    </ClCompile>
+    <ClCompile Include="ref_gl\gl_rmain.c">
+      <Filter>render</Filter>
+    </ClCompile>
+    <ClCompile Include="ref_gl\gl_rmisc.c">
+      <Filter>render</Filter>
+    </ClCompile>
+    <ClCompile Include="ref_gl\gl_rsurf.c">
+      <Filter>render</Filter>
+    </ClCompile>
+    <ClCompile Include="ref_gl\gl_warp.c">
+      <Filter>render</Filter>
+    </ClCompile>
+    <ClCompile Include="win32\glw_imp.c">
+      <Filter>render</Filter>
+    </ClCompile>
+    <ClCompile Include="win32\qgl_win.c">
+      <Filter>render</Filter>
+    </ClCompile>
+    <ClCompile Include="include\minizip\ioapi.c">
+      <Filter>include</Filter>
+    </ClCompile>
+    <ClCompile Include="include\minizip\unzip.c">
+      <Filter>include</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="win32\q2.ico">
+      <Filter>win32</Filter>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="win32\q2.rc">
+      <Filter>win32</Filter>
+    </ResourceCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuildStep Include="linux\block16.h">
+      <Filter>linux</Filter>
+    </CustomBuildStep>
+    <CustomBuildStep Include="linux\block8.h">
+      <Filter>linux</Filter>
+    </CustomBuildStep>
+    <CustomBuildStep Include="linux\d_ifacea.h">
+      <Filter>linux</Filter>
+    </CustomBuildStep>
+    <CustomBuildStep Include="linux\glob.h">
+      <Filter>linux</Filter>
+    </CustomBuildStep>
+    <CustomBuildStep Include="linux\glw_linux.h">
+      <Filter>linux</Filter>
+    </CustomBuildStep>
+    <CustomBuildStep Include="Makefile">
+      <Filter>linux</Filter>
+    </CustomBuildStep>
+    <CustomBuildStep Include="linux\qasm.h">
+      <Filter>linux</Filter>
+    </CustomBuildStep>
+    <CustomBuildStep Include="linux\rw_linux.h">
+      <Filter>linux</Filter>
+    </CustomBuildStep>
+    <CustomBuildStep Include="linux\snd_alsa_funcs.h">
+      <Filter>linux</Filter>
+    </CustomBuildStep>
+    <CustomBuildStep Include="linux\xmms_funcs.h">
+      <Filter>linux</Filter>
+    </CustomBuildStep>
+  </ItemGroup>
+</Project>
