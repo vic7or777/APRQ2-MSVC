@@ -1,0 +1,10 @@
+{
+  "dependencies": [
+    "zlib",
+    "minizip",
+    "libpng",
+    "ijg-libjpeg",
+    "curl",
+    "openal-soft"
+  ]
+}

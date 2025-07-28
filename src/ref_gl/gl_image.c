@@ -1003,6 +1003,7 @@ static void LoadPNG (const char *filename, byte **pic, int *width, int *height, 
 	png_infop		info_ptr;
 	byte			**row_pointers, *out, *dst;
 	TPngFileBuffer	PngFileBuffer = {NULL,0};
+	png_byte		img_color_type, img_bit_depth;
 
 	FS_LoadFile (filename, (void **)&PngFileBuffer.Buffer);
     if (!PngFileBuffer.Buffer)
@@ -1041,35 +1042,38 @@ static void LoadPNG (const char *filename, byte **pic, int *width, int *height, 
 
 	png_read_info(png_ptr, info_ptr);
 
-	if (info_ptr->color_type == PNG_COLOR_TYPE_PALETTE)
+	img_color_type = png_get_color_type( png_ptr, info_ptr );
+	img_bit_depth = png_get_bit_depth( png_ptr, info_ptr );
+
+	if (img_color_type == PNG_COLOR_TYPE_PALETTE)
 	{
 		png_set_palette_to_rgb (png_ptr);
 		png_set_filler(png_ptr, 0xFF, PNG_FILLER_AFTER);
 	}
 
-	if (info_ptr->color_type == PNG_COLOR_TYPE_GRAY && info_ptr->bit_depth < 8)
-		png_set_gray_1_2_4_to_8(png_ptr);
+	if (img_color_type == PNG_COLOR_TYPE_GRAY && img_bit_depth < 8)
+		png_set_expand_gray_1_2_4_to_8(png_ptr);
 
 	if (png_get_valid(png_ptr, info_ptr, PNG_INFO_tRNS))
 		png_set_tRNS_to_alpha(png_ptr);
 
-	if (info_ptr->color_type == PNG_COLOR_TYPE_GRAY || info_ptr->color_type == PNG_COLOR_TYPE_GRAY_ALPHA)
+	if (img_color_type == PNG_COLOR_TYPE_GRAY || img_color_type == PNG_COLOR_TYPE_GRAY_ALPHA)
 		png_set_gray_to_rgb(png_ptr);
 
-	if (info_ptr->color_type != PNG_COLOR_TYPE_RGBA)
+	if (img_color_type != PNG_COLOR_TYPE_RGBA)
 		png_set_filler(png_ptr, 0xFF, PNG_FILLER_AFTER);
 
-	if (info_ptr->bit_depth < 8)
+	if (img_bit_depth < 8)
         png_set_expand(png_ptr);
-	else if (info_ptr->bit_depth == 16)
+	else if (img_bit_depth == 16)
 		png_set_strip_16(png_ptr);
 
 	png_read_update_info(png_ptr, info_ptr);
 
 	rowbytes = png_get_rowbytes(png_ptr, info_ptr);
 
-	w = info_ptr->width;
-	h = info_ptr->height;
+	w = png_get_image_width(png_ptr, info_ptr);
+	h = png_get_image_height(png_ptr, info_ptr);
 	dst = out = Z_TagMalloc(h * rowbytes, TAG_RENDER_IMAGE);
 	row_pointers = Z_TagMalloc(h * sizeof(*row_pointers), TAG_RENDER_IMAGE);
 
@@ -1083,7 +1087,7 @@ static void LoadPNG (const char *filename, byte **pic, int *width, int *height, 
 	*width = w;
 	*height = h;
 	*pic = out;
-	*samples = info_ptr->channels;
+	*samples = png_get_channels(png_ptr, info_ptr);
 
 	png_read_end(png_ptr, info_ptr);
 	png_destroy_read_struct(&png_ptr, &info_ptr, NULL);
